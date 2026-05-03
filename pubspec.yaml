@@ -1,0 +1,62 @@
+name: trackora
+description: "Trackora — a clean, iOS-first expense tracker."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  cloud_firestore: ^5.4.0
+  firebase_storage: ^12.3.0
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # UI / charts / fonts
+  fl_chart: ^0.69.0
+  google_fonts: ^6.2.1
+
+  # Utilities
+  intl: ^0.20.2
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.2
+  file_picker: ^8.1.7
+  image_picker: ^1.1.2
+  share_plus: ^10.0.2
+  path_provider: ^2.1.4
+  csv: ^6.0.0
+  home_widget: ^0.7.0
+  watch_connectivity: ^0.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+  image: ^4.3.0
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true
+  background_color_ios: "#CFEFE2"
+  adaptive_icon_background: "#CFEFE2"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/

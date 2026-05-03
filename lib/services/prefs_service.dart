@@ -1,0 +1,159 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'i18n.dart';
+
+class PrefsService {
+  static const _kCurrency = 'currency_symbol';
+  static const _kCurrencyCode = 'currency_code';
+  static const _kThemeMode = 'theme_mode';
+  static const _kAppLocale = 'app_locale';
+  static const _kBalanceVisible = 'balance_visible';
+  static const _kHomeCardsVisible = 'home_cards_visible';
+  static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
+
+  static const defaultHomeCards = <String>[
+    'totalBalance',
+    'monthlyBudget',
+    'savingPlans',
+    'borrowLending',
+  ];
+
+  static const defaultMoneyHubModules = <String>[
+    'installments',
+    'borrowLending',
+    'savingPlans',
+    'monthlyBudget',
+  ];
+
+  /// Whether the user wants the home balance to be readable. Default
+  /// `true` (shown). Persisted so the choice survives app restart.
+  Future<bool> balanceVisible() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_kBalanceVisible) ?? true;
+  }
+
+  Future<void> setBalanceVisible(bool visible) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kBalanceVisible, visible);
+  }
+
+  Future<Set<String>> visibleHomeCards() async {
+    final p = await SharedPreferences.getInstance();
+    return _decodeVisibleSet(
+      p.getStringList(_kHomeCardsVisible),
+      defaultHomeCards,
+    );
+  }
+
+  Future<void> setVisibleHomeCards(Set<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kHomeCardsVisible,
+      _sanitizeVisibleSet(ids, defaultHomeCards).toList(),
+    );
+  }
+
+  Future<Set<String>> visibleMoneyHubModules() async {
+    final p = await SharedPreferences.getInstance();
+    return _decodeVisibleSet(
+      p.getStringList(_kMoneyHubModulesVisible),
+      defaultMoneyHubModules,
+    );
+  }
+
+  Future<void> setVisibleMoneyHubModules(Set<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kMoneyHubModulesVisible,
+      _sanitizeVisibleSet(ids, defaultMoneyHubModules).toList(),
+    );
+  }
+
+  Future<AppLocale> appLocale() async {
+    final p = await SharedPreferences.getInstance();
+    return AppLocale.decode(p.getString(_kAppLocale));
+  }
+
+  Future<void> setAppLocale(AppLocale locale) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kAppLocale, locale.encode());
+  }
+
+  Future<String> currencySymbol() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kCurrency) ?? '\$';
+  }
+
+  Future<String> currencyCode() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kCurrencyCode) ?? 'USD';
+  }
+
+  Future<void> setCurrency(String code, String symbol) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kCurrencyCode, code);
+    await p.setString(_kCurrency, symbol);
+  }
+
+  /// Stored as one of: 'system', 'light', 'dark'. Default is 'system'.
+  Future<ThemeMode> themeMode() async {
+    final p = await SharedPreferences.getInstance();
+    return _decodeThemeMode(p.getString(_kThemeMode));
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kThemeMode, _encodeThemeMode(mode));
+  }
+
+  static ThemeMode _decodeThemeMode(String? raw) {
+    switch (raw) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      case 'system':
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  static String _encodeThemeMode(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return 'light';
+      case ThemeMode.dark:
+        return 'dark';
+      case ThemeMode.system:
+        return 'system';
+    }
+  }
+
+  static Set<String> _decodeVisibleSet(List<String>? raw, List<String> all) {
+    if (raw == null) return all.toSet();
+    return _sanitizeVisibleSet(raw.toSet(), all);
+  }
+
+  static Set<String> _sanitizeVisibleSet(Set<String> ids, List<String> all) {
+    final allowed = all.toSet();
+    final visible = ids.where(allowed.contains).toSet();
+    if (visible.isEmpty) return {all.first};
+    return visible;
+  }
+}
+
+const kSupportedCurrencies = <String, String>{
+  'USD': '\$',
+  'EUR': '€',
+  'GBP': '£',
+  'JPY': '¥',
+  'CNY': '¥',
+  'INR': '₹',
+  'MYR': 'RM',
+  'SGD': 'S\$',
+  'AUD': 'A\$',
+  'CAD': 'C\$',
+  'HKD': 'HK\$',
+  'KRW': '₩',
+};

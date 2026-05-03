@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "957463431763",
+    "project_id": "trackora-9c965",
+    "storage_bucket": "trackora-9c965.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:957463431763:android:1ce4d60afbf9610eee14a6",
+        "android_client_info": {
+          "package_name": "com.example.trackora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCm_2tLSihYxCIBPC4iVVajstY-ZuJBtI0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
