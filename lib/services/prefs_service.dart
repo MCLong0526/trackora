@@ -10,7 +10,9 @@ class PrefsService {
   static const _kAppLocale = 'app_locale';
   static const _kBalanceVisible = 'balance_visible';
   static const _kHomeCardsVisible = 'home_cards_visible';
+  static const _kHomeCardOrder = 'home_card_order';
   static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
+  static const _kStatsSectionsVisible = 'stats_sections_visible';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -26,16 +28,39 @@ class PrefsService {
     'monthlyBudget',
   ];
 
+  static const defaultStatsSections = <String>[
+    'lineChart',
+    'importantData',
+    'donutChart',
+  ];
+
   /// Whether the user wants the home balance to be readable. Default
   /// `true` (shown). Persisted so the choice survives app restart.
   Future<bool> balanceVisible() async {
     final p = await SharedPreferences.getInstance();
-    return p.getBool(_kBalanceVisible) ?? true;
+    return p.getBool(_kBalanceVisible) ?? false;
   }
 
   Future<void> setBalanceVisible(bool visible) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_kBalanceVisible, visible);
+  }
+
+  Future<List<String>> homeCardOrder() async {
+    final p = await SharedPreferences.getInstance();
+    final saved = p.getStringList(_kHomeCardOrder);
+    if (saved == null) return defaultHomeCards;
+    final all = defaultHomeCards.toSet();
+    final result = saved.where(all.contains).toList();
+    for (final id in defaultHomeCards) {
+      if (!result.contains(id)) result.add(id);
+    }
+    return result;
+  }
+
+  Future<void> setHomeCardOrder(List<String> order) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_kHomeCardOrder, order);
   }
 
   Future<Set<String>> visibleHomeCards() async {
@@ -67,6 +92,22 @@ class PrefsService {
     await p.setStringList(
       _kMoneyHubModulesVisible,
       _sanitizeVisibleSet(ids, defaultMoneyHubModules).toList(),
+    );
+  }
+
+  Future<Set<String>> visibleStatsSections() async {
+    final p = await SharedPreferences.getInstance();
+    return _decodeVisibleSet(
+      p.getStringList(_kStatsSectionsVisible),
+      defaultStatsSections,
+    );
+  }
+
+  Future<void> setVisibleStatsSections(Set<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(
+      _kStatsSectionsVisible,
+      _sanitizeVisibleSet(ids, defaultStatsSections).toList(),
     );
   }
 

@@ -179,7 +179,12 @@ struct TrackoraWidgetEntryView: View {
             quickGrid(compact: true)
         }
         .padding(12)
-        .widgetURL(URL(string: "trackora://quickadd"))
+        // The `homeWidget=1` query is required so the home_widget Flutter
+        // plugin recognises this as a widget URL and forwards it to the
+        // Dart side via `HomeWidget.widgetClicked` /
+        // `HomeWidget.initiallyLaunchedFromHomeWidget`. Without it the
+        // plugin's `isWidgetUrl()` filter drops the URL.
+        .widgetURL(URL(string: "trackora://quickadd?homeWidget=1"))
     }
 
     // ── Medium (4x2) ──────────────────────────────────────────
@@ -239,7 +244,7 @@ struct TrackoraWidgetEntryView: View {
             }
             .buttonStyle(.plain)
         } else {
-            Link(destination: URL(string: "trackora://quickadd?amount=\(urlAmount(nextAmount))")!) {
+            Link(destination: URL(string: "trackora://quickadd?amount=\(urlAmount(nextAmount))&homeWidget=1")!) {
                 stepButtonLabel(symbol: delta > 0 ? "+" : "−", compact: compact)
             }
         }
@@ -255,16 +260,27 @@ struct TrackoraWidgetEntryView: View {
             .clipShape(RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous))
     }
 
+    // The amount itself is tappable: it deep-links to the in-app
+    // quick-add dialog with the current draft pre-filled, so users can
+    // type the *exact* value instead of poking +/- repeatedly. The
+    // +/- buttons remain for quick nudges.
     private func draftAmountLabel(compact: Bool) -> some View {
-        Text(fmt(entry.draftAmount))
-            .font(.system(size: compact ? 10 : 12, weight: .heavy, design: .rounded))
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .foregroundColor(.black)
+        Link(destination: URL(string: "trackora://quickadd?amount=\(urlAmount(entry.draftAmount))&homeWidget=1")!) {
+            HStack(spacing: 3) {
+                Text(fmt(entry.draftAmount))
+                    .font(.system(size: compact ? 10 : 12, weight: .heavy, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundColor(.black)
+                Image(systemName: "pencil")
+                    .font(.system(size: compact ? 8 : 9, weight: .bold))
+                    .foregroundColor(.black.opacity(0.45))
+            }
             .frame(maxWidth: .infinity, minHeight: compact ? 25 : 31)
             .padding(.horizontal, 3)
             .background(Color.white.opacity(0.76))
             .clipShape(RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous))
+        }
     }
 
     @ViewBuilder
@@ -275,14 +291,14 @@ struct TrackoraWidgetEntryView: View {
             }
             .buttonStyle(.plain)
         } else {
-            Link(destination: URL(string: "trackora://quickadd?amount=\(urlAmount(entry.draftAmount))")!) {
+            Link(destination: URL(string: "trackora://quickadd?amount=\(urlAmount(entry.draftAmount))&homeWidget=1")!) {
                 actionButtonLabel(text("add"), compact: compact, filled: true)
             }
         }
     }
 
     private func customButton(compact: Bool) -> some View {
-        Link(destination: URL(string: "trackora://quickadd")!) {
+        Link(destination: URL(string: "trackora://quickadd?homeWidget=1")!) {
             actionButtonLabel(text("custom"), compact: compact, filled: false)
         }
     }
@@ -314,6 +330,45 @@ struct TrackoraWidgetEntryView: View {
                 .foregroundColor(isOver ? .red : .black)
                 .minimumScaleFactor(0.42)
                 .lineLimit(1)
+            if entry.monthBudget > 0 {
+                budgetProgress
+                    .padding(.top, 4)
+            }
+        }
+    }
+
+    /// Compact iOS-style budget progress: usage percent + thin track.
+    /// Bar tints amber from 80% and red when over budget so users get a
+    /// glanceable warning without having to read numbers.
+    private var budgetProgress: some View {
+        let pct = entry.monthBudget > 0
+            ? min(max(entry.budgetableSpent / entry.monthBudget, 0), 1.2)
+            : 0
+        let warn = pct >= 0.8 && pct < 1
+        let barColor: Color = isOver ? .red : (warn ? Color(red: 0.85, green: 0.55, blue: 0.1) : Color.black.opacity(0.78))
+        let percentText = "\(Int((pct * 100).rounded()))%"
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(percentText)
+                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .foregroundColor(barColor)
+                Text("· \(fmt(entry.budgetableSpent)) / \(fmt(entry.monthBudget))")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.black.opacity(0.5))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Spacer(minLength: 0)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(Color.black.opacity(0.10))
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(barColor)
+                        .frame(width: geo.size.width * CGFloat(min(pct, 1)))
+                }
+            }
+            .frame(height: 5)
         }
     }
 

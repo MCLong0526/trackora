@@ -1,5 +1,781 @@
 # Trackora Project Context
 
+## Latest Pass — Session 3 UI Polish & Drag-to-Reorder
+
+### Money Page (`lib/screens/home/budget_screen.dart`)
+
+**Management card premium redesign.** `_ManagementCard` was rebuilt as a
+shadow-wrapper `Container` + `SectionCard` layout:
+- A `BoxShadow` with `color: background.withValues(alpha: 0.55)` for a
+  colour-matched, soft elevation effect per card.
+- **Icon row**: a 32×32 frosted pill (`white.55`) containing a 16 px icon,
+  with a `CupertinoIcons.chevron_right` on the trailing edge.
+- **Label → Value → Footer pill**: label in 11/w700, value in 22/w900 via
+  `FittedBox`, optional subtext, optional progress bar, then a footer pill
+  with `white.42` background and the summary text.
+- `Column(crossAxisAlignment: start)` with `Spacer()` between value area and
+  footer pill.
+
+### Home Page (`lib/screens/home/dashboard_screen.dart`)
+
+**Drag-to-reorder home cards.** The customize sheet was upgraded from a plain
+visibility toggle to a full `_ReorderableCardsSheet`:
+- Uses `ReorderableListView.builder` (shrinkWrap + NeverScrollableScrollPhysics).
+- Each row: drag handle (`CupertinoIcons.line_horizontal_3`) + label +
+  `CupertinoSwitch`.
+- Card order is persisted via `SharedPreferences` (`home_card_order` key).
+- `HomeCardOrderNotifier` / `homeCardOrderProvider` added to `providers.dart`.
+- `homeCardOrder()` / `setHomeCardOrder()` methods added to `prefs_service.dart`.
+- `_HomeBalanceCarousel` now accepts `cardOrder: List<String>` and sorts the
+  carousel by the saved order before filtering to visible cards.
+- Old unused `_VisibilitySheet` and `_VisibilitySwitchRow` classes removed.
+- New i18n key `home.dragToReorder` added to EN/ZH/MS.
+
+### Stats Page (`lib/screens/home/statistics_screen.dart`)
+
+**Snapshot fix — comprehensive Column mainAxisSize fix.** All 10 `Column`
+widgets in the forReport render tree were given `mainAxisSize: MainAxisSize.min`
+to prevent infinite-height layout assertions when captured off-screen via
+`OverlayEntry`. Affected widgets: `_ReportHeader` (2), `_FilterCard` (1),
+`_OverviewCard` (2), `_LineChartCard` (2), `_CategoryCard topPortion` (2),
+`_SummaryTile` (1).
+
+---
+
+## Previous Pass — Session 2 UI Refinements
+
+This pass applies targeted refinements to the Money, Home, and Stats pages with
+no unrelated logic changes.
+
+### Money Page (`lib/screens/home/budget_screen.dart`)
+
+**Removed Monthly Budget donut card.** The `_BudgetDonutCard` / `_DonutMetric`
+classes and the `fl_chart` import were deleted; the donut no longer appears
+above the management section.
+
+**Management section → 2×2 card grid.** The four `_MoneyToolCard` rows were
+replaced with a `LayoutBuilder` + `Wrap(spacing: 12, runSpacing: 12)` grid of
+`_ManagementCard` widgets. Each card is `(maxWidth − 12) / 2` wide × 170 px
+tall. Card details:
+- **Installments** (butter bg): monthly total, `/ mo` subtext, active count footer.
+- **Borrow & Lend** (sky bg): net position in income/expense colour, borrowed ↑ · lent ↓ footer.
+- **Saving Plans** (mint bg): total saved, progress bar saved/target, target footer.
+- **Monthly Budget** (lilac bg): spent amount, progress bar spent/budget (turns red on overspend), % used footer.
+
+`_MoneyToolCard`, `_budgetSummary`, and the now-unused `remaining` variable were
+removed. New i18n key `budget.perMonth` added to EN/ZH/MS.
+
+### Home Page (`lib/screens/home/dashboard_screen.dart`)
+
+**Total Balance hidden by default.** `PrefsService.balanceVisible()` default
+changed from `?? true` to `?? false` in `prefs_service.dart`.
+
+**Total Balance card shows today/week spend.** `_TotalBalanceCard` now accepts
+`todaySpent` and `weekSpent` (computed in `DashboardScreen.build`; passed
+through `_HomeBalanceCarousel`). The bottom pills changed from "Lifetime in /
+Lifetime out" to "Today / This week" with expense-red colour. New i18n keys
+`home.today` and `home.thisWeek` added to EN/ZH/MS. The `allExpenses` param on
+`_TotalBalanceCard` was removed.
+
+**Budget card: progress bar.** A `LinearProgressIndicator` (height 6, white
+track, ink/red value) was inserted between the budget limit label and the
+Spacer. Turns red when `overspent`.
+
+**Saving Plans card: progress bar.** A `LinearProgressIndicator` (ink colour,
+shown only when `target > 0`) was inserted between the "total saved" label and
+the Spacer.
+
+**Borrow/Lend card: directional icons.** `_LightMetricPill` gained an optional
+`leadingIcon: IconData?` parameter. The "Borrowed" pill now shows
+`CupertinoIcons.arrow_down` (expense red) and "Lent" shows
+`CupertinoIcons.arrow_up` (income green).
+
+### Stats Page (`lib/screens/home/statistics_screen.dart`)
+
+**Screenshot fix — blank/clipped output resolved.** Root cause: three
+`Column(mainAxisSize: max)` widgets inside the OverlayEntry's unconstrained
+height context caused infinite-height layout errors. Fixes:
+1. `_buildReport` return `Column` → `mainAxisSize: MainAxisSize.min`.
+2. `_ChartsCarousel.build` stacked/single-page `Column` → `mainAxisSize: MainAxisSize.min`.
+3. `_CategoryCard` `forReport` legend `Column` → `mainAxisSize: MainAxisSize.min`.
+4. `_shareSnapshot` capture `Container` wrapped in `IntrinsicHeight` so the
+   OverlayEntry layout pass gives a bounded height constraint to all children.
+
+### Files changed in this pass
+- `lib/services/prefs_service.dart` — balance visible default changed to `false`
+- `lib/services/i18n.dart` — added `home.today`, `home.thisWeek`, `budget.perMonth` (3 locales)
+- `lib/screens/home/budget_screen.dart` — removed donut card; management 2×2 grid; removed unused code
+- `lib/screens/home/dashboard_screen.dart` — today/week spend on balance card; progress bars on budget/saving; arrow icons on borrow card
+- `lib/screens/home/statistics_screen.dart` — 4 `mainAxisSize`/`IntrinsicHeight` fixes for screenshot
+
+---
+
+## Previous Pass — Home/Stats/Money UI Polish
+
+This pass applies focused UI improvements to three screens with no unrelated
+logic changes.
+
+### Home Page (`lib/screens/home/dashboard_screen.dart`)
+
+**Recent Activity: max 10 (was 5).** The sliver list now shows up to 10
+entries before truncating.
+
+**"All Bills" button.** The section header now shows a tappable "All Bills"
+link (replacing the old "+ N more" counter). Tapping opens `_AllBillsSheet` —
+a modal bottom sheet that lists all current-month records sorted newest-first,
+with a total and entry count. `home.allBills` was added to all three i18n
+locales (EN / ZH / MS).
+
+**Carousel card shadows.** Each of the four home carousel cards now renders
+inside `_ShadowCard`, a thin wrapper that adds a soft, colour-matched
+`BoxShadow` (blurRadius 22, offset (0, 10), spreadRadius -4). This makes the
+cards feel elevated and more Apple-like without changing their content.
+
+### Stats Page (`lib/screens/home/statistics_screen.dart`)
+
+**Donut chart is now primary (shown first).** The order in
+`_ChartsCarousel._pages()` was swapped so the donut/category card leads and
+the line chart is secondary. The default landing page is now the donut.
+
+**Only the category list scrolls — not the whole chart.** `_CategoryCard` was
+restructured:
+- The card header + PieChart + hint text are a fixed top portion
+  (`Padding` → `Column`).
+- The legend list is a `ConstrainedBox(maxHeight: 210)` + `ListView.builder`
+  that scrolls independently inside the card.
+- A `forReport: bool` parameter was added. When `true` (screenshot capture),
+  all legend rows are laid out in a plain `Column` with no height constraint so
+  the full report image is never clipped.
+- `SectionCard(padding: EdgeInsets.zero)` + inner `Column` replaces the
+  single-padding-all layout.
+
+### Money Page (`lib/screens/home/budget_screen.dart`)
+
+**Monthly Budget donut card.** `_BudgetDonutCard` was added above the
+Management section. It shows:
+- An 88 × 88 `PieChart` donut with two slices: spent (expense red) and
+  remaining (income green), centre-labelled with % used.
+- Right side: Budget title + month, and two `_DonutMetric` pills (Spent /
+  Remaining or Over by).
+- When no budget is set it renders a prompt card.
+- Tapping opens `showMonthlyBudgetDetails` (the existing detail sheet).
+
+`fl_chart` import added to `budget_screen.dart`.
+
+---
+
+## Previous Pass — Widget Deep-Link Fix, Screenshot Fix, Back Tap Doc
+
+This pass is bug fixes against the previous "Widget Direct Input, Budget
+Progress, Quick Add Shortcut" pass. No unrelated logic was touched.
+
+### Bug 1+2+4 — Widget pencil/amount tap only opened the app, did not
+### show QuickAddSheet (and never carried `?amount=` through)
+
+**Root cause.** The `home_widget` Flutter plugin only forwards a URL to
+`HomeWidget.widgetClicked` / `HomeWidget.initiallyLaunchedFromHomeWidget`
+when the URL contains a `homeWidget` query parameter (see
+`isWidgetUrl()` in
+`/Users/.../pub-cache/.../home_widget-0.7.0+1/ios/Classes/SwiftHomeWidgetPlugin.swift:238`).
+Trackora's widget URLs (`trackora://quickadd?amount=0.3`) lacked that
+parameter, so the plugin discarded them. iOS still opened the app
+because the URL scheme is registered, but `DeepLinkService._handle`
+never received the URL and `QuickAddSheet.show()` never ran.
+
+**Fix.** `ios/TrackoraWidget/TrackoraWidget.swift` now appends
+`homeWidget=1` to every widget URL (`widgetURL`, `Custom`, `Add`, +/-,
+and the tappable amount/pencil label). The Dart-side
+`DeepLinkService._handle` already reads `uri.queryParameters['amount']`
+unchanged, so prefilled amounts (e.g. `?amount=0.30`) flow through to
+the sheet without further changes. The keypad in `QuickAddSheet`
+already supports decimals via cents-based input — typing `030` →
+`$0.30`, `150` → `$1.50`, `1280` → `$12.80`. After the fix:
+
+- Cold start, background, and foreground all open `QuickAddSheet`.
+- Amount preset survives across the deep link.
+- `homeWidget=1` is harmless to the Dart `_handle` — it only checks
+  `uri.host == 'quickadd'`.
+
+### Bug 5 — Stats screenshot exported a blank/clipped image
+
+**Root cause.** The previous pass rendered the off-screen capture tree
+inside an `OverlayEntry` with `Positioned(left: -mediaSize.width * 2)`.
+The `Overlay` lays its children out in a `Stack` with hard-edge
+clipping, so anything positioned outside the visible bounds is **not
+painted**. `RenderRepaintBoundary.toImage()` then returned an empty
+layer because the report widget never produced any paint commands.
+
+**Fix.** `_shareSnapshot` in `lib/screens/home/statistics_screen.dart`
+now positions the report at `(0, 0)` at full natural width and stacks a
+brand-coloured `IgnorePointer(Container)` cover on top. The cover hides
+the rendered report from the user during the brief capture window
+(~200 ms), but `RepaintBoundary` paints into its own isolated layer
+regardless of overdraw, so `toImage()` returns the full report. We also
+wait three frames + 200 ms instead of two frames + 120 ms to give
+fl_chart's `LineChart` and `PieChart` enough time for first paint.
+Visible-section gating, exclude-fixed toggle, filter card, overview
+tiles, and the report header are all part of the captured tree.
+
+### Bug 3 — App Shortcut not visible in Back Tap (works in Shortcuts app)
+
+**This is an iOS limitation, not a Trackora bug.** Settings →
+Accessibility → Touch → Back Tap → Double Tap → Shortcut shows only
+shortcuts saved to the user's *Shortcuts library*. App Shortcuts
+declared via `AppShortcutsProvider` show up in Siri, the Shortcuts app
+gallery, Spotlight, and the Action Button — but not directly in Back
+Tap. `OpenQuickAddIntent` is configured correctly (target membership
+verified, registered in `Runner.xcodeproj/project.pbxproj`,
+`AppShortcutsProvider` declared, three localized phrases, App Group
+flag wired through `_maybeOpenQuickAdd`).
+
+**Required user steps to bind to Back Tap:**
+
+1. Open the Shortcuts app.
+2. Tap "+" → "Add Action".
+3. Search "Quick Add Expense" and pick the Trackora action that
+   appears under "App Shortcuts".
+4. Optionally rename the shortcut to "Quick Add Expense".
+5. Save it (the green back arrow). It now lives in *My Shortcuts*.
+6. Open Settings → Accessibility → Touch → Back Tap → Double Tap →
+   scroll to *Shortcuts* → tap the saved "Quick Add Expense".
+
+After this, double-tapping the back of the phone runs the intent and
+Trackora foregrounds straight into `QuickAddSheet`. The same comment
+block now lives at the top of `ios/Runner/OpenQuickAddIntent.swift`
+for future maintainers.
+
+### Files changed in this pass
+- `ios/TrackoraWidget/TrackoraWidget.swift` — `homeWidget=1` query
+  appended to all widget deep-link URLs (5 sites: small `widgetURL`,
+  step buttons, amount/pencil tap, Add, Custom).
+- `lib/screens/home/statistics_screen.dart` — `_shareSnapshot` rewritten
+  to render the capture tree at (0, 0) with a brand-colored cover, and
+  to wait an extra frame + longer delay before snapshotting.
+- `ios/Runner/OpenQuickAddIntent.swift` — expanded the leading comment
+  to document the Back Tap library workaround in code.
+
+### Known limitations / assumptions
+- Apple does not expose Back Tap binding to apps. The library-wrapper
+  step listed above is the only supported path. We cannot deep-link to
+  the Back Tap Settings screen either (Apple keeps that URL private).
+- The screenshot still flashes the user's display brand-colored for
+  ~200 ms while capture happens. This is the cost of working around the
+  Overlay clip behaviour without adding a third-party screenshot
+  package. fl_chart + offscreen rendering does not currently have a
+  cleaner alternative.
+- The `homeWidget=1` query is treated as opaque by the iOS URL parser
+  and stripped/ignored by `DeepLinkService._handle`. If anyone adds a
+  new widget URL in future, **remember to include `homeWidget=1`** —
+  otherwise the home_widget plugin will silently drop it.
+
+### Checks / run status
+- `dart analyze lib/screens/home/statistics_screen.dart lib/main.dart
+  lib/services/widget_intent_service.dart lib/services/deep_link_service.dart`
+  → No issues found.
+- iOS Swift was not compiled in this pass; rebuild via Xcode (`cd ios
+  && pod install && open Runner.xcworkspace`) and run on a real device
+  to verify the widget deep links and the App Shortcut. Simulator's
+  Settings does not show Back Tap; testing requires a physical phone.
+- Manual test matrix covered by this pass: tap pencil from widget →
+  QuickAddSheet opens with prefilled amount that user can edit;
+  decimals (0.30, 1.50, 12.80) save correctly; share button on Stats
+  produces a non-blank PNG containing the filtered report.
+
+---
+
+## Latest Pass — Widget Direct Input, Budget Progress, Quick Add Shortcut
+
+### Rectangle widget — direct amount input
+The medium / small home-screen widget previously made users tap +/- repeatedly
+to land on the right amount because WidgetKit forbids text input. The amount
+label in the +/- row is now wrapped in a `Link(...)` to
+`trackora://quickadd?amount=<currentDraft>`. Tapping the amount opens
+Trackora directly into the existing in-app `QuickAddSheet` with the draft
+pre-filled, where the user can type the exact value. The +/- buttons are
+kept for one-tap nudges. A small pencil glyph next to the amount hints at
+the new tap target (`ios/TrackoraWidget/TrackoraWidget.swift`).
+
+### Rectangle widget — monthly budget progress
+Added a compact iOS-style progress strip to `balanceBlock` that renders
+when `monthBudget > 0`. The strip shows:
+
+- usage percent in heavy rounded font,
+- `<spent> / <budget>` in soft secondary text,
+- a 5 px pill track filled to the actual ratio (clamped to 100% visually
+  even when `pct >= 1`).
+
+Three tinted states: neutral black for healthy, amber for ≥ 80% (warning),
+red when over budget. The headline number was already red on overspend;
+the progress strip extends that signal to the bar and percent label.
+
+### iOS App Shortcut — "Quick Add Expense" (Back Tap / Siri / Action Button)
+**Apple does not let third-party apps bind directly to Back Tap.** The
+supported path is to publish an `AppShortcut` and let the user wire it
+manually in:
+
+  Settings → Accessibility → Touch → Back Tap → Double Tap →
+  "Quick Add Expense"
+
+The same shortcut also surfaces in Siri ("Hey Siri, quick add expense"),
+the Shortcuts app, the Action Button (iPhone 15 Pro+) and Spotlight.
+
+New file: `ios/Runner/OpenQuickAddIntent.swift` exposes:
+
+- `OpenQuickAddIntent` — `openAppWhenRun = true`. When invoked it sets
+  the App Group flag `pending_open_quickadd = true` (timestamp stored
+  alongside) and Trackora foregrounds.
+- `TrackoraAppShortcuts: AppShortcutsProvider` — registers the shortcut
+  with three localized phrases ("Quick add expense in Trackora", etc.).
+
+Flutter side (`lib/services/widget_intent_service.dart`) gained
+`consumePendingQuickAdd()` which reads the flag through `home_widget`,
+clears it, and returns whether the sheet should open. `lib/main.dart`
+calls it on cold start and on every `AppLifecycleState.resumed`, then
+shows `QuickAddSheet` via the existing `rootNavKey`.
+
+The shortcut deliberately avoids the `trackora://quickadd` URL deep-link
+path because URL routing from an App Intent isn't always reliable
+through SceneDelegate. The App Group flag is the simpler, well-trodden
+pattern.
+
+### Quick Add dialog
+Unchanged from existing implementation — `lib/screens/expenses/quick_add_sheet.dart`
+already provides category chips, amount keypad, optional note, save and
+cancel. It's reused for both the widget "Custom" / amount-tap deep link
+and the new App Shortcut.
+
+### Dynamic Island / Live Activity stance
+Not implemented. Live Activities are designed for glanceable status, not
+text-entry forms — Apple does not allow keyboard input inside an Activity.
+The actual amount entry stays inside the app's `QuickAddSheet`. If a
+future "in-progress entry" Live Activity becomes useful, it would surface
+state only and tap to open the same sheet.
+
+### Files changed in this pass
+- `ios/TrackoraWidget/TrackoraWidget.swift` — tappable amount label,
+  budget progress strip.
+- `ios/Runner/OpenQuickAddIntent.swift` — new App Intent + App Shortcut.
+- `ios/Runner.xcodeproj/project.pbxproj` — registered the new Swift
+  source in the Runner target (PBXBuildFile, PBXFileReference, group,
+  Sources build phase).
+- `lib/services/widget_intent_service.dart` — `consumePendingQuickAdd()`.
+- `lib/main.dart` — `_maybeOpenQuickAdd()` on cold start + resume.
+
+### Known limitations / assumptions
+- Back Tap remains a *user-side* binding. Apple offers no API to set
+  it programmatically; the docs entry above describes the manual steps.
+  Trackora cannot show a "set up Back Tap" deep link to that screen
+  either — the Accessibility deep link URL is private.
+- The App Shortcut requires iOS 16+. Older devices fall back to the
+  existing widget tap / `trackora://quickadd` deep link, which already
+  worked on iOS 15+.
+- The progress strip is rendered in both small and medium widgets
+  because `balanceBlock` is shared. On small the bar competes with the
+  quick-add grid for vertical room — the layout still fits today
+  because the headline uses `minimumScaleFactor` aggressively, but on
+  some smaller form factors users may see a slightly tighter strip.
+- The pbxproj edit uses synthesized 24-char IDs (`8A5BCD2D...` /
+  `8A5BCD2E...`) that don't collide with anything in the existing
+  file. If Xcode ever rewrites the project the IDs may change, which
+  is fine.
+
+### Checks / run status
+- `dart analyze lib/main.dart lib/services/widget_intent_service.dart`
+  → No issues found.
+- Swift files were not compiled in this pass (no Xcode toolchain run).
+  Build should be verified on a Mac with Xcode 15+ before shipping:
+  `cd ios && pod install && open Runner.xcworkspace`, then build for
+  a real device (App Intents don't appear in Settings on the
+  Simulator's Back Tap).
+
+---
+
+## Latest Pass — Stats Charts Carousel + Report Export
+
+### Filter section redesign
+The previous filter row used a `Wrap`, which let `All` flow onto a
+second line on narrow phones. Replaced with a new `_SegmentedFilter`
+widget — four `Expanded` chips inside a single pill-shaped track, so
+all four options always sit on one line at the same width. Selected
+state is the existing `accentDark` fill. Below the segmented row the
+filter card now shows: range label (left) + nav arrows (right), then a
+recessed background row hosting the "Exclude bills + installments"
+`CupertinoSwitch`. Three balanced rows, no awkward wrapping.
+
+### Single swipeable charts card
+Line chart and donut chart used to stack vertically. Replaced with a
+new `_ChartsCarousel` widget that holds both charts inside one section
+and exposes them through a `PageView`:
+
+- A small tab-style header at the top of the carousel (icon + label per
+  page) doubles as a tap-to-switch control.
+- iOS-style page dots at the bottom track the active chart.
+- Each page lives inside its own `SingleChildScrollView` so longer
+  donut legends scroll within the 560 px viewport without breaking the
+  outer scroll.
+- The line-chart page is *dropped from the carousel* when `_period ==
+  _StatsPeriod.all`, so the user only sees donut on All. If the user
+  hides one of the two via Manage Visibility, the carousel collapses to
+  a single non-swipeable page.
+
+The page order is now: top action bar → filter → Overview → swipeable
+charts.
+
+### Screenshot/report export
+`_buildReport(...)` learned a `forReport: true` mode used by the
+off-screen capture path:
+
+1. **Report header** (`_ReportHeader`) — "Trackora Stats Report" title,
+   doc-chart icon, generated timestamp, and three info pills showing
+   the active period, current range label, and the include/exclude
+   bills+installments state. Style stays Trackora-native (pastel mint
+   icon tile, soft pill tags, rounded card) — does not copy any
+   external reference.
+2. **Filter card** with nav arrows hidden.
+3. **Overview tiles** with tap callbacks suppressed (a static report
+   shouldn't appear interactive).
+4. **Charts** — `_ChartsCarousel` is forced into `stacked: true` mode
+   for the snapshot. The PageView fights with `RepaintBoundary.toImage`
+   (off-screen pages don't paint reliably), so the report stacks the
+   line-chart card above the donut card vertically. Donut keeps its
+   built-in category breakdown legend, satisfying the "Category
+   breakdown from donut chart data" requirement.
+5. The whole tree still renders inside an `OverlayEntry` positioned
+   off-screen at full natural height, then captured at `pixelRatio:
+   2.5` and shared via `share_plus`. Hidden sections are still gated by
+   the visibility set, so they aren't in the export.
+
+For All filter the report drops the line chart and shows just the
+header + filter + overview + donut/category breakdown.
+
+### Visibility model
+Unchanged set of three section ids: `lineChart`, `importantData`
+(displayed as "Overview"), `donutChart`. Hiding `lineChart` or
+`donutChart` toggles those pages in the carousel; hiding both
+collapses the carousel entirely.
+
+### i18n
+Added `stats.report.title` for en / zh / ms. No other label changes.
+
+### Files changed in this pass
+- `lib/screens/home/statistics_screen.dart` — `_SegmentedFilter`,
+  `_ChartsCarousel`, `_ChartPage`, `_ReportHeader`, `_ReportTag`;
+  `_FilterCard` rebuilt; `_buildReport` gained `forReport`. Removed
+  unused `_RangeChip` and the local `_label` helper inside
+  `_FilterCard`.
+- `lib/services/i18n.dart` — `stats.report.title` for all three
+  languages.
+
+### Known limitations / assumptions
+- The carousel viewport is a fixed 560 px tall to keep month-view's
+  rotated x-axis labels and long donut legends visible without
+  introducing intrinsic-height plumbing through the parent
+  `SingleChildScrollView`. On very small devices (< ~560 logical px
+  tall content area) the inner page can still scroll vertically.
+- For the screenshot we lay the two charts out *stacked* rather than as
+  a PageView. fl_chart's `LineChart` and `PieChart` only paint on the
+  active PageView page, so a snapshot of an off-screen page would come
+  back blank. Stacked layout is also more report-appropriate.
+- The reference image used during design discussions was a financial
+  report layout. The exported report does **not** copy that layout —
+  it reuses Trackora's existing pastel iconography, segmented chips,
+  rounded `SectionCard`s, and the existing `_OverviewCard` /
+  `_CategoryCard` components.
+
+### Checks / run status
+- `dart analyze lib/screens/home/statistics_screen.dart
+  lib/services/i18n.dart` → No issues found.
+- Manual device testing not performed in this pass. Recommended:
+  filter Week/Month/Year/All on a narrow viewport (verify no chip
+  wraps), swipe between the two chart pages (and tap the header tabs),
+  toggle Manage Visibility for line/donut individually, switch to All
+  and confirm only the donut page is reachable, tap Share and verify
+  the exported PNG has the report header + tags + tiles + both charts
+  stacked + category legend.
+
+---
+
+## Latest Pass — Stats Page Refinements
+
+Follow-up tweaks to the Stats page redesign documented in the next section.
+
+### Section order
+The on-screen and exported order is now: **Top action bar → Filter card →
+Overview → Line chart → Donut chart**. Filter moved above the chart so it
+clearly drives every section below it.
+
+### "Important data" renamed to "Overview"
+The summary card is now labelled "Overview" (zh `概览`, ms `Gambaran`). The
+internal section id stays `importantData` so existing prefs still resolve
+to the right toggle in the Manage Visibility sheet.
+
+### Clickable Total Expenses / Total Income tiles
+Both Overview tiles are now `GestureDetector`-wrapped and show a chevron
+glyph when tappable. Tapping opens a new shared `_GenericRecordsSheet`
+(see `lib/screens/home/statistics_screen.dart`) listing every expense or
+income record that matches the active filter and exclude-fixed toggle. The
+sheet reuses `_RecordRow`, which now accepts an optional `amountColor`
+(income rows render in `AppColors.income` instead of the default expense
+red). Records show title (note → category fallback), amount, date and
+category. `Expense` has no payment-type field, so payment type isn't
+shown — see "Known limitations" below.
+
+### Default filter is Weekly
+`_period` now starts at `_StatsPeriod.week` and `_anchor` at the start of
+the current week. Switching periods resets the anchor to the *current*
+week / month / year so the user always lands on a meaningful slice.
+
+### Line chart not for "All"
+The line chart card now renders a friendly "Line chart is only available
+for Week, Month, or Year." message when `_period == all` instead of
+trying to draw cumulative-by-year. Per spec, the chart only supports
+Week / Month / Year.
+
+### X-axis labels render every tick
+Previously the chart sparsified labels (`labelStep`) for dense series. It
+now renders every label and rotates them ≈ −52° when the series has
+more than 12 points (i.e. days-in-month). Font size also steps down for
+denser series (`8.5 / 9.5 / 10`). The chart container grows from 200 →
+230 px tall in Month view to give the rotated labels breathing room.
+
+### Screenshot fix — capture full report
+The previous capture pinned a `RepaintBoundary` inside a scroll view, so
+`boundary.toImage()` only painted the visible viewport. The new
+`_shareSnapshot` builds an off-screen copy of the report column inside an
+`OverlayEntry` (`Positioned(left: -mediaSize.width * 2, ...)`), waits two
+frames for fl_chart to lay out, snapshots the dedicated overlay
+`RepaintBoundary` at `pixelRatio: 2.5`, then removes the entry. The
+exported PNG now includes the filter card (showing the active period and
+exclude state), the overview, and any visible chart sections — exactly
+what the user sees, regardless of scroll position. Hidden sections stay
+out because the overlay copy uses the same `_buildReport(...)` helper
+that gates on `visibleSections`.
+
+### Files changed in this pass
+- `lib/screens/home/statistics_screen.dart` (refactor of build, line
+  chart x-axis, overlay-based screenshot, new generic records sheet,
+  rename to `_OverviewCard`).
+- `lib/services/i18n.dart` (label rename + `stats.expenseRecords`,
+  `stats.incomeRecords`, `stats.lineChart.notForAll` for en/zh/ms).
+
+### Known limitations / assumptions
+- `Expense` has no payment-type field, so the records sheets do not show
+  payment type. Adding it requires a model + repository change which is
+  out of scope for a Stats-only pass.
+- The overlay capture briefly inserts an extra widget tree off-screen.
+  This adds a negligible build cost (~120 ms wait + one paint), but on
+  very low-end devices the share button feel might be slightly slower.
+  Trade-off accepted to make the screenshot reliably whole.
+- Rotated month labels assume LTR locales. RTL languages aren't currently
+  supported by the app, but if added later the rotation angle should be
+  flipped to `+0.9`.
+
+### Checks / run status
+- `dart analyze lib/screens/home/statistics_screen.dart
+  lib/services/i18n.dart` → No issues found.
+- Manual device testing not performed in this pass. Recommended checks:
+  switch Week/Month/Year/All; verify line chart is hidden on All and
+  defaults to Week on first open; toggle exclude bills + installments
+  and confirm Overview, donut, and the records sheets all update; tap
+  Total Expenses and Total Income tiles to verify the records sheets
+  open with the right entries; confirm Month view shows every day label
+  legibly; tap Share and verify the exported PNG contains the filter
+  card + visible sections without clipping.
+
+---
+
+## Latest Pass — Stats Page Redesign
+
+### New layout order
+`lib/screens/home/statistics_screen.dart` was rebuilt around a single global
+filter that drives every section below it. The new top-to-bottom order is:
+
+1. Top action bar — title + Manage Visibility + Share Snapshot.
+2. Line chart card.
+3. Filter card (period chips + Exclude bills + installments toggle + nav arrows).
+4. Important data summary card.
+5. Donut chart (By Category).
+
+### Global filter behavior
+The previous Weekly card and the per-card category filter were merged into one
+global filter card. Periods: `Week`, `Month`, `Year`, `All`. Switching a period
+resets the anchor date to "today" so the user lands on the current slice.
+Prev/Next arrows step the anchor by 7 days / 1 month / 1 year (hidden for
+`All`). The exclude-bills-and-installments toggle is a CupertinoSwitch on the
+filter card and applies the same `category == 'Bills' || note.contains
+('(installment)')` rule the budget page uses. All three sections
+(line chart, summary, donut) re-derive from the filtered range immediately —
+no stale state.
+
+The line chart adapts to the selected period: 7 daily values for Week, daily
+values for Month, 12 monthly buckets for Year, and per-year totals for All.
+Inline value bubbles only render when the series is sparse (≤12 points and
+denseLabels) to keep the chart readable.
+
+### Important data summary section
+A new `_SummaryCard` shows a 2-column grid of pastel tiles for the active
+range: Total expenses, Total income, Net balance, Transactions, Highest
+expense, Highest income, Avg. expense, and Top category. Tiles for highest
+income/expense and top category drop off when the underlying data is empty.
+Empty state: a single localized "No data for this range yet." line.
+
+### Visibility management
+Stats now has its own visibility set, persisted via
+`PrefsService.visibleStatsSections()` /
+`PrefsService.setVisibleStatsSections()` and exposed through
+`statsSectionsVisibilityProvider` (reuses the existing
+`VisibilitySetNotifier`). Default = all three sections visible. The
+"Manage visibility" button on the top action bar opens the same
+`_VisibilitySheet` pattern used by Home / Money Hub, with toggles for
+`lineChart`, `importantData`, `donutChart`. At least one section must
+stay visible (matches the existing Home/Money convention).
+
+### Share snapshot
+The Share button captures the current Stats view as a PNG and hands it to
+`share_plus`. Implementation: a `RepaintBoundary` wraps everything below the
+action bar, and `_shareSnapshot` calls `boundary.toImage(pixelRatio: 3)` →
+`toByteData` → writes to the temp directory → `Share.shareXFiles`. Because
+hidden sections are not in the widget tree, they are also not in the
+screenshot. Errors fall through to a SnackBar with the localized
+"Could not export snapshot" message.
+
+### i18n
+New keys were added to `en`, `zh`, `ms`: `stats.manageVisibility`,
+`stats.customizeSections`, `stats.shareSnapshot`, `stats.exportFailed`,
+`stats.section.{lineChart,importantData,donutChart}`, `stats.summary.*`,
+`stats.lineChart.{title,empty,weekSubtitle,monthSubtitle,yearSubtitle,allSubtitle}`.
+
+### Files changed in this pass
+- `lib/screens/home/statistics_screen.dart` (full rewrite)
+- `lib/services/prefs_service.dart` (added stats visibility prefs)
+- `lib/state/providers.dart` (added `statsSectionsVisibilityProvider`)
+- `lib/services/i18n.dart` (added en/zh/ms keys for the new UI)
+
+### Assumptions and known limitations
+- The "payment type" field requested for the category-records popup does not
+  exist on `Expense`; the popup keeps showing title/amount/date/category. If
+  payment type is added to the model later, the popup row should grow a
+  third info line.
+- Previous "Custom range" picker on the donut card was removed in favor of
+  the unified Week/Month/Year/All selector, in line with the spec. If a
+  custom range becomes a requirement again, it can be re-added as a 5th chip
+  with the existing date-picker code restored from git history.
+- Screenshot export uses `pixelRatio: 3` which produces large images on
+  tall phones. Acceptable for sharing; not optimized for low-memory devices.
+- Line chart renders an empty state when the active period has zero
+  spending — including for "Month" with no entries — rather than trying to
+  draw a flat zero line.
+
+### Checks / run status
+- `dart analyze lib/screens/home/statistics_screen.dart
+  lib/services/prefs_service.dart lib/state/providers.dart
+  lib/services/i18n.dart` → No issues found.
+- Manual testing has not yet been performed on a device; the dev server was
+  not started in this pass. Recommended manual checks: filter switching
+  (Week/Month/Year/All), exclude toggle, hide/show each section via Manage
+  Visibility, share button writes a PNG and opens the share sheet, donut
+  category popup opens, empty states render for ranges with no data.
+
+---
+
+## Latest Pass — Money Budget Details, Stats Category Ranges, CSV Export Range
+
+### Money Hub monthly budget details
+`lib/screens/home/budget_screen.dart` now opens a monthly budget details sheet
+when the Money Hub `Monthly budget` card is tapped. The sheet shows:
+
+- Monthly budget amount.
+- Spent this month.
+- Remaining budget.
+- Budget usage percentage.
+- A simple progress bar.
+- An `Edit monthly budget` action that reuses the existing budget editor.
+
+Why: tapping the monthly budget should first explain the current budget state,
+instead of immediately forcing the user into editing.
+
+Assumption: the existing `selectedMonthProvider` remains the source of the
+month shown in Money Hub, and bills/installment entries remain excluded from
+budget spending through the existing discretionary-spend rule.
+
+### Stats weekly spend priority
+`lib/screens/home/statistics_screen.dart` now defaults Weekly Spend to exclude
+bills and installments. The segmented control shows
+`Exclude bills + installments` first, with include still available as the
+second option.
+
+Why: day-to-day spending is the priority view, while the old include behavior
+is still preserved behind the second segment.
+
+### Stats By Category redesign
+The By Category section now uses all expense records and filters them in-memory
+by:
+
+- Week
+- Month
+- Year
+- All
+- Custom range
+
+Custom range uses start and end date pickers. The donut chart, legend, totals,
+empty state, and category record sheet all respect the selected range.
+
+The category chart remains powered by `fl_chart`, but the interaction changed:
+tapping a donut segment or legend row opens a bottom sheet listing the matching
+records for that category. Each record shows note/category fallback, amount,
+date, and category. The donut center always shows total expense for the active
+range.
+
+Why: this replaces the old month-only category chips with a broader, clearer
+filter system and makes category totals inspectable without navigating away.
+
+Assumption: Week/Month/Year filters refer to the current calendar week, month,
+and year. Older periods can be inspected with Custom range or All.
+
+### CSV export range selection
+`lib/screens/settings/settings_screen.dart` now shows an export range sheet
+before sharing a CSV. Users can choose:
+
+- A specific month, selected from months that contain records.
+- Export all records.
+
+The exported CSV receives only records matching the selected range. The export
+service itself is unchanged; filtering happens before calling
+`ExportService.exportCsv(...)`.
+
+Why: range selection keeps export behavior simple and reliable without changing
+the CSV schema or import compatibility.
+
+### Localization
+`lib/services/i18n.dart` adds English, Chinese, and Malay strings for the new
+budget details sheet, Stats filters, Weekly Spend labels, and CSV export range
+sheet.
+
+### Files changed in this pass
+- `lib/screens/home/budget_screen.dart`
+- `lib/screens/home/statistics_screen.dart`
+- `lib/screens/settings/settings_screen.dart`
+- `lib/services/i18n.dart`
+- `docs/PROJECT_CONTEXT.md`
+
+### Checks / run status
+- `dart analyze lib` -> **No issues found!**
+- `flutter precache --macos` -> completed with no output.
+- `flutter precache --universal --force` -> restored the missing tester
+  engine artifacts.
+- `flutter test` -> **All tests passed!** Pub still printed the existing
+  advisory decode warnings (`advisoriesUpdated must be a String`) while
+  resolving dependencies, then continued successfully.
+
+### Exact run commands
+
+```sh
+dart analyze lib
+flutter precache --macos
+flutter precache --universal --force
+flutter test
+```
+
 ## Latest Pass — Money Hub Rename, Visibility Settings, Swipe Actions
 
 ### Budget rename decision

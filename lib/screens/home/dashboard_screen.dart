@@ -35,6 +35,7 @@ class DashboardScreen extends ConsumerWidget {
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleCards = ref.watch(homeCardVisibilityProvider);
+    final cardOrder = ref.watch(homeCardOrderProvider);
     final email = user?.email ?? '';
     final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
 
@@ -160,6 +161,9 @@ class DashboardScreen extends ConsumerWidget {
                 borrowLending: borrowLending,
                 userId: user?.uid,
                 visibleCards: visibleCards,
+                cardOrder: cardOrder,
+                todaySpent: todaySpent,
+                weekSpent: weekSpent,
               ),
             ),
           ),
@@ -188,15 +192,23 @@ class DashboardScreen extends ConsumerWidget {
                       color: brand.ink,
                     ),
                   ),
-                  if (monthExpenses.length > 5)
-                    Text(
-                      '+ ${monthExpenses.length - 5} ${context.t('home.more')}',
+                  GestureDetector(
+                    onTap: () => _showAllBillsSheet(
+                      context,
+                      monthExpenses,
+                      symbol,
+                      selectedMonth,
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    child: Text(
+                      context.t('home.allBills'),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: brand.accentDark,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -206,7 +218,7 @@ class DashboardScreen extends ConsumerWidget {
             SliverToBoxAdapter(child: _empty(context))
           else
             SliverList.builder(
-              itemCount: monthExpenses.length > 5 ? 5 : monthExpenses.length,
+              itemCount: monthExpenses.length > 10 ? 10 : monthExpenses.length,
               itemBuilder: (_, i) {
                 final expense = monthExpenses[i];
                 return ExpenseCard(
@@ -264,6 +276,39 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  void _showAllBillsSheet(
+    BuildContext context,
+    List<Expense> expenses,
+    String symbol,
+    DateTime month,
+  ) {
+    final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
+    final total = sorted
+        .where((e) => e.type == EntryType.expense)
+        .fold<double>(0, (s, e) => s + e.amount);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.brand.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * 0.85,
+          ),
+          child: _AllBillsSheet(
+            expenses: sorted,
+            total: total,
+            symbol: symbol,
+            month: month,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showHomeCardsSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet<void>(
       context: context,
@@ -274,25 +319,33 @@ class DashboardScreen extends ConsumerWidget {
       builder: (ctx) => Consumer(
         builder: (context, ref, _) {
           final visible = ref.watch(homeCardVisibilityProvider);
-          final notifier = ref.read(homeCardVisibilityProvider.notifier);
-          final items = [
-            ('totalBalance', context.t('home.totalBalance')),
-            ('monthlyBudget', context.t('home.budget')),
-            ('savingPlans', context.t('tools.savingPlans')),
-            ('borrowLending', context.t('tools.borrowLending')),
-          ];
-          return _VisibilitySheet(
+          final visibilityNotifier = ref.read(
+            homeCardVisibilityProvider.notifier,
+          );
+          final order = ref.watch(homeCardOrderProvider);
+          final orderNotifier = ref.read(homeCardOrderProvider.notifier);
+          final labelFor = {
+            'totalBalance': context.t('home.totalBalance'),
+            'monthlyBudget': context.t('home.budget'),
+            'savingPlans': context.t('tools.savingPlans'),
+            'borrowLending': context.t('tools.borrowLending'),
+          };
+          return _ReorderableCardsSheet(
             title: context.t('home.customizeCards'),
             footnote: context.t('customize.keepOneVisible'),
-            children: [
-              for (final (id, label) in items)
-                _VisibilitySwitchRow(
-                  label: label,
-                  visible: visible.contains(id),
-                  canHide: visible.length > 1 || !visible.contains(id),
-                  onChanged: (value) => notifier.setVisible(id, value),
-                ),
-            ],
+            order: order,
+            visible: visible,
+            labelFor: labelFor,
+            canHide: (id) => visible.length > 1 || !visible.contains(id),
+            onVisibilityChanged: (id, value) =>
+                visibilityNotifier.setVisible(id, value),
+            onReorder: (oldIndex, newIndex) {
+              final updated = [...order];
+              if (newIndex > oldIndex) newIndex -= 1;
+              final item = updated.removeAt(oldIndex);
+              updated.insert(newIndex, item);
+              orderNotifier.setOrder(updated);
+            },
           );
         },
       ),
@@ -310,6 +363,9 @@ class _HomeBalanceCarousel extends ConsumerStatefulWidget {
   final List<BorrowLending> borrowLending;
   final String? userId;
   final Set<String> visibleCards;
+  final List<String> cardOrder;
+  final double todaySpent;
+  final double weekSpent;
 
   const _HomeBalanceCarousel({
     required this.balance,
@@ -321,6 +377,9 @@ class _HomeBalanceCarousel extends ConsumerStatefulWidget {
     required this.borrowLending,
     required this.userId,
     required this.visibleCards,
+    required this.cardOrder,
+    required this.todaySpent,
+    required this.weekSpent,
   });
 
   @override
@@ -346,13 +405,14 @@ class _HomeBalanceCarouselState extends ConsumerState<_HomeBalanceCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final cards = <(String, Widget)>[
+    final allCards = <(String, Widget)>[
       (
         'totalBalance',
         _TotalBalanceCard(
           balance: widget.balance,
           symbol: widget.symbol,
-          allExpenses: widget.allExpenses,
+          todaySpent: widget.todaySpent,
+          weekSpent: widget.weekSpent,
         ),
       ),
       (
@@ -392,7 +452,14 @@ class _HomeBalanceCarouselState extends ConsumerState<_HomeBalanceCarousel> {
           ),
         ),
       ),
-    ].where((entry) => widget.visibleCards.contains(entry.$1)).toList();
+    ];
+    // Sort by saved order, then filter to visible only
+    final cardMap = {for (final c in allCards) c.$1: c};
+    final cards = [
+      for (final id in widget.cardOrder)
+        if (widget.visibleCards.contains(id) && cardMap.containsKey(id))
+          cardMap[id]!,
+    ];
     if (_page >= cards.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -418,15 +485,25 @@ class _HomeBalanceCarouselState extends ConsumerState<_HomeBalanceCarousel> {
   }
 }
 
-class _VisibilitySheet extends StatelessWidget {
+class _ReorderableCardsSheet extends StatelessWidget {
   final String title;
   final String footnote;
-  final List<Widget> children;
+  final List<String> order;
+  final Set<String> visible;
+  final Map<String, String> labelFor;
+  final bool Function(String id) canHide;
+  final void Function(String id, bool value) onVisibilityChanged;
+  final void Function(int oldIndex, int newIndex) onReorder;
 
-  const _VisibilitySheet({
+  const _ReorderableCardsSheet({
     required this.title,
     required this.footnote,
-    required this.children,
+    required this.order,
+    required this.visible,
+    required this.labelFor,
+    required this.canHide,
+    required this.onVisibilityChanged,
+    required this.onReorder,
   });
 
   @override
@@ -454,10 +531,66 @@ class _VisibilitySheet extends StatelessWidget {
               title,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
+            const SizedBox(height: 4),
+            Text(
+              context.t('home.dragToReorder'),
+              style: TextStyle(
+                fontSize: 12,
+                color: brand.inkSoft,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 12),
             SectionCard(
               padding: EdgeInsets.zero,
-              child: Column(children: children),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                child: ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: order.length,
+                  onReorder: onReorder,
+                  itemBuilder: (ctx, i) {
+                    final id = order[i];
+                    final label = labelFor[id] ?? id;
+                    final isVisible = visible.contains(id);
+                    return Material(
+                      key: ValueKey(id),
+                      color: brand.surface,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+                        child: Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.line_horizontal_3,
+                              size: 16,
+                              color: brand.inkSoft,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: brand.ink,
+                                ),
+                              ),
+                            ),
+                            CupertinoSwitch(
+                              value: isVisible,
+                              onChanged:
+                                  canHide(id)
+                                      ? (v) => onVisibilityChanged(id, v)
+                                      : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 10),
             Text(
@@ -470,46 +603,6 @@ class _VisibilitySheet extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _VisibilitySwitchRow extends StatelessWidget {
-  final String label;
-  final bool visible;
-  final bool canHide;
-  final ValueChanged<bool> onChanged;
-
-  const _VisibilitySwitchRow({
-    required this.label,
-    required this.visible,
-    required this.canHide,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: brand.ink,
-              ),
-            ),
-          ),
-          CupertinoSwitch(
-            value: visible,
-            onChanged: canHide ? onChanged : null,
-          ),
-        ],
       ),
     );
   }
@@ -547,12 +640,14 @@ class _PageDots extends StatelessWidget {
 class _TotalBalanceCard extends ConsumerWidget {
   final double balance;
   final String symbol;
-  final List<Expense> allExpenses;
+  final double todaySpent;
+  final double weekSpent;
 
   const _TotalBalanceCard({
     required this.balance,
     required this.symbol,
-    required this.allExpenses,
+    required this.todaySpent,
+    required this.weekSpent,
   });
 
   @override
@@ -560,15 +655,11 @@ class _TotalBalanceCard extends ConsumerWidget {
     final positive = balance >= 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final visible = ref.watch(balanceVisibleProvider);
-    final lifetimeIncome = allExpenses
-        .where((e) => e.type == EntryType.income)
-        .fold<double>(0, (s, e) => s + e.amount);
-    final lifetimeSpent = allExpenses
-        .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.amount);
 
     final heroBg = isDark ? const Color(0xFF24242A) : const Color(0xFF111111);
-    return SectionCard(
+    return _ShadowCard(
+      shadowColor: heroBg.withValues(alpha: isDark ? 0.15 : 0.28),
+      child: SectionCard(
       color: heroBg,
       pastel: false,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
@@ -646,19 +737,19 @@ class _TotalBalanceCard extends ConsumerWidget {
             children: [
               Expanded(
                 child: _DarkMetricPill(
-                  label: context.t('home.lifetimeIn'),
+                  label: context.t('home.today'),
                   value: visible
-                      ? formatMoney(symbol, lifetimeIncome)
+                      ? formatMoney(symbol, todaySpent)
                       : '$symbol ****',
-                  color: AppColors.income,
+                  color: AppColors.expense,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _DarkMetricPill(
-                  label: context.t('home.lifetimeOut'),
+                  label: context.t('home.thisWeek'),
                   value: visible
-                      ? formatMoney(symbol, lifetimeSpent)
+                      ? formatMoney(symbol, weekSpent)
                       : '$symbol ****',
                   color: AppColors.expense,
                 ),
@@ -667,7 +758,7 @@ class _TotalBalanceCard extends ConsumerWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -690,7 +781,9 @@ class _MonthlyBudgetCarouselCard extends StatelessWidget {
     final remaining = budget - spent;
     final overspent = remaining < 0;
 
-    return SectionCard(
+    return _ShadowCard(
+      shadowColor: AppColors.lilac.withValues(alpha: 0.5),
+      child: SectionCard(
       color: AppColors.lilac,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       onTap: onTap,
@@ -746,6 +839,18 @@ class _MonthlyBudgetCarouselCard extends StatelessWidget {
                 color: AppColors.inkSoft,
               ),
             ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: (spent / budget).clamp(0.0, 1.0),
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.45),
+                valueColor: AlwaysStoppedAnimation(
+                  overspent ? AppColors.expense : AppColors.ink,
+                ),
+              ),
+            ),
             const Spacer(),
             Row(
               children: [
@@ -771,7 +876,7 @@ class _MonthlyBudgetCarouselCard extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -797,7 +902,9 @@ class _SavingPlansCarouselCard extends StatelessWidget {
     final saved = tracked.fold<double>(0, (s, p) => s + p.currentAmount);
     final target = tracked.fold<double>(0, (s, p) => s + p.targetAmount);
 
-    return SectionCard(
+    return _ShadowCard(
+      shadowColor: AppColors.mint.withValues(alpha: 0.55),
+      child: SectionCard(
       color: AppColors.mint,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       onTap: onTap,
@@ -832,6 +939,18 @@ class _SavingPlansCarouselCard extends StatelessWidget {
               color: AppColors.inkSoft,
             ),
           ),
+          if (target > 0) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: target > 0 ? (saved / target).clamp(0.0, 1.0) : 0.0,
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.45),
+                valueColor: const AlwaysStoppedAnimation(AppColors.ink),
+              ),
+            ),
+          ],
           const Spacer(),
           Row(
             children: [
@@ -854,7 +973,7 @@ class _SavingPlansCarouselCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -886,7 +1005,9 @@ class _BorrowLendingCarouselCard extends StatelessWidget {
         .fold<double>(0, (s, r) => s + r.remaining);
     final net = lent - borrowed;
 
-    return SectionCard(
+    return _ShadowCard(
+      shadowColor: AppColors.sky.withValues(alpha: 0.55),
+      child: SectionCard(
       color: AppColors.sky,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       onTap: onTap,
@@ -929,6 +1050,7 @@ class _BorrowLendingCarouselCard extends StatelessWidget {
                   label: context.t('home.borrowed'),
                   value: formatMoney(symbol, borrowed),
                   color: AppColors.expense,
+                  leadingIcon: CupertinoIcons.arrow_down,
                 ),
               ),
               const SizedBox(width: 10),
@@ -937,13 +1059,14 @@ class _BorrowLendingCarouselCard extends StatelessWidget {
                   label: context.t('home.lent'),
                   value: formatMoney(symbol, lent),
                   color: AppColors.income,
+                  leadingIcon: CupertinoIcons.arrow_up,
                 ),
               ),
             ],
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -1047,11 +1170,13 @@ class _LightMetricPill extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final IconData? leadingIcon;
 
   const _LightMetricPill({
     required this.label,
     required this.value,
     required this.color,
+    this.leadingIcon,
   });
 
   @override
@@ -1062,12 +1187,27 @@ class _LightMetricPill extends StatelessWidget {
         color: Colors.white.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: _MetricText(
-        label: label,
-        value: value,
-        valueColor: color,
-        labelColor: AppColors.inkSoft,
-      ),
+      child: leadingIcon == null
+          ? _MetricText(
+              label: label,
+              value: value,
+              valueColor: color,
+              labelColor: AppColors.inkSoft,
+            )
+          : Row(
+              children: [
+                Icon(leadingIcon!, size: 12, color: color),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: _MetricText(
+                    label: label,
+                    value: value,
+                    valueColor: color,
+                    labelColor: AppColors.inkSoft,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1139,6 +1279,206 @@ class _MiniAction extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+// ── Shadow wrapper for carousel cards ─────────────────────────
+
+class _ShadowCard extends StatelessWidget {
+  final Color shadowColor;
+  final Widget child;
+
+  const _ShadowCard({required this.shadowColor, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 22,
+            spreadRadius: -4,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+// ── All Bills bottom sheet ─────────────────────────────────────
+
+class _AllBillsSheet extends StatelessWidget {
+  final List<Expense> expenses;
+  final double total;
+  final String symbol;
+  final DateTime month;
+
+  const _AllBillsSheet({
+    required this.expenses,
+    required this.total,
+    required this.symbol,
+    required this.month,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('home.allBills'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('MMMM yyyy').format(month),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              CircleIconButton(
+                icon: CupertinoIcons.xmark,
+                size: 34,
+                background: brand.surface,
+                foreground: brand.ink,
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    formatMoney(symbol, total),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${expenses.length} ${expenses.length == 1 ? context.t('common.entry') : context.t('common.entries')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: expenses.length,
+              separatorBuilder: (_, _) =>
+                  Divider(height: 1, color: brand.divider),
+              itemBuilder: (ctx, i) =>
+                  _BillRow(expense: expenses[i], symbol: symbol),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BillRow extends StatelessWidget {
+  final Expense expense;
+  final String symbol;
+
+  const _BillRow({required this.expense, required this.symbol});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final title = expense.note.trim().isEmpty
+        ? context.categoryLabel(expense.category)
+        : expense.note.trim();
+    final isIncome = expense.type == EntryType.income;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${DateFormat('MMM d').format(expense.date)} · ${context.categoryLabel(expense.category)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            (isIncome ? '+' : '') + formatMoney(symbol, expense.amount),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: isIncome ? AppColors.income : AppColors.expense,
+            ),
+          ),
+        ],
       ),
     );
   }

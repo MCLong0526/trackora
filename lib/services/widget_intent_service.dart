@@ -15,6 +15,22 @@ import '../repositories/expense_repository.dart';
 /// UserDefaults key `pending_widget_expenses_json`.
 class WidgetIntentService {
   static const _key = 'pending_widget_expenses_json';
+  static const _kPendingQuickAdd = 'pending_open_quickadd';
+
+  /// Returns `true` if the iOS App Shortcut "Quick Add Expense" was
+  /// invoked (e.g. from Back Tap, Siri, or the Action Button). The flag
+  /// is cleared after the read so the sheet only opens once per
+  /// invocation. iOS-only; on Android this just returns `false`.
+  Future<bool> consumePendingQuickAdd() async {
+    try {
+      final raw = await HomeWidget.getWidgetData<bool>(_kPendingQuickAdd);
+      if (raw != true) return false;
+      await HomeWidget.saveWidgetData<bool>(_kPendingQuickAdd, false);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<int> drain(String userId, ExpenseRepository repo) async {
     final raw = await HomeWidget.getWidgetData<String>(_key);

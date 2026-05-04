@@ -9,6 +9,7 @@ import 'app_config.dart';
 import 'firebase_options.dart';
 import 'repositories/local_storage.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/expenses/quick_add_sheet.dart';
 import 'screens/home/home_shell.dart';
 import 'services/deep_link_service.dart';
 import 'services/widget_intent_service.dart';
@@ -105,6 +106,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       DeepLinkService.attach(rootNavKey);
       _drainWidgetQueue();
+      _maybeOpenQuickAdd();
     });
   }
 
@@ -118,6 +120,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _drainWidgetQueue();
+      _maybeOpenQuickAdd();
     }
   }
 
@@ -129,6 +132,19 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     } catch (_) {
       // Drain is best-effort; failures are non-fatal.
     }
+  }
+
+  /// Drains the iOS App Shortcut "Quick Add Expense" trigger flag.
+  /// Set by `OpenQuickAddIntent` when the user invokes the shortcut
+  /// from Back Tap, Siri, the Action Button, or the Shortcuts app.
+  Future<void> _maybeOpenQuickAdd() async {
+    final pending = await _widgetIntents.consumePendingQuickAdd();
+    if (!pending) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = rootNavKey.currentContext;
+      if (ctx == null) return;
+      QuickAddSheet.show(ctx);
+    });
   }
 
   @override

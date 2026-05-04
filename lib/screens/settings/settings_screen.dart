@@ -2,14 +2,25 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
+import '../../models/expense.dart';
 import '../../services/export_service.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+
+enum _CsvExportRangeMode { month, all }
+
+class _CsvExportSelection {
+  final _CsvExportRangeMode mode;
+  final DateTime month;
+
+  const _CsvExportSelection({required this.mode, required this.month});
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -426,12 +437,22 @@ class SettingsScreen extends ConsumerWidget {
           .read(expenseRepositoryProvider)
           .getAllExpenses(userId)
           .first;
+      if (!context.mounted) return;
       if (items.isEmpty) {
         messenger.showSnackBar(SnackBar(content: Text(nothingToExport)));
         return;
       }
+      final selection = await _pickCsvExportRange(context, items);
+      if (selection == null) return;
+      final exportItems = selection.mode == _CsvExportRangeMode.all
+          ? items
+          : items.where((e) => _isInSelectedMonth(e, selection.month)).toList();
+      if (exportItems.isEmpty) {
+        messenger.showSnackBar(SnackBar(content: Text(nothingToExport)));
+        return;
+      }
       final result = await ExportService().exportCsv(
-        items,
+        exportItems,
         sharePositionOrigin: origin,
       );
       messenger.showSnackBar(
@@ -444,6 +465,135 @@ class SettingsScreen extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$exportFailed: $e')));
     }
+  }
+
+  bool _isInSelectedMonth(Expense e, DateTime month) {
+    return e.date.year == month.year && e.date.month == month.month;
+  }
+
+  Future<_CsvExportSelection?> _pickCsvExportRange(
+    BuildContext context,
+    List<Expense> items,
+  ) async {
+    final months = _exportMonths(items);
+    final initialMonth = months.first;
+    return showModalBottomSheet<_CsvExportSelection>(
+      context: context,
+      backgroundColor: context.brand.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        var mode = _CsvExportRangeMode.month;
+        var selectedMonth = initialMonth;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final brand = context.brand;
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: brand.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      context.t('settings.exportRangeTitle'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.t('settings.exportRangeSubtitle'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _ExportRangeOption(
+                      icon: CupertinoIcons.calendar,
+                      title: context.t('settings.exportSpecificMonth'),
+                      subtitle: DateFormat('MMMM yyyy').format(selectedMonth),
+                      selected: mode == _CsvExportRangeMode.month,
+                      onTap: () =>
+                          setSheetState(() => mode = _CsvExportRangeMode.month),
+                    ),
+                    if (mode == _CsvExportRangeMode.month) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 42,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: months.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final month = months[index];
+                            final selected =
+                                month.year == selectedMonth.year &&
+                                month.month == selectedMonth.month;
+                            return _ExportMonthChip(
+                              label: DateFormat('MMM yyyy').format(month),
+                              selected: selected,
+                              onTap: () => setSheetState(() {
+                                mode = _CsvExportRangeMode.month;
+                                selectedMonth = month;
+                              }),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    _ExportRangeOption(
+                      icon: CupertinoIcons.tray_arrow_up,
+                      title: context.t('settings.exportAllRecords'),
+                      subtitle: context.t('settings.exportAllRecordsSubtitle'),
+                      selected: mode == _CsvExportRangeMode.all,
+                      onTap: () =>
+                          setSheetState(() => mode = _CsvExportRangeMode.all),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(
+                        ctx,
+                        _CsvExportSelection(mode: mode, month: selectedMonth),
+                      ),
+                      child: Text(context.t('settings.exportCsv')),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<DateTime> _exportMonths(List<Expense> items) {
+    final seen = <String>{};
+    final months = <DateTime>[];
+    for (final e in items) {
+      final month = DateTime(e.date.year, e.date.month, 1);
+      final key = '${month.year}-${month.month}';
+      if (seen.add(key)) months.add(month);
+    }
+    months.sort((a, b) => b.compareTo(a));
+    return months;
   }
 
   Future<void> _importCsv(
@@ -531,6 +681,127 @@ class SettingsScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ExportRangeOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ExportRangeOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? brand.accentDark : Colors.transparent,
+            width: 1.4,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.mint : brand.background,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 17, color: brand.ink),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: brand.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? CupertinoIcons.check_mark_circled_solid
+                  : CupertinoIcons.circle,
+              size: 20,
+              color: selected ? AppColors.income : brand.inkSoft,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportMonthChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ExportMonthChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final selectedBg = brand.accentDark;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: selected ? selectedBg : brand.surface,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: selected ? foregroundOn(selectedBg) : brand.ink,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }

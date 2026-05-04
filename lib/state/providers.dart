@@ -275,6 +275,28 @@ class VisibilitySetNotifier extends StateNotifier<Set<String>> {
   }
 }
 
+class HomeCardOrderNotifier extends StateNotifier<List<String>> {
+  final PrefsService _prefs;
+
+  HomeCardOrderNotifier(this._prefs) : super(PrefsService.defaultHomeCards) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = await _prefs.homeCardOrder();
+  }
+
+  Future<void> setOrder(List<String> order) async {
+    state = order;
+    await _prefs.setHomeCardOrder(order);
+  }
+}
+
+final homeCardOrderProvider =
+    StateNotifierProvider<HomeCardOrderNotifier, List<String>>(
+      (ref) => HomeCardOrderNotifier(ref.read(prefsServiceProvider)),
+    );
+
 final homeCardVisibilityProvider =
     StateNotifierProvider<VisibilitySetNotifier, Set<String>>(
       (ref) => VisibilitySetNotifier(
@@ -292,5 +314,15 @@ final moneyHubVisibilityProvider =
         initial: PrefsService.defaultMoneyHubModules.toSet(),
         load: (prefs) => prefs.visibleMoneyHubModules(),
         save: (prefs, ids) => prefs.setVisibleMoneyHubModules(ids),
+      ),
+    );
+
+final statsSectionsVisibilityProvider =
+    StateNotifierProvider<VisibilitySetNotifier, Set<String>>(
+      (ref) => VisibilitySetNotifier(
+        prefs: ref.read(prefsServiceProvider),
+        initial: PrefsService.defaultStatsSections.toSet(),
+        load: (prefs) => prefs.visibleStatsSections(),
+        save: (prefs, ids) => prefs.setVisibleStatsSections(ids),
       ),
     );
