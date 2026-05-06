@@ -50,16 +50,26 @@ class SavingPlanDetailScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
                 _Hero(plan: plan, symbol: symbol),
-                const SizedBox(height: 14),
+                const SizedBox(height: 20),
+                const Text(
+                  'PLAN',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF8E8E93),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 _DetailsCard(plan: plan, symbol: symbol),
-                const SizedBox(height: 14),
+                const SizedBox(height: 20),
                 if (plan.type == SavingPlanType.daysChallenge ||
                     plan.type == SavingPlanType.weeksChallenge)
                   _SlotGrid(plan: plan, symbol: symbol),
                 if (plan.type != SavingPlanType.daysChallenge &&
                     plan.type != SavingPlanType.weeksChallenge)
                   _ContributionHistory(plan: plan, symbol: symbol),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 _ActionRow(plan: plan, symbol: symbol),
               ],
             );
@@ -184,51 +194,89 @@ class _Hero extends StatelessWidget {
     final accent = spAccent(plan.type);
     final tint = spTint(plan.type);
     final brand = context.brand;
+
+    final raw = formatMoney(symbol, plan.currentAmount);
+    final dotIdx = raw.indexOf('.');
+    final mainPart = dotIdx >= 0 ? raw.substring(0, dotIdx) : raw;
+    final decPart = dotIdx >= 0 ? raw.substring(dotIdx) : '';
+    final pct = (plan.progress * 100).toStringAsFixed(0);
+    final remaining = formatMoney(symbol, plan.remaining);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [tint, brand.surface],
-        ),
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            plan.name,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            children: [
+              Text(
+                '${plan.name} ${_typeLabel(context, plan.type)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tint,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _typeLabel(context, plan.type),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            _typeLabel(context, plan.type),
-            style: TextStyle(
-              fontSize: 11,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            formatMoney(symbol, plan.currentAmount),
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1,
-            ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                mainPart,
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  color: brand.ink,
+                  letterSpacing: -1,
+                ),
+              ),
+              if (decPart.isNotEmpty)
+                Text(
+                  decPart,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                  ),
+                ),
+            ],
           ),
           Text(
             '${context.t('sp.ofTarget')} ${formatMoney(symbol, plan.targetAmount)}',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: brand.inkSoft,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 12),
@@ -241,25 +289,24 @@ class _Hero extends StatelessWidget {
               valueColor: AlwaysStoppedAnimation(accent),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             children: [
               Text(
-                '${(plan.progress * 100).toStringAsFixed(0)}%',
-                style: const TextStyle(
+                '$pct% saved',
+                style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
                 ),
               ),
               const Spacer(),
               Text(
-                context
-                    .t('sp.remainingLine')
-                    .replaceFirst('{amount}', formatMoney(symbol, plan.remaining)),
+                '$remaining to go',
                 style: TextStyle(
                   fontSize: 12,
                   color: brand.inkSoft,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -269,18 +316,13 @@ class _Hero extends StatelessWidget {
     );
   }
 
-  String _typeLabel(BuildContext context, SavingPlanType t) {
-    switch (t) {
-      case SavingPlanType.fixed:
-        return context.t('sp.typeFixed').toUpperCase();
-      case SavingPlanType.flexible:
-        return context.t('sp.typeFlexible').toUpperCase();
-      case SavingPlanType.daysChallenge:
-        return context.t('sp.typeDays').toUpperCase();
-      case SavingPlanType.weeksChallenge:
-        return context.t('sp.typeWeeks').toUpperCase();
-    }
-  }
+  String _typeLabel(BuildContext context, SavingPlanType t) => switch (t) {
+        SavingPlanType.fixed => context.t('sp.typeFixed').toUpperCase(),
+        SavingPlanType.flexible => context.t('sp.typeFlexible').toUpperCase(),
+        SavingPlanType.daysChallenge => context.t('sp.typeDays').toUpperCase(),
+        SavingPlanType.weeksChallenge =>
+          context.t('sp.typeWeeks').toUpperCase(),
+      };
 }
 
 class _DetailsCard extends StatelessWidget {
@@ -306,51 +348,60 @@ class _DetailsCard extends StatelessWidget {
           context.t('sp.fieldContribution'),
           formatMoney(symbol, plan.contributionAmount!),
         ),
-      if (plan.totalDays != null)
-        (
-          context.t('sp.fieldDays'),
-          '${plan.totalDays}',
-        ),
-      if (plan.totalWeeks != null)
-        (
-          context.t('sp.fieldWeeks'),
-          '${plan.totalWeeks}',
-        ),
+      if (plan.totalDays != null) (context.t('sp.fieldDays'), '${plan.totalDays}'),
+      if (plan.totalWeeks != null) (context.t('sp.fieldWeeks'), '${plan.totalWeeks}'),
       if (plan.note.isNotEmpty) (context.t('sp.fieldNote'), plan.note),
     ];
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          for (final (label, value) in rows)
+          for (int i = 0; i < rows.length; i++) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  Text(
+                    rows[i].$1,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: brand.ink,
                     ),
                   ),
+                  const Spacer(),
                   Flexible(
                     child: Text(
-                      value,
+                      rows[i].$2,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+            if (i < rows.length - 1)
+              Divider(
+                height: 1,
+                color: brand.divider,
+                indent: 16,
+                endIndent: 16,
+              ),
+          ],
         ],
       ),
     );
@@ -372,37 +423,63 @@ class _SlotGrid extends ConsumerWidget {
     for (final c in plan.contributions) {
       if (c.slotIndex != null) filled.add(c.slotIndex!);
     }
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t('sp.depositGrid'),
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-              letterSpacing: 0.5,
+    // Current slot = next to be deposited
+    final currentSlot = plan.slotsCompleted + 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              context.t('sp.depositGrid').toUpperCase(),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: Color(0xFF8E8E93),
+                letterSpacing: 0.8,
+              ),
             ),
+            const Spacer(),
+            Text(
+              '${plan.slotsCompleted} / $total',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6366F1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          GridView.builder(
+          child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: total,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 2.6,
+              crossAxisCount: 5,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 0.88,
             ),
             itemBuilder: (_, idx) {
               final slot = idx + 1;
               final done = filled.contains(slot);
+              final isCurrent =
+                  slot == currentSlot && plan.status == SavingPlanStatus.active;
               return _SlotCell(
                 plan: plan,
                 slot: slot,
@@ -410,11 +487,12 @@ class _SlotGrid extends ConsumerWidget {
                 symbol: symbol,
                 done: done,
                 isDays: isDays,
+                isCurrent: isCurrent,
               );
             },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -426,6 +504,7 @@ class _SlotCell extends ConsumerWidget {
   final String symbol;
   final bool done;
   final bool isDays;
+  final bool isCurrent;
   const _SlotCell({
     required this.plan,
     required this.slot,
@@ -433,71 +512,86 @@ class _SlotCell extends ConsumerWidget {
     required this.symbol,
     required this.done,
     required this.isDays,
+    this.isCurrent = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
-    final dateLabel = _slotDate(context);
+    final dateLabel = _slotDateShort(context);
+
+    Color bgColor;
+    Border? border;
+    Color numColor;
+    if (done) {
+      bgColor = AppColors.mint;
+      numColor = AppColors.income;
+    } else if (isCurrent) {
+      bgColor = brand.surface;
+      border = Border.all(
+        color: const Color(0xFF6366F1),
+        width: 1.5,
+        strokeAlign: BorderSide.strokeAlignInside,
+      );
+      numColor = const Color(0xFF6366F1);
+    } else {
+      bgColor = brand.background;
+      numColor = brand.inkSoft;
+    }
+
     return GestureDetector(
       onTap: () => _toggle(ref),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: done ? AppColors.mint : brand.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: done ? AppColors.income : brand.divider,
-            width: done ? 1.4 : 1,
-          ),
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: border,
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    formatMoney(symbol, amount),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    dateLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: brand.inkSoft,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            Text(
+              '$slot',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: numColor,
               ),
             ),
-            Icon(
-              done
-                  ? CupertinoIcons.check_mark_circled_solid
-                  : CupertinoIcons.circle,
-              size: 22,
-              color: done ? AppColors.income : brand.inkSoft,
-            ),
+            const SizedBox(height: 2),
+            if (done)
+              Icon(CupertinoIcons.checkmark_alt, size: 12, color: AppColors.income)
+            else if (isCurrent)
+              Text(
+                'NOW',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: numColor,
+                ),
+              )
+            else
+              Text(
+                dateLabel,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  String _slotDate(BuildContext context) {
+  String _slotDateShort(BuildContext context) {
     if (isDays) {
       final d = plan.startDate.add(Duration(days: slot - 1));
-      return DateFormat.MMMd().format(d);
+      return DateFormat('MMM').format(d);
     }
     final d = plan.startDate.add(Duration(days: (slot - 1) * 7));
-    return '${context.t('sp.weekShort')} $slot · ${DateFormat.MMMd().format(d)}';
+    return DateFormat('MMM').format(d);
   }
 
   Future<void> _toggle(WidgetRef ref) async {
@@ -641,108 +735,86 @@ class _ActionRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    final isActive = plan.status == SavingPlanStatus.active;
+    final isCancelled = plan.status == SavingPlanStatus.cancelled;
+    return Column(
       children: [
-        _btn(
-          context,
-          icon: CupertinoIcons.pencil,
-          label: context.t('common.edit'),
-          onTap: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => AddEditSavingPlanScreen(plan: plan),
-            ),
-          ),
-        ),
-        if (plan.status == SavingPlanStatus.active)
-          _btn(
-            context,
-            icon: CupertinoIcons.check_mark_circled,
-            label: context.t('inst.markCompleted'),
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              await ref
-                  .read(savingPlanServiceProvider)
-                  .markCompleted(user.uid, plan);
-            },
-          ),
-        if (plan.status == SavingPlanStatus.cancelled)
-          _btn(
-            context,
-            icon: CupertinoIcons.refresh,
-            label: context.t('inst.reactivate'),
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              await ref
-                  .read(savingPlanServiceProvider)
-                  .setCancelled(user.uid, plan, false);
-            },
-          )
-        else if (plan.status != SavingPlanStatus.completed)
-          _btn(
-            context,
-            icon: CupertinoIcons.xmark_circle,
-            label: context.t('common.cancel'),
-            destructive: true,
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              await ref
-                  .read(savingPlanServiceProvider)
-                  .setCancelled(user.uid, plan, true);
-            },
-          ),
-        _btn(
-          context,
-          icon: CupertinoIcons.trash,
-          label: context.t('common.delete'),
-          destructive: true,
-          onTap: () => _confirmDelete(context, ref),
-        ),
-      ],
-    );
-  }
-
-  Widget _btn(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool destructive = false,
-  }) {
-    final brand = context.brand;
-    final fg = destructive ? AppColors.expense : brand.ink;
-    final bg = destructive
-        ? AppColors.blush.withValues(alpha: 0.55)
-        : brand.surface;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        Row(
           children: [
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: fg,
+            Expanded(
+              child: _OutlineBtn(
+                label: context.t('common.edit'),
+                onTap: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => AddEditSavingPlanScreen(plan: plan),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _FilledBtn(
+                label: isActive
+                    ? context.t('inst.markCompleted')
+                    : isCancelled
+                    ? context.t('inst.reactivate')
+                    : 'Completed',
+                color: const Color(0xFF6366F1),
+                textColor: Colors.white,
+                onTap: isActive
+                    ? () async {
+                        final user = ref.read(authStateProvider).valueOrNull;
+                        if (user == null) return;
+                        await ref
+                            .read(savingPlanServiceProvider)
+                            .markCompleted(user.uid, plan);
+                      }
+                    : isCancelled
+                    ? () async {
+                        final user = ref.read(authStateProvider).valueOrNull;
+                        if (user == null) return;
+                        await ref
+                            .read(savingPlanServiceProvider)
+                            .setCancelled(user.uid, plan, false);
+                      }
+                    : () {},
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (!isCancelled && plan.status != SavingPlanStatus.completed)
+              Expanded(
+                child: _FilledBtn(
+                  label: 'Cancel plan',
+                  color: const Color(0xFFFEE2E2),
+                  textColor: AppColors.expense,
+                  onTap: () async {
+                    final user = ref.read(authStateProvider).valueOrNull;
+                    if (user == null) return;
+                    await ref
+                        .read(savingPlanServiceProvider)
+                        .setCancelled(user.uid, plan, true);
+                  },
+                ),
+              )
+            else
+              const Expanded(child: SizedBox.shrink()),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _FilledBtn(
+                label: context.t('common.delete'),
+                color: const Color(0xFFFEE2E2),
+                textColor: AppColors.expense,
+                onTap: () => _confirmDelete(context, ref),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -771,5 +843,75 @@ class _ActionRow extends ConsumerWidget {
       await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
       if (context.mounted) Navigator.pop(context);
     }
+  }
+}
+
+// ── Button helpers ────────────────────────────────────────────
+
+class _OutlineBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _OutlineBtn({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 54,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: brand.divider, width: 1.5),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: brand.ink,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilledBtn extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color? textColor;
+  final VoidCallback onTap;
+  const _FilledBtn({
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = textColor ?? foregroundOn(color);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 54,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: fg,
+          ),
+        ),
+      ),
+    );
   }
 }

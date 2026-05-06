@@ -47,13 +47,19 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   String _category = kExpenseCategories.first;
   DateTime _date = DateTime.now();
   String? _accountId;
+  String? _toAccountId;
+  bool _isAccountTransfer = false;
   bool _saving = false;
   File? _newReceipt;
   String? _existingReceiptUrl;
 
   bool get _isEdit => widget.expense != null;
-  bool get _isTransferType =>
-      _type == EntryType.transfer || _type == EntryType.receive;
+
+  bool get _isPersonTransfer =>
+      (_type == EntryType.transfer || _type == EntryType.receive) &&
+      !_isAccountTransfer;
+
+  bool get _showAccountTransferOption => _type == EntryType.transfer;
 
   @override
   void initState() {
@@ -66,8 +72,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       _date = e.date;
       _type = e.type;
       _accountId = e.accountId;
+      _toAccountId = e.toAccountId;
       _existingReceiptUrl = e.receiptUrl;
       _counterpartController.text = e.counterpart ?? '';
+      if (e.type == EntryType.transfer && e.toAccountId != null) {
+        _isAccountTransfer = true;
+      }
     }
   }
 
@@ -81,7 +91,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
   List<String> get _categories {
     if (_type == EntryType.income) return kIncomeCategories;
-    if (_isTransferType) return const ['Transfer'];
+    if (_type == EntryType.transfer || _type == EntryType.receive) {
+      return const ['Transfer'];
+    }
     return kExpenseCategories;
   }
 
@@ -125,6 +137,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isAccountTransfer && _toAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a destination account')),
+      );
+      return;
+    }
+    if (_isAccountTransfer && _toAccountId == _accountId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Source and destination accounts must be different')),
+      );
+      return;
+    }
     setState(() => _saving = true);
 
     final user = ref.read(authStateProvider).valueOrNull;
@@ -140,10 +164,25 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
       final amount = double.parse(_amountController.text);
       final now = DateTime.now();
-      final category = _isTransferType ? 'Transfer' : _category;
-      final counterpart = _isTransferType
-          ? _counterpartController.text.trim()
-          : null;
+
+      String category;
+      String? counterpart;
+      String? toAccountId;
+
+      if (_type == EntryType.transfer || _type == EntryType.receive) {
+        category = 'Transfer';
+        if (_isAccountTransfer) {
+          toAccountId = _toAccountId;
+          counterpart = null;
+        } else {
+          counterpart = _counterpartController.text.trim();
+          toAccountId = null;
+        }
+      } else {
+        category = _category;
+        counterpart = null;
+        toAccountId = null;
+      }
 
       if (_isEdit) {
         final updated = widget.expense!.copyWith(
@@ -154,6 +193,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           type: _type,
           receiptUrl: receiptUrl,
           accountId: _accountId,
+          toAccountId: toAccountId,
           counterpart: counterpart,
           updatedAt: now,
         );
@@ -168,6 +208,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           type: _type,
           receiptUrl: receiptUrl,
           accountId: _accountId,
+          toAccountId: toAccountId,
           counterpart: counterpart,
           createdAt: now,
           updatedAt: now,
@@ -251,22 +292,53 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
               const SizedBox(height: 18),
               _amountCard(symbol),
               const SizedBox(height: 18),
-              if (_isTransferType) ...[
-                _counterpartField(brand),
+              if (_showAccountTransferOption) ...[
+                _accountTransferToggle(brand),
                 const SizedBox(height: 14),
-              ] else ...[
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 10),
-                  child: Text(
-                    context.t('expense.category'),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                _categoryChips(selectedChipFg, brand),
-                const SizedBox(height: 18),
               ],
-              _accountPicker(accounts, brand),
-              const SizedBox(height: 12),
+              if (_type == EntryType.transfer && _isAccountTransfer) ...[
+                _accountPicker(
+                  accounts,
+                  brand,
+                  label: 'From Account',
+                  selectedId: _accountId,
+                  excludeId: _toAccountId,
+                  onSelect: (id) => setState(() => _accountId = id),
+                ),
+                const SizedBox(height: 12),
+                _accountPicker(
+                  accounts,
+                  brand,
+                  label: 'To Account',
+                  selectedId: _toAccountId,
+                  excludeId: _accountId,
+                  onSelect: (id) => setState(() => _toAccountId = id),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                if (_isPersonTransfer) ...[
+                  _counterpartField(brand),
+                  const SizedBox(height: 14),
+                ] else ...[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      context.t('expense.category'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  _categoryChips(selectedChipFg, brand),
+                  const SizedBox(height: 18),
+                ],
+                _accountPicker(
+                  accounts,
+                  brand,
+                  label: 'Account',
+                  selectedId: _accountId,
+                  onSelect: (id) => setState(() => _accountId = id),
+                ),
+                const SizedBox(height: 12),
+              ],
               SectionCard(
                 onTap: _pickDate,
                 child: Row(
@@ -291,10 +363,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                   hintText: context.t('expense.note'),
                 ),
               ),
-              if (!_isTransferType) ...[
-                const SizedBox(height: 12),
-                _receiptCard(brand),
-              ],
+              const SizedBox(height: 12),
+              _receiptCard(brand),
               const SizedBox(height: 28),
               FilledButton(
                 onPressed: _saving ? null : _save,
@@ -316,6 +386,54 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _accountTransferToggle(BrandColors brand) {
+    return SectionCard(
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.sky,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              CupertinoIcons.arrow_right_arrow_left,
+              size: 18,
+              color: Color(0xFF2A6FB5),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Transfer Between My Accounts',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                Text(
+                  'e.g. Maybank → Touch \'n Go',
+                  style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          CupertinoSwitch(
+            value: _isAccountTransfer,
+            onChanged: (v) => setState(() {
+              _isAccountTransfer = v;
+              if (v) {
+                _toAccountId = null;
+                _counterpartController.clear();
+              }
+            }),
+          ),
+        ],
       ),
     );
   }
@@ -405,7 +523,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   }
 
   Widget _counterpartField(BrandColors brand) {
-    final label = _type == EntryType.transfer ? 'To (Person / Name)' : 'From (Person / Name)';
+    final label = _type == EntryType.transfer
+        ? 'To (Person / Name)'
+        : 'From (Person / Name)';
     final hint = _type == EntryType.transfer
         ? 'e.g. John, Company ABC'
         : 'e.g. Sarah, Client XYZ';
@@ -469,8 +589,19 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
-  Widget _accountPicker(List<Account> accounts, BrandColors brand) {
-    if (accounts.isEmpty) {
+  Widget _accountPicker(
+    List<Account> accounts,
+    BrandColors brand, {
+    required String label,
+    required String? selectedId,
+    String? excludeId,
+    required void Function(String? id) onSelect,
+  }) {
+    final available = excludeId != null
+        ? accounts.where((a) => a.id != excludeId).toList()
+        : accounts;
+
+    if (available.isEmpty) {
       return SectionCard(
         onTap: () => Navigator.push(
           context,
@@ -501,22 +632,30 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       );
     }
 
-    final selected = accounts.where((a) => a.id == _accountId).firstOrNull;
+    final selected = available.where((a) => a.id == selectedId).firstOrNull;
 
     return SectionCard(
-      onTap: () => _showAccountPicker(accounts, brand),
+      onTap: () => _showAccountPicker(
+        available,
+        brand,
+        selectedId: selectedId,
+        onSelect: onSelect,
+        allowNone: label == 'Account',
+      ),
       child: Row(
         children: [
           Icon(
             selected != null
                 ? _iconForType(selected.type)
                 : CupertinoIcons.creditcard,
-            color: selected != null ? _accentForType(selected.type) : brand.inkSoft,
+            color: selected != null
+                ? _accentForType(selected.type)
+                : brand.inkSoft,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Account',
+              label,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
@@ -535,73 +674,103 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
-  void _showAccountPicker(List<Account> accounts, BrandColors brand) {
-    showCupertinoModalPopup<void>(
+  void _showAccountPicker(
+      List<Account> accounts,
+      BrandColors brand, {
+        required String? selectedId,
+        required void Function(String? id) onSelect,
+        bool allowNone = true,
+      }) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => Container(
-        color: ctx.brand.surface,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text(
-                  'Select Account',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: ctx.brand.ink,
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: Icon(
-                  CupertinoIcons.xmark_circle,
-                  color: ctx.brand.inkSoft,
-                ),
-                title: Text(
-                  'None',
-                  style: TextStyle(color: ctx.brand.inkSoft),
-                ),
-                trailing: _accountId == null
-                    ? Icon(
-                        CupertinoIcons.checkmark_alt,
-                        color: ctx.brand.accentDark,
-                      )
-                    : null,
-                onTap: () {
-                  setState(() => _accountId = null);
-                  Navigator.pop(ctx);
-                },
-              ),
-              ...accounts.map(
-                (a) => ListTile(
-                  leading: Icon(
-                    _iconForType(a.type),
-                    color: _accentForType(a.type),
-                  ),
-                  title: Text(a.name),
-                  subtitle: Text(a.type.label),
-                  trailing: _accountId == a.id
-                      ? Icon(
-                          CupertinoIcons.checkmark_alt,
-                          color: ctx.brand.accentDark,
-                        )
-                      : null,
-                  onTap: () {
-                    setState(() => _accountId = a.id);
-                    Navigator.pop(ctx);
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
+      backgroundColor: brand.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 420,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                  child: Text(
+                    'Select Account',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: ListView(
+                    children: [
+                      if (allowNone)
+                        ListTile(
+                          leading: Icon(
+                            CupertinoIcons.xmark_circle,
+                            color: brand.inkSoft,
+                          ),
+                          title: Text(
+                            'None',
+                            style: TextStyle(color: brand.inkSoft),
+                          ),
+                          trailing: selectedId == null
+                              ? Icon(
+                            CupertinoIcons.checkmark_alt,
+                            color: brand.accentDark,
+                          )
+                              : null,
+                          onTap: () {
+                            onSelect(null);
+                            Navigator.pop(ctx);
+                          },
+                        ),
+
+                      ...accounts.map((a) {
+                        final isSelected = selectedId == a.id;
+
+                        return ListTile(
+                          leading: Icon(
+                            _iconForType(a.type),
+                            color: _accentForType(a.type),
+                          ),
+                          title: Text(
+                            a.name,
+                            style: TextStyle(
+                              color: brand.ink,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            a.type.label,
+                            style: TextStyle(color: brand.inkSoft),
+                          ),
+                          trailing: isSelected
+                              ? Icon(
+                            CupertinoIcons.checkmark_alt,
+                            color: brand.accentDark,
+                          )
+                              : null,
+                          onTap: () {
+                            onSelect(a.id);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -793,10 +962,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         onTap: () {
           setState(() {
             _type = type;
-            if (_isTransferType) {
-              _category = 'Transfer';
-            } else if (!_categories.contains(_category)) {
-              _category = _categories.first;
+            _isAccountTransfer = false;
+            _toAccountId = null;
+            if (!(_type == EntryType.transfer || _type == EntryType.receive)) {
+              if (!_categories.contains(_category)) {
+                _category = _categories.first;
+              }
             }
           });
         },

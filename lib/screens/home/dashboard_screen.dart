@@ -58,7 +58,7 @@ class DashboardScreen extends ConsumerWidget {
         )
         .fold<double>(0, (s, e) => s + e.amount);
 
-    final totalBalance = ref.watch(savingsProvider);
+    final totalBalance = ref.watch(totalAccountBalanceProvider);
 
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);

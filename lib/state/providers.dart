@@ -164,6 +164,35 @@ final savingsProvider = Provider.autoDispose<double>((ref) {
   return opening + inflow - outflow;
 });
 
+/// Total balance = sum of all account opening balances adjusted by transactions.
+/// Account-to-account transfers credit the destination account without
+/// double-counting as income/expense.
+final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
+  final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+  final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
+  if (accounts.isEmpty) return ref.watch(savingsProvider);
+
+  final balances = <String, double>{};
+  for (final a in accounts) {
+    balances[a.id] = a.openingBalance;
+  }
+  for (final e in all) {
+    final aid = e.accountId;
+    if (aid != null && balances.containsKey(aid)) {
+      if (e.type.isInflow) {
+        balances[aid] = (balances[aid] ?? 0) + e.amount;
+      } else {
+        balances[aid] = (balances[aid] ?? 0) - e.amount;
+      }
+    }
+    final toId = e.toAccountId;
+    if (toId != null && balances.containsKey(toId)) {
+      balances[toId] = (balances[toId] ?? 0) + e.amount;
+    }
+  }
+  return balances.values.fold<double>(0, (s, v) => s + v);
+});
+
 final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
   ref,
 ) {

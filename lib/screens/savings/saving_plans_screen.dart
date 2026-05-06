@@ -9,14 +9,6 @@ import '../../theme/app_theme.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plan_detail_screen.dart';
 
-/// Saving Plans list screen.
-///
-/// Layout:
-///  • Summary card: total saved across active plans, total target,
-///    active count, completed count.
-///  • Filter pill row: all / active / completed / cancelled.
-///  • Plan cards. Each plan shows name, type, progress %,
-///    current/target, and optional periods-left.
 class SavingPlansScreen extends ConsumerStatefulWidget {
   const SavingPlansScreen({super.key});
 
@@ -29,18 +21,12 @@ enum _Filter { all, active, completed, cancelled }
 class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
   _Filter _filter = _Filter.all;
 
-  bool _matches(SavingPlan p) {
-    switch (_filter) {
-      case _Filter.all:
-        return true;
-      case _Filter.active:
-        return p.status == SavingPlanStatus.active;
-      case _Filter.completed:
-        return p.status == SavingPlanStatus.completed;
-      case _Filter.cancelled:
-        return p.status == SavingPlanStatus.cancelled;
-    }
-  }
+  bool _matches(SavingPlan p) => switch (_filter) {
+        _Filter.all => true,
+        _Filter.active => p.status == SavingPlanStatus.active,
+        _Filter.completed => p.status == SavingPlanStatus.completed,
+        _Filter.cancelled => p.status == SavingPlanStatus.cancelled,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -75,16 +61,17 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
           error: (e, _) =>
               Center(child: Text('${context.t('common.error')}: $e')),
           data: (plans) {
+            final filtered = plans.where(_matches).toList();
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
                 _Summary(plans: plans, symbol: symbol),
                 const SizedBox(height: 14),
-                _FilterChips(
+                _FilterSegment(
                   selected: _filter,
                   onSelected: (f) => setState(() => _filter = f),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
                 if (plans.isEmpty)
                   _EmptyState(
                     onAdd: () => Navigator.push(
@@ -94,17 +81,59 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                       ),
                     ),
                   )
-                else
-                  for (final p in plans.where(_matches))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _SavingPlanSwipeActions(
-                        plan: p,
-                        symbol: symbol,
-                        userId: user?.uid,
-                        child: _PlanCard(plan: p, symbol: symbol),
+                else ...[
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'PLANS',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF8E8E93),
+                        letterSpacing: 0.8,
                       ),
                     ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.brand.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFF6366F1).withValues(alpha: 0.05),
+                          blurRadius: 14,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < filtered.length; i++) ...[
+                            _SavingPlanSwipeActions(
+                              plan: filtered[i],
+                              symbol: symbol,
+                              userId: user?.uid,
+                              child: _PlanRow(
+                                plan: filtered[i],
+                                symbol: symbol,
+                              ),
+                            ),
+                            if (i < filtered.length - 1)
+                              Divider(
+                                height: 1,
+                                color: context.brand.divider,
+                                indent: 16,
+                                endIndent: 0,
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             );
           },
@@ -114,6 +143,8 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
   }
 }
 
+// ── Summary card ──────────────────────────────────────────────
+
 class _Summary extends StatelessWidget {
   final List<SavingPlan> plans;
   final String symbol;
@@ -122,28 +153,39 @@ class _Summary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final active = plans
-        .where((p) => p.status == SavingPlanStatus.active)
-        .toList();
-    final completed = plans
-        .where((p) => p.status == SavingPlanStatus.completed)
-        .length;
+    final active = plans.where((p) => p.status == SavingPlanStatus.active).toList();
+    final completed =
+        plans.where((p) => p.status == SavingPlanStatus.completed).length;
     final saved = active.fold<double>(0, (s, p) => s + p.currentAmount);
     final target = active.fold<double>(0, (s, p) => s + p.targetAmount);
+    final progress = target > 0 ? (saved / target).clamp(0.0, 1.0) : 0.0;
+
+    // This week contributions
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+    double thisWeek = 0;
+    for (final p in active) {
+      for (final c in p.contributions) {
+        if (c.date.isAfter(weekAgo)) thisWeek += c.amount;
+      }
+    }
+
+    // Split amount
+    final raw = formatMoney(symbol, saved);
+    final dotIdx = raw.indexOf('.');
+    final mainPart = dotIdx >= 0 ? raw.substring(0, dotIdx) : raw;
+    final decPart = dotIdx >= 0 ? raw.substring(dotIdx) : '';
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.mint, AppColors.sky],
-        ),
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 5),
+            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -151,32 +193,59 @@ class _Summary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.t('sp.summaryTitle'),
-            style: const TextStyle(
+            context.t('sp.summaryTitle').toUpperCase(),
+            style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink,
+              fontWeight: FontWeight.w700,
+              color: brand.inkSoft,
               letterSpacing: 0.6,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            formatMoney(symbol, saved),
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1,
-              color: AppColors.ink,
-            ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                mainPart,
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  color: brand.ink,
+                  letterSpacing: -1,
+                ),
+              ),
+              if (decPart.isNotEmpty)
+                Text(
+                  decPart,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                  ),
+                ),
+            ],
           ),
           Text(
-            '${context.t('sp.ofTarget')} ${formatMoney(symbol, target)}',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
+            '${context.t('sp.ofTarget')} ${formatMoney(symbol, target)} across ${active.length} plans',
+            style: TextStyle(
+              fontSize: 13,
+              color: brand.inkSoft,
+              fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: brand.divider,
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF6366F1)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: brand.divider),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -186,11 +255,19 @@ class _Summary extends StatelessWidget {
                   value: '${active.length}',
                 ),
               ),
-              Container(width: 1, height: 28, color: brand.divider),
+              Container(width: 1, height: 32, color: brand.divider),
               Expanded(
                 child: _Stat(
                   label: context.t('sp.completedCount'),
                   value: '$completed',
+                ),
+              ),
+              Container(width: 1, height: 32, color: brand.divider),
+              Expanded(
+                child: _Stat(
+                  label: 'This week',
+                  value: '+${formatMoney(symbol, thisWeek)}',
+                  valueColor: AppColors.income,
                 ),
               ),
             ],
@@ -204,10 +281,12 @@ class _Summary extends StatelessWidget {
 class _Stat extends StatelessWidget {
   final String label;
   final String value;
-  const _Stat({required this.label, required this.value});
+  final Color? valueColor;
+  const _Stat({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Column(
@@ -215,19 +294,23 @@ class _Stat extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
-              color: AppColors.ink,
-              fontWeight: FontWeight.w700,
+              color: brand.inkSoft,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: valueColor ?? brand.ink,
+              ),
             ),
           ),
         ],
@@ -236,190 +319,157 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _FilterChips extends StatelessWidget {
+// ── Filter segmented control ──────────────────────────────────
+
+class _FilterSegment extends StatelessWidget {
   final _Filter selected;
   final ValueChanged<_Filter> onSelected;
-  const _FilterChips({required this.selected, required this.onSelected});
+  const _FilterSegment({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final fg = foregroundOn(brand.accentDark);
     final filters = <(_Filter, String)>[
       (_Filter.all, context.t('sp.filterAll')),
       (_Filter.active, context.t('sp.filterActive')),
       (_Filter.completed, context.t('sp.filterCompleted')),
       (_Filter.cancelled, context.t('sp.filterCancelled')),
     ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: brand.divider,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
-          for (final (f, label) in filters) ...[
-            GestureDetector(
-              onTap: () => onSelected(f),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: f == selected ? brand.accentDark : brand.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: f == selected ? fg : brand.ink,
+          for (final (f, label) in filters)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onSelected(f),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: f == selected ? brand.surface : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: f == selected
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: f == selected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: f == selected ? brand.ink : brand.inkSoft,
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-          ],
         ],
       ),
     );
   }
 }
 
-class _PlanCard extends StatelessWidget {
+// ── Plan row (flat, inside grouped card) ──────────────────────
+
+class _PlanRow extends StatelessWidget {
   final SavingPlan plan;
   final String symbol;
-  const _PlanCard({required this.plan, required this.symbol});
+  const _PlanRow({required this.plan, required this.symbol});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final accent = _accentForType(plan.type);
     final tint = _tintForType(plan.type);
-    return Container(
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => SavingPlanDetailScreen(planId: plan.id),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          onTap: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => SavingPlanDetailScreen(planId: plan.id),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Row(
+            children: [
+              _ProgressRing(
+                progress: plan.progress,
+                color: accent,
+                bg: brand.divider,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ProgressRing(
-                      progress: plan.progress,
-                      color: accent,
-                      bg: brand.divider,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  plan.name,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _TypeChip(type: plan.type, tint: tint),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _subtitle(context, plan),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Row(
                       children: [
-                        Text(
-                          formatMoney(symbol, plan.currentAmount),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
+                        Flexible(
+                          child: Text(
+                            plan.name,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: brand.ink,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Text(
-                          '/ ${formatMoney(symbol, plan.targetAmount)}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        const SizedBox(width: 8),
+                        _TypeChip(type: plan.type, tint: tint),
                       ],
                     ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _subtitle(context, plan),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: plan.progress,
-                    minHeight: 5,
-                    backgroundColor: brand.divider,
-                    valueColor: AlwaysStoppedAnimation(accent),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatMoney(symbol, plan.currentAmount),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: brand.ink,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text(
-                      '${(plan.progress * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: brand.inkSoft,
-                      ),
+                  Text(
+                    '/ ${formatMoney(symbol, plan.targetAmount)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const Spacer(),
-                    Text(
-                      _trailing(context, plan, symbol),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -435,15 +485,15 @@ class _PlanCard extends StatelessWidget {
       case SavingPlanStatus.active:
         switch (p.type) {
           case SavingPlanType.daysChallenge:
-            return context
-                .t('sp.dayProgress')
-                .replaceFirst('{done}', '${p.slotsCompleted}')
-                .replaceFirst('{total}', '${p.totalDays}');
+            final done = p.slotsCompleted;
+            final total = p.totalDays ?? 0;
+            final left = total - done;
+            return 'Day $done of $total · $left days left';
           case SavingPlanType.weeksChallenge:
-            return context
-                .t('sp.weekProgress')
-                .replaceFirst('{done}', '${p.slotsCompleted}')
-                .replaceFirst('{total}', '${p.totalWeeks}');
+            final done = p.slotsCompleted;
+            final total = p.totalWeeks ?? 0;
+            final left = total - done;
+            return 'Week $done of $total · $left weeks left';
           case SavingPlanType.flexible:
             return context.t('sp.flexibleNote');
           case SavingPlanType.fixed:
@@ -452,62 +502,30 @@ class _PlanCard extends StatelessWidget {
     }
   }
 
-  String _trailing(BuildContext context, SavingPlan p, String symbol) {
-    if (p.status != SavingPlanStatus.active) return '';
-    final rem = p.remaining;
-    final periods = p.periodsLeft;
-    if (periods == null) {
-      return '${formatMoney(symbol, rem)} ${context.t('sp.left').toLowerCase()}';
-    }
-    final unit = switch (p.type) {
-      SavingPlanType.daysChallenge => context.t('sp.daysLeft'),
-      SavingPlanType.weeksChallenge => context.t('sp.weeksLeft'),
-      SavingPlanType.fixed => switch (p.frequency) {
-        SavingFrequency.daily => context.t('sp.daysLeft'),
-        SavingFrequency.weekly => context.t('sp.weeksLeft'),
-        SavingFrequency.monthly => context.t('sp.monthsLeft'),
-        null => context.t('sp.periodsLeft'),
-      },
-      SavingPlanType.flexible => context.t('sp.periodsLeft'),
-    };
-    return '$periods $unit';
-  }
+  String _frequencyLabel(BuildContext context, SavingFrequency? f) =>
+      switch (f) {
+        SavingFrequency.daily => context.t('sp.daily'),
+        SavingFrequency.weekly => context.t('sp.weekly'),
+        SavingFrequency.monthly => context.t('sp.monthly'),
+        null => context.t('sp.fixed'),
+      };
 
-  String _frequencyLabel(BuildContext context, SavingFrequency? f) {
-    return switch (f) {
-      SavingFrequency.daily => context.t('sp.daily'),
-      SavingFrequency.weekly => context.t('sp.weekly'),
-      SavingFrequency.monthly => context.t('sp.monthly'),
-      null => context.t('sp.fixed'),
-    };
-  }
+  static Color _accentForType(SavingPlanType t) => switch (t) {
+        SavingPlanType.fixed => AppColors.income,
+        SavingPlanType.flexible => const Color(0xFF6366F1),
+        SavingPlanType.daysChallenge => AppColors.income,
+        SavingPlanType.weeksChallenge => const Color(0xFF6366F1),
+      };
 
-  static Color _accentForType(SavingPlanType t) {
-    switch (t) {
-      case SavingPlanType.fixed:
-        return AppColors.income;
-      case SavingPlanType.flexible:
-        return AppColors.accent;
-      case SavingPlanType.daysChallenge:
-        return AppColors.expense;
-      case SavingPlanType.weeksChallenge:
-        return AppColors.accentDark;
-    }
-  }
-
-  static Color _tintForType(SavingPlanType t) {
-    switch (t) {
-      case SavingPlanType.fixed:
-        return AppColors.mint;
-      case SavingPlanType.flexible:
-        return AppColors.sky;
-      case SavingPlanType.daysChallenge:
-        return AppColors.peach;
-      case SavingPlanType.weeksChallenge:
-        return AppColors.lilac;
-    }
-  }
+  static Color _tintForType(SavingPlanType t) => switch (t) {
+        SavingPlanType.fixed => AppColors.mint,
+        SavingPlanType.flexible => AppColors.lilac,
+        SavingPlanType.daysChallenge => AppColors.mint,
+        SavingPlanType.weeksChallenge => AppColors.sky,
+      };
 }
+
+// ── Swipe actions ─────────────────────────────────────────────
 
 class _SavingPlanSwipeActions extends ConsumerWidget {
   final SavingPlan plan;
@@ -532,13 +550,13 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
     return Dismissible(
       key: ValueKey('saving-plan-swipe-${plan.id}'),
       direction: DismissDirection.horizontal,
-      background: _SwipeActionBackground(
+      background: _SwipeBg(
         icon: CupertinoIcons.pencil,
         label: context.t('common.edit'),
         alignment: Alignment.centerLeft,
         color: AppColors.mint,
       ),
-      secondaryBackground: _SwipeActionBackground(
+      secondaryBackground: _SwipeBg(
         icon: CupertinoIcons.ellipsis,
         label: context.t('common.actions'),
         alignment: Alignment.centerRight,
@@ -686,14 +704,16 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
           children: [
             Text(
               context.t('sp.addContribution'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
               decoration: InputDecoration(
                 prefixText: '$symbol  ',
@@ -714,9 +734,7 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
     );
     controller.dispose();
     if (amount == null || amount <= 0) return;
-    await ref
-        .read(savingPlanServiceProvider)
-        .addContribution(
+    await ref.read(savingPlanServiceProvider).addContribution(
           userId!,
           plan,
           SavingContribution(
@@ -753,13 +771,13 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
   }
 }
 
-class _SwipeActionBackground extends StatelessWidget {
+class _SwipeBg extends StatelessWidget {
   final IconData icon;
   final String label;
   final Alignment alignment;
   final Color color;
 
-  const _SwipeActionBackground({
+  const _SwipeBg({
     required this.icon,
     required this.label,
     required this.alignment,
@@ -771,10 +789,7 @@ class _SwipeActionBackground extends StatelessWidget {
     return Container(
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 22),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
+      color: color,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -793,6 +808,8 @@ class _SwipeActionBackground extends StatelessWidget {
   }
 }
 
+// ── Progress ring ─────────────────────────────────────────────
+
 class _ProgressRing extends StatelessWidget {
   final double progress;
   final Color color;
@@ -806,39 +823,44 @@ class _ProgressRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             child: CircularProgressIndicator(
               value: 1,
-              strokeWidth: 4,
+              strokeWidth: 4.5,
               valueColor: AlwaysStoppedAnimation(bg),
             ),
           ),
           SizedBox(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             child: CircularProgressIndicator(
               value: progress,
-              strokeWidth: 4,
+              strokeWidth: 4.5,
               backgroundColor: Colors.transparent,
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
           Text(
             '${(progress * 100).toStringAsFixed(0)}%',
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+// ── Type chip ─────────────────────────────────────────────────
 
 class _TypeChip extends StatelessWidget {
   final SavingPlanType type;
@@ -854,7 +876,7 @@ class _TypeChip extends StatelessWidget {
       SavingPlanType.weeksChallenge => context.t('sp.typeWeeks'),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: tint,
         borderRadius: BorderRadius.circular(20),
@@ -870,6 +892,8 @@ class _TypeChip extends StatelessWidget {
     );
   }
 }
+
+// ── Empty state ───────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final VoidCallback onAdd;
@@ -913,7 +937,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// Public helpers exposed for the detail screen so it can match list
-// styling without reaching into private state.
-Color spAccent(SavingPlanType t) => _PlanCard._accentForType(t);
-Color spTint(SavingPlanType t) => _PlanCard._tintForType(t);
+// Public helpers for detail screen
+Color spAccent(SavingPlanType t) => _PlanRow._accentForType(t);
+Color spTint(SavingPlanType t) => _PlanRow._tintForType(t);

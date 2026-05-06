@@ -27,36 +27,46 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     SettingsScreen(),
   ];
 
+  static const _navPurple = Color(0xFF6366F1);
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final fabFg = brand.accentDark.computeLuminance() < 0.5
-        ? Colors.white
-        : Colors.black;
     return Scaffold(
       backgroundColor: brand.background,
       body: _screens[_index],
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: SizedBox(
-          width: 64,
-          height: 64,
-          child: FloatingActionButton(
-            backgroundColor: brand.accentDark,
-            elevation: 0,
-            shape: const CircleBorder(),
-            onPressed: () {
-              Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => const AddEditExpenseScreen(),
-                ),
-              );
-            },
-            child: Icon(CupertinoIcons.add, size: 28, color: fabFg),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: FloatingActionButton(
+              backgroundColor: _navPurple,
+              elevation: 0,
+              shape: const CircleBorder(),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const AddEditExpenseScreen(),
+                  ),
+                );
+              },
+              child: const Icon(CupertinoIcons.add, size: 26, color: Colors.white),
+            ),
           ),
-        ),
+          const SizedBox(height: 4),
+          Text(
+            'Add',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: brand.inkSoft,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _BottomBar(
         index: _index,
@@ -99,14 +109,14 @@ class _BottomBar extends StatelessWidget {
               ),
               const SizedBox(width: 64),
               _NavItem(
-                icon: CupertinoIcons.creditcard_fill,
-                label: context.t('tab.money'),
+                icon: CupertinoIcons.creditcard,
+                label: 'Funds',
                 selected: index == 2,
                 onTap: () => onTap(2),
               ),
               _NavItem(
-                icon: CupertinoIcons.person_fill,
-                label: context.t('tab.profile'),
+                icon: CupertinoIcons.person,
+                label: 'Me',
                 selected: index == 3,
                 onTap: () => onTap(3),
               ),
@@ -134,7 +144,8 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final color = selected ? brand.ink : brand.inkSoft;
+    const purple = _HomeShellState._navPurple;
+    final color = selected ? purple : brand.inkSoft;
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

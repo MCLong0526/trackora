@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
+import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../services/export_service.dart';
 import '../../services/i18n.dart';
@@ -12,6 +13,8 @@ import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../accounts/accounts_screen.dart';
+import '../accounts/add_edit_account_screen.dart';
 
 enum _CsvExportRangeMode { month, all }
 
@@ -36,15 +39,34 @@ class SettingsScreen extends ConsumerWidget {
     final opening = ref.watch(openingSavingsProvider).valueOrNull ?? 0.0;
     final themeMode = ref.watch(themeModeProvider);
     final appLocale = ref.watch(localeProvider);
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final allExpenses = ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final totalBalance = ref.watch(totalAccountBalanceProvider);
+
+    // Display name: first part of email before @, or 'Trackora' for offline
+    final displayName = email.isNotEmpty
+        ? email.split('@').first.split('.').map((w) =>
+            w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w).join(' ')
+        : 'Trackora';
 
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: [
           // ── Hero profile card ────────────────────────────────
-          _ProfileHero(initial: initial, email: email),
+          _ProfileHero(initial: initial, email: email, displayName: displayName),
 
           const SizedBox(height: 24),
+
+          // ── My Accounts ─────────────────────────────────────
+          _AccountsSection(
+            accounts: accounts,
+            allExpenses: allExpenses,
+            symbol: symbol,
+            totalBalance: totalBalance,
+          ),
+
+          const SizedBox(height: 22),
 
           // ── Account ─────────────────────────────────────────
           _GroupHeader(label: context.t('settings.account')),
@@ -70,6 +92,14 @@ class SettingsScreen extends ConsumerWidget {
                   symbol,
                   user?.uid,
                 ),
+              ),
+              _GroupDivider(),
+              _Tile(
+                icon: CupertinoIcons.bell,
+                iconColor: AppColors.sky,
+                label: 'Reminders',
+                trailing: 'Daily at 8 PM',
+                onTap: () {},
               ),
             ],
           ),
@@ -807,6 +837,314 @@ class _ExportMonthChip extends StatelessWidget {
 }
 
 // ── Profile hero + grouped tiles ────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// Accounts section widget for the Me / Settings page
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _AccountsSection extends StatelessWidget {
+  final List<Account> accounts;
+  final List<Expense> allExpenses;
+  final String symbol;
+  final double totalBalance;
+
+  const _AccountsSection({
+    required this.accounts,
+    required this.allExpenses,
+    required this.symbol,
+    required this.totalBalance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'MY ACCOUNTS',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: brand.inkSoft,
+                letterSpacing: 0.5,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => const AccountsScreen(),
+                ),
+              ),
+              child: Text(
+                'Manage',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: brand.accentDark,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Total balance row
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.lilac,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.chart_pie_fill,
+                        size: 18,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Total Balance',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      formatMoney(symbol, totalBalance),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: totalBalance >= 0
+                            ? brand.ink
+                            : AppColors.expense,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (accounts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => const AddEditAccountScreen(),
+                      ),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: brand.accentDark.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.add_circled,
+                            size: 18,
+                            color: brand.accentDark,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Add Your First Account',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: brand.accentDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ...accounts.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final a = entry.value;
+                  final balance = computeAccountBalance(a, allExpenses);
+                  final isLast = i == accounts.length - 1;
+                  return _AccountRow(
+                    account: a,
+                    balance: balance,
+                    symbol: symbol,
+                    isLast: isLast,
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => AddEditAccountScreen(account: a),
+                      ),
+                    ),
+                  );
+                }),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => const AddEditAccountScreen(),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.add_circled,
+                          size: 16,
+                          color: brand.accentDark,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Add Account',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: brand.accentDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccountRow extends StatelessWidget {
+  final Account account;
+  final double balance;
+  final String symbol;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  const _AccountRow({
+    required this.account,
+    required this.balance,
+    required this.symbol,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final style = _styleFor(account.type);
+    final icon = _iconFor(account.type);
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: style.bg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 18, color: style.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        account.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
+                        ),
+                      ),
+                      Text(
+                        account.type.label,
+                        style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  formatMoney(symbol, balance),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: balance >= 0 ? brand.ink : AppColors.expense,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast) const Divider(height: 1, indent: 66, endIndent: 16),
+      ],
+    );
+  }
+
+  ({Color bg, Color accent}) _styleFor(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
+      case AccountType.eWallet:
+        return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
+      case AccountType.cash:
+        return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
+    }
+  }
+
+  IconData _iconFor(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet:
+        return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+    }
+  }
+}
+
 //
 // Beautified Profile UI. iOS-style grouped lists with subtle dividers,
 // a soft gradient hero card, larger avatar, and breathing-room
@@ -816,22 +1154,24 @@ class _ExportMonthChip extends StatelessWidget {
 class _ProfileHero extends StatelessWidget {
   final String initial;
   final String email;
-  const _ProfileHero({required this.initial, required this.email});
+  final String displayName;
+  const _ProfileHero({
+    required this.initial,
+    required this.email,
+    required this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isOffline = storageMode == StorageMode.local;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: BoxDecoration(
+        color: context.brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.lilac, AppColors.sky],
-        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -840,56 +1180,68 @@ class _ProfileHero extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white,
+            width: 60,
+            height: 60,
+            decoration: const BoxDecoration(
+              color: AppColors.lilac,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             alignment: Alignment.center,
             child: Text(
               initial,
               style: const TextStyle(
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: FontWeight.w900,
                 color: AppColors.ink,
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  storageMode == StorageMode.local
-                      ? context.t('settings.offlineProfile')
-                      : context.t('settings.signedIn'),
-                  style: const TextStyle(
-                    fontSize: 11,
+                  displayName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                    letterSpacing: 0.5,
+                    color: context.brand.ink,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  email.isEmpty ? 'Trackora' : email,
+                  isOffline
+                      ? 'Offline profile · Local only'
+                      : email,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.brand.inkSoft,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.lilac,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Sync',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B40A8),
+                ),
+              ),
             ),
           ),
         ],

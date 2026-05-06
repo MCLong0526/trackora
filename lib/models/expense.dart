@@ -14,6 +14,7 @@ class Expense {
   final EntryType type;
   final String? receiptUrl;
   final String? accountId;
+  final String? toAccountId;
   final String? counterpart;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -27,6 +28,7 @@ class Expense {
     this.type = EntryType.expense,
     this.receiptUrl,
     this.accountId,
+    this.toAccountId,
     this.counterpart,
     required this.createdAt,
     required this.updatedAt,
@@ -42,6 +44,7 @@ class Expense {
       type: _decodeType(data['type'] as String?),
       receiptUrl: data['receiptUrl'] as String?,
       accountId: data['accountId'] as String?,
+      toAccountId: data['toAccountId'] as String?,
       counterpart: data['counterpart'] as String?,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
@@ -58,6 +61,7 @@ class Expense {
       'type': _encodeType(type),
       'receiptUrl': receiptUrl,
       'accountId': accountId,
+      'toAccountId': toAccountId,
       'counterpart': counterpart,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -75,6 +79,7 @@ class Expense {
     EntryType? type,
     Object? receiptUrl = _sentinel,
     Object? accountId = _sentinel,
+    Object? toAccountId = _sentinel,
     Object? counterpart = _sentinel,
     DateTime? updatedAt,
   }) {
@@ -91,6 +96,9 @@ class Expense {
       accountId: identical(accountId, _sentinel)
           ? this.accountId
           : accountId as String?,
+      toAccountId: identical(toAccountId, _sentinel)
+          ? this.toAccountId
+          : toAccountId as String?,
       counterpart: identical(counterpart, _sentinel)
           ? this.counterpart
           : counterpart as String?,

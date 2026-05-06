@@ -11,40 +11,14 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/section_card.dart';
 import 'add_edit_installment_screen.dart';
+import 'installment_detail_screen.dart';
 
-/// Manage installments — redesigned for clarity.
-///
-/// Layout:
-///   1. Header summary card — total monthly outflow, active count,
-///      total remaining across all active fixed-term plans.
-///   2. List of installments. Each tile is **collapsed by default**:
-///      name, monthly amount, status badge, and one secondary line
-///      (months left / remaining for fixed-term, "Ongoing" for
-///      lifetime). A progress bar appears under fixed-term tiles.
-///   3. Tap a tile to expand it inline — start date, total months,
-///      months paid, next payment date, plus iOS-style action buttons
-///      (Edit / Mark completed / Cancel / Delete with confirmation).
-///
-/// The expand-in-place pattern keeps everything on one screen so users
-/// can scan all their plans at a glance without losing context.
-class InstallmentsScreen extends ConsumerStatefulWidget {
+class InstallmentsScreen extends ConsumerWidget {
   const InstallmentsScreen({super.key});
 
   @override
-  ConsumerState<InstallmentsScreen> createState() => _InstallmentsScreenState();
-}
-
-class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
-  String? _expandedId;
-
-  void _toggleExpanded(String id) {
-    setState(() => _expandedId = _expandedId == id ? null : id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
-    final month = ref.watch(selectedMonthProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final installmentsAsync = ref.watch(installmentsProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -76,8 +50,6 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
               Center(child: Text('${context.t('common.error')}: $e')),
           data: (items) {
             if (items.isEmpty) return _Empty();
-            // Sort: active first, then completed, then cancelled. Inside
-            // each group, due-day ascending.
             final sorted = [...items]
               ..sort((a, b) {
                 final aRank = _statusRank(a.status);
@@ -90,34 +62,80 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
                 _SummaryCard(items: items, symbol: symbol),
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 8),
-                  child: Text(
-                    context.t('inst.all'),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
+                const SizedBox(height: 20),
+                // Section header
+                Row(
+                  children: [
+                    Text(
+                      context.t('inst.all').toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF8E8E93),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {},
+                      child: const Text(
+                        'Filter',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6366F1),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Grouped card with all installments
+                Container(
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Column(
+                      children: [
+                        for (int i = 0; i < sorted.length; i++) ...[
+                          _InstallmentSwipeActions(
+                            installment: sorted[i],
+                            userId: user?.uid,
+                            child: _InstallmentRow(
+                              installment: sorted[i],
+                              symbol: symbol,
+                              onTap: () => Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (_) => InstallmentDetailScreen(
+                                    installmentId: sorted[i].id,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (i < sorted.length - 1)
+                            Divider(
+                              height: 1,
+                              color: brand.divider,
+                              indent: 16,
+                              endIndent: 0,
+                            ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-                for (final i in sorted)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _InstallmentSwipeActions(
-                      installment: i,
-                      userId: user?.uid,
-                      child: _InstallmentTile(
-                        installment: i,
-                        month: month,
-                        symbol: symbol,
-                        userId: user?.uid,
-                        expanded: _expandedId == i.id,
-                        onToggle: () => _toggleExpanded(i.id),
-                      ),
-                    ),
-                  ),
               ],
             );
           },
@@ -126,16 +144,11 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
     );
   }
 
-  static int _statusRank(InstallmentStatus s) {
-    switch (s) {
-      case InstallmentStatus.active:
-        return 0;
-      case InstallmentStatus.completed:
-        return 1;
-      case InstallmentStatus.cancelled:
-        return 2;
-    }
-  }
+  static int _statusRank(InstallmentStatus s) => switch (s) {
+        InstallmentStatus.active => 0,
+        InstallmentStatus.completed => 1,
+        InstallmentStatus.cancelled => 2,
+      };
 }
 
 // ── Summary card ──────────────────────────────────────────────
@@ -148,48 +161,101 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final active = items
-        .where((i) => i.status == InstallmentStatus.active)
-        .toList();
+    final active = items.where((i) => i.status == InstallmentStatus.active).toList();
     final monthlyTotal = active.fold<double>(0, (s, i) => s + i.amount);
-    final remainingTotal = active.fold<double>(
-      0,
-      (s, i) => s + (i.totalRemaining ?? 0),
-    );
+    final remainingTotal =
+        active.fold<double>(0, (s, i) => s + (i.totalRemaining ?? 0));
 
-    return SectionCard(
-      color: brand.surface,
+    // Find next batch date (earliest upcoming due across all active)
+    DateTime? nextBatch;
+    for (final i in active) {
+      final next = i.nextDueDate();
+      if (next != null && (nextBatch == null || next.isBefore(nextBatch))) {
+        nextBatch = next;
+      }
+    }
+    String? nextBatchLine;
+    if (nextBatch != null) {
+      final today = DateTime.now();
+      final daysAway = nextBatch
+          .difference(DateTime(today.year, today.month, today.day))
+          .inDays;
+      final dateStr = DateFormat('MMM d').format(nextBatch);
+      nextBatchLine = daysAway == 0
+          ? 'Next batch today'
+          : 'Next batch on $dateStr · $daysAway days away';
+    }
+
+    // Split amount for display
+    final raw = formatMoney(symbol, monthlyTotal);
+    final dotIdx = raw.indexOf('.');
+    final mainPart = dotIdx >= 0 ? raw.substring(0, dotIdx) : raw;
+    final decPart = dotIdx >= 0 ? raw.substring(dotIdx) : '';
+
+    return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.t('inst.summaryTitle'),
+            context.t('inst.summaryTitle').toUpperCase(),
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: brand.inkSoft,
               letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            formatMoney(symbol, monthlyTotal),
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                mainPart,
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  color: brand.ink,
+                  letterSpacing: -1,
+                ),
+              ),
+              if (decPart.isNotEmpty)
+                Text(
+                  decPart,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                  ),
+                ),
+            ],
           ),
-          Text(
-            context.t('inst.summaryMonthly'),
-            style: TextStyle(
-              fontSize: 12,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
+          if (nextBatchLine != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              nextBatchLine,
+              style: TextStyle(
+                fontSize: 12,
+                color: brand.inkSoft,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 14),
+          Divider(height: 1, color: brand.divider),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -203,7 +269,6 @@ class _SummaryCard extends StatelessWidget {
                 child: _SummaryStat(
                   label: context.t('inst.summaryRemaining'),
                   value: formatMoney(symbol, remainingTotal),
-                  flexible: true,
                 ),
               ),
             ],
@@ -217,12 +282,7 @@ class _SummaryCard extends StatelessWidget {
 class _SummaryStat extends StatelessWidget {
   final String label;
   final String value;
-  final bool flexible;
-  const _SummaryStat({
-    required this.label,
-    required this.value,
-    this.flexible = false,
-  });
+  const _SummaryStat({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -246,9 +306,11 @@ class _SummaryStat extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: brand.ink,
+              ),
             ),
           ),
         ],
@@ -315,7 +377,151 @@ class _Empty extends StatelessWidget {
   }
 }
 
-// ── Tile (collapsed + expandable) ─────────────────────────────
+// ── Installment Row ───────────────────────────────────────────
+
+class _InstallmentRow extends StatelessWidget {
+  final Installment installment;
+  final String symbol;
+  final VoidCallback onTap;
+
+  const _InstallmentRow({
+    required this.installment,
+    required this.symbol,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final i = installment;
+    final style = styleFor(i.category);
+    final isActive = i.status == InstallmentStatus.active;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Subtle gray icon
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: brand.background,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(style.icon, color: brand.inkSoft, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                i.name,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: brand.ink,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _StatusBadge(installment: i),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _subtitle(context, i),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        formatMoney(symbol, i.amount),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: brand.ink,
+                        ),
+                      ),
+                      Text(
+                        context.t('inst.perMonth'),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              // Progress bar for fixed-term active plans
+              if (!i.isLifetime && isActive) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: i.progress,
+                    minHeight: 4,
+                    backgroundColor: brand.divider,
+                    valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _subtitle(BuildContext context, Installment i) {
+    switch (i.status) {
+      case InstallmentStatus.cancelled:
+        return context.t('inst.cancelledLine');
+      case InstallmentStatus.completed:
+        return context.t('inst.completedLine');
+      case InstallmentStatus.active:
+        if (i.isLifetime) {
+          final next = i.nextDueDate();
+          if (next != null) {
+            return '${context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next))}';
+          }
+          return context.t('inst.statusLifetime');
+        }
+        final paid = i.paidCount;
+        final total = i.totalMonths ?? 0;
+        final rem = i.totalRemaining ?? 0;
+        return '$paid/$total paid · ${formatMoney(symbol, rem)} left';
+    }
+  }
+}
+
+// ── Swipe actions (unchanged functionality) ───────────────────
 
 class _InstallmentSwipeActions extends ConsumerWidget {
   final Installment installment;
@@ -333,13 +539,13 @@ class _InstallmentSwipeActions extends ConsumerWidget {
     return Dismissible(
       key: ValueKey('installment-swipe-${installment.id}'),
       direction: DismissDirection.horizontal,
-      background: _SwipeActionBackground(
+      background: _SwipeBg(
         icon: CupertinoIcons.pencil,
         label: context.t('common.edit'),
         alignment: Alignment.centerLeft,
         color: AppColors.mint,
       ),
-      secondaryBackground: _SwipeActionBackground(
+      secondaryBackground: _SwipeBg(
         icon: CupertinoIcons.ellipsis,
         label: context.t('common.actions'),
         alignment: Alignment.centerRight,
@@ -463,20 +669,18 @@ class _InstallmentSwipeActions extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref
-          .read(installmentServiceProvider)
-          .delete(userId!, installment.id);
+      await ref.read(installmentServiceProvider).delete(userId!, installment.id);
     }
   }
 }
 
-class _SwipeActionBackground extends StatelessWidget {
+class _SwipeBg extends StatelessWidget {
   final IconData icon;
   final String label;
   final Alignment alignment;
   final Color color;
 
-  const _SwipeActionBackground({
+  const _SwipeBg({
     required this.icon,
     required this.label,
     required this.alignment,
@@ -488,10 +692,7 @@ class _SwipeActionBackground extends StatelessWidget {
     return Container(
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 22),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
+      color: color,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -510,560 +711,7 @@ class _SwipeActionBackground extends StatelessWidget {
   }
 }
 
-class _InstallmentTile extends ConsumerWidget {
-  final Installment installment;
-  final DateTime month;
-  final String symbol;
-  final String? userId;
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  const _InstallmentTile({
-    required this.installment,
-    required this.month,
-    required this.symbol,
-    required this.userId,
-    required this.expanded,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    final i = installment;
-    final s = styleFor(i.category);
-    final status = i.status;
-    final isActive = status == InstallmentStatus.active;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onToggle();
-          },
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header row ─────────────────────────────────
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: s.background,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(s.icon, color: s.accent, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  i.name,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusBadge(installment: i),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _primaryLine(context, i),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatMoney(symbol, i.amount),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          context.t('inst.perMonth'),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (!i.isLifetime) ...[
-                  const SizedBox(height: 12),
-                  _ProgressRow(installment: i, symbol: symbol),
-                ],
-                if (expanded)
-                  _ExpandedDetails(
-                    installment: i,
-                    symbol: symbol,
-                    userId: userId,
-                    monthSelected: month,
-                    isActive: isActive,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Single most-useful line under the name. Fixed-term active plans
-  /// surface "N months left · remaining $X". Lifetime → "Ongoing ·
-  /// next due Mmm d". Completed / cancelled → status text.
-  String _primaryLine(BuildContext context, Installment i) {
-    switch (i.status) {
-      case InstallmentStatus.cancelled:
-        return context.t('inst.cancelledLine');
-      case InstallmentStatus.completed:
-        return context.t('inst.completedLine');
-      case InstallmentStatus.active:
-        if (i.isLifetime) {
-          final next = i.nextDueDate();
-          if (next != null) {
-            return '${context.t('inst.statusLifetime')} · '
-                '${context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next))}';
-          }
-          return context.t('inst.statusLifetime');
-        }
-        final left = i.monthsLeft ?? 0;
-        final rem = i.totalRemaining ?? 0;
-        return '${context.t('inst.monthsLeft')}: $left · '
-            '${formatMoney(symbol, rem)}';
-    }
-  }
-}
-
-// ── Expanded panel ────────────────────────────────────────────
-
-class _ExpandedDetails extends ConsumerWidget {
-  final Installment installment;
-  final String symbol;
-  final String? userId;
-  final DateTime monthSelected;
-  final bool isActive;
-
-  const _ExpandedDetails({
-    required this.installment,
-    required this.symbol,
-    required this.userId,
-    required this.monthSelected,
-    required this.isActive,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    final i = installment;
-    final next = i.nextDueDate();
-    final paid = i.isPaidIn(monthSelected);
-    final activeNow = i.isActiveIn(monthSelected);
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(height: 1, color: brand.divider),
-          const SizedBox(height: 12),
-          // Detail rows.
-          _DetailRow(
-            label: context.t('inst.detailStartDate'),
-            value: DateFormat('MMM d, yyyy').format(i.startDate),
-          ),
-          if (!i.isLifetime)
-            _DetailRow(
-              label: context.t('inst.detailTotalMonths'),
-              value: '${i.totalMonths}',
-            ),
-          _DetailRow(
-            label: context.t('inst.detailMonthsPaid'),
-            value: i.isLifetime ? '${i.paidInApp}' : '${i.paidCount}',
-          ),
-          if (next != null)
-            _DetailRow(
-              label: context.t('inst.detailNextPayment'),
-              value: DateFormat('MMM d, yyyy').format(next),
-            ),
-          _DetailRow(
-            label: context.t('inst.detailDueDay'),
-            value: '${i.dayOfMonth}',
-          ),
-          if (i.originalPrincipal != null)
-            _DetailRow(
-              label: context.t('inst.detailOriginalAmount'),
-              value: formatMoney(symbol, i.originalPrincipal!),
-            ),
-          // Inline mark-paid for the selected month, if active now.
-          if (isActive && activeNow) ...[
-            const SizedBox(height: 8),
-            _MarkPaidRow(
-              installment: i,
-              month: monthSelected,
-              userId: userId,
-              paid: paid,
-            ),
-          ],
-          const SizedBox(height: 14),
-          // Action buttons (iOS-style).
-          _ActionButtons(installment: i, userId: userId, isActive: isActive),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _DetailRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MarkPaidRow extends ConsumerWidget {
-  final Installment installment;
-  final DateTime month;
-  final String? userId;
-  final bool paid;
-
-  const _MarkPaidRow({
-    required this.installment,
-    required this.month,
-    required this.userId,
-    required this.paid,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final monthLabel = DateFormat('MMM').format(month);
-    return SizedBox(
-      width: double.infinity,
-      child: GestureDetector(
-        onTap: () async {
-          if (userId == null) return;
-          HapticFeedback.selectionClick();
-          final svc = ref.read(installmentServiceProvider);
-          if (paid) {
-            await svc.markUnpaid(userId!, installment, month);
-          } else {
-            await svc.markPaid(userId!, installment, month);
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: paid ? AppColors.mint : AppColors.sand,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            paid
-                ? '${context.t('inst.paidFor').replaceFirst('{month}', monthLabel)} ✓'
-                : context
-                      .t('inst.markPaid')
-                      .replaceFirst('{month}', monthLabel),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: paid ? AppColors.income : AppColors.ink,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionButtons extends ConsumerWidget {
-  final Installment installment;
-  final String? userId;
-  final bool isActive;
-
-  const _ActionButtons({
-    required this.installment,
-    required this.userId,
-    required this.isActive,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final i = installment;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _ActionChip(
-          icon: CupertinoIcons.pencil,
-          label: context.t('common.edit'),
-          onTap: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => AddEditInstallmentScreen(installment: i),
-            ),
-          ),
-        ),
-        if (isActive)
-          _ActionChip(
-            icon: CupertinoIcons.check_mark_circled,
-            label: context.t('inst.markCompleted'),
-            onTap: () async {
-              if (userId == null) return;
-              await ref
-                  .read(installmentServiceProvider)
-                  .markCompleted(userId!, i);
-            },
-          ),
-        if (i.status == InstallmentStatus.cancelled)
-          _ActionChip(
-            icon: CupertinoIcons.refresh,
-            label: context.t('inst.reactivate'),
-            onTap: () async {
-              if (userId == null) return;
-              await ref.read(installmentServiceProvider).reactivate(userId!, i);
-            },
-          )
-        else
-          _ActionChip(
-            icon: CupertinoIcons.xmark_circle,
-            label: context.t('inst.cancel'),
-            destructive: true,
-            onTap: () => _confirmCancel(context, ref, i),
-          ),
-        _ActionChip(
-          icon: CupertinoIcons.trash,
-          label: context.t('common.delete'),
-          destructive: true,
-          onTap: () => _confirmDelete(context, ref, i),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _confirmCancel(
-    BuildContext context,
-    WidgetRef ref,
-    Installment i,
-  ) async {
-    if (userId == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dctx) => CupertinoAlertDialog(
-        title: Text(context.t('inst.cancelTitle')),
-        content: Text(context.t('inst.cancelMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
-            child: Text(context.t('inst.keep')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(context.t('inst.cancelIt')),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await ref.read(installmentServiceProvider).setCancelled(userId!, i, true);
-    }
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    Installment i,
-  ) async {
-    if (userId == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dctx) => CupertinoAlertDialog(
-        title: Text(context.t('inst.deleteTitle')),
-        content: Text(context.t('inst.deleteMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
-            child: Text(context.t('common.cancel')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await ref.read(installmentServiceProvider).delete(userId!, i.id);
-    }
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final fg = destructive ? AppColors.expense : brand.ink;
-    final bg = destructive
-        ? AppColors.blush.withValues(alpha: 0.55)
-        : brand.background;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: fg,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProgressRow extends StatelessWidget {
-  final Installment installment;
-  final String symbol;
-  const _ProgressRow({required this.installment, required this.symbol});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final i = installment;
-    final total = i.totalMonths!;
-    final paid = i.paidCount;
-    final pct = i.progress;
-    final completed = i.status == InstallmentStatus.completed;
-    final cancelled = i.status == InstallmentStatus.cancelled;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: pct,
-            minHeight: 5,
-            backgroundColor: brand.divider,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              cancelled
-                  ? brand.inkSoft
-                  : completed
-                  ? AppColors.income
-                  : brand.ink,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '$paid / $total ${context.t('inst.monthsPaid').toLowerCase()}',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: brand.inkSoft,
-          ),
-        ),
-      ],
-    );
-  }
-}
+// ── Status badge ──────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
   final Installment installment;
@@ -1071,12 +719,11 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = installment.status;
-    final (label, bg, fg) = switch (status) {
+    final (label, bg, fg) = switch (installment.status) {
       InstallmentStatus.active when installment.isLifetime => (
         context.t('inst.statusLifetime'),
         AppColors.butter,
-        AppColors.ink,
+        const Color(0xFFB36A1F),
       ),
       InstallmentStatus.active => (
         context.t('inst.statusActive'),
@@ -1086,7 +733,7 @@ class _StatusBadge extends StatelessWidget {
       InstallmentStatus.completed => (
         context.t('inst.statusCompleted'),
         AppColors.sky,
-        AppColors.ink,
+        const Color(0xFF2A6FB5),
       ),
       InstallmentStatus.cancelled => (
         context.t('inst.statusCancelled'),
@@ -1095,7 +742,7 @@ class _StatusBadge extends StatelessWidget {
       ),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),

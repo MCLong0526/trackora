@@ -103,11 +103,17 @@ class AccountsScreen extends ConsumerWidget {
     }
     for (final e in expenses) {
       final aid = e.accountId;
-      if (aid == null || !balances.containsKey(aid)) continue;
-      if (e.type.isInflow) {
-        balances[aid] = (balances[aid] ?? 0) + e.amount;
-      } else {
-        balances[aid] = (balances[aid] ?? 0) - e.amount;
+      if (aid != null && balances.containsKey(aid)) {
+        if (e.type.isInflow) {
+          balances[aid] = (balances[aid] ?? 0) + e.amount;
+        } else {
+          balances[aid] = (balances[aid] ?? 0) - e.amount;
+        }
+      }
+      // Credit destination for account-to-account transfers
+      final toId = e.toAccountId;
+      if (toId != null && balances.containsKey(toId)) {
+        balances[toId] = (balances[toId] ?? 0) + e.amount;
       }
     }
     return balances;
@@ -364,12 +370,28 @@ class _AccountCard extends StatelessWidget {
 double computeAccountBalance(Account account, List<Expense> expenses) {
   double balance = account.openingBalance;
   for (final e in expenses) {
-    if (e.accountId != account.id) continue;
-    if (e.type.isInflow) {
+    if (e.accountId == account.id) {
+      if (e.type.isInflow) {
+        balance += e.amount;
+      } else {
+        balance -= e.amount;
+      }
+    }
+    // Credit this account when it is the destination of an account-to-account transfer
+    if (e.toAccountId == account.id) {
       balance += e.amount;
-    } else {
-      balance -= e.amount;
     }
   }
   return balance;
+}
+
+/// Compute total balance across all accounts.
+double computeTotalAccountBalance(
+  List<Account> accounts,
+  List<Expense> expenses,
+) {
+  return accounts.fold<double>(
+    0,
+    (sum, a) => sum + computeAccountBalance(a, expenses),
+  );
 }
