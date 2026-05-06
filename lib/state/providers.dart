@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_config.dart';
+import '../models/account.dart';
 import '../models/borrow_lending.dart';
 import '../models/expense.dart';
 import '../models/installment.dart';
 import '../models/app_user.dart';
 import '../models/saving_plan.dart';
+import '../repositories/account_repository.dart';
 import '../repositories/borrow_lending_repository.dart';
 import '../repositories/expense_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
@@ -14,6 +16,7 @@ import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/installment_repository.dart';
+import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
@@ -31,6 +34,17 @@ import '../services/watch_service.dart';
 import '../services/widget_sync_service.dart';
 
 final authServiceProvider = Provider((_) => AuthService());
+
+final accountRepositoryProvider = Provider<AccountRepository>(
+  (_) => LocalAccountRepository(),
+);
+
+/// Stream of all accounts for the active user.
+final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.read(accountRepositoryProvider).getAll(user.uid);
+});
 final expenseRepositoryProvider = Provider<ExpenseRepository>((_) {
   switch (storageMode) {
     case StorageMode.local:
@@ -133,20 +147,21 @@ final openingSavingsProvider = StreamProvider.autoDispose<double>((ref) {
   return ref.read(expenseRepositoryProvider).getOpeningSavings(user.uid);
 });
 
-/// Current savings = opening balance + (lifetime income − lifetime expenses).
+/// Current savings = opening balance + (lifetime inflows − lifetime outflows).
+/// Inflows: income + receive. Outflows: expense + transfer.
 final savingsProvider = Provider.autoDispose<double>((ref) {
   final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
   final opening = ref.watch(openingSavingsProvider).valueOrNull ?? 0.0;
-  double income = 0;
-  double expense = 0;
+  double inflow = 0;
+  double outflow = 0;
   for (final e in all) {
-    if (e.type == EntryType.income) {
-      income += e.amount;
+    if (e.type.isInflow) {
+      inflow += e.amount;
     } else {
-      expense += e.amount;
+      outflow += e.amount;
     }
   }
-  return opening + income - expense;
+  return opening + inflow - outflow;
 });
 
 final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
@@ -220,7 +235,7 @@ final localeProvider = StateNotifierProvider<LocaleNotifier, AppLocale>(
 /// `false` = masked as `RM ****`. Persisted via `PrefsService` so the
 /// choice survives restart. Calculations are unaffected.
 class BalanceVisibilityNotifier extends StateNotifier<bool> {
-  BalanceVisibilityNotifier(this._prefs) : super(true) {
+  BalanceVisibilityNotifier(this._prefs) : super(false) {
     _load();
   }
   final PrefsService _prefs;

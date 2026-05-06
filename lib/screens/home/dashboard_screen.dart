@@ -34,6 +34,7 @@ class DashboardScreen extends ConsumerWidget {
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     final email = user?.email ?? '';
     final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
 
@@ -45,7 +46,7 @@ class DashboardScreen extends ConsumerWidget {
         borrowLendingAsync.valueOrNull ?? const <BorrowLending>[];
 
     final monthSpent = monthExpenses
-        .where((e) => e.type == EntryType.expense)
+        .where((e) => e.type.isOutflow)
         .fold<double>(0, (s, e) => s + e.amount);
 
     final budgetableSpent = monthExpenses
@@ -65,7 +66,7 @@ class DashboardScreen extends ConsumerWidget {
     double todaySpent = 0;
     double weekSpent = 0;
     for (final e in allExpenses) {
-      if (e.type != EntryType.expense) continue;
+      if (!e.type.isOutflow) continue;
       if (!e.date.isBefore(todayStart)) todaySpent += e.amount;
       if (!e.date.isBefore(weekStart)) weekSpent += e.amount;
     }
@@ -154,16 +155,6 @@ class DashboardScreen extends ConsumerWidget {
           ),
 
           SliverToBoxAdapter(
-            child: MonthFilterBar(
-              selectedMonth: selectedMonth,
-              onMonthSelected: (m) =>
-                  ref.read(selectedMonthProvider.notifier).state = m,
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-          SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
               child: Row(
@@ -199,6 +190,16 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
+          SliverToBoxAdapter(
+            child: MonthFilterBar(
+              selectedMonth: selectedMonth,
+              onMonthSelected: (m) =>
+                  ref.read(selectedMonthProvider.notifier).state = m,
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
           if (monthExpenses.isEmpty)
             SliverToBoxAdapter(child: _empty(context))
           else
@@ -206,9 +207,13 @@ class DashboardScreen extends ConsumerWidget {
               itemCount: monthExpenses.length > 10 ? 10 : monthExpenses.length,
               itemBuilder: (_, i) {
                 final expense = monthExpenses[i];
+                final acct = accounts
+                    .where((a) => a.id == expense.accountId)
+                    .firstOrNull;
                 return ExpenseCard(
                   expense: expense,
                   currencySymbol: symbol,
+                  account: acct,
                   onTap: () => Navigator.push(
                     context,
                     CupertinoPageRoute(

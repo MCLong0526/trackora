@@ -1,4 +1,9 @@
-enum EntryType { expense, income }
+enum EntryType { expense, income, transfer, receive }
+
+extension EntryTypeX on EntryType {
+  bool get isOutflow => this == EntryType.expense || this == EntryType.transfer;
+  bool get isInflow => this == EntryType.income || this == EntryType.receive;
+}
 
 class Expense {
   final String id;
@@ -8,6 +13,8 @@ class Expense {
   final DateTime date;
   final EntryType type;
   final String? receiptUrl;
+  final String? accountId;
+  final String? counterpart;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,6 +26,8 @@ class Expense {
     required this.date,
     this.type = EntryType.expense,
     this.receiptUrl,
+    this.accountId,
+    this.counterpart,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -30,10 +39,10 @@ class Expense {
       category: data['category'] as String,
       note: data['note'] as String? ?? '',
       date: _readDate(data['date']),
-      type: (data['type'] as String?) == 'income'
-          ? EntryType.income
-          : EntryType.expense,
+      type: _decodeType(data['type'] as String?),
       receiptUrl: data['receiptUrl'] as String?,
+      accountId: data['accountId'] as String?,
+      counterpart: data['counterpart'] as String?,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
     );
@@ -46,8 +55,10 @@ class Expense {
       'category': category,
       'note': note,
       'date': date.toIso8601String(),
-      'type': type == EntryType.income ? 'income' : 'expense',
+      'type': _encodeType(type),
       'receiptUrl': receiptUrl,
+      'accountId': accountId,
+      'counterpart': counterpart,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -55,9 +66,6 @@ class Expense {
 
   static const _sentinel = Object();
 
-  /// `receiptUrl` uses a sentinel so callers can explicitly clear the
-  /// reference (pass `null`) without `copyWith` falling back to the old
-  /// value. Needed by the "Remove receipt" action on the edit screen.
   Expense copyWith({
     String? id,
     double? amount,
@@ -66,6 +74,8 @@ class Expense {
     DateTime? date,
     EntryType? type,
     Object? receiptUrl = _sentinel,
+    Object? accountId = _sentinel,
+    Object? counterpart = _sentinel,
     DateTime? updatedAt,
   }) {
     return Expense(
@@ -78,9 +88,41 @@ class Expense {
       receiptUrl: identical(receiptUrl, _sentinel)
           ? this.receiptUrl
           : receiptUrl as String?,
+      accountId: identical(accountId, _sentinel)
+          ? this.accountId
+          : accountId as String?,
+      counterpart: identical(counterpart, _sentinel)
+          ? this.counterpart
+          : counterpart as String?,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static EntryType _decodeType(String? raw) {
+    switch (raw) {
+      case 'income':
+        return EntryType.income;
+      case 'transfer':
+        return EntryType.transfer;
+      case 'receive':
+        return EntryType.receive;
+      default:
+        return EntryType.expense;
+    }
+  }
+
+  static String _encodeType(EntryType type) {
+    switch (type) {
+      case EntryType.income:
+        return 'income';
+      case EntryType.transfer:
+        return 'transfer';
+      case EntryType.receive:
+        return 'receive';
+      case EntryType.expense:
+        return 'expense';
+    }
   }
 
   static DateTime _readDate(Object? value) {
@@ -91,10 +133,7 @@ class Expense {
       try {
         final date = (value as dynamic).toDate();
         if (date is DateTime) return date;
-      } catch (_) {
-        // The repositories keep dates normalized; this only supports older
-        // Firestore-shaped values that may still flow through the model.
-      }
+      } catch (_) {}
     }
     throw FormatException('Unsupported date value: $value');
   }

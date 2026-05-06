@@ -45,7 +45,7 @@ class BrandColors extends ThemeExtension<BrandColors> {
     required this.accentDark,
   });
 
-  static const _lightBackground = Color(0xFFF4F4F6);
+  static const _lightBackground = Color(0xFFF0EFFE);
   static const _lightSurface = Color(0xFFFFFFFF);
   static const _lightInk = Color(0xFF111111);
   static const _lightInkSoft = Color(0xFF6B6B70);
@@ -465,6 +465,11 @@ const Map<String, CategoryStyle> kCategoryStyles = {
     background: AppColors.sand,
     accent: Color(0xFF6B6B70),
     icon: CupertinoIcons.square_grid_2x2,
+  ),
+  'Transfer': CategoryStyle(
+    background: AppColors.blush,
+    accent: Color(0xFFB23A4A),
+    icon: CupertinoIcons.arrow_right_arrow_left_circle_fill,
   ),
 };
 

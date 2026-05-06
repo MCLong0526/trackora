@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -39,15 +41,19 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
+  final _counterpartController = TextEditingController();
 
   EntryType _type = EntryType.expense;
   String _category = kExpenseCategories.first;
   DateTime _date = DateTime.now();
+  String? _accountId;
   bool _saving = false;
   File? _newReceipt;
   String? _existingReceiptUrl;
 
   bool get _isEdit => widget.expense != null;
+  bool get _isTransferType =>
+      _type == EntryType.transfer || _type == EntryType.receive;
 
   @override
   void initState() {
@@ -59,7 +65,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       _category = e.category;
       _date = e.date;
       _type = e.type;
+      _accountId = e.accountId;
       _existingReceiptUrl = e.receiptUrl;
+      _counterpartController.text = e.counterpart ?? '';
     }
   }
 
@@ -67,11 +75,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _counterpartController.dispose();
     super.dispose();
   }
 
-  List<String> get _categories =>
-      _type == EntryType.income ? kIncomeCategories : kExpenseCategories;
+  List<String> get _categories {
+    if (_type == EntryType.income) return kIncomeCategories;
+    if (_isTransferType) return const ['Transfer'];
+    return kExpenseCategories;
+  }
 
   Future<void> _pickReceipt() async {
     final picker = ImagePicker();
@@ -128,15 +140,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
       final amount = double.parse(_amountController.text);
       final now = DateTime.now();
+      final category = _isTransferType ? 'Transfer' : _category;
+      final counterpart = _isTransferType
+          ? _counterpartController.text.trim()
+          : null;
 
       if (_isEdit) {
         final updated = widget.expense!.copyWith(
           amount: amount,
-          category: _category,
+          category: category,
           note: _noteController.text.trim(),
           date: _date,
           type: _type,
           receiptUrl: receiptUrl,
+          accountId: _accountId,
+          counterpart: counterpart,
           updatedAt: now,
         );
         await expenses.updateExpense(user.uid, updated);
@@ -144,11 +162,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         final e = Expense(
           id: '',
           amount: amount,
-          category: _category,
+          category: category,
           note: _noteController.text.trim(),
           date: _date,
           type: _type,
           receiptUrl: receiptUrl,
+          accountId: _accountId,
+          counterpart: counterpart,
           createdAt: now,
           updatedAt: now,
         );
@@ -200,6 +220,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final dateLabel = DateFormat('MMM d, yyyy').format(_date);
     final selectedChipFg = foregroundOn(brand.accentDark);
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -228,127 +249,24 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             children: [
               _typeToggle(),
               const SizedBox(height: 18),
-              SectionCard(
-                color: _type == EntryType.income
-                    ? AppColors.mint
-                    : AppColors.lilac,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t('expense.amount'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            symbol,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _amountController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            style: const TextStyle(
-                              fontSize: 38,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1,
-                            ),
-                            decoration: const InputDecoration(
-                              filled: false,
-                              hintText: '0.00',
-                              hintStyle: TextStyle(
-                                color: AppColors.inkSoft,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 38,
-                                letterSpacing: -1,
-                              ),
-                              contentPadding: EdgeInsets.zero,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return context.t('validation.enterAmount');
-                              }
-                              final n = double.tryParse(v);
-                              if (n == null || n <= 0) {
-                                return context.t('validation.invalidAmount');
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              _amountCard(symbol),
               const SizedBox(height: 18),
-              Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 10),
-                child: Text(
-                  context.t('expense.category'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+              if (_isTransferType) ...[
+                _counterpartField(brand),
+                const SizedBox(height: 14),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 10),
+                  child: Text(
+                    context.t('expense.category'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _categories.map((c) {
-                  final selected = c == _category;
-                  final s = styleFor(c);
-                  return GestureDetector(
-                    onTap: () => setState(() => _category = c),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected ? brand.accentDark : s.background,
-                        borderRadius: BorderRadius.circular(AppRadius.chip),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            s.icon,
-                            size: 16,
-                            color: selected ? selectedChipFg : s.accent,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            context.categoryLabel(c),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: selected ? selectedChipFg : AppColors.ink,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 18),
+                _categoryChips(selectedChipFg, brand),
+                const SizedBox(height: 18),
+              ],
+              _accountPicker(accounts, brand),
+              const SizedBox(height: 12),
               SectionCard(
                 onTap: _pickDate,
                 child: Row(
@@ -373,8 +291,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                   hintText: context.t('expense.note'),
                 ),
               ),
-              const SizedBox(height: 12),
-              _receiptCard(brand),
+              if (!_isTransferType) ...[
+                const SizedBox(height: 12),
+                _receiptCard(brand),
+              ],
               const SizedBox(height: 28),
               FilledButton(
                 onPressed: _saving ? null : _save,
@@ -398,6 +318,313 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         ),
       ),
     );
+  }
+
+  Widget _amountCard(String symbol) {
+    Color cardColor;
+    switch (_type) {
+      case EntryType.income:
+        cardColor = AppColors.mint;
+        break;
+      case EntryType.transfer:
+        cardColor = AppColors.blush;
+        break;
+      case EntryType.receive:
+        cardColor = AppColors.sky;
+        break;
+      case EntryType.expense:
+        cardColor = AppColors.lilac;
+        break;
+    }
+    return SectionCard(
+      color: cardColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.t('expense.amount'),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  symbol,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                  ),
+                  decoration: const InputDecoration(
+                    filled: false,
+                    hintText: '0.00',
+                    hintStyle: TextStyle(
+                      color: AppColors.inkSoft,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 38,
+                      letterSpacing: -1,
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return context.t('validation.enterAmount');
+                    }
+                    final n = double.tryParse(v);
+                    if (n == null || n <= 0) {
+                      return context.t('validation.invalidAmount');
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _counterpartField(BrandColors brand) {
+    final label = _type == EntryType.transfer ? 'To (Person / Name)' : 'From (Person / Name)';
+    final hint = _type == EntryType.transfer
+        ? 'e.g. John, Company ABC'
+        : 'e.g. Sarah, Client XYZ';
+    return TextFormField(
+      controller: _counterpartController,
+      textCapitalization: TextCapitalization.words,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(
+          _type == EntryType.transfer
+              ? CupertinoIcons.arrow_right_circle
+              : CupertinoIcons.arrow_left_circle,
+          color: brand.inkSoft,
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryChips(Color selectedChipFg, BrandColors brand) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _categories.map((c) {
+        final selected = c == _category;
+        final s = styleFor(c);
+        return GestureDetector(
+          onTap: () => setState(() => _category = c),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: selected ? brand.accentDark : s.background,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  s.icon,
+                  size: 16,
+                  color: selected ? selectedChipFg : s.accent,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  context.categoryLabel(c),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? selectedChipFg : AppColors.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _accountPicker(List<Account> accounts, BrandColors brand) {
+    if (accounts.isEmpty) {
+      return SectionCard(
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const AddEditAccountScreen(),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(CupertinoIcons.creditcard, color: brand.inkSoft),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Add an account',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: brand.inkSoft,
+                ),
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: brand.inkSoft,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final selected = accounts.where((a) => a.id == _accountId).firstOrNull;
+
+    return SectionCard(
+      onTap: () => _showAccountPicker(accounts, brand),
+      child: Row(
+        children: [
+          Icon(
+            selected != null
+                ? _iconForType(selected.type)
+                : CupertinoIcons.creditcard,
+            color: selected != null ? _accentForType(selected.type) : brand.inkSoft,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Account',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(
+            selected?.name ?? 'None',
+            style: TextStyle(color: brand.inkSoft),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            CupertinoIcons.chevron_down,
+            size: 14,
+            color: brand.inkSoft,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAccountPicker(List<Account> accounts, BrandColors brand) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        color: ctx.brand.surface,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  'Select Account',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: ctx.brand.ink,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  CupertinoIcons.xmark_circle,
+                  color: ctx.brand.inkSoft,
+                ),
+                title: Text(
+                  'None',
+                  style: TextStyle(color: ctx.brand.inkSoft),
+                ),
+                trailing: _accountId == null
+                    ? Icon(
+                        CupertinoIcons.checkmark_alt,
+                        color: ctx.brand.accentDark,
+                      )
+                    : null,
+                onTap: () {
+                  setState(() => _accountId = null);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ...accounts.map(
+                (a) => ListTile(
+                  leading: Icon(
+                    _iconForType(a.type),
+                    color: _accentForType(a.type),
+                  ),
+                  title: Text(a.name),
+                  subtitle: Text(a.type.label),
+                  trailing: _accountId == a.id
+                      ? Icon(
+                          CupertinoIcons.checkmark_alt,
+                          color: ctx.brand.accentDark,
+                        )
+                      : null,
+                  onTap: () {
+                    setState(() => _accountId = a.id);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _iconForType(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet:
+        return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+    }
+  }
+
+  Color _accentForType(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return const Color(0xFF2A6FB5);
+      case AccountType.eWallet:
+        return const Color(0xFF1F7A60);
+      case AccountType.cash:
+        return const Color(0xFFA0801C);
+    }
   }
 
   Widget _receiptCard(BrandColors brand) {
@@ -550,6 +777,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         children: [
           _typeChip(context.t('expense.expense'), EntryType.expense),
           _typeChip(context.t('expense.income'), EntryType.income),
+          _typeChip('Transfer', EntryType.transfer),
+          _typeChip('Receive', EntryType.receive),
         ],
       ),
     );
@@ -564,14 +793,16 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         onTap: () {
           setState(() {
             _type = type;
-            if (!_categories.contains(_category)) {
+            if (_isTransferType) {
+              _category = 'Transfer';
+            } else if (!_categories.contains(_category)) {
               _category = _categories.first;
             }
           });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected ? brand.accentDark : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.chip),
@@ -580,7 +811,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: selected ? selectedFg : brand.ink,
             ),

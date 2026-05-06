@@ -6,6 +6,7 @@ class LocalStorage {
   static const installmentsBoxName = 'trackora_installments_v1';
   static const borrowLendingBoxName = 'trackora_borrow_lending_v1';
   static const savingPlansBoxName = 'trackora_saving_plans_v1';
+  static const accountsBoxName = 'trackora_accounts_v1';
 
   static bool _initialized = false;
 
@@ -18,6 +19,7 @@ class LocalStorage {
     await _openBox(installmentsBoxName);
     await _openBox(borrowLendingBoxName);
     await _openBox(savingPlansBoxName);
+    await _openBox(accountsBoxName);
     _initialized = true;
   }
 
@@ -30,6 +32,8 @@ class LocalStorage {
   static Box<dynamic> get borrowLending => Hive.box(borrowLendingBoxName);
 
   static Box<dynamic> get savingPlans => Hive.box(savingPlansBoxName);
+
+  static Box<dynamic> get accounts => Hive.box(accountsBoxName);
 
   static Future<void> _openBox(String name) async {
     if (!Hive.isBoxOpen(name)) {

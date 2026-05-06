@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/account.dart';
 import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
@@ -12,7 +13,9 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
+import '../accounts/accounts_screen.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
 import '../savings/saving_plans_screen.dart';
@@ -273,6 +276,10 @@ class BudgetScreen extends ConsumerWidget {
     final brand = context.brand;
     final expenses =
         ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
+    final allExpenses =
+        ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
     final installments =
         ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
@@ -281,6 +288,7 @@ class BudgetScreen extends ConsumerWidget {
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final visible = ref.watch(balanceVisibleProvider);
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
@@ -317,10 +325,20 @@ class BudgetScreen extends ConsumerWidget {
         .toList();
     final saved = trackedPlans.fold<double>(0, (s, p) => s + p.currentAmount);
 
+    final budgetLeft = budget - discretionarySpent;
+    final budgetOverspent = budgetLeft < 0;
+
+    // Upcoming installments sorted by due date within the current month
+    final upcomingInstallments = activeInstallments
+        .where((i) => i.isActiveIn(month))
+        .toList()
+      ..sort((a, b) => a.startDate.day.compareTo(b.startDate.day));
+
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
         children: [
+          // ── Title row ────────────────────────────────────
           Row(
             children: [
               Expanded(
@@ -336,22 +354,43 @@ class BudgetScreen extends ConsumerWidget {
                     size: 40,
                     onTap: () => _showMoneyHubSheet(context, ref),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: brand.surface,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      DateFormat('MMM yyyy').format(month),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: brand.inkSoft,
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: brand.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            DateFormat('MMM').format(month),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: brand.ink,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            CupertinoIcons.chevron_down,
+                            size: 12,
+                            color: brand.inkSoft,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -359,17 +398,53 @@ class BudgetScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Text(
-              context.t('money.subtitle'),
-              style: TextStyle(color: brand.inkSoft, fontSize: 13),
+
+          // ── Budget summary line ───────────────────────────
+          if (budget > 0) ...[
+            const SizedBox(height: 10),
+            RichText(
+              text: TextSpan(
+                style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                children: [
+                  const TextSpan(text: 'Spent '),
+                  TextSpan(
+                    text: formatMoney(symbol, discretionarySpent),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: brand.ink,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' of ${formatMoney(symbol, budget)} budget · ',
+                  ),
+                  TextSpan(
+                    text: '${formatMoney(symbol, budgetLeft.abs())} ${budgetOverspent ? 'over' : 'left'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: budgetOverspent ? AppColors.expense : AppColors.income,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // ── Accounts section ──────────────────────────────
+          _AccountsSection(
+            accounts: accounts,
+            allExpenses: allExpenses,
+            symbol: symbol,
+            visible: visible,
+            ref: ref,
           ),
-          const SizedBox(height: 22),
+
+          const SizedBox(height: 24),
+
+          // ── Management cards ──────────────────────────────
           _GroupHeader(label: context.t('budget.management')),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
               final cardWidth = (constraints.maxWidth - 12) / 2;
@@ -389,113 +464,38 @@ class BudgetScreen extends ConsumerWidget {
                   budget > 0
                       ? (discretionarySpent / budget * 100).clamp(0, 999).round()
                       : 0;
+              final savingUsagePct =
+                  savingTarget > 0
+                      ? (saved / savingTarget * 100).clamp(0, 100).round()
+                      : 0;
 
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  if (visibleModules.contains('installments'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 170,
-                      child: _ManagementCard(
-                        icon: CupertinoIcons.calendar_today,
-                        background: AppColors.butter,
-                        title: context.t('budget.manageInstallments'),
-                        value:
-                            activeInstallments.isEmpty
-                                ? '—'
-                                : formatMoney(symbol, installmentsMonthly),
-                        valueSubtext:
-                            activeInstallments.isEmpty
-                                ? null
-                                : context.t('budget.perMonth'),
-                        footer:
-                            activeInstallments.isEmpty
-                                ? context.t('budget.noneActive')
-                                : context
-                                      .t('budget.activeCount')
-                                      .replaceFirst(
-                                        '{count}',
-                                        '${activeInstallments.length}',
-                                      ),
-                        onTap: () => _push(context, const InstallmentsScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('borrowLending'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 170,
-                      child: _ManagementCard(
-                        icon: CupertinoIcons.arrow_up_arrow_down,
-                        background: AppColors.sky,
-                        title: context.t('tools.borrowLending'),
-                        value: formatMoney(symbol, net.abs()),
-                        valueColor:
-                            net < 0
-                                ? AppColors.expense
-                                : net > 0
-                                ? AppColors.income
-                                : null,
-                        footer:
-                            '${formatMoney(symbol, borrowed)} ↑ · ${formatMoney(symbol, lent)} ↓',
-                        onTap: () =>
-                            _push(context, const BorrowLendingScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('savingPlans'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 170,
-                      child: _ManagementCard(
-                        icon: CupertinoIcons.flag_fill,
-                        background: AppColors.mint,
-                        title: context.t('tools.savingPlans'),
-                        value: formatMoney(symbol, saved),
-                        progress: savingProgress,
-                        footer:
-                            savingTarget > 0
-                                ? context
-                                      .t('budget.savingPlansSummary')
-                                      .replaceFirst(
-                                        '{amount}',
-                                        formatMoney(symbol, savingTarget),
-                                      )
-                                : context
-                                      .t('budget.activeCount')
-                                      .replaceFirst(
-                                        '{count}',
-                                        '${trackedPlans.length}',
-                                      ),
-                        onTap: () => _push(context, const SavingPlansScreen()),
-                      ),
-                    ),
                   if (visibleModules.contains('monthlyBudget'))
                     SizedBox(
                       width: cardWidth,
-                      height: 170,
-                      child: _ManagementCard(
-                        icon: CupertinoIcons.creditcard_fill,
-                        background: AppColors.lilac,
-                        title: context.t('home.budget'),
-                        value:
-                            budget <= 0
-                                ? context.t('budget.monthlyNotSet')
-                                : formatMoney(symbol, discretionarySpent),
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'BUDGET',
+                        badgeColor: AppColors.lilac,
+                        badgeTextColor: const Color(0xFF6B40A8),
+                        icon: CupertinoIcons.chart_pie_fill,
+                        iconBgColor: const Color(0xFF6B40A8),
+                        mainValue: budget <= 0
+                            ? context.t('budget.monthlyNotSet')
+                            : formatMoney(symbol, budgetLeft.abs()),
+                        mainValueSub: budget <= 0
+                            ? null
+                            : budgetOverspent
+                                ? 'over budget'
+                                : 'left this month',
                         progress: budgetProgress,
-                        progressColor:
-                            budget > 0 && discretionarySpent > budget
-                                ? AppColors.expense
-                                : null,
-                        footer:
-                            budget <= 0
-                                ? context.t('budget.setAction')
-                                : context
-                                      .t('budget.percentUsed')
-                                      .replaceFirst(
-                                        '{percent}',
-                                        '$budgetUsagePct',
-                                      ),
+                        progressLabel: budget <= 0
+                            ? context.t('budget.setAction')
+                            : '$budgetUsagePct% used',
+                        progressColor: budgetOverspent ? AppColors.expense : null,
                         onTap: () => showMonthlyBudgetDetails(
                           context,
                           ref,
@@ -507,10 +507,117 @@ class BudgetScreen extends ConsumerWidget {
                         ),
                       ),
                     ),
+                  if (visibleModules.contains('savingPlans'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'SAVINGS',
+                        badgeColor: AppColors.mint,
+                        badgeTextColor: const Color(0xFF1F7A60),
+                        icon: CupertinoIcons.flag_fill,
+                        iconBgColor: const Color(0xFF1F7A60),
+                        mainValue: formatMoney(symbol, saved),
+                        mainValueSub: savingTarget > 0
+                            ? 'of ${formatMoney(symbol, savingTarget)} goal'
+                            : '${trackedPlans.length} plans',
+                        progress: savingProgress,
+                        progressLabel: savingTarget > 0
+                            ? '$savingUsagePct% saved'
+                            : null,
+                        onTap: () => _push(context, const SavingPlansScreen()),
+                      ),
+                    ),
+                  if (visibleModules.contains('borrowLending'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'LENDING',
+                        badgeColor: AppColors.sky,
+                        badgeTextColor: const Color(0xFF2A6FB5),
+                        icon: CupertinoIcons.arrow_up_arrow_down,
+                        iconBgColor: const Color(0xFF2A6FB5),
+                        mainValue: net == 0
+                            ? formatMoney(symbol, 0)
+                            : '${net > 0 ? '+' : '-'}${formatMoney(symbol, net.abs())}',
+                        mainValueSub: 'net position',
+                        mainValueColor: net < 0
+                            ? AppColors.expense
+                            : net > 0
+                            ? AppColors.income
+                            : null,
+                        footer:
+                            '↑ ${formatMoney(symbol, lent)} · ↓ ${formatMoney(symbol, borrowed)}',
+                        onTap: () =>
+                            _push(context, const BorrowLendingScreen()),
+                      ),
+                    ),
+                  if (visibleModules.contains('installments'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'INSTALLMENTS',
+                        badgeColor: AppColors.peach,
+                        badgeTextColor: const Color(0xFFB36A1F),
+                        icon: CupertinoIcons.calendar_today,
+                        iconBgColor: const Color(0xFFB36A1F),
+                        mainValue: activeInstallments.isEmpty
+                            ? '—'
+                            : formatMoney(symbol, installmentsMonthly),
+                        mainValueSub: activeInstallments.isEmpty
+                            ? null
+                            : 'due this month',
+                        footer: activeInstallments.isEmpty
+                            ? context.t('budget.noneActive')
+                            : '${activeInstallments.length} active plans',
+                        onTap: () => _push(context, const InstallmentsScreen()),
+                      ),
+                    ),
                 ],
               );
             },
           ),
+
+          // ── Upcoming section ──────────────────────────────
+          if (upcomingInstallments.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            _GroupHeader(label: 'UPCOMING'),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: brand.surface,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < upcomingInstallments.length && i < 5; i++) ...[
+                      if (i > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 68),
+                          child: Container(height: 0.5, color: brand.divider),
+                        ),
+                      _UpcomingInstallmentRow(
+                        installment: upcomingInstallments[i],
+                        symbol: symbol,
+                        month: month,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -722,148 +829,570 @@ class _VisibilitySwitchRow extends StatelessWidget {
   }
 }
 
-// ── Management Grid Card ───────────────────────────────────────
+// ── Premium management card ────────────────────────────────────
 
-class _ManagementCard extends StatelessWidget {
+class _PremiumManagementCard extends StatelessWidget {
+  final String badgeLabel;
+  final Color badgeColor;
+  final Color badgeTextColor;
   final IconData icon;
-  final Color background;
-  final String title;
-  final String value;
-  final String? valueSubtext;
-  final Color? valueColor;
+  final Color iconBgColor;
+  final String mainValue;
+  final String? mainValueSub;
+  final Color? mainValueColor;
   final double? progress;
+  final String? progressLabel;
   final Color? progressColor;
-  final String footer;
+  final String? footer;
   final VoidCallback onTap;
 
-  const _ManagementCard({
+  const _PremiumManagementCard({
+    required this.badgeLabel,
+    required this.badgeColor,
+    required this.badgeTextColor,
     required this.icon,
-    required this.background,
-    required this.title,
-    required this.value,
-    this.valueSubtext,
-    this.valueColor,
+    required this.iconBgColor,
+    required this.mainValue,
+    this.mainValueSub,
+    this.mainValueColor,
     this.progress,
+    this.progressLabel,
     this.progressColor,
-    required this.footer,
+    this.footer,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: background.withValues(alpha: 0.55),
-            blurRadius: 18,
-            spreadRadius: -4,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: SectionCard(
-        color: background,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        onTap: onTap,
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              spreadRadius: -2,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon + chevron header
+            // Badge + chevron
             Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  child: Icon(icon, size: 16, color: AppColors.ink),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 10, color: badgeTextColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        badgeLabel,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: badgeTextColor,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const Spacer(),
                 Icon(
                   CupertinoIcons.chevron_right,
-                  size: 13,
-                  color: AppColors.inkSoft,
+                  size: 12,
+                  color: brand.inkSoft,
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            // Title
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.inkSoft,
+            // Donut / circle progress or icon
+            if (progress != null) ...[
+              _CircleProgress(
+                progress: progress!,
+                color: progressColor ?? iconBgColor,
+                size: 48,
+                strokeWidth: 5,
               ),
-            ),
-            const SizedBox(height: 4),
-            // Primary value
+              const SizedBox(height: 8),
+            ] else ...[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: badgeTextColor),
+              ),
+              const SizedBox(height: 8),
+            ],
+            // Main value
             FittedBox(
               alignment: Alignment.centerLeft,
               fit: BoxFit.scaleDown,
               child: Text(
-                value,
+                mainValue,
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  color: valueColor ?? AppColors.ink,
+                  color: mainValueColor ?? brand.ink,
                 ),
               ),
             ),
-            if (valueSubtext != null) ...[
-              const SizedBox(height: 1),
+            if (mainValueSub != null) ...[
+              const SizedBox(height: 2),
               Text(
-                valueSubtext!,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.inkSoft,
-                ),
-              ),
-            ],
-            if (progress != null) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress!,
-                  minHeight: 5,
-                  backgroundColor: Colors.white.withValues(alpha: 0.55),
-                  valueColor: AlwaysStoppedAnimation(
-                    progressColor ?? AppColors.ink,
-                  ),
-                ),
-              ),
-            ],
-            const Spacer(),
-            // Footer
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.42),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                footer,
+                mainValueSub!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (footer != null || progressLabel != null) ...[
+              const Spacer(),
+              Text(
+                footer ?? progressLabel ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: brand.inkSoft,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.inkSoft,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Circle progress indicator ──────────────────────────────────
+
+class _CircleProgress extends StatelessWidget {
+  final double progress;
+  final Color color;
+  final double size;
+  final double strokeWidth;
+
+  const _CircleProgress({
+    required this.progress,
+    required this.color,
+    required this.size,
+    required this.strokeWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            strokeWidth: strokeWidth,
+            backgroundColor: brand.divider,
+            valueColor: AlwaysStoppedAnimation(color),
+            strokeCap: StrokeCap.round,
+          ),
+          Text(
+            '${(progress * 100).round()}%',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: brand.ink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Upcoming installment row ───────────────────────────────────
+
+class _UpcomingInstallmentRow extends StatelessWidget {
+  final Installment installment;
+  final String symbol;
+  final DateTime month;
+
+  const _UpcomingInstallmentRow({
+    required this.installment,
+    required this.symbol,
+    required this.month,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final dueDate = installment.dueDateIn(month);
+    final dueDateLabel = DateFormat('MMM d').format(dueDate);
+    final paymentNum = installment.paidCount + 1;
+    final totalStr = installment.totalMonths != null
+        ? '/${installment.totalMonths}'
+        : '';
+    final title = installment.name.isEmpty
+        ? 'Payment $paymentNum$totalStr'
+        : '${installment.name} · payment $paymentNum$totalStr';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.butter,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              CupertinoIcons.creditcard,
+              size: 18,
+              color: AppColors.inkSoft,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dueDateLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            formatMoney(symbol, installment.amount),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: brand.ink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+// ── Accounts section for Funds tab ────────────────────────────
+
+class _AccountsSection extends StatelessWidget {
+  final List<Account> accounts;
+  final List<Expense> allExpenses;
+  final String symbol;
+  final bool visible;
+  final WidgetRef ref;
+
+  const _AccountsSection({
+    required this.accounts,
+    required this.allExpenses,
+    required this.symbol,
+    required this.visible,
+    required this.ref,
+  });
+
+  Map<String, double> _balances() {
+    final map = <String, double>{};
+    for (final a in accounts) {
+      map[a.id] = a.openingBalance;
+    }
+    for (final e in allExpenses) {
+      final aid = e.accountId;
+      if (aid == null || !map.containsKey(aid)) continue;
+      if (e.type.isInflow) {
+        map[aid] = (map[aid] ?? 0) + e.amount;
+      } else {
+        map[aid] = (map[aid] ?? 0) - e.amount;
+      }
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final balances = _balances();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _GroupHeader(label: 'ACCOUNTS'),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => const AccountsScreen(),
+                ),
+              ),
+              behavior: HitTestBehavior.opaque,
+              child: Text(
+                accounts.isEmpty ? 'Add Account' : 'Manage',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: brand.accentDark,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        if (accounts.isEmpty)
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              CupertinoPageRoute(
+                builder: (_) => const AccountsScreen(),
+              ),
+            ),
+            child: SectionCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.sky,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.creditcard,
+                      size: 20,
+                      color: Color(0xFF2A6FB5),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'No accounts yet',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: brand.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Add bank, e-wallet, or cash accounts',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: brand.inkSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    CupertinoIcons.add_circled,
+                    color: brand.accentDark,
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: accounts.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final a = accounts[i];
+                final bal = balances[a.id] ?? 0.0;
+                return _AccountMiniCard(
+                  account: a,
+                  balance: bal,
+                  symbol: symbol,
+                  visible: visible,
+                  onTap: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => const AccountsScreen(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AccountMiniCard extends StatelessWidget {
+  final Account account;
+  final double balance;
+  final String symbol;
+  final bool visible;
+  final VoidCallback onTap;
+
+  const _AccountMiniCard({
+    required this.account,
+    required this.balance,
+    required this.symbol,
+    required this.visible,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final style = _styleFor(account.type);
+    final icon = _iconFor(account.type);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: style.bg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 14, color: style.accent),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    account.type.label,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: brand.inkSoft,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            MaskedAmount(
+              visibleText: formatMoney(symbol, balance),
+              visible: visible,
+              currencyPrefix: symbol,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: balance >= 0 ? brand.ink : AppColors.expense,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              account.name,
+              style: TextStyle(
+                fontSize: 11,
+                color: brand.inkSoft,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  ({Color bg, Color accent}) _styleFor(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
+      case AccountType.eWallet:
+        return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
+      case AccountType.cash:
+        return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
+    }
+  }
+
+  IconData _iconFor(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet:
+        return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+    }
   }
 }
 
