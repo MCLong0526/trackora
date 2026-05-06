@@ -27,7 +27,7 @@ class MonthFilterBar extends StatelessWidget {
     final brand = context.brand;
 
     return SizedBox(
-      height: 44,
+      height: 38,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -44,8 +44,8 @@ class MonthFilterBar extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+                  horizontal: 22,
+                  vertical: 7,
                 ),
                 decoration: BoxDecoration(
                   color: isSelected ? brand.accentDark : brand.surface,

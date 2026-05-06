@@ -27,7 +27,7 @@ class StatisticsScreen extends ConsumerStatefulWidget {
 
 class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   _StatsPeriod _period = _StatsPeriod.month;
-  // Bills and installments are always excluded from spending stats.
+  bool _excludeFixed = true;
   late DateTime _anchor;
   bool _isSharing = false;
 
@@ -177,7 +177,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         data: (allItems) {
           final allExpenses = allItems
               .where((e) => e.type == EntryType.expense)
-              .where((e) => !_isFixed(e))
+              .where((e) => !_excludeFixed || !_isFixed(e))
               .toList();
           final allIncome = allItems
               .where((e) => e.type == EntryType.income)
@@ -259,6 +259,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   allExpenses: allExpenses,
                   range: range,
                   symbol: symbol,
+                  excludeFixed: _excludeFixed,
+                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
                 ),
               ],
             ),
@@ -308,6 +310,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     required List<Expense> allExpenses,
     required _StatsRange range,
     required String symbol,
+    bool excludeFixed = true,
+    ValueChanged<bool>? onExcludeChanged,
     bool forReport = false,
   }) {
     final showLine =
@@ -325,6 +329,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       period: _period,
       symbol: symbol,
       stacked: forReport,
+      excludeFixed: excludeFixed,
+      onExcludeChanged: onExcludeChanged,
     );
   }
 
@@ -1119,6 +1125,8 @@ class _ChartsCarousel extends StatefulWidget {
   final _StatsPeriod period;
   final String symbol;
   final bool stacked;
+  final bool excludeFixed;
+  final ValueChanged<bool>? onExcludeChanged;
 
   const _ChartsCarousel({
     required this.showLine,
@@ -1129,6 +1137,8 @@ class _ChartsCarousel extends StatefulWidget {
     required this.period,
     required this.symbol,
     required this.stacked,
+    this.excludeFixed = true,
+    this.onExcludeChanged,
   });
 
   @override
@@ -1215,6 +1225,34 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Exclude bills + installments toggle
+        if (widget.onExcludeChanged != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.field),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Exclude bills + installments',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+                CupertinoSwitch(
+                  value: widget.excludeFixed,
+                  onChanged: widget.onExcludeChanged,
+                ),
+              ],
+            ),
+          ),
         // "By Category" / "Trend" tab switcher
         Container(
           padding: const EdgeInsets.all(4),
