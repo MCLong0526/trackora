@@ -17,13 +17,13 @@
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		8A5BCD2E2F00111100AAA001 /* OpenQuickAddIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A5BCD2D2F00111100AAA002 /* OpenQuickAddIntent.swift */; };
-		FF5E12F885374BAC8BFDE264 /* WatchUserInfoBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		C2839FC784954CC923A7868C /* QuickAddExpenseIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006AAD33775106DBCB35BA17 /* QuickAddExpenseIntent.swift */; };
 		C986E2F9F492571C65967B16 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CDB314DBB024361242B6D27 /* Foundation.framework */; };
 		F02E8AEFA4DF3523C69E7F8B /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D64D391D9C528DFA768D54D2 /* Pods_RunnerTests.framework */; };
+		FF5E12F885374BAC8BFDE264 /* WatchUserInfoBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,14 +108,14 @@
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		765F4720D2DEC3752E007C50 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		8A5BCD2D2F00111100AAA002 /* OpenQuickAddIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenQuickAddIntent.swift; sourceTree = "<group>"; };
-		7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUserInfoBridge.swift; sourceTree = "<group>"; };
 		79A249BA44278F702D654B83 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		7CB21D991F78E425B0ECA02C /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Runner/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUserInfoBridge.swift; sourceTree = "<group>"; };
 		7F75B282F7602CB7C202CCA4 /* TrackoraWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = TrackoraWidget.entitlements; sourceTree = "<group>"; };
 		804C6898342EE909912E0B90 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		86CDD61C18757ABDA4A2A644 /* TrackoraWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TrackoraWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8A5BCD2D2F00111100AAA002 /* OpenQuickAddIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenQuickAddIntent.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -424,6 +424,7 @@
 				5BA66A20662FB12EAE98DA85 /* [CP] Embed Pods Frameworks */,
 				E3B6C4FA2A0C4F5BB5F1B4D0 /* Sign Native Asset Frameworks */,
 				5A58FC5D2FA4B7E200A168C0 /* Embed Watch Content */,
+				5EF866B64F285F18433E762B /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -592,6 +593,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		5EF866B64F285F18433E762B /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		5FA0D9B3934F8DDE5546C701 /* [CP] Check Pods Manifest.lock */ = {

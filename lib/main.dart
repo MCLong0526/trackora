@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'app_config.dart';
 import 'firebase_options.dart';
 import 'repositories/local_storage.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/welcome_screen.dart';
 import 'screens/expenses/quick_add_sheet.dart';
 import 'screens/home/home_shell.dart';
 import 'services/deep_link_service.dart';
@@ -230,13 +232,46 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       ],
       supportedLocales: const [Locale('en'), Locale('zh'), Locale('ms')],
       home: auth.when(
-        data: (user) => user == null ? const LoginScreen() : const HomeShell(),
+        data: (user) => user == null
+            ? const _AuthGate()
+            : const HomeShell(),
         loading: () => Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: const Center(child: CupertinoActivityIndicator()),
         ),
         error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       ),
+    );
+  }
+}
+
+/// Shows WelcomeScreen on first launch; LoginScreen on subsequent launches.
+/// If Firebase already has a valid cached user (during the brief persistence-
+/// loading window before authStateChanges fires), shows a spinner instead of
+/// the login form so Face ID is never prompted for an already-valid session.
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    // Firebase persistence may restore the session slightly after the stream
+    // emits null. If currentUser is already set, wait for the auth stream to
+    // catch up and navigate to HomeShell — never show the login form.
+    if (FirebaseAuth.instance.currentUser != null) {
+      return const Scaffold(
+        body: Center(child: CupertinoActivityIndicator()),
+      );
+    }
+    return FutureBuilder<bool>(
+      future: hasSeenWelcome(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CupertinoActivityIndicator()),
+          );
+        }
+        return snapshot.data! ? const LoginScreen() : const WelcomeScreen();
+      },
     );
   }
 }
