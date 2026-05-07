@@ -68,6 +68,8 @@ class DashboardScreen extends ConsumerWidget {
       if (!e.date.isBefore(weekStart)) weekSpent += e.amount;
     }
 
+    final sortedRecent = [...allExpenses]
+      ..sort((a, b) => b.date.compareTo(a.date));
     ref
         .read(widgetSyncServiceProvider)
         .push(
@@ -81,6 +83,7 @@ class DashboardScreen extends ConsumerWidget {
           todaySpent: todaySpent,
           weekSpent: weekSpent,
           accounts: accounts,
+          recentExpenses: sortedRecent.take(5).toList(),
         );
 
     return SafeArea(

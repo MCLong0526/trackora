@@ -121,11 +121,18 @@ class WatchService {
     required String userId,
     required ExpenseRepository repository,
   }) async {
-    if (message['type'] != 'addExpense') return;
+    final type = message['type'] as String?;
+    if (type == 'requestSync') {
+      // Phone-side: push latest applicationContext back to watch.
+      await syncToWatch();
+      return;
+    }
+    if (type != 'addExpense') return;
     final amount = (message['amount'] as num?)?.toDouble();
     final category = message['category'] as String?;
     if (amount == null || amount <= 0 || category == null) return;
     final note = (message['note'] as String?) ?? '';
+    final accountId = message['accountId'] as String?;
     final now = DateTime.now();
     await repository.addExpense(
       userId,
@@ -136,10 +143,11 @@ class WatchService {
         note: note,
         date: now,
         type: EntryType.expense,
+        accountId: accountId,
         createdAt: now,
         updatedAt: now,
       ),
     );
-    debugPrint('[WatchService] expense saved: $category \$$amount');
+    debugPrint('[WatchService] expense saved: $category \$$amount accountId=$accountId');
   }
 }

@@ -32,6 +32,14 @@
 				<string>trackora</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.957463431763-tvksvin07tht16fgcf3pljvbrjhle3ln</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
@@ -83,5 +91,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Trackora uses Face ID to let you sign in quickly and securely.</string>
 </dict>
 </plist>
