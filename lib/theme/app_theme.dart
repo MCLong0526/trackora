@@ -45,7 +45,7 @@ class BrandColors extends ThemeExtension<BrandColors> {
     required this.accentDark,
   });
 
-  static const _lightBackground = Color(0xFFF0EFFE);
+  static const _lightBackground = Color(0xFFF2F2F7);
   static const _lightSurface = Color(0xFFFFFFFF);
   static const _lightInk = Color(0xFF111111);
   static const _lightInkSoft = Color(0xFF6B6B70);

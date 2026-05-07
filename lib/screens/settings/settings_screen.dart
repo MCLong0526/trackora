@@ -11,6 +11,7 @@ import '../../services/export_service.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../accounts/accounts_screen.dart';
@@ -36,7 +37,6 @@ class SettingsScreen extends ConsumerWidget {
     final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
     final code = ref.watch(currencyCodeProvider).valueOrNull ?? 'USD';
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
-    final opening = ref.watch(openingSavingsProvider).valueOrNull ?? 0.0;
     final themeMode = ref.watch(themeModeProvider);
     final appLocale = ref.watch(localeProvider);
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
@@ -44,7 +44,8 @@ class SettingsScreen extends ConsumerWidget {
     final totalBalance = ref.watch(totalAccountBalanceProvider);
 
     // Display name: first part of email before @, or 'Trackora' for offline
-    final displayName = email.isNotEmpty
+    final isRealUser = email.isNotEmpty && email.contains('@');
+    final displayName = isRealUser
         ? email.split('@').first.split('.').map((w) =>
             w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w).join(' ')
         : 'Trackora';
@@ -53,10 +54,27 @@ class SettingsScreen extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: [
-          // ── Hero profile card ────────────────────────────────
-          _ProfileHero(initial: initial, email: email, displayName: displayName),
+          // ── Page title ───────────────────────────────────────
+          const Text(
+            'Profile',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 16),
 
-          const SizedBox(height: 24),
+          // ── Hero profile card (only shown when signed in) ────
+          if (isRealUser) ...[
+            _ProfileHero(initial: initial, email: email, displayName: displayName),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Cloud Sync ───────────────────────────────────────
+          const _CloudSyncSection(),
+
+          const SizedBox(height: 22),
 
           // ── My Accounts ─────────────────────────────────────
           _AccountsSection(
@@ -78,20 +96,6 @@ class SettingsScreen extends ConsumerWidget {
                 label: context.t('settings.currency'),
                 trailing: '$symbol  $code',
                 onTap: () => _pickCurrency(context, ref),
-              ),
-              _GroupDivider(),
-              _Tile(
-                icon: CupertinoIcons.creditcard,
-                iconColor: AppColors.peach,
-                label: context.t('settings.startingSavings'),
-                trailing: formatMoney(symbol, opening),
-                onTap: () => _editOpeningSavings(
-                  context,
-                  ref,
-                  opening,
-                  symbol,
-                  user?.uid,
-                ),
               ),
               _GroupDivider(),
               _Tile(
@@ -373,78 +377,6 @@ class SettingsScreen extends ConsumerWidget {
           : null,
       onTap: onTap,
     );
-  }
-
-  Future<void> _editOpeningSavings(
-    BuildContext context,
-    WidgetRef ref,
-    double current,
-    String symbol,
-    String? userId,
-  ) async {
-    if (userId == null) return;
-    final controller = TextEditingController(
-      text: current > 0 ? current.toStringAsFixed(2) : '',
-    );
-    final result = await showModalBottomSheet<double>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.brand.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) {
-        final brand = ctx.brand;
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                context.t('settings.startingSavings'),
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.t('settings.startingSavingsSubtitle'),
-                style: TextStyle(color: brand.inkSoft, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                autofocus: true,
-                decoration: InputDecoration(
-                  prefixText: '$symbol  ',
-                  hintText: '0.00',
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  final v = double.tryParse(controller.text) ?? 0;
-                  Navigator.pop(ctx, v);
-                },
-                child: Text(context.t('common.save')),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (result != null) {
-      await ref
-          .read(expenseRepositoryProvider)
-          .setOpeningSavings(userId, result);
-    }
   }
 
   Future<void> _exportCsv(
@@ -860,6 +792,7 @@ class _AccountsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Section header
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -875,9 +808,7 @@ class _AccountsSection extends StatelessWidget {
             GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                CupertinoPageRoute(
-                  builder: (_) => const AccountsScreen(),
-                ),
+                CupertinoPageRoute(builder: (_) => const AccountsScreen()),
               ),
               child: Text(
                 'Manage',
@@ -891,13 +822,15 @@ class _AccountsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+
+        // Unified accounts card
         Container(
           decoration: BoxDecoration(
             color: brand.surface,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.05),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 2),
               ),
@@ -905,7 +838,7 @@ class _AccountsSection extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Total balance row
+              // Total Balance row
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                 child: Row(
@@ -939,14 +872,13 @@ class _AccountsSection extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: totalBalance >= 0
-                            ? brand.ink
-                            : AppColors.expense,
+                        color: totalBalance >= 0 ? brand.ink : AppColors.expense,
                       ),
                     ),
                   ],
                 ),
               ),
+
               if (accounts.isEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
@@ -988,7 +920,7 @@ class _AccountsSection extends StatelessWidget {
                   ),
                 )
               else ...[
-                const Divider(height: 1, indent: 16, endIndent: 16),
+                Divider(height: 0.5, thickness: 0.5, indent: 16, endIndent: 16, color: brand.divider),
                 ...accounts.asMap().entries.map((entry) {
                   final i = entry.key;
                   final a = entry.value;
@@ -1007,8 +939,9 @@ class _AccountsSection extends StatelessWidget {
                     ),
                   );
                 }),
+                Divider(height: 0.5, thickness: 0.5, indent: 16, endIndent: 16, color: brand.divider),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
                   child: GestureDetector(
                     onTap: () => Navigator.push(
                       context,
@@ -1112,12 +1045,25 @@ class _AccountRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 13,
+                  color: brand.inkSoft,
+                ),
               ],
             ),
           ),
         ),
-        if (!isLast) const Divider(height: 1, indent: 66, endIndent: 16),
+        if (!isLast)
+          Builder(
+            builder: (ctx) => Divider(
+              height: 0.5,
+              thickness: 0.5,
+              indent: 66,
+              endIndent: 16,
+              color: ctx.brand.divider,
+            ),
+          ),
       ],
     );
   }
@@ -1151,7 +1097,7 @@ class _AccountRow extends StatelessWidget {
 // spacing. All existing actions are preserved — these widgets just
 // host them.
 
-class _ProfileHero extends StatelessWidget {
+class _ProfileHero extends ConsumerWidget {
   final String initial;
   final String email;
   final String displayName;
@@ -1162,12 +1108,12 @@ class _ProfileHero extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final isOffline = storageMode == StorageMode.local;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
       decoration: BoxDecoration(
-        color: context.brand.surface,
+        color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [
           BoxShadow(
@@ -1207,41 +1153,22 @@ class _ProfileHero extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: context.brand.ink,
+                    color: brand.ink,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  isOffline
-                      ? 'Offline profile · Local only'
-                      : email,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.brand.inkSoft,
-                    fontWeight: FontWeight.w500,
+                if (email.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    email,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                ],
               ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.lilac,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'Sync',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF6B40A8),
-                ),
-              ),
             ),
           ),
         ],
@@ -1417,5 +1344,538 @@ class _Tile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ── Cloud Sync ───────────────────────────────────────────────────────────────
+
+class _CloudSyncSection extends ConsumerStatefulWidget {
+  const _CloudSyncSection();
+
+  @override
+  ConsumerState<_CloudSyncSection> createState() => _CloudSyncSectionState();
+}
+
+class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
+  final _sync = SyncService();
+  SyncState _state = SyncState.idle;
+  String? _email;
+  DateTime? _lastSynced;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmail();
+  }
+
+  Future<void> _loadEmail() async {
+    final e = await _sync.currentFirebaseEmail();
+    if (mounted) setState(() => _email = e);
+  }
+
+  String _relativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  // Sync Now — called when already authenticated.
+  Future<void> _syncNow() async {
+    setState(() => _state = SyncState.syncing);
+    try {
+      await _sync.syncIfAuthenticated(
+        onState: (s) { if (mounted) setState(() => _state = s); },
+      );
+      if (mounted) {
+        setState(() => _lastSynced = DateTime.now());
+        // After upload, push fresh data to Watch.
+        await ref.read(watchServiceProvider).syncToWatch();
+        _showSuccessBanner();
+      }
+    } catch (e) {
+      if (mounted) _showError(e.toString());
+    }
+  }
+
+  // Sign In & Sync — called when no account is linked yet.
+  Future<void> _showSignInSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SyncSheet(
+        onSync: (email, password) async {
+          Navigator.pop(ctx);
+          setState(() => _state = SyncState.syncing);
+          try {
+            await _sync.signInAndSync(
+              email: email,
+              password: password,
+              onState: (s) { if (mounted) setState(() => _state = s); },
+            );
+            if (mounted) {
+              setState(() {
+                _email = email;
+                _lastSynced = DateTime.now();
+              });
+              await ref.read(watchServiceProvider).syncToWatch();
+              _showSuccessBanner();
+            }
+          } catch (e) {
+            if (mounted) _showError(e.toString());
+          }
+        },
+      ),
+    );
+  }
+
+  void _showSuccessBanner() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: AppColors.income,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: const Row(
+          children: [
+            Icon(CupertinoIcons.checkmark_circle_fill, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Text(
+              'Sync complete',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _state = SyncState.idle);
+    });
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: AppColors.expense,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Text(
+          'Sync failed: $msg',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isOnline = ref.watch(isOnlineProvider);
+    final isSyncing = _state == SyncState.syncing;
+    final hasSynced = _lastSynced != null || _state == SyncState.success;
+    final hasFailed = _state == SyncState.failed;
+
+    // ── Status row helpers ────────────────────────────────────────
+    final Color networkDot = isOnline ? AppColors.income : brand.inkSoft;
+    final String networkLabel = isOnline ? 'Online' : 'Offline';
+
+    final Color iconBg = hasFailed
+        ? AppColors.blush
+        : hasSynced
+            ? AppColors.mint
+            : AppColors.sky;
+    final Color iconColor = hasFailed
+        ? AppColors.expense
+        : hasSynced
+            ? AppColors.income
+            : const Color(0xFF2A6FB5);
+    final IconData iconData = isSyncing
+        ? CupertinoIcons.cloud_upload
+        : hasFailed
+            ? CupertinoIcons.exclamationmark_triangle
+            : hasSynced
+                ? CupertinoIcons.cloud_fill
+                : CupertinoIcons.cloud_upload;
+
+    // Sync state label
+    final String syncLabel;
+    if (isSyncing) {
+      syncLabel = 'Uploading data…';
+    } else if (hasFailed) {
+      syncLabel = 'Sync failed';
+    } else if (_lastSynced != null) {
+      syncLabel = 'Synced · ${_relativeTime(_lastSynced!)}';
+    } else if (hasSynced) {
+      syncLabel = 'Synced to Cloud';
+    } else {
+      syncLabel = _email != null ? 'Not synced yet' : 'Not connected';
+    }
+
+    // Sync button
+    final bool canSync = isOnline && !isSyncing;
+    final String syncBtnLabel = _email != null ? 'Sync Now' : 'Sign In & Sync';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Column(
+          children: [
+            // ── Header row ──────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: isSyncing
+                        ? const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(iconData, size: 17, color: iconColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Cloud Sync',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: brand.ink,
+                      ),
+                    ),
+                  ),
+                  // Sync button
+                  GestureDetector(
+                    onTap: canSync
+                        ? (_email != null ? _syncNow : _showSignInSheet)
+                        : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: canSync
+                            ? brand.accentDark.withValues(alpha: 0.12)
+                            : brand.divider,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isSyncing
+                                ? CupertinoIcons.arrow_2_circlepath
+                                : CupertinoIcons.cloud_upload,
+                            size: 13,
+                            color: canSync ? brand.accentDark : brand.inkSoft,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isSyncing ? 'Syncing…' : syncBtnLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: canSync ? brand.accentDark : brand.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.only(left: 14, right: 14),
+              child: Container(height: 0.5, color: brand.divider),
+            ),
+
+            // ── Status details ──────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Column(
+                children: [
+                  // Network status row
+                  Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: networkDot,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        networkLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isOnline ? AppColors.income : brand.inkSoft,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        syncLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: hasFailed ? AppColors.expense : brand.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_email != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.person_circle,
+                          size: 13,
+                          color: brand.inkSoft,
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            _email!,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: brand.inkSoft,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Credential entry sheet — shown when no Firebase account is linked yet.
+class _SyncSheet extends StatefulWidget {
+  final Future<void> Function(String email, String password) onSync;
+
+  const _SyncSheet({required this.onSync});
+
+  @override
+  State<_SyncSheet> createState() => _SyncSheetState();
+}
+
+class _SyncSheetState extends State<_SyncSheet> {
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _obscure = true;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    decoration: BoxDecoration(
+                      color: brand.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.sky,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.cloud_upload_fill,
+                        size: 20,
+                        color: Color(0xFF2A6FB5),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Sign In & Sync',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            'Your data stays local. Sync creates a backup.',
+                            style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _field(
+                  controller: _emailCtrl,
+                  hint: 'Email',
+                  icon: CupertinoIcons.mail,
+                  keyboardType: TextInputType.emailAddress,
+                  brand: brand,
+                ),
+                const SizedBox(height: 10),
+                _passField(brand),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: _loading ? null : _doSync,
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text(
+                            'Sign In & Sync',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "No account? We'll create one automatically.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: brand.inkSoft),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required BrandColors brand,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, size: 18, color: brand.inkSoft),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _passField(BrandColors brand) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller: _passCtrl,
+        obscureText: _obscure,
+        decoration: InputDecoration(
+          hintText: 'Password',
+          prefixIcon: Icon(CupertinoIcons.lock, size: 18, color: brand.inkSoft),
+          suffixIcon: GestureDetector(
+            onTap: () => setState(() => _obscure = !_obscure),
+            child: Icon(
+              _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+              size: 18,
+              color: brand.inkSoft,
+            ),
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _doSync() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text;
+    if (email.isEmpty || password.isEmpty) return;
+    setState(() => _loading = true);
+    try {
+      await widget.onSync(email, password);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 }

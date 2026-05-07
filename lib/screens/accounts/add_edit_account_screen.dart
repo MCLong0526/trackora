@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../models/account.dart';
 import '../../state/providers.dart';
@@ -338,8 +339,8 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         children: [
           Icon(
             _type == AccountType.bank
-                ? CupertinoIcons.building_2_fill
-                : CupertinoIcons.device_phone_portrait,
+                ? PhosphorIconsFill.bank
+                : PhosphorIconsFill.deviceMobile,
             color: _type == AccountType.bank
                 ? const Color(0xFF2A6FB5)
                 : const Color(0xFF1F7A60),
@@ -500,11 +501,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   IconData _iconFor(AccountType type) {
     switch (type) {
       case AccountType.bank:
-        return CupertinoIcons.building_2_fill;
+        return PhosphorIconsFill.bank;
       case AccountType.eWallet:
-        return CupertinoIcons.device_phone_portrait;
+        return PhosphorIconsFill.deviceMobile;
       case AccountType.cash:
-        return CupertinoIcons.money_dollar_circle_fill;
+        return PhosphorIconsFill.currencyDollar;
     }
   }
 }

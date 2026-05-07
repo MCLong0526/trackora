@@ -778,54 +778,31 @@ class _LineChartCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.mint,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  CupertinoIcons.chart_bar,
-                  size: 18,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t('stats.lineChart.title'),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      _subtitle(context),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            context.t('stats.lineChart.title'),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: brand.ink,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            _subtitle(context),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: brand.inkSoft,
+            ),
           ),
           const SizedBox(height: 14),
           Text(
             formatMoney(symbol, total),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
               letterSpacing: -1,
+              color: brand.ink,
             ),
           ),
           const SizedBox(height: 14),
@@ -974,26 +951,24 @@ class _LineChartCard extends StatelessWidget {
       for (int i = 0; i < series.values.length; i++)
         FlSpot(i.toDouble(), series.values[i]),
     ];
+    final lineColor = brand.ink;
     final lineBar = LineChartBarData(
       spots: spots,
       isCurved: true,
-      color: accent,
-      barWidth: 3,
+      color: lineColor,
+      barWidth: 2.5,
       isStrokeCapRound: true,
       dotData: FlDotData(
         show: true,
         checkToShowDot: (spot, _) => spot.y > 0,
         getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
           radius: 3.5,
-          color: accent,
+          color: lineColor,
           strokeWidth: 2,
           strokeColor: brand.surface,
         ),
       ),
-      belowBarData: BarAreaData(
-        show: true,
-        color: accent.withValues(alpha: isDark ? 0.20 : 0.10),
-      ),
+      belowBarData: BarAreaData(show: false),
     );
 
     final n = series.values.length;
@@ -1024,18 +999,31 @@ class _LineChartCard extends StatelessWidget {
             tooltipMargin: 8,
             fitInsideHorizontally: true,
             fitInsideVertically: true,
-            getTooltipItems: (spots) => spots
-                .map(
-                  (spot) => LineTooltipItem(
-                    formatMoney(symbol, spot.y),
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                    ),
+            getTooltipItems: (spots) => spots.map((spot) {
+                final i = spot.x.toInt();
+                final label = i < series.labels.length ? series.labels[i] : '';
+                final displayLabel = period == _StatsPeriod.month
+                    ? 'Day $label'
+                    : label;
+                return LineTooltipItem(
+                  '$displayLabel\n',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
                   ),
-                )
-                .toList(),
+                  children: [
+                    TextSpan(
+                      text: formatMoney(symbol, spot.y),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
           ),
         ),
         titlesData: FlTitlesData(
@@ -1254,62 +1242,45 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
             ),
           ),
         // "By Category" / "Trend" tab switcher
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-          ),
-          child: Row(
-            children: [
-              for (var i = 0; i < pages.length; i++)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      _controller.animateToPage(
-                        i,
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                      );
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      decoration: BoxDecoration(
-                        color: _page == i
-                            ? brand.surface == brand.background
-                                  ? brand.ink.withValues(alpha: 0.08)
-                                  : brand.background
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(AppRadius.chip - 4),
-                        boxShadow: _page == i
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.06),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        pages[i].label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: _page == i ? brand.ink : brand.inkSoft,
-                        ),
+        Row(
+          children: [
+            for (var i = 0; i < pages.length; i++) ...[
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _controller.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                  );
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: _page == i ? brand.ink : Colors.transparent,
+                        width: 2.5,
                       ),
                     ),
                   ),
+                  child: Text(
+                    pages[i].label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: _page == i ? FontWeight.w700 : FontWeight.w500,
+                      color: _page == i ? brand.ink : brand.inkSoft,
+                    ),
+                  ),
                 ),
+              ),
+              if (i < pages.length - 1) const SizedBox(width: 20),
             ],
-          ),
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -1491,10 +1462,10 @@ class _CategoryCard extends StatelessWidget {
     final brand = context.brand;
 
     return SectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (expenses.isEmpty)
             Padding(
@@ -1507,80 +1478,64 @@ class _CategoryCard extends StatelessWidget {
                 ),
               ),
             )
-          else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Donut chart
-                SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      PieChart(
-                        PieChartData(
-                          sectionsSpace: 3,
-                          centerSpaceRadius: 52,
-                          pieTouchData: PieTouchData(
-                            touchCallback: (event, response) {
-                              if (event is! FlTapUpEvent ||
-                                  response == null ||
-                                  response.touchedSection == null) return;
-                              final idx =
-                                  response
-                                      .touchedSection!
-                                      .touchedSectionIndex;
-                              if (idx >= 0 && idx < sorted.length) {
-                                _showCategoryRecords(context, sorted[idx]);
-                              }
-                            },
-                          ),
-                          sections: List.generate(sorted.length, (i) {
-                            final entry = sorted[i];
-                            final s = styleFor(entry.key);
-                            final pct =
-                                total == 0 ? 0.0 : entry.value / total;
-                            return PieChartSectionData(
-                              value: entry.value,
-                              color: s.accent,
-                              radius: 26,
-                              title:
-                                  pct >= 0.08
-                                      ? '${(pct * 100).round()}%'
-                                      : '',
-                              titleStyle: TextStyle(
-                                color: foregroundOn(s.accent),
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            );
-                          }),
+          else ...[
+            // Donut chart centered
+            Center(
+              child: SizedBox(
+                width: 200,
+                height: 200,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        sectionsSpace: 3,
+                        centerSpaceRadius: 62,
+                        pieTouchData: PieTouchData(
+                          touchCallback: (event, response) {
+                            if (event is! FlTapUpEvent ||
+                                response == null ||
+                                response.touchedSection == null) return;
+                            final idx =
+                                response.touchedSection!.touchedSectionIndex;
+                            if (idx >= 0 && idx < sorted.length) {
+                              _showCategoryRecords(context, sorted[idx]);
+                            }
+                          },
                         ),
+                        sections: List.generate(sorted.length, (i) {
+                          final entry = sorted[i];
+                          final s = styleFor(entry.key);
+                          final pct = total == 0 ? 0.0 : entry.value / total;
+                          return PieChartSectionData(
+                            value: entry.value,
+                            color: s.accent,
+                            radius: 36,
+                            title: pct >= 0.08 ? '${(pct * 100).round()}%' : '',
+                            titleStyle: TextStyle(
+                              color: foregroundOn(s.accent),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          );
+                        }),
                       ),
-                      _CenterTotalLabel(total: total, symbol: symbol),
-                    ],
-                  ),
+                    ),
+                    _CenterTotalLabel(total: total, symbol: symbol),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                // Legend (right side)
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final entry in sorted.take(6))
-                        _LegendRow(
-                          entry: entry,
-                          total: total,
-                          symbol: symbol,
-                          onTap: () =>
-                              _showCategoryRecords(context, entry),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
+            const SizedBox(height: 20),
+            // Legend rows — full width below the chart
+            for (final entry in sorted.take(6))
+              _LegendRow(
+                entry: entry,
+                total: total,
+                symbol: symbol,
+                onTap: () => _showCategoryRecords(context, entry),
+              ),
+          ],
         ],
       ),
     );
@@ -1680,45 +1635,36 @@ class _LegendRow extends StatelessWidget {
       },
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: s.accent,
-                  shape: BoxShape.circle,
-                ),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: s.accent,
+                shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.categoryLabel(entry.key),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                  Text(
-                    '${(pct * 100).toStringAsFixed(0)}%  ·  ${formatMoney(symbol, entry.value)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: brand.inkSoft,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              child: Text(
+                context.categoryLabel(entry.key),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ),
+            Text(
+              '${(pct * 100).toStringAsFixed(0)}%  ·  ${formatMoney(symbol, entry.value)}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: brand.inkSoft,
               ),
             ),
           ],

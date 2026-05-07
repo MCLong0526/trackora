@@ -38,4 +38,10 @@ class FirebaseSavingPlanRepository implements SavingPlanRepository {
   Future<void> delete(String userId, String id) async {
     await _col(userId).doc(id).delete();
   }
+
+  Future<void> upsertById(String userId, SavingPlan plan) async {
+    await _col(userId)
+        .doc(plan.id)
+        .set(plan.toMap(), SetOptions(merge: true));
+  }
 }

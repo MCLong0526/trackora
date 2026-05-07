@@ -266,19 +266,41 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.xmark, size: 22),
-          onPressed: () => Navigator.pop(context),
+        backgroundColor: brand.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+          ),
         ),
         title: Text(
           _isEdit ? context.t('expense.edit') : context.t('expense.new'),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         actions: [
           if (_isEdit)
-            IconButton(
-              icon: const Icon(CupertinoIcons.delete, size: 20),
-              color: AppColors.expense,
-              onPressed: _delete,
+            GestureDetector(
+              onTap: _delete,
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.blush,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.delete,
+                  size: 17,
+                  color: AppColors.expense,
+                ),
+              ),
             ),
         ],
       ),
@@ -289,32 +311,20 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
               _typeToggle(),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _amountCard(symbol),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               if (_showAccountTransferOption) ...[
                 _accountTransferToggle(brand),
                 const SizedBox(height: 14),
               ],
               if (_type == EntryType.transfer && _isAccountTransfer) ...[
-                _accountPicker(
-                  accounts,
-                  brand,
-                  label: 'From Account',
-                  selectedId: _accountId,
-                  excludeId: _toAccountId,
-                  onSelect: (id) => setState(() => _accountId = id),
+                _groupedDetailsCard(
+                  brand: brand,
+                  accounts: accounts,
+                  dateLabel: dateLabel,
+                  isAccountTransfer: true,
                 ),
-                const SizedBox(height: 12),
-                _accountPicker(
-                  accounts,
-                  brand,
-                  label: 'To Account',
-                  selectedId: _toAccountId,
-                  excludeId: _accountId,
-                  onSelect: (id) => setState(() => _toAccountId = id),
-                ),
-                const SizedBox(height: 12),
               ] else ...[
                 if (_isPersonTransfer) ...[
                   _counterpartField(brand),
@@ -330,58 +340,42 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                   _categoryChips(selectedChipFg, brand),
                   const SizedBox(height: 18),
                 ],
-                _accountPicker(
-                  accounts,
-                  brand,
-                  label: 'Account',
-                  selectedId: _accountId,
-                  onSelect: (id) => setState(() => _accountId = id),
+                _groupedDetailsCard(
+                  brand: brand,
+                  accounts: accounts,
+                  dateLabel: dateLabel,
+                  isAccountTransfer: false,
                 ),
-                const SizedBox(height: 12),
               ],
-              SectionCard(
-                onTap: _pickDate,
-                child: Row(
-                  children: [
-                    Icon(CupertinoIcons.calendar, color: brand.ink),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        context.t('expense.date'),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Text(dateLabel, style: TextStyle(color: brand.inkSoft)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _noteController,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: context.t('expense.note'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _receiptCard(brand),
               const SizedBox(height: 28),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
+              SizedBox(
+                height: 54,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          _isEdit
+                              ? context.t('common.update')
+                              : context.t('expense.saveEntry'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      )
-                    : Text(
-                        _isEdit
-                            ? context.t('common.update')
-                            : context.t('expense.saveEntry'),
-                      ),
+                ),
               ),
             ],
           ),
@@ -435,6 +429,270 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Grouped card: Account (or From/To), Date, Note, Receipt
+  Widget _groupedDetailsCard({
+    required BrandColors brand,
+    required List<Account> accounts,
+    required String dateLabel,
+    required bool isAccountTransfer,
+  }) {
+    final divider = Container(
+      height: 0.5,
+      margin: const EdgeInsets.only(left: 46),
+      color: brand.divider,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Column(
+          children: [
+            if (isAccountTransfer) ...[
+              _inlineAccountRow(
+                accounts: accounts,
+                brand: brand,
+                label: 'From',
+                selectedId: _accountId,
+                excludeId: _toAccountId,
+                onSelect: (id) => setState(() => _accountId = id),
+              ),
+              divider,
+              _inlineAccountRow(
+                accounts: accounts,
+                brand: brand,
+                label: 'To',
+                selectedId: _toAccountId,
+                excludeId: _accountId,
+                onSelect: (id) => setState(() => _toAccountId = id),
+              ),
+            ] else ...[
+              _inlineAccountRow(
+                accounts: accounts,
+                brand: brand,
+                label: 'Account',
+                selectedId: _accountId,
+                onSelect: (id) => setState(() => _accountId = id),
+              ),
+            ],
+            divider,
+            // Date row
+            InkWell(
+              onTap: _pickDate,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.calendar, size: 18, color: brand.inkSoft),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        context.t('expense.date'),
+                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                      ),
+                    ),
+                    Text(dateLabel, style: TextStyle(color: brand.inkSoft, fontSize: 15)),
+                    const SizedBox(width: 4),
+                    Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+                  ],
+                ),
+              ),
+            ),
+            divider,
+            // Note row
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 12),
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.doc_text, size: 18, color: brand.inkSoft),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _noteController,
+                      maxLines: 2,
+                      style: const TextStyle(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: context.t('expense.note'),
+                        hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            divider,
+            // Receipt row
+            InkWell(
+              onTap: (_newReceipt == null && _existingReceiptUrl == null)
+                  ? _pickReceipt
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: _receiptInlineContent(brand),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _inlineAccountRow({
+    required List<Account> accounts,
+    required BrandColors brand,
+    required String label,
+    required String? selectedId,
+    String? excludeId,
+    required void Function(String? id) onSelect,
+  }) {
+    final available = excludeId != null
+        ? accounts.where((a) => a.id != excludeId).toList()
+        : accounts;
+    final selected = available.where((a) => a.id == selectedId).firstOrNull;
+
+    return InkWell(
+      onTap: () {
+        if (available.isEmpty) {
+          Navigator.push(
+            context,
+            CupertinoPageRoute(builder: (_) => const AddEditAccountScreen()),
+          );
+          return;
+        }
+        _showAccountPicker(available, brand, selectedId: selectedId, onSelect: onSelect);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Icon(
+              selected != null
+                  ? _iconForType(selected.type)
+                  : CupertinoIcons.creditcard,
+              size: 18,
+              color: selected != null
+                  ? _accentForType(selected.type)
+                  : brand.inkSoft,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+              ),
+            ),
+            Text(
+              selected?.name ?? (available.isEmpty ? 'Add account' : 'None'),
+              style: TextStyle(color: brand.inkSoft, fontSize: 15),
+            ),
+            const SizedBox(width: 4),
+            Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _receiptInlineContent(BrandColors brand) {
+    final hasNew = _newReceipt != null;
+    final hasExisting = _existingReceiptUrl != null;
+
+    if (!hasNew && !hasExisting) {
+      return Row(
+        children: [
+          Icon(CupertinoIcons.paperclip, size: 18, color: brand.inkSoft),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              context.t('expense.attachReceipt'),
+              style: TextStyle(fontSize: 15, color: brand.inkSoft),
+            ),
+          ),
+          Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Icon(CupertinoIcons.paperclip, size: 18, color: brand.inkSoft),
+        const SizedBox(width: 12),
+        if (hasNew)
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              CupertinoPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(
+                    title: Text(context.t('expense.receipt')),
+                  ),
+                  body: Center(
+                    child: InteractiveViewer(
+                      child: Image.file(_newReceipt!, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+                fullscreenDialog: true,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(_newReceipt!, width: 44, height: 44, fit: BoxFit.cover),
+            ),
+          )
+        else
+          ReceiptPreview(stored: _existingReceiptUrl!),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            hasNew
+                ? context.t('expense.newAttachment')
+                : context.t('expense.savedAttachment'),
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
+          ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: _pickReceipt,
+              child: Text(
+                context.t('expense.replace'),
+                style: TextStyle(fontSize: 13, color: brand.accentDark, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () => setState(() {
+                _newReceipt = null;
+                _existingReceiptUrl = null;
+              }),
+              child: Text(
+                context.t('expense.remove'),
+                style: const TextStyle(fontSize: 13, color: AppColors.expense, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -589,90 +847,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
-  Widget _accountPicker(
-    List<Account> accounts,
-    BrandColors brand, {
-    required String label,
-    required String? selectedId,
-    String? excludeId,
-    required void Function(String? id) onSelect,
-  }) {
-    final available = excludeId != null
-        ? accounts.where((a) => a.id != excludeId).toList()
-        : accounts;
-
-    if (available.isEmpty) {
-      return SectionCard(
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const AddEditAccountScreen(),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(CupertinoIcons.creditcard, color: brand.inkSoft),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Add an account',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: brand.inkSoft,
-                ),
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_right,
-              size: 16,
-              color: brand.inkSoft,
-            ),
-          ],
-        ),
-      );
-    }
-
-    final selected = available.where((a) => a.id == selectedId).firstOrNull;
-
-    return SectionCard(
-      onTap: () => _showAccountPicker(
-        available,
-        brand,
-        selectedId: selectedId,
-        onSelect: onSelect,
-        allowNone: label == 'Account',
-      ),
-      child: Row(
-        children: [
-          Icon(
-            selected != null
-                ? _iconForType(selected.type)
-                : CupertinoIcons.creditcard,
-            color: selected != null
-                ? _accentForType(selected.type)
-                : brand.inkSoft,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Text(
-            selected?.name ?? 'None',
-            style: TextStyle(color: brand.inkSoft),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            CupertinoIcons.chevron_down,
-            size: 14,
-            color: brand.inkSoft,
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showAccountPicker(
       List<Account> accounts,
@@ -796,143 +970,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     }
   }
 
-  Widget _receiptCard(BrandColors brand) {
-    final hasNew = _newReceipt != null;
-    final hasExisting = _existingReceiptUrl != null && !hasNew;
-    final hasAny = hasNew || hasExisting;
-
-    return SectionCard(
-      onTap: hasAny ? null : _pickReceipt,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(CupertinoIcons.paperclip, color: brand.ink),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  hasAny
-                      ? context.t('expense.receipt')
-                      : context.t('expense.attachReceipt'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              if (!hasAny)
-                Icon(
-                  CupertinoIcons.chevron_right,
-                  size: 16,
-                  color: brand.inkSoft,
-                ),
-            ],
-          ),
-          if (hasAny) ...[
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasNew)
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (_) => Scaffold(
-                          backgroundColor: Colors.black,
-                          appBar: AppBar(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            leading: IconButton(
-                              icon: const Icon(CupertinoIcons.xmark),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            title: Text(context.t('expense.receipt')),
-                          ),
-                          body: Center(
-                            child: InteractiveViewer(
-                              child: Image.file(
-                                _newReceipt!,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ),
-                        ),
-                        fullscreenDialog: true,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        _newReceipt!,
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  )
-                else
-                  ReceiptPreview(stored: _existingReceiptUrl!),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasNew
-                            ? context.t('expense.newAttachment')
-                            : context.t('expense.savedAttachment'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        context.t('expense.tapThumbnail'),
-                        style: TextStyle(fontSize: 11, color: brand.inkSoft),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: _pickReceipt,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(0, 30),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(context.t('expense.replace')),
-                          ),
-                          TextButton(
-                            onPressed: () => setState(() {
-                              _newReceipt = null;
-                              _existingReceiptUrl = null;
-                            }),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.expense,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              minimumSize: const Size(0, 30),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(context.t('expense.remove')),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _typeToggle() {
     final brand = context.brand;

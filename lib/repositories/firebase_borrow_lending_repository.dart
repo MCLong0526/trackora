@@ -42,4 +42,10 @@ class FirebaseBorrowLendingRepository implements BorrowLendingRepository {
   Future<void> delete(String userId, String id) async {
     await _col(userId).doc(id).delete();
   }
+
+  Future<void> upsertById(String userId, BorrowLending record) async {
+    await _col(userId)
+        .doc(record.id)
+        .set(record.toMap(), SetOptions(merge: true));
+  }
 }

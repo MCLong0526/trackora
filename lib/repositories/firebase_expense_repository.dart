@@ -119,10 +119,26 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       'category': expense.category,
       'note': expense.note,
       'date': Timestamp.fromDate(expense.date),
-      'type': expense.type == EntryType.income ? 'income' : 'expense',
+      'type': _encodeType(expense.type),
       'receiptUrl': expense.receiptUrl,
+      'accountId': expense.accountId,
+      'toAccountId': expense.toAccountId,
+      'counterpart': expense.counterpart,
       'createdAt': Timestamp.fromDate(expense.createdAt),
       'updatedAt': Timestamp.fromDate(expense.updatedAt),
     };
+  }
+
+  static String _encodeType(EntryType type) {
+    switch (type) {
+      case EntryType.income:
+        return 'income';
+      case EntryType.transfer:
+        return 'transfer';
+      case EntryType.receive:
+        return 'receive';
+      case EntryType.expense:
+        return 'expense';
+    }
   }
 }

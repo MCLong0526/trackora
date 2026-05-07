@@ -17,6 +17,9 @@ class ExpenseCard extends StatelessWidget {
   final Future<void> Function()? onDelete;
   final VoidCallback? onLongPress;
   final Account? account;
+  /// When true, renders as a flat row (no outer card decoration).
+  /// The caller is responsible for wrapping in a container.
+  final bool flat;
 
   const ExpenseCard({
     super.key,
@@ -26,6 +29,7 @@ class ExpenseCard extends StatelessWidget {
     this.onDelete,
     this.onLongPress,
     this.account,
+    this.flat = false,
   });
 
   @override
@@ -39,6 +43,7 @@ class ExpenseCard extends StatelessWidget {
       },
       onLongPress: onLongPress,
       account: account,
+      flat: flat,
     );
 
     if (onDelete == null) return card;
@@ -97,6 +102,7 @@ class _CardContents extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final Account? account;
+  final bool flat;
 
   const _CardContents({
     required this.expense,
@@ -104,6 +110,7 @@ class _CardContents extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.account,
+    this.flat = false,
   });
 
   @override
@@ -163,6 +170,87 @@ class _CardContents extends StatelessWidget {
       subtitle = _buildSubtitle(dateStr, account);
     }
 
+    final rowContent = Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: style.background,
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(style.icon, size: 20, color: style.accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Row(
+          children: [
+            Text(
+              (isIncome || isReceive)
+                  ? formatMoney(
+                      currencySymbol,
+                      expense.amount,
+                      forceSign: true,
+                    )
+                  : formatMoney(currencySymbol, -expense.amount),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: amountColor,
+              ),
+            ),
+            if (expense.receiptUrl != null) ...[
+              const SizedBox(width: 6),
+              Icon(
+                CupertinoIcons.paperclip,
+                size: 14,
+                color: brand.inkSoft,
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+
+    if (flat) {
+      return GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: rowContent,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -180,74 +268,7 @@ class _CardContents extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: style.background,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(style.icon, size: 20, color: style.accent),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: brand.inkSoft,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Row(
-              children: [
-                Text(
-                  (isIncome || isReceive)
-                      ? formatMoney(
-                          currencySymbol,
-                          expense.amount,
-                          forceSign: true,
-                        )
-                      : formatMoney(currencySymbol, -expense.amount),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: amountColor,
-                  ),
-                ),
-                if (expense.receiptUrl != null) ...[
-                  const SizedBox(width: 6),
-                  Icon(
-                    CupertinoIcons.paperclip,
-                    size: 14,
-                    color: brand.inkSoft,
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
+        child: rowContent,
       ),
     );
   }

@@ -121,6 +121,17 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     if (state == AppLifecycleState.resumed) {
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
+      // Push fresh data to Watch on every foreground resume so the Watch
+      // has up-to-date stats without needing the user to open the phone app.
+      _syncToWatch();
+    }
+  }
+
+  Future<void> _syncToWatch() async {
+    try {
+      await ref.read(watchServiceProvider).syncToWatch();
+    } catch (_) {
+      // Watch sync is best-effort.
     }
   }
 
@@ -161,6 +172,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
           .attach(
             userId: currentUser.uid,
             repository: ref.read(expenseRepositoryProvider),
+            accountRepository: ref.read(accountRepositoryProvider),
+            prefsService: ref.read(prefsServiceProvider),
           );
       // Drain the queue once the user is known (covers the case where
       // auth resolves after our cold-start drain ran).
@@ -174,6 +187,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
           .attach(
             userId: user.uid,
             repository: ref.read(expenseRepositoryProvider),
+            accountRepository: ref.read(accountRepositoryProvider),
+            prefsService: ref.read(prefsServiceProvider),
           );
       _drainWidgetQueue();
     });

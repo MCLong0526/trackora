@@ -36,6 +36,12 @@ class FirebaseInstallmentRepository implements InstallmentRepository {
     await _ref(userId).doc(id).delete();
   }
 
+  Future<void> upsert(String userId, Installment installment) async {
+    await _ref(userId)
+        .doc(installment.id)
+        .set(_toFirestoreMap(installment), SetOptions(merge: true));
+  }
+
   Installment _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
     if (data == null) {

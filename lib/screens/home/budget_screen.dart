@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/account.dart';
 import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
@@ -13,9 +12,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
-import '../accounts/accounts_screen.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
 import '../savings/saving_plans_screen.dart';
@@ -276,10 +273,6 @@ class BudgetScreen extends ConsumerWidget {
     final brand = context.brand;
     final expenses =
         ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
-    final allExpenses =
-        ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
-    final accounts =
-        ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
     final installments =
         ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
@@ -288,7 +281,6 @@ class BudgetScreen extends ConsumerWidget {
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
-    final visible = ref.watch(balanceVisibleProvider);
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
@@ -328,11 +320,6 @@ class BudgetScreen extends ConsumerWidget {
     final budgetLeft = budget - discretionarySpent;
     final budgetOverspent = budgetLeft < 0;
 
-    // Upcoming installments sorted by due date within the current month
-    final upcomingInstallments = activeInstallments
-        .where((i) => i.isActiveIn(month))
-        .toList()
-      ..sort((a, b) => a.startDate.day.compareTo(b.startDate.day));
 
     return SafeArea(
       child: ListView(
@@ -397,47 +384,6 @@ class BudgetScreen extends ConsumerWidget {
                 ],
               ),
             ],
-          ),
-
-          // ── Budget summary line ───────────────────────────
-          if (budget > 0) ...[
-            const SizedBox(height: 10),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(fontSize: 13, color: brand.inkSoft),
-                children: [
-                  const TextSpan(text: 'Spent '),
-                  TextSpan(
-                    text: formatMoney(symbol, discretionarySpent),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: brand.ink,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' of ${formatMoney(symbol, budget)} budget · ',
-                  ),
-                  TextSpan(
-                    text: '${formatMoney(symbol, budgetLeft.abs())} ${budgetOverspent ? 'over' : 'left'}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: budgetOverspent ? AppColors.expense : AppColors.income,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // ── Accounts section ──────────────────────────────
-          _AccountsSection(
-            accounts: accounts,
-            allExpenses: allExpenses,
-            symbol: symbol,
-            visible: visible,
-            ref: ref,
           ),
 
           const SizedBox(height: 24),
@@ -580,44 +526,6 @@ class BudgetScreen extends ConsumerWidget {
             },
           ),
 
-          // ── Upcoming section ──────────────────────────────
-          if (upcomingInstallments.isNotEmpty) ...[
-            const SizedBox(height: 28),
-            _GroupHeader(label: 'UPCOMING'),
-            const SizedBox(height: 10),
-            Container(
-              decoration: BoxDecoration(
-                color: brand.surface,
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                child: Column(
-                  children: [
-                    for (var i = 0; i < upcomingInstallments.length && i < 5; i++) ...[
-                      if (i > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 68),
-                          child: Container(height: 0.5, color: brand.divider),
-                        ),
-                      _UpcomingInstallmentRow(
-                        installment: upcomingInstallments[i],
-                        symbol: symbol,
-                        month: month,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1037,362 +945,4 @@ class _CircleProgress extends StatelessWidget {
   }
 }
 
-// ── Upcoming installment row ───────────────────────────────────
-
-class _UpcomingInstallmentRow extends StatelessWidget {
-  final Installment installment;
-  final String symbol;
-  final DateTime month;
-
-  const _UpcomingInstallmentRow({
-    required this.installment,
-    required this.symbol,
-    required this.month,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final dueDate = installment.dueDateIn(month);
-    final dueDateLabel = DateFormat('MMM d').format(dueDate);
-    final paymentNum = installment.paidCount + 1;
-    final totalStr = installment.totalMonths != null
-        ? '/${installment.totalMonths}'
-        : '';
-    final title = installment.name.isEmpty
-        ? 'Payment $paymentNum$totalStr'
-        : '${installment.name} · payment $paymentNum$totalStr';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.butter,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              CupertinoIcons.creditcard,
-              size: 18,
-              color: AppColors.inkSoft,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dueDateLabel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            formatMoney(symbol, installment.amount),
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: brand.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-}
-
-// ── Accounts section for Funds tab ────────────────────────────
-
-class _AccountsSection extends StatelessWidget {
-  final List<Account> accounts;
-  final List<Expense> allExpenses;
-  final String symbol;
-  final bool visible;
-  final WidgetRef ref;
-
-  const _AccountsSection({
-    required this.accounts,
-    required this.allExpenses,
-    required this.symbol,
-    required this.visible,
-    required this.ref,
-  });
-
-  Map<String, double> _balances() {
-    final map = <String, double>{};
-    for (final a in accounts) {
-      map[a.id] = a.openingBalance;
-    }
-    for (final e in allExpenses) {
-      final aid = e.accountId;
-      if (aid == null || !map.containsKey(aid)) continue;
-      if (e.type.isInflow) {
-        map[aid] = (map[aid] ?? 0) + e.amount;
-      } else {
-        map[aid] = (map[aid] ?? 0) - e.amount;
-      }
-    }
-    return map;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final balances = _balances();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _GroupHeader(label: 'ACCOUNTS'),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => const AccountsScreen(),
-                ),
-              ),
-              behavior: HitTestBehavior.opaque,
-              child: Text(
-                accounts.isEmpty ? 'Add Account' : 'Manage',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: brand.accentDark,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (accounts.isEmpty)
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              CupertinoPageRoute(
-                builder: (_) => const AccountsScreen(),
-              ),
-            ),
-            child: SectionCard(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.sky,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.creditcard,
-                      size: 20,
-                      color: Color(0xFF2A6FB5),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'No accounts yet',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: brand.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Add bank, e-wallet, or cash accounts',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: brand.inkSoft,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    CupertinoIcons.add_circled,
-                    color: brand.accentDark,
-                    size: 22,
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final a = accounts[i];
-                final bal = balances[a.id] ?? 0.0;
-                return _AccountMiniCard(
-                  account: a,
-                  balance: bal,
-                  symbol: symbol,
-                  visible: visible,
-                  onTap: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => const AccountsScreen(),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _AccountMiniCard extends StatelessWidget {
-  final Account account;
-  final double balance;
-  final String symbol;
-  final bool visible;
-  final VoidCallback onTap;
-
-  const _AccountMiniCard({
-    required this.account,
-    required this.balance,
-    required this.symbol,
-    required this.visible,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final style = _styleFor(account.type);
-    final icon = _iconFor(account.type);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 140,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: style.bg,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 14, color: style.accent),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    account.type.label,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: brand.inkSoft,
-                      letterSpacing: 0.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            MaskedAmount(
-              visibleText: formatMoney(symbol, balance),
-              visible: visible,
-              currencyPrefix: symbol,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: balance >= 0 ? brand.ink : AppColors.expense,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              account.name,
-              style: TextStyle(
-                fontSize: 11,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  ({Color bg, Color accent}) _styleFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
-      case AccountType.eWallet:
-        return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
-      case AccountType.cash:
-        return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
-    }
-  }
-
-  IconData _iconFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return CupertinoIcons.building_2_fill;
-      case AccountType.eWallet:
-        return CupertinoIcons.device_phone_portrait;
-      case AccountType.cash:
-        return CupertinoIcons.money_dollar_circle_fill;
-    }
-  }
-}
 

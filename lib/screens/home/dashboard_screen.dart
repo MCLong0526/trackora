@@ -14,10 +14,7 @@ import '../../widgets/expense_card.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/month_filter_bar.dart';
 import '../../widgets/section_card.dart';
-import '../borrow_lending/borrow_lending_screen.dart';
 import '../expenses/add_edit_expense_screen.dart';
-import '../savings/saving_plans_screen.dart';
-import 'budget_screen.dart' show showMonthlyBudgetEditor;
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -83,6 +80,7 @@ class DashboardScreen extends ConsumerWidget {
           localeCode: appLocale.encode(),
           todaySpent: todaySpent,
           weekSpent: weekSpent,
+          accounts: accounts,
         );
 
     return SafeArea(
@@ -202,30 +200,99 @@ class DashboardScreen extends ConsumerWidget {
 
           if (monthExpenses.isEmpty)
             SliverToBoxAdapter(child: _empty(context))
-          else
-            SliverList.builder(
-              itemCount: monthExpenses.length > 10 ? 10 : monthExpenses.length,
-              itemBuilder: (_, i) {
-                final expense = monthExpenses[i];
-                final acct = accounts
-                    .where((a) => a.id == expense.accountId)
-                    .firstOrNull;
-                return ExpenseCard(
-                  expense: expense,
-                  currencySymbol: symbol,
-                  account: acct,
-                  onTap: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => AddEditExpenseScreen(expense: expense),
+          else ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < monthExpenses.length.clamp(0, 5); i++) ...[
+                          if (i > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 70),
+                              child: Container(
+                                height: 0.5,
+                                color: brand.divider,
+                              ),
+                            ),
+                          Builder(
+                            builder: (ctx) {
+                              final expense = monthExpenses[i];
+                              final acct = accounts
+                                  .where((a) => a.id == expense.accountId)
+                                  .firstOrNull;
+                              return ExpenseCard(
+                                key: ValueKey(expense.id),
+                                expense: expense,
+                                currencySymbol: symbol,
+                                account: acct,
+                                flat: true,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) =>
+                                        AddEditExpenseScreen(expense: expense),
+                                  ),
+                                ),
+                                onDelete: () => ref
+                                    .read(expenseRepositoryProvider)
+                                    .deleteExpense(user!.uid, expense.id),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  onDelete: () => ref
-                      .read(expenseRepositoryProvider)
-                      .deleteExpense(user!.uid, expense.id),
-                );
-              },
+                ),
+              ),
             ),
+            if (monthExpenses.length > 5)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: GestureDetector(
+                    onTap: () => _showAllBillsSheet(
+                      context,
+                      monthExpenses,
+                      symbol,
+                      selectedMonth,
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: brand.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'View all ${monthExpenses.length} entries',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: brand.accentDark,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
 
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
@@ -566,25 +633,17 @@ class _MiniBudgetCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            symbol,
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
           FittedBox(
             alignment: Alignment.centerLeft,
             fit: BoxFit.scaleDown,
             child: Text(
               visible
                   ? (hasBudget
-                        ? _fmtNum(remaining.abs())
+                        ? formatMoney(symbol, remaining.abs())
                         : '—')
-                  : '****',
+                  : '$symbol ****',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w900,
                 color: overspent && hasBudget
                     ? AppColors.expense
@@ -616,13 +675,6 @@ class _MiniBudgetCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _fmtNum(double v) {
-    if (v >= 1000) {
-      return v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 2);
-    }
-    return v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 2);
   }
 }
 
@@ -673,23 +725,15 @@ class _MiniLendingCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            symbol,
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
           FittedBox(
             alignment: Alignment.centerLeft,
             fit: BoxFit.scaleDown,
             child: Text(
               visible
-                  ? '${isPositive && net != 0 ? '+' : ''}${net.toStringAsFixed(net.truncateToDouble() == net ? 0 : 2)}'
-                  : '****',
+                  ? formatMoney(symbol, net, forceSign: net > 0)
+                  : '$symbol ****',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w900,
                 color: isPositive ? brand.ink : AppColors.expense,
               ),
@@ -725,6 +769,8 @@ class _MiniSavingsCard extends StatelessWidget {
     required this.visible,
   });
 
+  static const _savingsDotColor = Color(0xFF8B5CF6);
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -742,8 +788,8 @@ class _MiniSavingsCard extends StatelessWidget {
               Container(
                 width: 7,
                 height: 7,
-                decoration: BoxDecoration(
-                  color: AppColors.income,
+                decoration: const BoxDecoration(
+                  color: _savingsDotColor,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -760,25 +806,13 @@ class _MiniSavingsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            symbol,
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
           FittedBox(
             alignment: Alignment.centerLeft,
             fit: BoxFit.scaleDown,
             child: Text(
-              visible
-                  ? saved.toStringAsFixed(
-                      saved.truncateToDouble() == saved ? 0 : 2,
-                    )
-                  : '****',
+              visible ? formatMoney(symbol, saved) : '$symbol ****',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w900,
                 color: brand.ink,
               ),
@@ -792,7 +826,7 @@ class _MiniSavingsCard extends StatelessWidget {
                 value: progress,
                 minHeight: 3,
                 backgroundColor: brand.divider,
-                valueColor: AlwaysStoppedAnimation(AppColors.income),
+                valueColor: const AlwaysStoppedAnimation(_savingsDotColor),
               ),
             ),
           ],

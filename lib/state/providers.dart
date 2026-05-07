@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,6 +33,26 @@ import '../services/saving_plan_service.dart';
 import '../services/storage_service.dart';
 import '../services/watch_service.dart';
 import '../services/widget_sync_service.dart';
+
+// ── Network connectivity ──────────────────────────────────────────────────────
+
+/// Emits `true` when the device has internet, `false` when offline.
+/// Starts with an immediate check, then streams changes.
+final networkStatusProvider = StreamProvider<bool>((ref) async* {
+  final initial = await Connectivity().checkConnectivity();
+  yield initial.any((r) => r != ConnectivityResult.none);
+  yield* Connectivity().onConnectivityChanged.map(
+    (results) => results.any((r) => r != ConnectivityResult.none),
+  );
+});
+
+/// `true` if the device currently has internet access.
+final isOnlineProvider = Provider<bool>((ref) {
+  return ref.watch(networkStatusProvider).maybeWhen(
+    data: (online) => online,
+    orElse: () => true, // assume online until we know otherwise
+  );
+});
 
 final authServiceProvider = Provider((_) => AuthService());
 
