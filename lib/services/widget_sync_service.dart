@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:watch_connectivity/watch_connectivity.dart';
 
-/// Pushes summary numbers to the home-screen widget.
+/// Pushes summary numbers to the home-screen widget and the paired watch app.
 /// The iOS/Android widget extension reads these via shared UserDefaults.
+/// The watchOS app receives an applicationContext update via WCSession so it
+/// shows live totals without depending solely on the App Group.
 class WidgetSyncService {
   static const _appGroupId = 'group.com.michaelchia.trackora';
   static const _iosWidgetName = 'TrackoraWidget';
@@ -12,6 +15,8 @@ class WidgetSyncService {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
+
+  final WatchConnectivity _watch = WatchConnectivity();
 
   Future<void> init() async {
     if (!_enabled) return;
@@ -53,6 +58,28 @@ class WidgetSyncService {
         androidName: _androidWidgetProvider,
       );
     }());
+
+    // Push the same totals to the paired Apple Watch via WCSession
+    // applicationContext so the watch gets live data even on first install,
+    // without depending solely on the App Group UserDefaults being populated.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        final supported = await _watch.isSupported;
+        if (supported) {
+          await _watch.updateApplicationContext({
+            'currency': currencySymbol,
+            'monthSpent': monthSpent,
+            'monthBudget': monthBudget,
+            'savings': savings,
+            'budgetableSpent': budgetableSpent,
+          });
+        }
+      } on MissingPluginException {
+        // watch_connectivity not available — skip
+      } catch (_) {
+        // Best-effort; never block the main app
+      }
+    }
   }
 
   Future<void> setLocale(String localeCode) async {

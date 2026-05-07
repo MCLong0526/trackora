@@ -9,25 +9,40 @@ import '../repositories/expense_repository.dart';
 
 /// Bridge between the Flutter app and the paired watchOS app.
 ///
-/// Watch → phone: when the user adds an expense on the watch, the watch
-///   sends a `{type: 'addExpense', amount, category, note}` message via
-///   `WCSession.sendMessage`. We hand it to the active [ExpenseRepository]
-///   so it lands in the same Hive (or Firestore) store the rest of the app
-///   uses. Repository pattern stays intact — this service never touches
-///   Hive or Firestore directly.
+/// Watch → phone: the watch sends a `{type:'addExpense', amount, category, note}`
+///   payload via `transferUserInfo`.  The patched `watch_connectivity` iOS plugin
+///   forwards `session(_:didReceiveUserInfo:)` to the Dart `messageStream`, so
+///   messages arrive here even when the phone app was backgrounded at send time.
 ///
-/// Phone → watch: budget + spent are already pushed to the shared App Group
-///   `UserDefaults` by `WidgetSyncService`; the watch reads from there
-///   directly so no extra plumbing is needed for the read path.
+/// Phone → watch: budget + spent are pushed to the watch via
+///   `WidgetSyncService.push()` which calls both the App Group UserDefaults
+///   (for the widget) and `WatchConnectivity.updateApplicationContext` (for the
+///   watch app's live state).
 class WatchService {
   final WatchConnectivity _watch = WatchConnectivity();
   StreamSubscription<Map<String, dynamic>>? _sub;
 
+  /// Updated by attach(); closure reads these at delivery time.
+  String? _userId;
+  ExpenseRepository? _repository;
+
+  /// True once we have subscribed to the message stream.
+  bool _subscribed = false;
+
+  /// Call once the user is known.  Safe to call multiple times — only the
+  /// first call creates the subscription; subsequent calls update the
+  /// userId / repository so the live listener picks them up.
   Future<void> attach({
     required String userId,
     required ExpenseRepository repository,
   }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
+
+    _userId = userId;
+    _repository = repository;
+
+    if (_subscribed) return; // already listening — just updated the references
+    _subscribed = true;
 
     final bool supported;
     try {
@@ -38,15 +53,20 @@ class WatchService {
       return;
     }
     if (!supported) return;
-    await _sub?.cancel();
+
     try {
       _sub = _watch.messageStream.listen((message) async {
+        final uid = _userId;
+        final repo = _repository;
+        if (uid == null || repo == null) return;
         try {
-          await _handle(message, userId: userId, repository: repository);
-        } catch (_) {
-          // Don't crash the app on a bad payload — silently drop.
+          await _handle(message, userId: uid, repository: repo);
+        } catch (e, st) {
+          debugPrint('[WatchService] failed to handle message: $e\n$st');
         }
-      }, onError: (_) {});
+      }, onError: (dynamic e) {
+        debugPrint('[WatchService] messageStream error: $e');
+      });
     } on MissingPluginException {
       return;
     } catch (_) {
@@ -57,6 +77,7 @@ class WatchService {
   Future<void> dispose() async {
     await _sub?.cancel();
     _sub = null;
+    _subscribed = false;
   }
 
   Future<void> _handle(
@@ -83,5 +104,6 @@ class WatchService {
         updatedAt: now,
       ),
     );
+    debugPrint('[WatchService] expense saved: $category $amount');
   }
 }
