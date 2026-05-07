@@ -26,6 +26,7 @@ class PrefsService {
     'borrowLending',
     'savingPlans',
     'monthlyBudget',
+    'people',
   ];
 
   static const defaultStatsSections = <String>[

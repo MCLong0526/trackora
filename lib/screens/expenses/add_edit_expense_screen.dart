@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
+import '../../models/person.dart';
+import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -787,20 +789,72 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     final hint = _type == EntryType.transfer
         ? 'e.g. John, Company ABC'
         : 'e.g. Sarah, Client XYZ';
-    return TextFormField(
-      controller: _counterpartController,
-      textCapitalization: TextCapitalization.words,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(
-          _type == EntryType.transfer
-              ? CupertinoIcons.arrow_right_circle
-              : CupertinoIcons.arrow_left_circle,
-          color: brand.inkSoft,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _counterpartController,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            prefixIcon: Icon(
+              _type == EntryType.transfer
+                  ? CupertinoIcons.arrow_right_circle
+                  : CupertinoIcons.arrow_left_circle,
+              color: brand.inkSoft,
+            ),
+          ),
         ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => _pickFromPeople(brand),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+              border: Border.all(color: brand.divider),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.person_2_fill,
+                  size: 14,
+                  color: brand.inkSoft,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Choose from People',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickFromPeople(BrandColors brand) async {
+    final result = await showModalBottomSheet<Person>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PersonPickerSheet(
+        currentName: _counterpartController.text.trim().isEmpty
+            ? null
+            : _counterpartController.text.trim(),
       ),
     );
+    if (result != null) {
+      setState(() => _counterpartController.text = result.name);
+    }
   }
 
   Widget _categoryChips(Color selectedChipFg, BrandColors brand) {

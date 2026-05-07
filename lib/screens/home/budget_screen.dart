@@ -15,6 +15,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/section_card.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
+import '../people/people_screen.dart';
 import '../savings/saving_plans_screen.dart';
 
 bool _isDiscretionary(Expense e) =>
@@ -280,6 +281,7 @@ class BudgetScreen extends ConsumerWidget {
         ref.watch(borrowLendingProvider).valueOrNull ?? const <BorrowLending>[];
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
+    final people = ref.watch(peopleProvider).valueOrNull ?? const [];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -521,6 +523,26 @@ class BudgetScreen extends ConsumerWidget {
                         onTap: () => _push(context, const InstallmentsScreen()),
                       ),
                     ),
+                  if (visibleModules.contains('people'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'PEOPLE',
+                        badgeColor: AppColors.lilac,
+                        badgeTextColor: const Color(0xFF6B3EC4),
+                        icon: CupertinoIcons.person_2_fill,
+                        iconBgColor: const Color(0xFF6B3EC4),
+                        mainValue: people.isEmpty ? '—' : '${people.length}',
+                        mainValueSub: people.isEmpty
+                            ? null
+                            : people.length == 1 ? 'person saved' : 'people saved',
+                        footer: people.isEmpty
+                            ? 'Tap to add people'
+                            : 'friends · family · coworkers',
+                        onTap: () => _push(context, const PeopleScreen()),
+                      ),
+                    ),
                 ],
               );
             },
@@ -552,6 +574,7 @@ class BudgetScreen extends ConsumerWidget {
             ('borrowLending', context.t('tools.borrowLending')),
             ('savingPlans', context.t('tools.savingPlans')),
             ('monthlyBudget', context.t('home.budget')),
+            ('people', 'People'),
           ];
           return _VisibilitySheet(
             title: context.t('money.customizeHub'),

@@ -8,6 +8,7 @@ import '../models/borrow_lending.dart';
 import '../models/expense.dart';
 import '../models/installment.dart';
 import '../models/app_user.dart';
+import '../models/person.dart';
 import '../models/saving_plan.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/borrow_lending_repository.dart';
@@ -15,19 +16,23 @@ import '../repositories/expense_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
 import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
+import '../repositories/firebase_person_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/installment_repository.dart';
 import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
+import '../repositories/local_person_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
+import '../repositories/person_repository.dart';
 import '../repositories/saving_plan_repository.dart';
 import '../services/auth_service.dart';
 import '../services/borrow_lending_service.dart';
 import '../services/expense_service.dart';
 import '../services/i18n.dart';
 import '../services/installment_service.dart';
+import '../services/person_service.dart';
 import '../services/prefs_service.dart';
 import '../services/saving_plan_service.dart';
 import '../services/storage_service.dart';
@@ -115,6 +120,25 @@ final savingPlanRepositoryProvider = Provider<SavingPlanRepository>((_) {
 final savingPlanServiceProvider = Provider(
   (ref) => SavingPlanService(ref.read(savingPlanRepositoryProvider)),
 );
+
+final personRepositoryProvider = Provider<PersonRepository>((_) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalPersonRepository();
+    case StorageMode.firebase:
+      return FirebasePersonRepository();
+  }
+});
+
+final personServiceProvider = Provider(
+  (ref) => PersonService(ref.read(personRepositoryProvider)),
+);
+
+final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.read(personServiceProvider).getAll(user.uid);
+});
 
 /// Stream of all borrow / lending records for the active user.
 final borrowLendingProvider = StreamProvider.autoDispose<List<BorrowLending>>((
