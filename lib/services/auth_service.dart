@@ -9,6 +9,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../app_config.dart';
 import '../models/app_user.dart';
 
+// Thrown when the user's session is too old for a sensitive operation and
+// re-authentication is required.
+class ReauthRequiredException implements Exception {
+  final String message;
+  const ReauthRequiredException(this.message);
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   FirebaseAuth get _auth => FirebaseAuth.instance;
 
@@ -66,5 +75,33 @@ class AuthService {
   Future<void> signOut() async {
     if (storageMode == StorageMode.local) return;
     await _auth.signOut();
+  }
+
+  /// Re-authenticates the current user with their password, then sends a
+  /// verification link to [newEmail]. The email only changes after the user
+  /// clicks the link in their new inbox.
+  Future<void> changeEmail({
+    required String currentPassword,
+    required String newEmail,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) {
+      throw const ReauthRequiredException('No signed-in user.');
+    }
+    // Re-authenticate so Firebase accepts the sensitive email-change operation.
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: currentPassword,
+    );
+    try {
+      await user.reauthenticateWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw const ReauthRequiredException('Incorrect password.');
+      }
+      rethrow;
+    }
+    // Send verification email to new address; change takes effect after click.
+    await user.verifyBeforeUpdateEmail(newEmail.trim());
   }
 }

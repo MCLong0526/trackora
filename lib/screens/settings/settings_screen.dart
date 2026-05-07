@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../services/auth_service.dart';
 import '../../services/export_service.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
@@ -105,6 +106,16 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: 'Daily at 8 PM',
                 onTap: () {},
               ),
+              if (storageMode == StorageMode.firebase && email.isNotEmpty) ...[
+                _GroupDivider(),
+                _Tile(
+                  icon: CupertinoIcons.envelope,
+                  iconColor: AppColors.sky,
+                  label: 'Change Email',
+                  trailing: email,
+                  onTap: () => _showChangeEmail(context, ref, email),
+                ),
+              ],
             ],
           ),
 
@@ -376,6 +387,18 @@ class SettingsScreen extends ConsumerWidget {
             )
           : null,
       onTap: onTap,
+    );
+  }
+
+  void _showChangeEmail(BuildContext context, WidgetRef ref, String currentEmail) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChangeEmailSheet(
+        currentEmail: currentEmail,
+        authService: ref.read(authServiceProvider),
+      ),
     );
   }
 
@@ -1877,5 +1900,246 @@ class _SyncSheetState extends State<_SyncSheet> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+}
+
+// ─── Change Email Sheet ────────────────────────────────────────────────────
+
+class _ChangeEmailSheet extends StatefulWidget {
+  final String currentEmail;
+  final AuthService authService;
+
+  const _ChangeEmailSheet({
+    required this.currentEmail,
+    required this.authService,
+  });
+
+  @override
+  State<_ChangeEmailSheet> createState() => _ChangeEmailSheetState();
+}
+
+class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
+  final _newEmailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _loading = false;
+  bool _obscure = true;
+  String? _error;
+  bool _done = false;
+
+  @override
+  void dispose() {
+    _newEmailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final newEmail = _newEmailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    if (newEmail.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (!newEmail.contains('@')) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+    setState(() { _loading = true; _error = null; });
+    try {
+      await widget.authService.changeEmail(
+        currentPassword: password,
+        newEmail: newEmail,
+      );
+      if (mounted) setState(() { _loading = false; _done = true; });
+    } on ReauthRequiredException catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.message; });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = 'Something went wrong. Try again.'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottom),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: brand.inkSoft.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Change Email',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: brand.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Current: ${widget.currentEmail}',
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
+          ),
+          const SizedBox(height: 20),
+
+          if (_done) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.mint.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.checkmark_circle_fill,
+                      color: AppColors.mint, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Verification link sent to ${_newEmailCtrl.text.trim()}.\n\nClick the link in that email to confirm your new address, then sign in again.',
+                      style: TextStyle(fontSize: 13, color: brand.ink, height: 1.45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
+              ),
+            ),
+          ] else ...[
+            // New email field
+            _Field(
+              controller: _newEmailCtrl,
+              label: 'New email',
+              hint: 'chia70857@gmail.com',
+              keyboardType: TextInputType.emailAddress,
+              brand: brand,
+            ),
+            const SizedBox(height: 12),
+            // Password field
+            _Field(
+              controller: _passwordCtrl,
+              label: 'Current password',
+              hint: '••••••••',
+              obscure: _obscure,
+              brand: brand,
+              suffix: GestureDetector(
+                onTap: () => setState(() => _obscure = !_obscure),
+                child: Icon(
+                  _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                  size: 18,
+                  color: brand.inkSoft,
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 13, color: AppColors.blush),
+              ),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                onPressed: _loading ? null : _submit,
+                child: _loading
+                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    : const Text('Send Verification Link'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final bool obscure;
+  final TextInputType keyboardType;
+  final Widget? suffix;
+  final dynamic brand;
+
+  const _Field({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.brand,
+    this.obscure = false,
+    this.keyboardType = TextInputType.text,
+    this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: brand.inkSoft,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: brand.inkSoft.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  keyboardType: keyboardType,
+                  style: TextStyle(fontSize: 15, color: brand.ink),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: TextStyle(color: brand.inkSoft.withValues(alpha: 0.5)),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              ?suffix,
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
