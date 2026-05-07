@@ -106,7 +106,7 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: 'Daily at 8 PM',
                 onTap: () {},
               ),
-              if (storageMode == StorageMode.firebase && email.isNotEmpty) ...[
+              if (email.isNotEmpty && email != localUserEmail) ...[
                 _GroupDivider(),
                 _Tile(
                   icon: CupertinoIcons.envelope,
