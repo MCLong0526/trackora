@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 import '../../services/auth_service.dart';
 import '../../services/i18n.dart';
@@ -64,19 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: AppColors.mint,
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.chart_pie_fill,
-                    size: 44,
-                    color: AppColors.ink,
-                  ),
-                ),
+                const _HeroIllustration(),
                 const SizedBox(height: 28),
                 Text(
                   context.t('auth.welcomeBack'),
@@ -191,4 +180,246 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+// ── Login hero illustration ────────────────────────────────────
+
+class _HeroIllustration extends StatelessWidget {
+  const _HeroIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 180,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Balance card — top-left, slight CCW tilt
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Transform.rotate(
+              angle: -0.06,
+              child: const _BalancePreviewCard(),
+            ),
+          ),
+          // Expense + donut card — bottom-right, slight CW tilt
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Transform.rotate(
+              angle: 0.05,
+              child: const _ExpensePreviewCard(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalancePreviewCard extends StatelessWidget {
+  const _BalancePreviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TOTAL BALANCE',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: brand.inkSoft,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'RM 12,480',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: brand.ink,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _ColorBar(color: const Color(0xFF5B8AF4), width: 52),
+              const SizedBox(width: 6),
+              _ColorBar(color: const Color(0xFF59C28A), width: 40),
+              const SizedBox(width: 6),
+              _ColorBar(color: const Color(0xFF8B5CF6), width: 28),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorBar extends StatelessWidget {
+  final Color color;
+  final double width;
+  const _ColorBar({required this.color, required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 5,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+}
+
+class _ExpensePreviewCard extends StatelessWidget {
+  const _ExpensePreviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.peach,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              CupertinoIcons.cart_fill,
+              size: 20,
+              color: Color(0xFFC07C3A),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Food · Lunch',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '–RM 24.50',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFE96B6B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const _MiniDonut(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniDonut extends StatelessWidget {
+  const _MiniDonut();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(44, 44),
+      painter: _DonutPainter(),
+    );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  static const _segments = [
+    (color: Color(0xFF59C28A), sweep: 0.42),
+    (color: Color(0xFFC07C3A), sweep: 0.25),
+    (color: Color(0xFF5B8AF4), sweep: 0.20),
+    (color: Color(0xFF8B5CF6), sweep: 0.13),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final outerR = cx - 2;
+    final innerR = outerR * 0.54;
+    const gapRad = 0.06;
+
+    double angle = -math.pi / 2;
+    for (final seg in _segments) {
+      final sweep = seg.sweep * 2 * math.pi - gapRad;
+      final paint = Paint()
+        ..color = seg.color
+        ..style = PaintingStyle.fill;
+
+      final path = Path()
+        ..moveTo(cx + outerR * math.cos(angle), cy + outerR * math.sin(angle))
+        ..arcTo(
+          Rect.fromCircle(center: Offset(cx, cy), radius: outerR),
+          angle,
+          sweep,
+          false,
+        )
+        ..lineTo(cx + innerR * math.cos(angle + sweep), cy + innerR * math.sin(angle + sweep))
+        ..arcTo(
+          Rect.fromCircle(center: Offset(cx, cy), radius: innerR),
+          angle + sweep,
+          -sweep,
+          false,
+        )
+        ..close();
+
+      canvas.drawPath(path, paint);
+      angle += seg.sweep * 2 * math.pi;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DonutPainter _) => false;
 }
