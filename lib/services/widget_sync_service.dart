@@ -4,6 +4,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:watch_connectivity/watch_connectivity.dart';
 
 import '../models/account.dart';
+import '../models/expense.dart';
 
 /// Pushes summary numbers to the home-screen widget and the paired watch app.
 /// The iOS/Android widget extension reads these via shared UserDefaults.
@@ -36,6 +37,7 @@ class WidgetSyncService {
     double todaySpent = 0,
     double weekSpent = 0,
     List<Account> accounts = const [],
+    List<Expense> recentExpenses = const [],
   }) async {
     if (!_enabled) return;
     await _runOptional(() async {
@@ -69,12 +71,26 @@ class WidgetSyncService {
       try {
         final supported = await _watch.isSupported;
         if (supported) {
+          final expensesPayload = recentExpenses.take(5).map((e) => {
+            'id': e.id,
+            'amount': e.amount,
+            'category': e.category,
+            'note': e.note,
+            'type': e.type.name,
+            'date': e.date.millisecondsSinceEpoch / 1000.0,
+          }).toList();
+          final accountsPayload = accounts.map((a) => {
+            'id': a.id,
+            'name': a.name,
+          }).toList();
           await _watch.updateApplicationContext({
             'currency': currencySymbol,
             'monthSpent': monthSpent,
             'monthBudget': monthBudget,
             'savings': savings,
             'budgetableSpent': budgetableSpent,
+            'recentExpenses': expensesPayload,
+            'accounts': accountsPayload,
           });
         }
       } on MissingPluginException {
