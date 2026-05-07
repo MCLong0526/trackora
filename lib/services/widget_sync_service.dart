@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:watch_connectivity/watch_connectivity.dart';
 
+import '../models/account.dart';
+
 /// Pushes summary numbers to the home-screen widget and the paired watch app.
 /// The iOS/Android widget extension reads these via shared UserDefaults.
 /// The watchOS app receives an applicationContext update via WCSession so it
@@ -33,6 +35,7 @@ class WidgetSyncService {
     String localeCode = 'system',
     double todaySpent = 0,
     double weekSpent = 0,
+    List<Account> accounts = const [],
   }) async {
     if (!_enabled) return;
     await _runOptional(() async {
