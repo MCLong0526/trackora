@@ -88,6 +88,7 @@ class AppStrings {
     'tab.stats': 'Stats',
     'tab.budget': 'Budget',
     'tab.money': 'Money',
+    'tab.assets': 'Assets',
     'tab.profile': 'Profile',
 
     // Dashboard.
@@ -558,6 +559,7 @@ class AppStrings {
     'tab.stats': '统计',
     'tab.budget': '预算',
     'tab.money': '资金',
+    'tab.assets': '资产',
     'tab.profile': '我的',
 
     'home.totalBalance': '总余额',
@@ -996,6 +998,7 @@ class AppStrings {
     'tab.stats': 'Statistik',
     'tab.budget': 'Bajet',
     'tab.money': 'Wang',
+    'tab.assets': 'Aset',
     'tab.profile': 'Profil',
 
     'home.totalBalance': 'Jumlah baki',

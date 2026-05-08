@@ -12,9 +12,11 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
+import '../people/people_screen.dart';
 import '../savings/saving_plans_screen.dart';
 
 bool _isDiscretionary(Expense e) =>
@@ -280,6 +282,7 @@ class BudgetScreen extends ConsumerWidget {
         ref.watch(borrowLendingProvider).valueOrNull ?? const <BorrowLending>[];
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
+    final people = ref.watch(peopleProvider).valueOrNull ?? const [];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -319,7 +322,6 @@ class BudgetScreen extends ConsumerWidget {
 
     final budgetLeft = budget - discretionarySpent;
     final budgetOverspent = budgetLeft < 0;
-
 
     return SafeArea(
       child: ListView(
@@ -381,6 +383,8 @@ class BudgetScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  const ProfileAvatarButton(),
                 ],
               ),
             ],
@@ -398,22 +402,18 @@ class BudgetScreen extends ConsumerWidget {
                 0,
                 (s, p) => s + p.targetAmount,
               );
-              final budgetProgress =
-                  budget > 0
-                      ? (discretionarySpent / budget).clamp(0.0, 1.0)
-                      : null;
-              final savingProgress =
-                  savingTarget > 0
-                      ? (saved / savingTarget).clamp(0.0, 1.0)
-                      : null;
-              final budgetUsagePct =
-                  budget > 0
-                      ? (discretionarySpent / budget * 100).clamp(0, 999).round()
-                      : 0;
-              final savingUsagePct =
-                  savingTarget > 0
-                      ? (saved / savingTarget * 100).clamp(0, 100).round()
-                      : 0;
+              final budgetProgress = budget > 0
+                  ? (discretionarySpent / budget).clamp(0.0, 1.0)
+                  : null;
+              final savingProgress = savingTarget > 0
+                  ? (saved / savingTarget).clamp(0.0, 1.0)
+                  : null;
+              final budgetUsagePct = budget > 0
+                  ? (discretionarySpent / budget * 100).clamp(0, 999).round()
+                  : 0;
+              final savingUsagePct = savingTarget > 0
+                  ? (saved / savingTarget * 100).clamp(0, 100).round()
+                  : 0;
 
               return Wrap(
                 spacing: 12,
@@ -435,13 +435,15 @@ class BudgetScreen extends ConsumerWidget {
                         mainValueSub: budget <= 0
                             ? null
                             : budgetOverspent
-                                ? 'over budget'
-                                : 'left this month',
+                            ? 'over budget'
+                            : 'left this month',
                         progress: budgetProgress,
                         progressLabel: budget <= 0
                             ? context.t('budget.setAction')
                             : '$budgetUsagePct% used',
-                        progressColor: budgetOverspent ? AppColors.expense : null,
+                        progressColor: budgetOverspent
+                            ? AppColors.expense
+                            : null,
                         onTap: () => showMonthlyBudgetDetails(
                           context,
                           ref,
@@ -521,11 +523,32 @@ class BudgetScreen extends ConsumerWidget {
                         onTap: () => _push(context, const InstallmentsScreen()),
                       ),
                     ),
+                  if (visibleModules.contains('people'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: 'PEOPLE',
+                        badgeColor: AppColors.lilac,
+                        badgeTextColor: const Color(0xFF6B3EC4),
+                        icon: CupertinoIcons.person_2_fill,
+                        iconBgColor: const Color(0xFF6B3EC4),
+                        mainValue: people.isEmpty ? '—' : '${people.length}',
+                        mainValueSub: people.isEmpty
+                            ? null
+                            : people.length == 1
+                            ? 'person saved'
+                            : 'people saved',
+                        footer: people.isEmpty
+                            ? 'Tap to add people'
+                            : 'friends · family · coworkers',
+                        onTap: () => _push(context, const PeopleScreen()),
+                      ),
+                    ),
                 ],
               );
             },
           ),
-
         ],
       ),
     );
@@ -552,6 +575,7 @@ class BudgetScreen extends ConsumerWidget {
             ('borrowLending', context.t('tools.borrowLending')),
             ('savingPlans', context.t('tools.savingPlans')),
             ('monthlyBudget', context.t('home.budget')),
+            ('people', 'People'),
           ];
           return _VisibilitySheet(
             title: context.t('money.customizeHub'),
@@ -944,5 +968,3 @@ class _CircleProgress extends StatelessWidget {
     );
   }
 }
-
-

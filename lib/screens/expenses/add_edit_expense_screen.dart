@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -9,6 +10,8 @@ import 'package:intl/intl.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
+import '../../models/person.dart';
+import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -30,7 +33,10 @@ const kIncomeCategories = ['Salary', 'Others'];
 
 class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? expense;
-  const AddEditExpenseScreen({super.key, this.expense});
+  /// When set, pre-fills the form from this expense but saves as a NEW record.
+  final Expense? copyFrom;
+
+  const AddEditExpenseScreen({super.key, this.expense, this.copyFrom});
 
   @override
   ConsumerState<AddEditExpenseScreen> createState() =>
@@ -64,18 +70,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   @override
   void initState() {
     super.initState();
-    if (_isEdit) {
-      final e = widget.expense!;
-      _amountController.text = e.amount.toStringAsFixed(2);
-      _noteController.text = e.note;
-      _category = e.category;
-      _date = e.date;
-      _type = e.type;
-      _accountId = e.accountId;
-      _toAccountId = e.toAccountId;
-      _existingReceiptUrl = e.receiptUrl;
-      _counterpartController.text = e.counterpart ?? '';
-      if (e.type == EntryType.transfer && e.toAccountId != null) {
+    final template = widget.expense ?? widget.copyFrom;
+    if (template != null) {
+      _amountController.text = template.amount.toStringAsFixed(2);
+      _noteController.text = template.note;
+      _category = template.category;
+      _date = template.date;
+      _type = template.type;
+      _accountId = template.accountId;
+      _toAccountId = template.toAccountId;
+      if (_isEdit) _existingReceiptUrl = template.receiptUrl;
+      _counterpartController.text = template.counterpart ?? '';
+      if (template.type == EntryType.transfer && template.toAccountId != null) {
         _isAccountTransfer = true;
       }
     }
@@ -158,8 +164,37 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
     try {
       String? receiptUrl = _existingReceiptUrl;
+      String? uploadedNewUrl;
+
       if (_newReceipt != null) {
-        receiptUrl = await storage.saveReceipt(user.uid, _newReceipt!);
+        dev.log(
+          '[RECEIPT_UPLOAD] User selected new receipt — uploading for user ${user.uid}',
+          name: 'AddEditExpense',
+        );
+        try {
+          uploadedNewUrl = await storage.saveReceipt(user.uid, _newReceipt!);
+          receiptUrl = uploadedNewUrl;
+          dev.log(
+            '[RECEIPT_UPLOAD] Upload succeeded. URL obtained.',
+            name: 'AddEditExpense',
+          );
+        } catch (uploadError) {
+          dev.log(
+            '[RECEIPT_UPLOAD] Upload failed: $uploadError',
+            name: 'AddEditExpense',
+            error: uploadError,
+          );
+          if (mounted) {
+            final msg = _storageErrorMessage(uploadError);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
+            );
+          }
+          // Keep existing receipt so an edit doesn't wipe the old attachment.
+          receiptUrl = _existingReceiptUrl;
+          setState(() => _saving = false);
+          return;
+        }
       }
 
       final amount = double.parse(_amountController.text);
@@ -197,7 +232,22 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           counterpart: counterpart,
           updatedAt: now,
         );
+        dev.log(
+          '[FIRESTORE_SAVE] Updating expense ${updated.id} | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
+          name: 'AddEditExpense',
+        );
         await expenses.updateExpense(user.uid, updated);
+        dev.log('[FIRESTORE_SAVE] Update complete.', name: 'AddEditExpense');
+
+        // Delete the old receipt from Storage only after the Firestore document
+        // has been successfully updated with the new URL.
+        if (uploadedNewUrl != null && _existingReceiptUrl != null) {
+          dev.log(
+            '[FIREBASE_STORAGE] Deleting replaced receipt after successful update.',
+            name: 'AddEditExpense',
+          );
+          await storage.delete(_existingReceiptUrl!);
+        }
       } else {
         final e = Expense(
           id: '',
@@ -213,7 +263,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           createdAt: now,
           updatedAt: now,
         );
+        dev.log(
+          '[FIRESTORE_SAVE] Adding new expense | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
+          name: 'AddEditExpense',
+        );
         await expenses.addExpense(user.uid, e);
+        dev.log('[FIRESTORE_SAVE] Add complete.', name: 'AddEditExpense');
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -225,6 +280,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  static String _storageErrorMessage(Object e) {
+    return 'Receipt upload failed: $e';
   }
 
   Future<void> _delete() async {
@@ -516,8 +575,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(CupertinoIcons.doc_text, size: 18, color: brand.inkSoft),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Icon(CupertinoIcons.doc_text, size: 18, color: brand.inkSoft),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
@@ -787,20 +850,72 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     final hint = _type == EntryType.transfer
         ? 'e.g. John, Company ABC'
         : 'e.g. Sarah, Client XYZ';
-    return TextFormField(
-      controller: _counterpartController,
-      textCapitalization: TextCapitalization.words,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(
-          _type == EntryType.transfer
-              ? CupertinoIcons.arrow_right_circle
-              : CupertinoIcons.arrow_left_circle,
-          color: brand.inkSoft,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _counterpartController,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            prefixIcon: Icon(
+              _type == EntryType.transfer
+                  ? CupertinoIcons.arrow_right_circle
+                  : CupertinoIcons.arrow_left_circle,
+              color: brand.inkSoft,
+            ),
+          ),
         ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => _pickFromPeople(brand),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+              border: Border.all(color: brand.divider),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.person_2_fill,
+                  size: 14,
+                  color: brand.inkSoft,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Choose from People',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickFromPeople(BrandColors brand) async {
+    final result = await showModalBottomSheet<Person>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PersonPickerSheet(
+        currentName: _counterpartController.text.trim().isEmpty
+            ? null
+            : _counterpartController.text.trim(),
       ),
     );
+    if (result != null) {
+      setState(() => _counterpartController.text = result.name);
+    }
   }
 
   Widget _categoryChips(Color selectedChipFg, BrandColors brand) {
@@ -956,6 +1071,16 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         return CupertinoIcons.device_phone_portrait;
       case AccountType.cash:
         return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.loan:
+        return CupertinoIcons.doc_text_fill;
+      case AccountType.mortgage:
+        return CupertinoIcons.house_fill;
+      case AccountType.bnpl:
+        return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability:
+        return CupertinoIcons.minus_circle_fill;
     }
   }
 
@@ -967,6 +1092,16 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         return const Color(0xFF1F7A60);
       case AccountType.cash:
         return const Color(0xFFA0801C);
+      case AccountType.creditCard:
+        return const Color(0xFFB03060);
+      case AccountType.loan:
+        return const Color(0xFF9C4A1A);
+      case AccountType.mortgage:
+        return const Color(0xFF6B4D2A);
+      case AccountType.bnpl:
+        return const Color(0xFF5C3A9E);
+      case AccountType.otherLiability:
+        return const Color(0xFF7A4040);
     }
   }
 

@@ -124,13 +124,26 @@ class _AddEditBorrowLendingScreenState
       return;
     }
 
-    try {
-      String? imagePath = _existingImagePath;
-      if (_newImage != null) {
+    // Upload image first so a failure aborts before writing Firestore.
+    String? imagePath = _existingImagePath;
+    if (_newImage != null) {
+      try {
         imagePath = await ref
             .read(storageServiceProvider)
             .saveReceipt(user.uid, _newImage!);
+      } catch (uploadError) {
+        if (mounted) {
+          final msg = _storageErrorMessage(uploadError);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
+          );
+          setState(() => _saving = false);
+        }
+        return;
       }
+    }
+
+    try {
       final now = DateTime.now();
       final amount = double.parse(_amount.text);
       final svc = ref.read(borrowLendingServiceProvider);
@@ -174,6 +187,10 @@ class _AddEditBorrowLendingScreenState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  static String _storageErrorMessage(Object e) {
+    return 'Image upload failed: $e';
   }
 
   @override

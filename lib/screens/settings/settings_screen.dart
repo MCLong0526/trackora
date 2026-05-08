@@ -15,8 +15,13 @@ import '../../services/prefs_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/masked_amount.dart';
+import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../accounts/add_edit_account_screen.dart';
+import '../auth/welcome_screen.dart';
+import '../../main.dart' show rootNavKey;
 
 enum _CsvExportRangeMode { month, all }
 
@@ -35,178 +40,191 @@ class SettingsScreen extends ConsumerWidget {
     final brand = context.brand;
     final user = ref.watch(authStateProvider).valueOrNull;
     final email = user?.email ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
     final code = ref.watch(currencyCodeProvider).valueOrNull ?? 'USD';
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final themeMode = ref.watch(themeModeProvider);
     final appLocale = ref.watch(localeProvider);
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
-    final allExpenses = ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final allExpenses =
+        ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
     final totalBalance = ref.watch(totalAccountBalanceProvider);
+    final visible = ref.watch(balanceVisibleProvider);
+    final canPop = Navigator.canPop(context);
 
-    // Display name: first part of email before @, or 'Trackora' for offline
-    final isRealUser = email.isNotEmpty && email.contains('@');
-    final displayName = isRealUser
-        ? email.split('@').first.split('.').map((w) =>
-            w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w).join(' ')
-        : 'Trackora';
-
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-        children: [
-          // ── Page title ───────────────────────────────────────
-          const Text(
-            'Profile',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
+    return Scaffold(
+      backgroundColor: brand.background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+          children: [
+            // ── Page title ───────────────────────────────────────
+            Row(
+              children: [
+                if (canPop) ...[
+                  CircleIconButton(
+                    icon: CupertinoIcons.chevron_left,
+                    size: 40,
+                    onTap: () => Navigator.maybePop(context),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                const Expanded(
+                  child: Text(
+                    'Profile',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Hero profile card (only shown when signed in) ────
-          if (isRealUser) ...[
-            _ProfileHero(initial: initial, email: email, displayName: displayName),
             const SizedBox(height: 16),
-          ],
 
-          // ── Cloud Sync ───────────────────────────────────────
-          const _CloudSyncSection(),
+            // ── Cloud Sync ───────────────────────────────────────
+            const _CloudSyncSection(),
 
-          const SizedBox(height: 22),
+            const SizedBox(height: 22),
 
-          // ── My Accounts ─────────────────────────────────────
-          _AccountsSection(
-            accounts: accounts,
-            allExpenses: allExpenses,
-            symbol: symbol,
-            totalBalance: totalBalance,
-          ),
+            // ── My Accounts ─────────────────────────────────────
+            _AccountsSection(
+              accounts: accounts,
+              allExpenses: allExpenses,
+              symbol: symbol,
+              totalBalance: totalBalance,
+              visible: visible,
+            ),
 
-          const SizedBox(height: 22),
+            const SizedBox(height: 22),
 
-          // ── Account ─────────────────────────────────────────
-          _GroupHeader(label: context.t('settings.account')),
-          _GroupCard(
-            children: [
-              _Tile(
-                icon: CupertinoIcons.money_dollar,
-                iconColor: AppColors.mint,
-                label: context.t('settings.currency'),
-                trailing: '$symbol  $code',
-                onTap: () => _pickCurrency(context, ref),
-              ),
-              _GroupDivider(),
-              _Tile(
-                icon: CupertinoIcons.bell,
-                iconColor: AppColors.sky,
-                label: 'Reminders',
-                trailing: 'Daily at 8 PM',
-                onTap: () {},
-              ),
-              if (email.isNotEmpty && email != localUserEmail) ...[
+            // ── Account ─────────────────────────────────────────
+            _GroupHeader(label: context.t('settings.account')),
+            _GroupCard(
+              children: [
+                _Tile(
+                  icon: CupertinoIcons.money_dollar,
+                  iconColor: AppColors.mint,
+                  label: context.t('settings.currency'),
+                  trailing: '$symbol  $code',
+                  onTap: () => _pickCurrency(context, ref),
+                ),
                 _GroupDivider(),
                 _Tile(
-                  icon: CupertinoIcons.envelope,
+                  icon: CupertinoIcons.bell,
                   iconColor: AppColors.sky,
-                  label: 'Change Email',
-                  trailing: email,
-                  onTap: () => _showChangeEmail(context, ref, email),
+                  label: 'Reminders',
+                  trailing: 'Daily at 8 PM',
+                  onTap: () {},
                 ),
+                if (email.isNotEmpty && email != localUserEmail) ...[
+                  _GroupDivider(),
+                  _Tile(
+                    icon: CupertinoIcons.envelope,
+                    iconColor: AppColors.sky,
+                    label: 'Change Email',
+                    trailing: email,
+                    onTap: () => _showChangeEmail(context, ref, email),
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
 
-          const SizedBox(height: 22),
+            const SizedBox(height: 22),
 
-          // ── Display ─────────────────────────────────────────
-          _GroupHeader(label: context.t('settings.display')),
-          _GroupCard(
-            children: [
-              _Tile(
-                icon: CupertinoIcons.paintbrush,
-                iconColor: AppColors.lilac,
-                label: context.t('settings.appearance'),
-                trailing: _themeLabel(context, themeMode),
-                onTap: () => _pickThemeMode(context, ref, themeMode),
-              ),
-              _GroupDivider(),
-              _Tile(
-                icon: CupertinoIcons.globe,
-                iconColor: AppColors.sky,
-                label: context.t('settings.language'),
-                trailing: context.appLocaleLabel(appLocale),
-                onTap: () => _pickLanguage(context, ref, appLocale),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 22),
-
-          // ── Data ────────────────────────────────────────────
-          _GroupHeader(label: context.t('settings.data')),
-          _GroupCard(
-            children: [
-              _Tile(
-                // Outward-arrow / share-style — matches "send out".
-                icon: CupertinoIcons.square_arrow_up,
-                iconColor: AppColors.sage,
-                label: context.t('settings.exportCsv'),
-                onTap: () => _exportCsv(context, ref, user?.uid),
-              ),
-              _GroupDivider(),
-              _Tile(
-                // Inward-arrow / download-style — matches "bring in".
-                icon: CupertinoIcons.tray_arrow_down,
-                iconColor: AppColors.butter,
-                label: context.t('settings.importCsv'),
-                onTap: () => _importCsv(context, ref, user?.uid),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 22),
-
-          // ── About ───────────────────────────────────────────
-          _GroupHeader(label: context.t('settings.about')),
-          _GroupCard(
-            children: [
-              _Tile(
-                icon: CupertinoIcons.info,
-                iconColor: AppColors.sand,
-                label: context.t('settings.version'),
-                trailing: '1.0.0',
-              ),
-              if (storageMode == StorageMode.firebase) ...[
+            // ── Display ─────────────────────────────────────────
+            _GroupHeader(label: context.t('settings.display')),
+            _GroupCard(
+              children: [
+                _Tile(
+                  icon: CupertinoIcons.paintbrush,
+                  iconColor: AppColors.lilac,
+                  label: context.t('settings.appearance'),
+                  trailing: _themeLabel(context, themeMode),
+                  onTap: () => _pickThemeMode(context, ref, themeMode),
+                ),
                 _GroupDivider(),
                 _Tile(
-                  icon: CupertinoIcons.square_arrow_right,
-                  iconColor: AppColors.blush,
-                  label: context.t('settings.signOut'),
-                  destructive: true,
-                  onTap: () async {
-                    await ref.read(authServiceProvider).signOut();
-                  },
+                  icon: CupertinoIcons.globe,
+                  iconColor: AppColors.sky,
+                  label: context.t('settings.language'),
+                  trailing: context.appLocaleLabel(appLocale),
+                  onTap: () => _pickLanguage(context, ref, appLocale),
                 ),
               ],
-            ],
-          ),
+            ),
 
-          const SizedBox(height: 18),
-          Center(
-            child: Text(
-              'Trackora',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: brand.inkSoft,
-                letterSpacing: 0.5,
+            const SizedBox(height: 22),
+
+            // ── Data ────────────────────────────────────────────
+            _GroupHeader(label: context.t('settings.data')),
+            _GroupCard(
+              children: [
+                _Tile(
+                  // Outward-arrow / share-style — matches "send out".
+                  icon: CupertinoIcons.square_arrow_up,
+                  iconColor: AppColors.sage,
+                  label: context.t('settings.exportCsv'),
+                  onTap: () => _exportCsv(context, ref, user?.uid),
+                ),
+                _GroupDivider(),
+                _Tile(
+                  // Inward-arrow / download-style — matches "bring in".
+                  icon: CupertinoIcons.tray_arrow_down,
+                  iconColor: AppColors.butter,
+                  label: context.t('settings.importCsv'),
+                  onTap: () => _importCsv(context, ref, user?.uid),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 22),
+
+            // ── About ───────────────────────────────────────────
+            _GroupHeader(label: context.t('settings.about')),
+            _GroupCard(
+              children: [
+                _Tile(
+                  icon: CupertinoIcons.info,
+                  iconColor: AppColors.sand,
+                  label: context.t('settings.version'),
+                  trailing: '1.0.0',
+                ),
+                if (storageMode == StorageMode.firebase) ...[
+                  _GroupDivider(),
+                  _Tile(
+                    icon: CupertinoIcons.square_arrow_right,
+                    iconColor: AppColors.blush,
+                    label: context.t('settings.signOut'),
+                    destructive: true,
+                    onTap: () async {
+                      await ref.read(authServiceProvider).signOut();
+                      rootNavKey.currentState?.pushAndRemoveUntil(
+                        CupertinoPageRoute(
+                          builder: (_) => const WelcomeScreen(),
+                        ),
+                        (route) => false,
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+
+            const SizedBox(height: 18),
+            Center(
+              child: Text(
+                'Trackora',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: brand.inkSoft,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -390,7 +408,11 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showChangeEmail(BuildContext context, WidgetRef ref, String currentEmail) {
+  void _showChangeEmail(
+    BuildContext context,
+    WidgetRef ref,
+    String currentEmail,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -791,31 +813,60 @@ class _ExportMonthChip extends StatelessWidget {
   }
 }
 
-// ── Profile hero + grouped tiles ────────────────────────────
-// ──────────────────────────────────────────────────────────────────────────────
-// Accounts section widget for the Me / Settings page
-// ──────────────────────────────────────────────────────────────────────────────
+// ── My Accounts section — donut chart card ───────────────────────────────────
 
-class _AccountsSection extends StatelessWidget {
+const _kAccountChartColors = [
+  Color(0xFF6366F1),
+  Color(0xFF34D399),
+  Color(0xFFFBBF24),
+  Color(0xFF60A5FA),
+  Color(0xFFF472B6),
+  Color(0xFFA78BFA),
+  Color(0xFF2DD4BF),
+  Color(0xFFFB923C),
+];
+
+class _AccountsSection extends StatefulWidget {
   final List<Account> accounts;
   final List<Expense> allExpenses;
   final String symbol;
   final double totalBalance;
+  final bool visible;
 
   const _AccountsSection({
     required this.accounts,
     required this.allExpenses,
     required this.symbol,
     required this.totalBalance,
+    required this.visible,
   });
+
+  @override
+  State<_AccountsSection> createState() => _AccountsSectionState();
+}
+
+class _AccountsSectionState extends State<_AccountsSection> {
+  int? _touched;
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+
+    final balanceMap = <String, double>{
+      for (final a in widget.accounts)
+        a.id: computeAccountBalance(a, widget.allExpenses),
+    };
+    final positiveAccounts = widget.accounts
+        .where((a) => (balanceMap[a.id] ?? 0) > 0)
+        .toList();
+    final positiveTotal = positiveAccounts.fold<double>(
+      0,
+      (s, a) => s + balanceMap[a.id]!,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section header
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -845,8 +896,6 @@ class _AccountsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-
-        // Unified accounts card
         Container(
           decoration: BoxDecoration(
             color: brand.surface,
@@ -859,343 +908,280 @@ class _AccountsSection extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
+          child: widget.accounts.isEmpty
+              ? _buildEmpty(context, brand)
+              : _buildChart(
+                  context,
+                  brand,
+                  positiveAccounts,
+                  positiveTotal,
+                  balanceMap,
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context, BrandColors brand) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(builder: (_) => const AddEditAccountScreen()),
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: brand.accentDark.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Total Balance row
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                child: Row(
+              Icon(
+                CupertinoIcons.add_circled,
+                size: 18,
+                color: brand.accentDark,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Add Your First Account',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: brand.accentDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChart(
+    BuildContext context,
+    BrandColors brand,
+    List<Account> positiveAccounts,
+    double positiveTotal,
+    Map<String, double> balanceMap,
+  ) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: positiveAccounts.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No positive balance to display',
+                    style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                  ),
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.lilac,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.chart_pie_fill,
-                        size: 18,
-                        color: Color(0xFF6366F1),
+                    // Donut chart — animated sweep reveal
+                    SizedBox(
+                      width: 108,
+                      height: 108,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AnimatedDonutChart(
+                            key: ValueKey(positiveAccounts.length),
+                            size: 108,
+                            strokeWidth: 16,
+                            segments: List.generate(positiveAccounts.length, (
+                              i,
+                            ) {
+                              final a = positiveAccounts[i];
+                              final bal = balanceMap[a.id]!;
+                              final color =
+                                  _kAccountChartColors[i %
+                                      _kAccountChartColors.length];
+                              return DonutSegment(
+                                value: bal,
+                                color: color.withValues(alpha: 0.88),
+                              );
+                            }),
+                            onSegmentTap: (idx) => setState(() {
+                              _touched = _touched == idx ? null : idx;
+                            }),
+                          ),
+                          // Center label
+                          _touched != null &&
+                                  _touched! < positiveAccounts.length
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${((balanceMap[positiveAccounts[_touched!].id]! / positiveTotal) * 100).toStringAsFixed(0)}%',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: brand.ink,
+                                      ),
+                                    ),
+                                    Text(
+                                      positiveAccounts[_touched!].name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        color: brand.inkSoft,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Total',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: brand.inkSoft,
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    MaskedAmount(
+                                      visibleText: formatMoney(
+                                        widget.symbol,
+                                        widget.totalBalance,
+                                      ),
+                                      visible: widget.visible,
+                                      currencyPrefix: widget.symbol,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: brand.ink,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
+                    // Legend
                     Expanded(
-                      child: Text(
-                        'Total Balance',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: brand.ink,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      formatMoney(symbol, totalBalance),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: totalBalance >= 0 ? brand.ink : AppColors.expense,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(positiveAccounts.length, (i) {
+                          final a = positiveAccounts[i];
+                          final bal = balanceMap[a.id]!;
+                          final pct = bal / positiveTotal * 100;
+                          final color =
+                              _kAccountChartColors[i %
+                                  _kAccountChartColors.length];
+                          final isActive = _touched == i;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 9),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 3,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(
+                                      alpha: isActive ? 1.0 : 0.7,
+                                    ),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        a.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: isActive
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                          color: brand.ink,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${pct.toStringAsFixed(0)}%',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: color,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                MaskedAmount(
+                                  visibleText: formatMoney(widget.symbol, bal),
+                                  visible: widget.visible,
+                                  currencyPrefix: widget.symbol,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isActive ? brand.ink : brand.inkSoft,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                       ),
                     ),
                   ],
                 ),
-              ),
-
-              if (accounts.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => const AddEditAccountScreen(),
-                      ),
-                    ),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: brand.accentDark.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            CupertinoIcons.add_circled,
-                            size: 18,
-                            color: brand.accentDark,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Add Your First Account',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: brand.accentDark,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else ...[
-                Divider(height: 0.5, thickness: 0.5, indent: 16, endIndent: 16, color: brand.divider),
-                ...accounts.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final a = entry.value;
-                  final balance = computeAccountBalance(a, allExpenses);
-                  final isLast = i == accounts.length - 1;
-                  return _AccountRow(
-                    account: a,
-                    balance: balance,
-                    symbol: symbol,
-                    isLast: isLast,
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => AddEditAccountScreen(account: a),
-                      ),
-                    ),
-                  );
-                }),
-                Divider(height: 0.5, thickness: 0.5, indent: 16, endIndent: 16, color: brand.divider),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => const AddEditAccountScreen(),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.add_circled,
-                          size: 16,
-                          color: brand.accentDark,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Add Account',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: brand.accentDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
-      ],
-    );
-  }
-}
-
-class _AccountRow extends StatelessWidget {
-  final Account account;
-  final double balance;
-  final String symbol;
-  final bool isLast;
-  final VoidCallback onTap;
-
-  const _AccountRow({
-    required this.account,
-    required this.balance,
-    required this.symbol,
-    required this.isLast,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final style = _styleFor(account.type);
-    final icon = _iconFor(account.type);
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        Divider(
+          height: 0.5,
+          thickness: 0.5,
+          indent: 16,
+          endIndent: 16,
+          color: brand.divider,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => const AddEditAccountScreen()),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: style.bg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, size: 18, color: style.accent),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        account.name,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: brand.ink,
-                        ),
-                      ),
-                      Text(
-                        account.type.label,
-                        style: TextStyle(fontSize: 12, color: brand.inkSoft),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  formatMoney(symbol, balance),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: balance >= 0 ? brand.ink : AppColors.expense,
-                  ),
+                Icon(
+                  CupertinoIcons.add_circled,
+                  size: 16,
+                  color: brand.accentDark,
                 ),
                 const SizedBox(width: 6),
-                Icon(
-                  CupertinoIcons.chevron_right,
-                  size: 13,
-                  color: brand.inkSoft,
+                Text(
+                  'Add Account',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: brand.accentDark,
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        if (!isLast)
-          Builder(
-            builder: (ctx) => Divider(
-              height: 0.5,
-              thickness: 0.5,
-              indent: 66,
-              endIndent: 16,
-              color: ctx.brand.divider,
-            ),
-          ),
       ],
-    );
-  }
-
-  ({Color bg, Color accent}) _styleFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
-      case AccountType.eWallet:
-        return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
-      case AccountType.cash:
-        return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
-    }
-  }
-
-  IconData _iconFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return CupertinoIcons.building_2_fill;
-      case AccountType.eWallet:
-        return CupertinoIcons.device_phone_portrait;
-      case AccountType.cash:
-        return CupertinoIcons.money_dollar_circle_fill;
-    }
-  }
-}
-
-//
-// Beautified Profile UI. iOS-style grouped lists with subtle dividers,
-// a soft gradient hero card, larger avatar, and breathing-room
-// spacing. All existing actions are preserved — these widgets just
-// host them.
-
-class _ProfileHero extends ConsumerWidget {
-  final String initial;
-  final String email;
-  final String displayName;
-  const _ProfileHero({
-    required this.initial,
-    required this.email,
-    required this.displayName,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: const BoxDecoration(
-              color: AppColors.lilac,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initial,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: AppColors.ink,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: brand.ink,
-                  ),
-                ),
-                if (email.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    email,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: brand.inkSoft,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1409,7 +1395,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
     setState(() => _state = SyncState.syncing);
     try {
       await _sync.syncIfAuthenticated(
-        onState: (s) { if (mounted) setState(() => _state = s); },
+        onState: (s) {
+          if (mounted) setState(() => _state = s);
+        },
       );
       if (mounted) {
         setState(() => _lastSynced = DateTime.now());
@@ -1436,7 +1424,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
             await _sync.signInAndSync(
               email: email,
               password: password,
-              onState: (s) { if (mounted) setState(() => _state = s); },
+              onState: (s) {
+                if (mounted) setState(() => _state = s);
+              },
             );
             if (mounted) {
               setState(() {
@@ -1463,11 +1453,18 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: const Row(
           children: [
-            Icon(CupertinoIcons.checkmark_circle_fill, color: Colors.white, size: 20),
+            Icon(
+              CupertinoIcons.checkmark_circle_fill,
+              color: Colors.white,
+              size: 20,
+            ),
             SizedBox(width: 10),
             Text(
               'Sync complete',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -1488,7 +1485,10 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: Text(
           'Sync failed: $msg',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -1512,20 +1512,20 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
     final Color iconBg = hasFailed
         ? AppColors.blush
         : hasSynced
-            ? AppColors.mint
-            : AppColors.sky;
+        ? AppColors.mint
+        : AppColors.sky;
     final Color iconColor = hasFailed
         ? AppColors.expense
         : hasSynced
-            ? AppColors.income
-            : const Color(0xFF2A6FB5);
+        ? AppColors.income
+        : const Color(0xFF2A6FB5);
     final IconData iconData = isSyncing
         ? CupertinoIcons.cloud_upload
         : hasFailed
-            ? CupertinoIcons.exclamationmark_triangle
-            : hasSynced
-                ? CupertinoIcons.cloud_fill
-                : CupertinoIcons.cloud_upload;
+        ? CupertinoIcons.exclamationmark_triangle
+        : hasSynced
+        ? CupertinoIcons.cloud_fill
+        : CupertinoIcons.cloud_upload;
 
     // Sync state label
     final String syncLabel;
@@ -1598,7 +1598,10 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
                         : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: canSync
                             ? brand.accentDark.withValues(alpha: 0.12)
@@ -1734,7 +1737,9 @@ class _SyncSheetState extends State<_SyncSheet> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         decoration: BoxDecoration(
@@ -1781,11 +1786,17 @@ class _SyncSheetState extends State<_SyncSheet> {
                         children: [
                           const Text(
                             'Sign In & Sync',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           Text(
                             'Your data stays local. Sync creates a backup.',
-                            style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: brand.inkSoft,
+                            ),
                           ),
                         ],
                       ),
@@ -1816,11 +1827,17 @@ class _SyncSheetState extends State<_SyncSheet> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
                         : const Text(
                             'Sign In & Sync',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
                           ),
                   ),
                 ),
@@ -1857,7 +1874,10 @@ class _SyncSheetState extends State<_SyncSheet> {
           hintText: hint,
           prefixIcon: Icon(icon, size: 18, color: brand.inkSoft),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -1884,7 +1904,10 @@ class _SyncSheetState extends State<_SyncSheet> {
             ),
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -1944,17 +1967,32 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
       setState(() => _error = 'Enter a valid email address.');
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       await widget.authService.changeEmail(
         currentPassword: password,
         newEmail: newEmail,
       );
-      if (mounted) setState(() { _loading = false; _done = true; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _done = true;
+        });
     } on ReauthRequiredException catch (e) {
-      if (mounted) setState(() { _loading = false; _error = e.message; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Something went wrong. Try again.'; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = 'Something went wrong. Try again.';
+        });
     }
   }
 
@@ -2009,13 +2047,20 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
               ),
               child: Row(
                 children: [
-                  const Icon(CupertinoIcons.checkmark_circle_fill,
-                      color: AppColors.mint, size: 22),
+                  const Icon(
+                    CupertinoIcons.checkmark_circle_fill,
+                    color: AppColors.mint,
+                    size: 22,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Verification link sent to ${_newEmailCtrl.text.trim()}.\n\nClick the link in that email to confirm your new address, then sign in again.',
-                      style: TextStyle(fontSize: 13, color: brand.ink, height: 1.45),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: brand.ink,
+                        height: 1.45,
+                      ),
                     ),
                   ),
                 ],
@@ -2128,7 +2173,9 @@ class _Field extends StatelessWidget {
                   style: TextStyle(fontSize: 15, color: brand.ink),
                   decoration: InputDecoration(
                     hintText: hint,
-                    hintStyle: TextStyle(color: brand.inkSoft.withValues(alpha: 0.5)),
+                    hintStyle: TextStyle(
+                      color: brand.inkSoft.withValues(alpha: 0.5),
+                    ),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.zero,

@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../theme/app_theme.dart';
+import '../home/home_shell.dart';
 import 'signup_screen.dart';
 import 'welcome_screen.dart';
 
@@ -14,14 +18,14 @@ const Color _kPrimary = Color(0xFF5B5FEF);
 const String _kRememberedEmail = 'remembered_email';
 const String _kRememberMe = 'remember_me';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -88,6 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_biometricAvailable) {
         await _biometricService.enable(email, password);
       }
+      _goHome();
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
@@ -115,9 +120,21 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
+    // Safety timeout: always clear loading after 15 seconds if stuck.
+    Timer? safetyTimer;
+    safetyTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && _isLoading) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Sign in timed out. Please try again.';
+        });
+      }
+    });
+
     try {
       final success = await _biometricService.authenticate();
       if (!success) {
+        safetyTimer.cancel();
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -128,24 +145,20 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Check if Firebase session is still valid. This can happen during the
-      // brief window between app launch and the auth stream emitting the user.
+      // Check if Firebase session is still valid (e.g. brief window between
+      // app cold-start and the auth stream emitting the cached user).
       final existingUser = FirebaseAuth.instance.currentUser;
       if (existingUser != null) {
-        // Force a token refresh so authStateChanges re-emits the user and
-        // triggers navigation to HomeShell.
         try {
           await existingUser.reload();
           await existingUser.getIdToken(true);
         } catch (_) {
           // Token refresh failed — fall through to credential re-sign-in.
         }
-        // If reload succeeded, auth stream will navigate; loading will clear
-        // when the widget is replaced. If it failed, we still try credentials.
         final stillValid = FirebaseAuth.instance.currentUser != null;
         if (stillValid) {
-          // Auth stream will navigate to HomeShell.
-          if (mounted) setState(() => _isLoading = false);
+          safetyTimer.cancel();
+          _goHome();
           return;
         }
       }
@@ -154,6 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // stored credentials from the iOS Keychain.
       final creds = await _biometricService.getStoredCredentials();
       if (creds == null) {
+        safetyTimer.cancel();
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -165,9 +179,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       await _authService.signIn(email: creds.email, password: creds.password);
-      // authStateChanges stream triggers navigation to HomeShell.
-      // _isLoading stays true during the navigation transition.
+      safetyTimer.cancel();
+      _goHome();
     } on FirebaseAuthException catch (e) {
+      safetyTimer.cancel();
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -178,6 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } catch (e) {
+      safetyTimer.cancel();
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -196,8 +212,10 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       final result = await _authService.signInWithGoogle();
-      if (result == null && mounted) {
-        setState(() => _isLoading = false);
+      if (result == null) {
+        if (mounted) setState(() => _isLoading = false);
+      } else {
+        _goHome();
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -226,8 +244,10 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       final result = await _authService.signInWithApple();
-      if (result == null && mounted) {
-        setState(() => _isLoading = false);
+      if (result == null) {
+        if (mounted) setState(() => _isLoading = false);
+      } else {
+        _goHome();
       }
     } on SignInWithAppleAuthorizationException catch (e) {
       if (mounted) {
@@ -253,6 +273,14 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _goHome() {
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeShell()),
+      (route) => false,
+    );
   }
 
   String _friendlyError(String code) {

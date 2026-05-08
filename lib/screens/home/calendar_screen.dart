@@ -1,0 +1,871 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../../models/expense.dart';
+import '../../services/i18n.dart';
+import '../../services/money_format.dart';
+import '../../state/providers.dart';
+import '../../theme/app_theme.dart';
+import '../expenses/add_edit_expense_screen.dart';
+
+class CalendarScreen extends ConsumerStatefulWidget {
+  const CalendarScreen({super.key});
+
+  @override
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  late DateTime _month;
+  DateTime? _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month, 1);
+    _selectedDay = DateTime(now.year, now.month, now.day);
+  }
+
+  void _prevMonth() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _month = DateTime(_month.year, _month.month - 1, 1);
+      _selectedDay = null;
+    });
+  }
+
+  void _nextMonth() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _month = DateTime(_month.year, _month.month + 1, 1);
+      _selectedDay = null;
+    });
+  }
+
+  Map<int, ({double expense, double income})> _computeDayTotals(
+    List<Expense> expenses,
+  ) {
+    final map = <int, ({double expense, double income})>{};
+    for (final e in expenses) {
+      final day = e.date.day;
+      final prev = map[day] ?? (expense: 0.0, income: 0.0);
+      if (e.type.isOutflow) {
+        map[day] = (expense: prev.expense + e.amount, income: prev.income);
+      } else if (e.type.isInflow) {
+        map[day] = (expense: prev.expense, income: prev.income + e.amount);
+      }
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final allExpensesAsync = ref.watch(allExpensesProvider);
+    final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
+    final isLoading = allExpensesAsync.isLoading && allExpenses.isEmpty;
+
+    final monthExpenses = allExpenses.where((e) {
+      return e.date.year == _month.year && e.date.month == _month.month;
+    }).toList();
+
+    final dayTotals = _computeDayTotals(monthExpenses);
+
+    final selectedDayExpenses = _selectedDay == null
+        ? const <Expense>[]
+        : (allExpenses
+              .where(
+                (e) =>
+                    e.date.year == _selectedDay!.year &&
+                    e.date.month == _selectedDay!.month &&
+                    e.date.day == _selectedDay!.day,
+              )
+              .toList()
+            ..sort((a, b) => b.date.compareTo(a.date)));
+
+    return Scaffold(
+      backgroundColor: brand.background,
+      appBar: AppBar(
+        backgroundColor: brand.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.only(left: 12),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: brand.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              CupertinoIcons.chevron_left,
+              color: brand.ink,
+              size: 18,
+            ),
+          ),
+        ),
+        title: Text(
+          'Calendar',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: brand.ink,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Center(child: CupertinoActivityIndicator()),
+                  ),
+                _CalendarGrid(
+                  month: _month,
+                  dayTotals: dayTotals,
+                  selectedDay: _selectedDay,
+                  symbol: symbol,
+                  onPrev: _prevMonth,
+                  onNext: _nextMonth,
+                  onDayTap: (day) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selectedDay = _selectedDay?.year == day.year &&
+                              _selectedDay?.month == day.month &&
+                              _selectedDay?.day == day.day
+                          ? null
+                          : day;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                if (_selectedDay != null) ...[
+                  _DayHeader(
+                    day: _selectedDay!,
+                    expenses: selectedDayExpenses,
+                    symbol: symbol,
+                  ),
+                  const SizedBox(height: 10),
+                  if (selectedDayExpenses.isEmpty)
+                    _EmptyDayCard()
+                  else
+                    _DayRecordsList(
+                      expenses: selectedDayExpenses,
+                      symbol: symbol,
+                      accounts: accounts,
+                      onTapExpense: (expense) => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) =>
+                              AddEditExpenseScreen(expense: expense),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  _MonthSummary(
+                    expenses: monthExpenses,
+                    symbol: symbol,
+                    brand: brand,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _NavButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 16, color: brand.ink),
+      ),
+    );
+  }
+}
+
+// ── Calendar grid ──────────────────────────────────────────────
+
+class _CalendarGrid extends StatelessWidget {
+  final DateTime month;
+  final Map<int, ({double expense, double income})> dayTotals;
+  final DateTime? selectedDay;
+  final String symbol;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final ValueChanged<DateTime> onDayTap;
+
+  const _CalendarGrid({
+    required this.month,
+    required this.dayTotals,
+    required this.selectedDay,
+    required this.symbol,
+    required this.onPrev,
+    required this.onNext,
+    required this.onDayTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final firstWeekday = DateTime(month.year, month.month, 1).weekday;
+    // weekday: 1=Mon..7=Sun, we want Sun as first column (index 0)
+    final leadingBlanks = firstWeekday % 7;
+
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
+      child: Column(
+        children: [
+          // Month navigation header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _NavButton(icon: CupertinoIcons.chevron_left, onTap: onPrev),
+                Text(
+                  DateFormat('MMMM yyyy').format(month),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: brand.ink,
+                  ),
+                ),
+                _NavButton(icon: CupertinoIcons.chevron_right, onTap: onNext),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Weekday header row
+          Row(
+            children: weekdays
+                .map(
+                  (d) => Expanded(
+                    child: Center(
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: brand.inkSoft,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          // Day rows
+          LayoutBuilder(
+            builder: (_, constraints) {
+              final cellW = constraints.maxWidth / 7;
+              // Height is ~1.3x width so there's space for amounts while staying compact
+              final cellH = cellW * 1.3;
+              final totalCells = leadingBlanks + daysInMonth;
+              final rowCount = (totalCells / 7).ceil();
+              final now = DateTime.now();
+
+              return Column(
+                children: List.generate(rowCount, (row) {
+                  return Row(
+                    children: List.generate(7, (col) {
+                      final idx = row * 7 + col;
+                      if (idx < leadingBlanks || idx >= totalCells) {
+                        // Greyed-out blank placeholder
+                        return SizedBox(width: cellW, height: cellH);
+                      }
+                      final dayNum = idx - leadingBlanks + 1;
+                      final date = DateTime(month.year, month.month, dayNum);
+                      final totals = dayTotals[dayNum];
+                      final isSelected = selectedDay != null &&
+                          selectedDay!.year == date.year &&
+                          selectedDay!.month == date.month &&
+                          selectedDay!.day == date.day;
+                      final isToday = now.year == date.year &&
+                          now.month == date.month &&
+                          now.day == date.day;
+
+                      return SizedBox(
+                        width: cellW,
+                        height: cellH,
+                        child: _DayCell(
+                          dayNum: dayNum,
+                          date: date,
+                          totals: totals,
+                          isSelected: isSelected,
+                          isToday: isToday,
+                          symbol: symbol,
+                          onTap: () => onDayTap(date),
+                        ),
+                      );
+                    }),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayCell extends StatelessWidget {
+  final int dayNum;
+  final DateTime date;
+  final ({double expense, double income})? totals;
+  final bool isSelected;
+  final bool isToday;
+  final String symbol;
+  final VoidCallback onTap;
+
+  const _DayCell({
+    required this.dayNum,
+    required this.date,
+    required this.totals,
+    required this.isSelected,
+    required this.isToday,
+    required this.symbol,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final hasActivity =
+        totals != null && (totals!.expense > 0 || totals!.income > 0);
+
+    // Today: blue border ring, no fill; Selected: solid dark fill
+    Color bgColor;
+    Color dayColor;
+    Border? border;
+
+    if (isSelected) {
+      bgColor = brand.accentDark;
+      dayColor = Colors.white;
+      border = null;
+    } else if (isToday) {
+      bgColor = Colors.transparent;
+      dayColor = const Color(0xFF3D6FD4);
+      border = Border.all(color: const Color(0xFF3D6FD4), width: 1.5);
+    } else {
+      bgColor = Colors.transparent;
+      dayColor = brand.ink;
+      border = null;
+    }
+
+    final expenseColor = isSelected ? Colors.white70 : AppColors.expense;
+    final incomeColor = isSelected ? Colors.white70 : AppColors.income;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: border,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const SizedBox(height: 6),
+            Text(
+              '$dayNum',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight:
+                    isToday || isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: dayColor,
+              ),
+            ),
+            if (hasActivity) ...[
+              const SizedBox(height: 1),
+              if (totals!.expense > 0)
+                Text(
+                  '-${_compact(totals!.expense)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: expenseColor,
+                  ),
+                ),
+              if (totals!.income > 0)
+                Text(
+                  '+${_compact(totals!.income)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: incomeColor,
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _compact(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
+    return v.toStringAsFixed(0);
+  }
+}
+
+// ── Day header ─────────────────────────────────────────────────
+
+class _DayHeader extends StatelessWidget {
+  final DateTime day;
+  final List<Expense> expenses;
+  final String symbol;
+
+  const _DayHeader({
+    required this.day,
+    required this.expenses,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final expense = expenses
+        .where((e) => e.type.isOutflow)
+        .fold<double>(0, (s, e) => s + e.amount);
+    final income = expenses
+        .where((e) => e.type.isInflow)
+        .fold<double>(0, (s, e) => s + e.amount);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('EEEE').format(day),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: brand.inkSoft,
+                ),
+              ),
+              Text(
+                DateFormat('MMMM d, yyyy').format(day),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: brand.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (expenses.isNotEmpty)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (income > 0)
+                Text(
+                  '+${formatMoney(symbol, income)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.income,
+                  ),
+                ),
+              if (expense > 0)
+                Text(
+                  '-${formatMoney(symbol, expense)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.expense,
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+// ── Day records list ───────────────────────────────────────────
+
+class _DayRecordsList extends StatelessWidget {
+  final List<Expense> expenses;
+  final String symbol;
+  final List<dynamic> accounts;
+  final void Function(Expense) onTapExpense;
+
+  const _DayRecordsList({
+    required this.expenses,
+    required this.symbol,
+    required this.accounts,
+    required this.onTapExpense,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < expenses.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.only(left: 68),
+                child: Container(height: 0.5, color: brand.divider),
+              ),
+            _RecordRow(
+              expense: expenses[i],
+              symbol: symbol,
+              account: accounts
+                  .where((a) => a.id == expenses[i].accountId)
+                  .firstOrNull,
+              onTap: () => onTapExpense(expenses[i]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordRow extends StatelessWidget {
+  final Expense expense;
+  final String symbol;
+  final dynamic account;
+  final VoidCallback onTap;
+
+  const _RecordRow({
+    required this.expense,
+    required this.symbol,
+    required this.account,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isIncome =
+        expense.type == EntryType.income || expense.type == EntryType.receive;
+    final isTransfer = expense.type == EntryType.transfer;
+
+    final style = (isTransfer || expense.type == EntryType.receive)
+        ? CategoryStyle(
+            background: AppColors.blush,
+            accent: AppColors.expense,
+            icon: CupertinoIcons.arrow_right_arrow_left_circle_fill,
+          )
+        : styleFor(expense.category);
+
+    final title = expense.note.trim().isEmpty
+        ? context.categoryLabel(expense.category)
+        : '${context.categoryLabel(expense.category)} · ${expense.note.trim()}';
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: style.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(style.icon, size: 20, color: style.accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                  if (account != null)
+                    Text(
+                      account.name as String,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isIncome
+                  ? formatMoney(symbol, expense.amount, forceSign: true)
+                  : formatMoney(symbol, -expense.amount),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: isIncome ? AppColors.income : brand.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Empty state ────────────────────────────────────────────────
+
+class _EmptyDayCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              CupertinoIcons.doc_text,
+              size: 32,
+              color: brand.inkSoft,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'No records for this day',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: brand.inkSoft,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Month summary (shown when no day selected) ─────────────────
+
+class _MonthSummary extends StatelessWidget {
+  final List<Expense> expenses;
+  final String symbol;
+  final BrandColors brand;
+
+  const _MonthSummary({
+    required this.expenses,
+    required this.symbol,
+    required this.brand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (expenses.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        padding: const EdgeInsets.all(28),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(CupertinoIcons.calendar_badge_plus,
+                  size: 32, color: brand.inkSoft),
+              const SizedBox(height: 10),
+              Text(
+                'No records this month',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: brand.inkSoft,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tap a day to see records',
+                style: TextStyle(fontSize: 12, color: brand.inkSoft),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final totalExpense = expenses
+        .where((e) => e.type.isOutflow)
+        .fold<double>(0, (s, e) => s + e.amount);
+    final totalIncome = expenses
+        .where((e) => e.type.isInflow)
+        .fold<double>(0, (s, e) => s + e.amount);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryTile(
+              label: 'Expenses',
+              amount: formatMoney(symbol, totalExpense),
+              color: AppColors.expense,
+              icon: CupertinoIcons.arrow_down_circle_fill,
+            ),
+          ),
+          Container(width: 1, height: 40, color: brand.divider),
+          Expanded(
+            child: _SummaryTile(
+              label: 'Income',
+              amount: formatMoney(symbol, totalIncome),
+              color: AppColors.income,
+              icon: CupertinoIcons.arrow_up_circle_fill,
+            ),
+          ),
+          Container(width: 1, height: 40, color: brand.divider),
+          Expanded(
+            child: _SummaryTile(
+              label: 'Net',
+              amount: formatMoney(symbol, totalIncome - totalExpense,
+                  forceSign: true),
+              color: totalIncome >= totalExpense
+                  ? AppColors.income
+                  : AppColors.expense,
+              icon: CupertinoIcons.equal_circle_fill,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  final String label;
+  final String amount;
+  final Color color;
+  final IconData icon;
+
+  const _SummaryTile({
+    required this.label,
+    required this.amount,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Column(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: brand.inkSoft,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          amount,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}

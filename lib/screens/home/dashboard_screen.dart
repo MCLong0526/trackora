@@ -1,20 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
-import '../../models/saving_plan.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/expense_card.dart';
-import '../../widgets/masked_amount.dart';
 import '../../widgets/month_filter_bar.dart';
+import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import 'calendar_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -26,24 +27,20 @@ class DashboardScreen extends ConsumerWidget {
     final expensesAsync = ref.watch(expensesProvider);
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final budgetAsync = ref.watch(budgetProvider);
-    final savingPlansAsync = ref.watch(savingPlansProvider);
-    final borrowLendingAsync = ref.watch(borrowLendingProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
-    final email = user?.email ?? '';
-    final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
 
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-    final savingPlans = savingPlansAsync.valueOrNull ?? const <SavingPlan>[];
-    final borrowLending =
-        borrowLendingAsync.valueOrNull ?? const <BorrowLending>[];
-
     final monthSpent = monthExpenses
         .where((e) => e.type.isOutflow)
+        .fold<double>(0, (s, e) => s + e.amount);
+
+    final monthIncome = monthExpenses
+        .where((e) => e.type.isInflow)
         .fold<double>(0, (s, e) => s + e.amount);
 
     final budgetableSpent = monthExpenses
@@ -117,22 +114,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: AppColors.lilac,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
+                  const ProfileAvatarButton(),
                 ],
               ),
             ),
@@ -140,17 +122,15 @@ class DashboardScreen extends ConsumerWidget {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
               child: _HomeOverviewCard(
                 balance: totalBalance,
                 symbol: symbol,
-                todaySpent: todaySpent,
-                weekSpent: weekSpent,
+                monthSpent: monthSpent,
+                monthIncome: monthIncome,
                 budget: budget,
                 budgetSpent: budgetableSpent,
-                borrowLending: borrowLending,
-                savingPlans: savingPlans,
-                userId: user?.uid,
+                selectedMonth: selectedMonth,
               ),
             ),
           ),
@@ -170,20 +150,30 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () => _showAllBillsSheet(
+                    onTap: () => Navigator.push(
                       context,
-                      monthExpenses,
-                      symbol,
-                      selectedMonth,
+                      CupertinoPageRoute(
+                        builder: (_) => const CalendarScreen(),
+                      ),
                     ),
                     behavior: HitTestBehavior.opaque,
-                    child: Text(
-                      'See All',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: brand.accentDark,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.calendar,
+                          size: 14,
+                          color: brand.accentDark,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Calendar',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: brand.accentDark,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -223,7 +213,11 @@ class DashboardScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(18),
                     child: Column(
                       children: [
-                        for (var i = 0; i < monthExpenses.length.clamp(0, 5); i++) ...[
+                        for (
+                          var i = 0;
+                          i < monthExpenses.length.clamp(0, 5);
+                          i++
+                        ) ...[
                           if (i > 0)
                             Padding(
                               padding: const EdgeInsets.only(left: 70),
@@ -251,9 +245,17 @@ class DashboardScreen extends ConsumerWidget {
                                         AddEditExpenseScreen(expense: expense),
                                   ),
                                 ),
+                                onEdit: () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) =>
+                                        AddEditExpenseScreen(expense: expense),
+                                  ),
+                                ),
                                 onDelete: () => ref
                                     .read(expenseRepositoryProvider)
                                     .deleteExpense(user!.uid, expense.id),
+                                onCopy: () => _copyRecord(context, expense),
                               );
                             },
                           ),
@@ -336,6 +338,25 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  void _copyRecord(BuildContext context, Expense original) {
+    _showCopiedToast(context);
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddEditExpenseScreen(copyFrom: original),
+      ),
+    );
+  }
+
+  void _showCopiedToast(BuildContext context) {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) => _CopiedToast(onDone: () => entry.remove()),
+    );
+    overlay.insert(entry);
+  }
+
   void _showAllBillsSheet(
     BuildContext context,
     List<Expense> expenses,
@@ -375,481 +396,854 @@ class DashboardScreen extends ConsumerWidget {
 class _HomeOverviewCard extends ConsumerWidget {
   final double balance;
   final String symbol;
-  final double todaySpent;
-  final double weekSpent;
+  final double monthSpent;
+  final double monthIncome;
   final double budget;
   final double budgetSpent;
-  final List<BorrowLending> borrowLending;
-  final List<SavingPlan> savingPlans;
-  final String? userId;
+  final DateTime selectedMonth;
 
   const _HomeOverviewCard({
     required this.balance,
     required this.symbol,
-    required this.todaySpent,
-    required this.weekSpent,
+    required this.monthSpent,
+    required this.monthIncome,
     required this.budget,
     required this.budgetSpent,
-    required this.borrowLending,
-    required this.savingPlans,
-    required this.userId,
+    required this.selectedMonth,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final visible = ref.watch(balanceVisibleProvider);
     final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final now = DateTime.now();
+    final isCurrentMonth =
+        selectedMonth.year == now.year && selectedMonth.month == now.month;
+    final daysInMonth = DateTime(
+      selectedMonth.year,
+      selectedMonth.month + 1,
+      0,
+    ).day;
+    final daysPassed = isCurrentMonth ? now.day : daysInMonth;
+    final daysRemaining = isCurrentMonth ? (daysInMonth - now.day) : 0;
+
+    final avgDaily = daysPassed > 0 ? monthSpent / daysPassed : 0.0;
     final budgetRemaining = budget - budgetSpent;
+    final remainingDaily = (budget > 0 && daysRemaining > 0)
+        ? budgetRemaining / daysRemaining
+        : 0.0;
     final budgetProgress = budget > 0
         ? (budgetSpent / budget).clamp(0.0, 1.0)
         : 0.0;
+    final pct = budgetProgress * 100;
+    final overspent = budgetRemaining < 0;
 
-    final active = borrowLending
-        .where(
-          (r) =>
-              r.status != BorrowLendingStatus.cancelled &&
-              r.status != BorrowLendingStatus.settled,
-        )
-        .toList();
-    final borrowed = active
-        .where((r) => r.type == BorrowLendingType.borrowed)
-        .fold<double>(0, (s, r) => s + r.remaining);
-    final lent = active
-        .where((r) => r.type == BorrowLendingType.lent)
-        .fold<double>(0, (s, r) => s + r.remaining);
-    final lendingNet = lent - borrowed;
+    final topBg = isDark ? const Color(0xFF201E2C) : const Color(0xFFEDE9FF);
+    final topInk = isDark ? brand.ink : const Color(0xFF111028);
+    final topSoft = isDark ? brand.inkSoft : const Color(0xFF827B95);
+    final statPillBg = isDark
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.white.withValues(alpha: 0.62);
 
-    final activePlans = savingPlans
-        .where((p) => p.status != SavingPlanStatus.cancelled)
-        .toList();
-    final totalSaved =
-        activePlans.fold<double>(0, (s, p) => s + p.currentAmount);
-    final totalTarget =
-        activePlans.fold<double>(0, (s, p) => s + p.targetAmount);
-    final savingsProgress = totalTarget > 0
-        ? (totalSaved / totalTarget).clamp(0.0, 1.0)
-        : 0.0;
+    final firstCardShadow = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
+        blurRadius: 32,
+        offset: const Offset(0, 12),
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ];
+    final cardShadow = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.055),
+        blurRadius: 24,
+        offset: const Offset(0, 8),
+      ),
+    ];
 
-    return SectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SpendingOverviewCard(
+          visible: visible,
+          onToggleVisibility: () =>
+              ref.read(balanceVisibleProvider.notifier).toggle(),
+          selectedMonth: selectedMonth,
+          symbol: symbol,
+          monthSpent: monthSpent,
+          monthIncome: monthIncome,
+          balance: balance,
+          background: topBg,
+          ink: topInk,
+          soft: topSoft,
+          statPillBg: statPillBg,
+          shadows: firstCardShadow,
+          isDark: isDark,
+        ),
+        const SizedBox(height: 12),
+        _BudgetOverviewCard(
+          visible: visible,
+          symbol: symbol,
+          budget: budget,
+          budgetSpent: budgetSpent,
+          budgetRemaining: budgetRemaining,
+          budgetProgress: budgetProgress,
+          pct: pct,
+          overspent: overspent,
+          avgDaily: avgDaily,
+          remainingDaily: remainingDaily,
+          daysRemaining: daysRemaining,
+          brand: brand,
+          shadows: cardShadow,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+}
+
+class _SpendingOverviewCard extends StatelessWidget {
+  final bool visible;
+  final VoidCallback onToggleVisibility;
+  final DateTime selectedMonth;
+  final String symbol;
+  final double monthSpent;
+  final double monthIncome;
+  final double balance;
+  final Color background;
+  final Color ink;
+  final Color soft;
+  final Color statPillBg;
+  final List<BoxShadow> shadows;
+  final bool isDark;
+
+  const _SpendingOverviewCard({
+    required this.visible,
+    required this.onToggleVisibility,
+    required this.selectedMonth,
+    required this.symbol,
+    required this.monthSpent,
+    required this.monthIncome,
+    required this.balance,
+    required this.background,
+    required this.ink,
+    required this.soft,
+    required this.statPillBg,
+    required this.shadows,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 215,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: shadows,
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 56,
+            top: 12,
+            child: Transform.rotate(
+              angle: 0.34,
+              child: Container(
+                width: 98,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : const Color(0xFFD8D1F3).withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -2,
+            top: 54,
+            child: Transform.rotate(
+              angle: -0.16,
+              child: Container(
+                width: 86,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.40),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            top: 23,
+            child: _MonthChip(month: selectedMonth, ink: ink, isDark: isDark),
+          ),
+          Positioned(
+            right: 24,
+            top: 28,
+            child: Semantics(
+              button: true,
+              label: visible ? 'Hide balance amounts' : 'Show balance amounts',
+              child: GestureDetector(
+                onTap: onToggleVisibility,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    'You spent',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: soft,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            top: 70,
+            child: _HeroAmount(
+              visible: visible,
+              symbol: symbol,
+              amount: monthSpent,
+              ink: ink,
+              soft: soft,
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 22,
+            child: _TopStatsPill(
+              background: statPillBg,
+              divider: soft.withValues(alpha: isDark ? 0.22 : 0.14),
+              ink: ink,
+              soft: soft,
+              visible: visible,
+              symbol: symbol,
+              income: monthIncome,
+              balance: balance,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthChip extends StatelessWidget {
+  final DateTime month;
+  final Color ink;
+  final bool isDark;
+
+  const _MonthChip({
+    required this.month,
+    required this.ink,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.78),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.calendar, size: 12, color: ink),
+          const SizedBox(width: 6),
+          Text(
+            DateFormat('MMM yyyy').format(month),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: ink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroAmount extends StatelessWidget {
+  final bool visible;
+  final String symbol;
+  final double amount;
+  final Color ink;
+  final Color soft;
+
+  const _HeroAmount({
+    required this.visible,
+    required this.symbol,
+    required this.amount,
+    required this.ink,
+    required this.soft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) {
+      return Text(
+        '$symbol ****',
+        style: TextStyle(
+          fontSize: 42,
+          fontWeight: FontWeight.w900,
+          color: ink,
+          height: 1,
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          symbol,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: soft,
+            height: 1,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            formatMoney('', amount).trim(),
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.w900,
+              color: ink,
+              height: 0.96,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TopStatsPill extends StatelessWidget {
+  final Color background;
+  final Color divider;
+  final Color ink;
+  final Color soft;
+  final bool visible;
+  final String symbol;
+  final double income;
+  final double balance;
+
+  const _TopStatsPill({
+    required this.background,
+    required this.divider,
+    required this.ink,
+    required this.soft,
+    required this.visible,
+    required this.symbol,
+    required this.income,
+    required this.balance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 62,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TopStat(
+              dotColor: AppColors.income,
+              label: 'INCOME',
+              value: visible ? formatMoney(symbol, income) : '$symbol ****',
+              ink: ink,
+              soft: soft,
+            ),
+          ),
+          Container(width: 1, height: 34, color: divider),
+          const SizedBox(width: 14),
+          Expanded(
+            child: _TopStat(
+              dotColor: const Color(0xFF5B5CF6),
+              label: 'BALANCE',
+              value: visible ? formatMoney(symbol, balance) : '$symbol ****',
+              ink: ink,
+              soft: soft,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BudgetOverviewCard extends StatelessWidget {
+  final bool visible;
+  final String symbol;
+  final double budget;
+  final double budgetSpent;
+  final double budgetRemaining;
+  final double budgetProgress;
+  final double pct;
+  final bool overspent;
+  final double avgDaily;
+  final double remainingDaily;
+  final int daysRemaining;
+  final BrandColors brand;
+  final List<BoxShadow> shadows;
+  final bool isDark;
+
+  const _BudgetOverviewCard({
+    required this.visible,
+    required this.symbol,
+    required this.budget,
+    required this.budgetSpent,
+    required this.budgetRemaining,
+    required this.budgetProgress,
+    required this.pct,
+    required this.overspent,
+    required this.avgDaily,
+    required this.remainingDaily,
+    required this.daysRemaining,
+    required this.brand,
+    required this.shadows,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 300),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: shadows,
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 21, 24, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: TOTAL BALANCE + eye toggle
           Row(
             children: [
               Text(
-                context.t('home.totalBalance').toUpperCase(),
+                'Month Budget',
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.5,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: brand.ink,
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () =>
-                    ref.read(balanceVisibleProvider.notifier).toggle(),
-                behavior: HitTestBehavior.opaque,
-                child: Icon(
-                  visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
-                  size: 20,
+              Text(
+                budget > 0 ? formatMoney(symbol, budget) : '—',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: brand.inkSoft,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Balance
-          MaskedAmount(
-            visibleText: formatMoney(symbol, balance),
-            visible: visible,
-            currencyPrefix: symbol,
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w900,
-              color: balance >= 0 ? brand.ink : AppColors.expense,
+          if (budget > 0) ...[
+            const SizedBox(height: 18),
+            Center(
+              child: SizedBox(
+                width: 154,
+                height: 82,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: budgetProgress),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animatedProgress, child) => CustomPaint(
+                    painter: _ArcGaugePainter(
+                      progress: animatedProgress,
+                      bgColor: overspent
+                          ? AppColors.blush.withValues(alpha: 0.55)
+                          : AppColors.income.withValues(
+                              alpha: isDark ? 0.18 : 0.14,
+                            ),
+                      fgColor: overspent ? AppColors.expense : AppColors.income,
+                      strokeWidth: 14,
+                    ),
+                    child: child,
+                  ),
+                  child: Align(
+                    alignment: const Alignment(0, 0.55),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${pct.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                            color: brand.ink,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          'of budget',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          // Today / This week
-          _TodayWeekRow(
-            symbol: symbol,
-            todaySpent: todaySpent,
-            weekSpent: weekSpent,
-            visible: visible,
-          ),
-          const SizedBox(height: 16),
-          // 3 mini-cards
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            const SizedBox(height: 16),
+            Container(height: 1, color: brand.divider),
+            const SizedBox(height: 13),
+            Row(
               children: [
                 Expanded(
-                  child: _MiniBudgetCard(
-                    symbol: symbol,
-                    budget: budget,
-                    remaining: budgetRemaining,
-                    progress: budgetProgress,
-                    visible: visible,
+                  child: _BudgetAmountMetric(
+                    value: visible
+                        ? formatMoney('', budgetSpent).trim()
+                        : '****',
+                    label: 'Spent',
+                    valueColor: brand.ink,
                   ),
                 ),
-                const SizedBox(width: 8),
+                Container(width: 1, height: 42, color: brand.divider),
                 Expanded(
-                  child: _MiniLendingCard(
-                    symbol: symbol,
-                    net: lendingNet,
-                    visible: visible,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MiniSavingsCard(
-                    symbol: symbol,
-                    saved: totalSaved,
-                    target: totalTarget,
-                    progress: savingsProgress,
-                    visible: visible,
+                  child: _BudgetAmountMetric(
+                    value: visible
+                        ? formatMoney('', budgetRemaining.abs()).trim()
+                        : '****',
+                    label: overspent ? 'Overspent' : 'Remaining',
+                    valueColor: overspent
+                        ? AppColors.expense
+                        : AppColors.income,
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodayWeekRow extends StatelessWidget {
-  final String symbol;
-  final double todaySpent;
-  final double weekSpent;
-  final bool visible;
-
-  const _TodayWeekRow({
-    required this.symbol,
-    required this.todaySpent,
-    required this.weekSpent,
-    required this.visible,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final todayStr = visible ? formatMoney(symbol, todaySpent) : '$symbol ****';
-    final weekStr = visible ? formatMoney(symbol, weekSpent) : '$symbol ****';
-    final weekNegative = weekSpent > 0;
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '${context.t('home.today')} $todayStr',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: brand.ink,
+            const SizedBox(height: 13),
+            _DottedDivider(color: brand.divider),
+            const SizedBox(height: 12),
+            _DailyStat(
+              label: 'Averaged daily spending',
+              value: visible ? formatMoney('', avgDaily).trim() : '****',
+              brand: brand,
+              dotColor: const Color(0xFFF4BE3B),
             ),
-          ),
-          TextSpan(
-            text: '  ·  ',
-            style: TextStyle(fontSize: 12, color: brand.inkSoft),
-          ),
-          TextSpan(
-            text: '${context.t('home.thisWeek')} ',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: brand.ink,
-            ),
-          ),
-          TextSpan(
-            text: weekNegative ? '–$weekStr' : weekStr,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color:
-                  weekNegative ? AppColors.expense : brand.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Mini summary cards ─────────────────────────────────────────
-
-class _MiniBudgetCard extends StatelessWidget {
-  final String symbol;
-  final double budget;
-  final double remaining;
-  final double progress;
-  final bool visible;
-
-  const _MiniBudgetCard({
-    required this.symbol,
-    required this.budget,
-    required this.remaining,
-    required this.progress,
-    required this.visible,
-  });
-
-  static const _dotColor = Color(0xFF5B8AF4);
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final hasBudget = budget > 0;
-    final overspent = remaining < 0;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: _dotColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'BUDGET',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          FittedBox(
-            alignment: Alignment.centerLeft,
-            fit: BoxFit.scaleDown,
-            child: Text(
-              visible
-                  ? (hasBudget
-                        ? formatMoney(symbol, remaining.abs())
+            const SizedBox(height: 8),
+            _DailyStat(
+              label: 'Remaining daily',
+              value: visible
+                  ? (daysRemaining > 0
+                        ? formatMoney('', remainingDaily).trim()
                         : '—')
-                  : '$symbol ****',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: overspent && hasBudget
-                    ? AppColors.expense
-                    : brand.ink,
+                  : '****',
+              brand: brand,
+              dotColor: const Color(0xFF5B5CF6),
+              valueColor: daysRemaining > 0 && !overspent
+                  ? AppColors.income
+                  : null,
+            ),
+          ] else
+            SizedBox(
+              height: 219,
+              child: Center(
+                child: Text(
+                  'No budget set',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-          if (hasBudget) ...[
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 3,
-                backgroundColor: brand.divider,
-                valueColor: const AlwaysStoppedAnimation(_dotColor),
-              ),
-            ),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            'left',
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _MiniLendingCard extends StatelessWidget {
-  final String symbol;
-  final double net;
-  final bool visible;
+class _TopStat extends StatelessWidget {
+  final Color dotColor;
+  final String label;
+  final String value;
+  final Color ink;
+  final Color soft;
 
-  const _MiniLendingCard({
-    required this.symbol,
-    required this.net,
-    required this.visible,
+  const _TopStat({
+    required this.dotColor,
+    required this.label,
+    required this.value,
+    required this.ink,
+    required this.soft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: soft,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: ink,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+class _BudgetAmountMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color valueColor;
+
+  const _BudgetAmountMetric({
+    required this.value,
+    required this.label,
+    required this.valueColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final isPositive = net >= 0;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: AppColors.income,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'LENDING',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: valueColor,
+            height: 1.05,
           ),
-          const SizedBox(height: 8),
-          FittedBox(
-            alignment: Alignment.centerLeft,
-            fit: BoxFit.scaleDown,
-            child: Text(
-              visible
-                  ? formatMoney(symbol, net, forceSign: net > 0)
-                  : '$symbol ****',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: isPositive ? brand.ink : AppColors.expense,
-              ),
-            ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: brand.inkSoft,
+            height: 1,
           ),
-          const SizedBox(height: 4),
-          Text(
-            'net',
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _MiniSavingsCard extends StatelessWidget {
-  final String symbol;
-  final double saved;
-  final double target;
+class _DailyStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final BrandColors brand;
+  final Color dotColor;
+  final Color? valueColor;
+
+  const _DailyStat({
+    required this.label,
+    required this.value,
+    required this.brand,
+    required this.dotColor,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: brand.ink,
+              fontWeight: FontWeight.w500,
+              height: 1.1,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: valueColor ?? brand.ink,
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ArcGaugePainter extends CustomPainter {
   final double progress;
-  final bool visible;
+  final Color bgColor;
+  final Color fgColor;
+  final double strokeWidth;
 
-  const _MiniSavingsCard({
-    required this.symbol,
-    required this.saved,
-    required this.target,
+  const _ArcGaugePainter({
     required this.progress,
-    required this.visible,
+    required this.bgColor,
+    required this.fgColor,
+    this.strokeWidth = 10,
   });
 
-  static const _savingsDotColor = Color(0xFF8B5CF6);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height);
+    final radius = size.height - strokeWidth / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final bgPaint = Paint()
+      ..color = bgColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final fgPaint = Paint()
+      ..color = fgColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, math.pi, math.pi, false, bgPaint);
+    if (progress > 0) {
+      canvas.drawArc(
+        rect,
+        math.pi,
+        math.pi * progress.clamp(0.0, 1.0),
+        false,
+        fgPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ArcGaugePainter old) =>
+      old.progress != progress ||
+      old.bgColor != bgColor ||
+      old.fgColor != fgColor ||
+      old.strokeWidth != strokeWidth;
+}
+
+class _DottedDivider extends StatelessWidget {
+  final Color color;
+
+  const _DottedDivider({required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: _savingsDotColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'SAVINGS',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          FittedBox(
-            alignment: Alignment.centerLeft,
-            fit: BoxFit.scaleDown,
-            child: Text(
-              visible ? formatMoney(symbol, saved) : '$symbol ****',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: brand.ink,
-              ),
-            ),
-          ),
-          if (target > 0) ...[
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 3,
-                backgroundColor: brand.divider,
-                valueColor: const AlwaysStoppedAnimation(_savingsDotColor),
-              ),
-            ),
-          ],
-          const SizedBox(height: 4),
-          Text(
-            target > 0
-                ? 'of ${target.toStringAsFixed(target.truncateToDouble() == target ? 0 : 2)}'
-                : 'saved',
-            style: TextStyle(
-              fontSize: 10,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+    return SizedBox(
+      height: 1,
+      width: double.infinity,
+      child: CustomPaint(painter: _DottedDividerPainter(color)),
     );
   }
+}
+
+class _DottedDividerPainter extends CustomPainter {
+  final Color color;
+
+  const _DottedDividerPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    const dashWidth = 2.0;
+    const gap = 6.0;
+    var x = 0.0;
+    while (x < size.width) {
+      canvas.drawLine(
+        Offset(x, size.height / 2),
+        Offset(math.min(x + dashWidth, size.width), size.height / 2),
+        paint,
+      );
+      x += dashWidth + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DottedDividerPainter old) => old.color != color;
 }
 
 // ── All Activity bottom sheet ──────────────────────────────────
@@ -1020,6 +1414,94 @@ class _BillRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Copied toast ───────────────────────────────────────────────
+
+class _CopiedToast extends StatefulWidget {
+  final VoidCallback onDone;
+
+  const _CopiedToast({required this.onDone});
+
+  @override
+  State<_CopiedToast> createState() => _CopiedToastState();
+}
+
+class _CopiedToastState extends State<_CopiedToast>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _ctrl.forward();
+    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) {
+        _ctrl.reverse().then((_) => widget.onDone());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      bottom: 120,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: FadeTransition(
+          opacity: _opacity,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.ink,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.doc_on_doc,
+                    color: Colors.white,
+                    size: 15,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Record has been copied',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

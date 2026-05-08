@@ -62,6 +62,22 @@ const kCommonWallets = [
   _kCustomLabel,
 ];
 
+const kCommonCreditCards = [
+  // Malaysia
+  'Maybank Visa', 'CIMB Visa', 'Public Bank Visa', 'RHB Visa',
+  'Hong Leong Visa', 'AmBank Visa', 'Alliance Bank Visa',
+  'Maybank Mastercard', 'CIMB Mastercard', 'Public Bank Mastercard',
+  // Singapore
+  'DBS Cashback Card', 'OCBC 365 Card', 'UOB One Card',
+  // US
+  'Chase Freedom', 'Amex Gold', 'Capital One Venture', 'Discover It',
+  // Global
+  'Visa', 'Mastercard', 'American Express', 'UnionPay',
+  _kCustomLabel,
+];
+
+const _assetTypes = [AccountType.bank, AccountType.eWallet, AccountType.cash];
+
 class AddEditAccountScreen extends ConsumerStatefulWidget {
   final Account? account;
   const AddEditAccountScreen({super.key, this.account});
@@ -84,8 +100,16 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
 
   bool get _isEdit => widget.account != null;
 
-  List<String> get _providers =>
-      _type == AccountType.bank ? kCommonBanks : kCommonWallets;
+  bool get _hasProviderList =>
+      _type == AccountType.bank ||
+      _type == AccountType.eWallet ||
+      _type == AccountType.creditCard;
+
+  List<String> get _providers {
+    if (_type == AccountType.bank) return kCommonBanks;
+    if (_type == AccountType.creditCard) return kCommonCreditCards;
+    return kCommonWallets;
+  }
 
   @override
   void initState() {
@@ -93,12 +117,15 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     if (_isEdit) {
       final a = widget.account!;
       _type = a.type;
-      _balanceController.text = a.openingBalance > 0
-          ? a.openingBalance.toStringAsFixed(2)
-          : '';
 
-      if (_type == AccountType.bank || _type == AccountType.eWallet) {
-        final providers = _type == AccountType.bank ? kCommonBanks : kCommonWallets;
+      // For liability accounts, opening balance is stored as negative — show abs value
+      final displayBalance =
+          _type.isLiability ? a.openingBalance.abs() : a.openingBalance;
+      _balanceController.text =
+          displayBalance > 0 ? displayBalance.toStringAsFixed(2) : '';
+
+      if (_hasProviderList) {
+        final providers = _providers;
         if (providers.contains(a.name)) {
           _selectedProvider = a.name;
           _useCustomName = false;
@@ -122,7 +149,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   String get _resolvedName {
-    if (_type == AccountType.cash) return _nameController.text.trim();
+    if (!_hasProviderList) return _nameController.text.trim();
     if (_useCustomName) return _customNameController.text.trim();
     return _selectedProvider ?? '';
   }
@@ -139,7 +166,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     final repo = ref.read(accountRepositoryProvider);
 
     try {
-      final openingBalance = double.tryParse(_balanceController.text) ?? 0.0;
+      final enteredBalance = double.tryParse(_balanceController.text) ?? 0.0;
+      // For liability accounts, user enters the amount they owe (positive),
+      // which we store as negative so the balance calculation treats it as debt.
+      final openingBalance =
+          _type.isLiability ? -enteredBalance.abs() : enteredBalance;
       final now = DateTime.now();
 
       if (_isEdit) {
@@ -241,7 +272,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               ),
               _typeSelector(brand),
               const SizedBox(height: 20),
-              if (_type == AccountType.bank || _type == AccountType.eWallet) ...[
+              if (_hasProviderList) ...[
                 _providerPicker(brand),
                 if (_useCustomName) ...[
                   const SizedBox(height: 14),
@@ -252,8 +283,14 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                     decoration: InputDecoration(
                       hintText: _type == AccountType.bank
                           ? 'Enter bank name'
-                          : 'Enter e-wallet name',
-                      labelText: _type == AccountType.bank ? 'Bank Name' : 'E-Wallet Name',
+                          : _type == AccountType.creditCard
+                              ? 'Enter card name'
+                              : 'Enter e-wallet name',
+                      labelText: _type == AccountType.bank
+                          ? 'Bank Name'
+                          : _type == AccountType.creditCard
+                              ? 'Card Name'
+                              : 'E-Wallet Name',
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
@@ -267,8 +304,10 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    hintText: 'e.g. My Wallet, Piggy Bank',
+                  decoration: InputDecoration(
+                    hintText: _type.isLiability
+                        ? 'e.g. Car Loan, Home Loan'
+                        : 'e.g. My Wallet, Piggy Bank',
                     labelText: 'Account Name',
                   ),
                   validator: (v) {
@@ -285,9 +324,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '0.00',
-                  labelText: 'Opening Balance (optional)',
+                  labelText: _type.isLiability
+                      ? 'Current Balance Owed (optional)'
+                      : 'Opening Balance (optional)',
                 ),
                 validator: (v) {
                   if (v != null && v.isNotEmpty) {
@@ -302,7 +343,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: Text(
-                  'Opening balance is the amount already in this account before tracking starts.',
+                  _type.isLiability
+                      ? 'Enter how much you currently owe on this account.'
+                      : 'Opening balance is the amount already in this account before tracking starts.',
                   style: TextStyle(fontSize: 12, color: brand.inkSoft),
                 ),
               ),
@@ -328,7 +371,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   Widget _providerPicker(BrandColors brand) {
-    final label = _type == AccountType.bank ? 'Bank' : 'E-Wallet';
+    final label = _type == AccountType.bank
+        ? 'Bank'
+        : _type == AccountType.creditCard
+            ? 'Credit Card'
+            : 'E-Wallet';
     final display = _useCustomName
         ? 'Other / Custom'
         : (_selectedProvider ?? 'Select $label');
@@ -338,12 +385,8 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       child: Row(
         children: [
           Icon(
-            _type == AccountType.bank
-                ? PhosphorIconsFill.bank
-                : PhosphorIconsFill.deviceMobile,
-            color: _type == AccountType.bank
-                ? const Color(0xFF2A6FB5)
-                : const Color(0xFF1F7A60),
+            _iconFor(_type),
+            color: _accentColorFor(_type),
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -363,7 +406,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
 
   void _showProviderPicker(BrandColors brand) {
     final providers = List<String>.from(_providers);
-    final title = _type == AccountType.bank ? 'Select Bank' : 'Select E-Wallet';
+    final label = _type == AccountType.bank
+        ? 'Select Bank'
+        : _type == AccountType.creditCard
+            ? 'Select Credit Card'
+            : 'Select E-Wallet';
 
     showModalBottomSheet<void>(
       context: context,
@@ -382,7 +429,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
                   child: Text(
-                    title,
+                    label,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -393,9 +440,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 Expanded(
                   child: ListView.separated(
                     itemCount: providers.length,
-                    separatorBuilder: (_, __) => Divider(
+                    separatorBuilder: (_, _) => Divider(
                       height: 1,
-                      color: brand.inkSoft.withOpacity(0.12),
+                      color: brand.inkSoft.withValues(alpha: 0.12),
                     ),
                     itemBuilder: (context, index) {
                       final p = providers[index];
@@ -416,20 +463,16 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                         ),
                         trailing: isSelected
                             ? Icon(
-                          CupertinoIcons.checkmark_alt,
-                          color: brand.accentDark,
-                        )
+                                CupertinoIcons.checkmark_alt,
+                                color: brand.accentDark,
+                              )
                             : null,
                         onTap: () {
                           setState(() {
                             _selectedProvider = p;
                             _useCustomName = isCustom;
-
-                            if (!isCustom) {
-                              _customNameController.clear();
-                            }
+                            if (!isCustom) _customNameController.clear();
                           });
-
                           Navigator.pop(ctx);
                         },
                       );
@@ -445,20 +488,60 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   Widget _typeSelector(BrandColors brand) {
-    return SectionCard(
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: AccountType.values
-            .map((t) => _typeChip(t, brand))
-            .toList(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('ASSET ACCOUNTS', brand),
+        const SizedBox(height: 8),
+        SectionCard(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: _assetTypes.map((t) => _typeChip(t, brand)).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _groupLabel('LIABILITY ACCOUNTS', brand),
+        const SizedBox(height: 8),
+        SectionCard(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _typeChip(AccountType.creditCard, brand),
+                  _typeChip(AccountType.loan, brand),
+                  _typeChip(AccountType.mortgage, brand),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  _typeChip(AccountType.bnpl, brand),
+                  _typeChip(AccountType.otherLiability, brand),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupLabel(String text, BrandColors brand) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.6,
+        color: brand.inkSoft,
       ),
     );
   }
 
   Widget _typeChip(AccountType type, BrandColors brand) {
     final selected = _type == type;
-    // final selectedFg = foregroundOn(brand.accentDark);
-    final selectedFg = Colors.white;
     final iconData = _iconFor(type);
     return Expanded(
       child: GestureDetector(
@@ -467,28 +550,34 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           _selectedProvider = null;
           _useCustomName = false;
           _customNameController.clear();
+          _nameController.clear();
         }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? brand.accentDark : Colors.transparent,
+            color: selected
+                ? (type.isLiability
+                    ? AppColors.expense.withValues(alpha: 0.85)
+                    : brand.accentDark)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Column(
             children: [
               Icon(
                 iconData,
-                size: 20,
-                color: selected ? selectedFg : brand.inkSoft,
+                size: 18,
+                color: selected ? Colors.white : brand.inkSoft,
               ),
               const SizedBox(height: 4),
               Text(
                 type.label,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
-                    color: selected ? Colors.white : brand.ink,
+                  color: selected ? Colors.white : brand.ink,
                 ),
               ),
             ],
@@ -506,6 +595,37 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         return PhosphorIconsFill.deviceMobile;
       case AccountType.cash:
         return PhosphorIconsFill.currencyDollar;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.loan:
+        return PhosphorIconsFill.receipt;
+      case AccountType.mortgage:
+        return CupertinoIcons.house_fill;
+      case AccountType.bnpl:
+        return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability:
+        return CupertinoIcons.minus_circle_fill;
+    }
+  }
+
+  Color _accentColorFor(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return const Color(0xFF2A6FB5);
+      case AccountType.eWallet:
+        return const Color(0xFF1F7A60);
+      case AccountType.cash:
+        return const Color(0xFFA0801C);
+      case AccountType.creditCard:
+        return const Color(0xFFB03060);
+      case AccountType.loan:
+        return const Color(0xFF9C4A1A);
+      case AccountType.mortgage:
+        return const Color(0xFF6B4D2A);
+      case AccountType.bnpl:
+        return const Color(0xFF5C3A9E);
+      case AccountType.otherLiability:
+        return const Color(0xFF7A4040);
     }
   }
 }

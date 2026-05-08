@@ -26,7 +26,6 @@ class WatchService {
 
   String? _userId;
   ExpenseRepository? _repository;
-  AccountRepository? _accountRepository;
   PrefsService? _prefsService;
 
   bool _subscribed = false;
@@ -41,7 +40,6 @@ class WatchService {
   }) async {
     _userId = userId;
     _repository = repository;
-    _accountRepository = accountRepository;
     _prefsService = prefsService;
 
     if (_subscribed) return;
@@ -75,18 +73,21 @@ class WatchService {
     if (!supported) return;
 
     try {
-      _sub = _watch.messageStream.listen((message) async {
-        final uid = _userId;
-        final repo = _repository;
-        if (uid == null || repo == null) return;
-        try {
-          await _handle(message, userId: uid, repository: repo);
-        } catch (e, st) {
-          debugPrint('[WatchService] messageStream error: $e\n$st');
-        }
-      }, onError: (dynamic e) {
-        debugPrint('[WatchService] messageStream stream error: $e');
-      });
+      _sub = _watch.messageStream.listen(
+        (message) async {
+          final uid = _userId;
+          final repo = _repository;
+          if (uid == null || repo == null) return;
+          try {
+            await _handle(message, userId: uid, repository: repo);
+          } catch (e, st) {
+            debugPrint('[WatchService] messageStream error: $e\n$st');
+          }
+        },
+        onError: (dynamic e) {
+          debugPrint('[WatchService] messageStream stream error: $e');
+        },
+      );
     } on MissingPluginException {
       return;
     } catch (_) {
@@ -148,6 +149,8 @@ class WatchService {
         updatedAt: now,
       ),
     );
-    debugPrint('[WatchService] expense saved: $category \$$amount accountId=$accountId');
+    debugPrint(
+      '[WatchService] expense saved: $category \$$amount accountId=$accountId',
+    );
   }
 }

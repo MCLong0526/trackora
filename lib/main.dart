@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide LocalStorage;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_config.dart';
 import 'firebase_options.dart';
+import 'supabase_config.dart';
 import 'repositories/local_storage.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/welcome_screen.dart';
@@ -41,6 +43,7 @@ class _TrackoraBootstrapState extends State<TrackoraBootstrap> {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
     } else {
       await LocalStorage.init();
     }
