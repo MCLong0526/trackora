@@ -143,8 +143,9 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
             // 3. Phone is in foreground — ask it for a fresh push.
             session.sendMessage(["type": "requestSync"], replyHandler: { [weak self] reply in
                 DispatchQueue.main.async {
-                    self?.applyContext(reply)
-                    self?.syncStatus = .synced(Date())
+                    guard let self = self else { return }
+                    self.applyContext(reply)
+                    self.syncStatus = self._hasData ? .synced(Date()) : .offline
                 }
             }, errorHandler: { [weak self] _ in
                 DispatchQueue.main.async {

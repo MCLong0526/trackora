@@ -21,6 +21,10 @@ class WidgetSyncService {
 
   final WatchConnectivity _watch = WatchConnectivity();
 
+  // Last context successfully pushed to the Watch so we can re-send it
+  // when the WCSession activates without waiting for a dashboard rebuild.
+  Map<String, dynamic>? _lastWatchContext;
+
   Future<void> init() async {
     if (!_enabled) return;
     await _runOptional(HomeWidget.setAppGroupId(_appGroupId));
@@ -83,7 +87,7 @@ class WidgetSyncService {
             'id': a.id,
             'name': a.name,
           }).toList();
-          await _watch.updateApplicationContext({
+          final ctx = {
             'currency': currencySymbol,
             'monthSpent': monthSpent,
             'monthBudget': monthBudget,
@@ -91,13 +95,34 @@ class WidgetSyncService {
             'budgetableSpent': budgetableSpent,
             'recentExpenses': expensesPayload,
             'accounts': accountsPayload,
-          });
+          };
+          await _watch.updateApplicationContext(ctx);
+          _lastWatchContext = ctx;
         }
       } on MissingPluginException {
         // watch_connectivity not available — skip
       } catch (_) {
         // Best-effort; never block the main app
       }
+    }
+  }
+
+  /// Re-sends the last watch context after WCSession activation completes.
+  /// Called via the onSessionActivated callback so the Watch gets data without
+  /// waiting for the next dashboard rebuild.
+  Future<void> repushToWatch() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
+    final ctx = _lastWatchContext;
+    if (ctx == null) return;
+    try {
+      final supported = await _watch.isSupported;
+      if (supported) {
+        await _watch.updateApplicationContext(ctx);
+      }
+    } on MissingPluginException {
+      // watch_connectivity not available
+    } catch (_) {
+      // Best-effort
     }
   }
 

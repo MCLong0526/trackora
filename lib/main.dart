@@ -179,6 +179,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
             repository: ref.read(expenseRepositoryProvider),
             accountRepository: ref.read(accountRepositoryProvider),
             prefsService: ref.read(prefsServiceProvider),
+            onSessionActivated: () =>
+                ref.read(widgetSyncServiceProvider).repushToWatch(),
           );
       // Drain the queue once the user is known (covers the case where
       // auth resolves after our cold-start drain ran).
@@ -194,6 +196,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
             repository: ref.read(expenseRepositoryProvider),
             accountRepository: ref.read(accountRepositoryProvider),
             prefsService: ref.read(prefsServiceProvider),
+            onSessionActivated: () =>
+                ref.read(widgetSyncServiceProvider).repushToWatch(),
           );
       _drainWidgetQueue();
     });

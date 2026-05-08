@@ -26,6 +26,7 @@ class WatchService {
 
   String? _userId;
   ExpenseRepository? _repository;
+  void Function()? _onSessionActivated;
 
   bool _subscribed = false;
 
@@ -36,9 +37,11 @@ class WatchService {
     required ExpenseRepository repository,
     required AccountRepository accountRepository,
     required PrefsService prefsService,
+    void Function()? onSessionActivated,
   }) async {
     _userId = userId;
     _repository = repository;
+    _onSessionActivated = onSessionActivated;
 
     if (_subscribed) return;
     _subscribed = true;
@@ -47,6 +50,10 @@ class WatchService {
 
     // Handle transferUserInfo messages routed via WatchUserInfoBridge.
     _watchQueueChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onSessionActivated') {
+        _onSessionActivated?.call();
+        return;
+      }
       if (call.method != 'onWatchUserInfo') return;
       final uid = _userId;
       final repo = _repository;

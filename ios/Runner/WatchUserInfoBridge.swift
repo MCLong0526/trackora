@@ -29,6 +29,14 @@ final class WatchUserInfoBridge: NSObject, WCSessionDelegate {
         error: Error?
     ) {
         original.session(session, activationDidCompleteWith: state, error: error)
+        // Notify Dart so it can push the latest context to the Watch.
+        // This ensures the Watch gets fresh data even if the dashboard
+        // hadn't built yet when the session first activated.
+        if state == .activated {
+            DispatchQueue.main.async {
+                self.channel.invokeMethod("onSessionActivated", arguments: nil)
+            }
+        }
     }
 
     func sessionDidBecomeInactive(_ session: WCSession) {

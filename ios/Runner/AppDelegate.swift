@@ -38,6 +38,10 @@ import WatchConnectivity
     )
     let bridge = WatchUserInfoBridge(wrapping: original, channel: channel)
     session.delegate = bridge
+    // Ensure activation if the plugin registered lazily (idempotent when activating).
+    if session.activationState == .notActivated {
+      session.activate()
+    }
     print("[PHONE_SYNC] WatchUserInfoBridge installed over \(type(of: original))")
   }
 }
