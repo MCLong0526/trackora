@@ -1365,16 +1365,29 @@ class _CloudSyncSection extends ConsumerStatefulWidget {
   ConsumerState<_CloudSyncSection> createState() => _CloudSyncSectionState();
 }
 
-class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
+class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
+    with SingleTickerProviderStateMixin {
   final _sync = SyncService();
   SyncState _state = SyncState.idle;
   String? _email;
   DateTime? _lastSynced;
+  late final AnimationController _rotateCtrl;
+  bool? _prevOnline;
 
   @override
   void initState() {
     super.initState();
+    _rotateCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _loadEmail();
+  }
+
+  @override
+  void dispose() {
+    _rotateCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadEmail() async {
@@ -1390,18 +1403,31 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
     return '${diff.inDays}d ago';
   }
 
+  void _onSyncState(SyncState s) {
+    if (!mounted) return;
+    setState(() => _state = s);
+    if (s == SyncState.syncing) {
+      _rotateCtrl.repeat();
+    } else {
+      _rotateCtrl.stop();
+      _rotateCtrl.reset();
+    }
+  }
+
   // Sync Now — called when already authenticated.
   Future<void> _syncNow() async {
-    setState(() => _state = SyncState.syncing);
+    _onSyncState(SyncState.syncing);
     try {
-      await _sync.syncIfAuthenticated(
-        onState: (s) {
-          if (mounted) setState(() => _state = s);
-        },
-      );
+      final user = ref.read(authStateProvider).valueOrNull;
+      if (user != null) {
+        await _sync.syncPendingIfAuthenticated(
+          localUserId: user.uid,
+          onState: _onSyncState,
+        );
+      }
+      await _sync.syncIfAuthenticated(onState: _onSyncState);
       if (mounted) {
         setState(() => _lastSynced = DateTime.now());
-        // After upload, push fresh data to Watch.
         await ref.read(watchServiceProvider).syncToWatch();
         _showSuccessBanner();
       }
@@ -1419,14 +1445,12 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
       builder: (ctx) => _SyncSheet(
         onSync: (email, password) async {
           Navigator.pop(ctx);
-          setState(() => _state = SyncState.syncing);
+          _onSyncState(SyncState.syncing);
           try {
             await _sync.signInAndSync(
               email: email,
               password: password,
-              onState: (s) {
-                if (mounted) setState(() => _state = s);
-              },
+              onState: _onSyncState,
             );
             if (mounted) {
               setState(() {
@@ -1501,33 +1525,46 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isOnline = ref.watch(isOnlineProvider);
+    final pendingCount = ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+
+    // Auto-sync when connectivity is restored.
+    if (_prevOnline == false && isOnline && _email != null &&
+        _state != SyncState.syncing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _state != SyncState.syncing) _syncNow();
+      });
+    }
+    _prevOnline = isOnline;
+
     final isSyncing = _state == SyncState.syncing;
     final hasSynced = _lastSynced != null || _state == SyncState.success;
     final hasFailed = _state == SyncState.failed;
-
-    // ── Status row helpers ────────────────────────────────────────
-    final Color networkDot = isOnline ? AppColors.income : brand.inkSoft;
-    final String networkLabel = isOnline ? 'Online' : 'Offline';
+    final hasPending = pendingCount > 0 && !isSyncing;
 
     final Color iconBg = hasFailed
         ? AppColors.blush
         : hasSynced
         ? AppColors.mint
+        : hasPending
+        ? const Color(0xFFFFEFCC)
         : AppColors.sky;
     final Color iconColor = hasFailed
         ? AppColors.expense
         : hasSynced
         ? AppColors.income
+        : hasPending
+        ? const Color(0xFFB07800)
         : const Color(0xFF2A6FB5);
     final IconData iconData = isSyncing
-        ? CupertinoIcons.cloud_upload
+        ? CupertinoIcons.arrow_2_circlepath
         : hasFailed
         ? CupertinoIcons.exclamationmark_triangle
         : hasSynced
         ? CupertinoIcons.cloud_fill
+        : hasPending
+        ? CupertinoIcons.clock
         : CupertinoIcons.cloud_upload;
 
-    // Sync state label
     final String syncLabel;
     if (isSyncing) {
       syncLabel = 'Uploading data…';
@@ -1537,11 +1574,12 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
       syncLabel = 'Synced · ${_relativeTime(_lastSynced!)}';
     } else if (hasSynced) {
       syncLabel = 'Synced to Cloud';
+    } else if (hasPending) {
+      syncLabel = '$pendingCount pending';
     } else {
       syncLabel = _email != null ? 'Not synced yet' : 'Not connected';
     }
 
-    // Sync button
     final bool canSync = isOnline && !isSyncing;
     final String syncBtnLabel = _email != null ? 'Sync Now' : 'Sign In & Sync';
 
@@ -1566,7 +1604,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
               child: Row(
                 children: [
-                  Container(
+                  // Animated sync icon
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
@@ -1574,21 +1614,51 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: isSyncing
-                        ? const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? RotationTransition(
+                            turns: _rotateCtrl,
+                            child: Icon(
+                              CupertinoIcons.arrow_2_circlepath,
+                              size: 17,
+                              color: iconColor,
+                            ),
                           )
-                        : Icon(iconData, size: 17, color: iconColor),
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, anim) => ScaleTransition(
+                              scale: anim,
+                              child: child,
+                            ),
+                            child: Icon(
+                              iconData,
+                              key: ValueKey(iconData),
+                              size: 17,
+                              color: iconColor,
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      'Cloud Sync',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: brand.ink,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cloud Sync',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: brand.ink,
+                          ),
+                        ),
+                        if (hasPending)
+                          Text(
+                            '$pendingCount offline entr${pendingCount == 1 ? "y" : "ies"} pending',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFFB07800),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   // Sync button
@@ -1611,13 +1681,24 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            isSyncing
-                                ? CupertinoIcons.arrow_2_circlepath
-                                : CupertinoIcons.cloud_upload,
-                            size: 13,
-                            color: canSync ? brand.accentDark : brand.inkSoft,
-                          ),
+                          isSyncing
+                              ? RotationTransition(
+                                  turns: _rotateCtrl,
+                                  child: Icon(
+                                    CupertinoIcons.arrow_2_circlepath,
+                                    size: 13,
+                                    color: canSync
+                                        ? brand.accentDark
+                                        : brand.inkSoft,
+                                  ),
+                                )
+                              : Icon(
+                                  CupertinoIcons.cloud_upload,
+                                  size: 13,
+                                  color: canSync
+                                      ? brand.accentDark
+                                      : brand.inkSoft,
+                                ),
                           const SizedBox(width: 5),
                           Text(
                             isSyncing ? 'Syncing…' : syncBtnLabel,
@@ -1645,20 +1726,20 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
               child: Column(
                 children: [
-                  // Network status row
                   Row(
                     children: [
-                      Container(
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
                         width: 7,
                         height: 7,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: networkDot,
+                          color: isOnline ? AppColors.income : brand.inkSoft,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        networkLabel,
+                        isOnline ? 'Online' : 'Offline',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1666,12 +1747,20 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        syncLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: hasFailed ? AppColors.expense : brand.inkSoft,
-                          fontWeight: FontWeight.w500,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Text(
+                          syncLabel,
+                          key: ValueKey(syncLabel),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: hasFailed
+                                ? AppColors.expense
+                                : hasPending
+                                ? const Color(0xFFB07800)
+                                : brand.inkSoft,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],

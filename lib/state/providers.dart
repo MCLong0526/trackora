@@ -36,6 +36,7 @@ import '../services/person_service.dart';
 import '../services/prefs_service.dart';
 import '../services/saving_plan_service.dart';
 import '../services/storage_service.dart';
+import '../services/sync_service.dart';
 import '../services/watch_service.dart';
 import '../services/widget_sync_service.dart';
 
@@ -173,6 +174,16 @@ final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value([]);
   final month = ref.watch(selectedMonthProvider);
+  if (storageMode == StorageMode.firebase) {
+    final isOnline = ref.watch(isOnlineProvider);
+    final pendingCount =
+        ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+    // Use local Hive when offline or while pending entries are being synced
+    // so newly-created offline entries appear immediately without flicker.
+    if (!isOnline || pendingCount > 0) {
+      return LocalExpenseRepository().getExpenses(user.uid, month: month);
+    }
+  }
   return ref
       .read(expenseRepositoryProvider)
       .getExpenses(user.uid, month: month);
@@ -182,6 +193,14 @@ final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
 final allExpensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value([]);
+  if (storageMode == StorageMode.firebase) {
+    final isOnline = ref.watch(isOnlineProvider);
+    final pendingCount =
+        ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+    if (!isOnline || pendingCount > 0) {
+      return LocalExpenseRepository().getAllExpenses(user.uid);
+    }
+  }
   return ref.read(expenseRepositoryProvider).getAllExpenses(user.uid);
 });
 
@@ -189,6 +208,12 @@ final allExpensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
 final openingSavingsProvider = StreamProvider.autoDispose<double>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(0.0);
+  if (storageMode == StorageMode.firebase) {
+    final isOnline = ref.watch(isOnlineProvider);
+    if (!isOnline) {
+      return LocalExpenseRepository().getOpeningSavings(user.uid);
+    }
+  }
   return ref.read(expenseRepositoryProvider).getOpeningSavings(user.uid);
 });
 
@@ -249,6 +274,12 @@ final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
 final budgetProvider = StreamProvider.autoDispose<double>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(0.0);
+  if (storageMode == StorageMode.firebase) {
+    final isOnline = ref.watch(isOnlineProvider);
+    if (!isOnline) {
+      return LocalExpenseRepository().getMonthlyBudget(user.uid);
+    }
+  }
   return ref.read(expenseRepositoryProvider).getMonthlyBudget(user.uid);
 });
 
@@ -415,3 +446,29 @@ final statsSectionsVisibilityProvider =
         save: (prefs, ids) => prefs.setVisibleStatsSections(ids),
       ),
     );
+
+/// Live count of locally-saved offline entries awaiting cloud sync.
+final pendingSyncCountProvider = StreamProvider.autoDispose<int>((ref) {
+  if (storageMode != StorageMode.firebase) return Stream.value(0);
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(0);
+  return SyncService().pendingCountStream(user.uid);
+});
+
+/// Watches for offline→online transitions and automatically uploads pending
+/// entries. Must be watched by a long-lived widget (TrackoraApp) to stay active.
+final autoSyncProvider = Provider<void>((ref) {
+  if (storageMode != StorageMode.firebase) return;
+  ref.listen<AsyncValue<bool>>(networkStatusProvider, (prev, next) {
+    final wasOffline = prev?.valueOrNull == false;
+    final isNowOnline = next.valueOrNull == true;
+    if (!wasOffline || !isNowOnline) return;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    SyncService().syncPendingIfAuthenticated(
+      localUserId: user.uid,
+      onState: (_) {},
+    );
+  });
+});
+

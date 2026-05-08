@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app_config.dart';
 import '../../models/expense.dart';
+import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import 'add_edit_expense_screen.dart' show kExpenseCategories;
@@ -130,23 +133,30 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       });
       return;
     }
+    final isOnline = ref.read(isOnlineProvider);
     final repo = ref.read(expenseRepositoryProvider);
     final now = DateTime.now();
+    final expense = Expense(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      amount: amount,
+      category: _category,
+      note: 'Quick add',
+      date: now,
+      type: EntryType.expense,
+      createdAt: now,
+      updatedAt: now,
+    );
 
     try {
-      await repo.addExpense(
-        user.uid,
-        Expense(
-          id: '',
-          amount: amount,
-          category: _category,
-          note: 'Quick add',
-          date: now,
-          type: EntryType.expense,
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
+      if (isOnline) {
+        await repo.addExpense(user.uid, expense);
+      } else {
+        // Offline: save to local Hive and mark pending.
+        await LocalExpenseRepository().upsertExpense(user.uid, expense);
+        if (storageMode == StorageMode.firebase) {
+          await SyncService().markPending(user.uid, expense.id);
+        }
+      }
       await ref
           .read(widgetSyncServiceProvider)
           .nudgeQuickExpense(

@@ -5,9 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/expense.dart';
+import '../../repositories/firebase_expense_repository.dart';
+import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/expense_card.dart';
@@ -252,9 +256,30 @@ class DashboardScreen extends ConsumerWidget {
                                         AddEditExpenseScreen(expense: expense),
                                   ),
                                 ),
-                                onDelete: () => ref
-                                    .read(expenseRepositoryProvider)
-                                    .deleteExpense(user!.uid, expense.id),
+                                onDelete: () async {
+                                  if (user == null) return;
+                                  final uid = user.uid;
+                                  await LocalExpenseRepository()
+                                      .deleteExpense(uid, expense.id);
+                                  if (storageMode == StorageMode.firebase) {
+                                    await SyncService()
+                                        .clearPending(uid, expense.id);
+                                    final isOnline =
+                                        ref.read(isOnlineProvider);
+                                    if (isOnline) {
+                                      try {
+                                        await FirebaseExpenseRepository()
+                                            .deleteExpense(uid, expense.id);
+                                      } catch (_) {
+                                        await SyncService().markPendingDelete(
+                                            uid, expense.id);
+                                      }
+                                    } else {
+                                      await SyncService().markPendingDelete(
+                                          uid, expense.id);
+                                    }
+                                  }
+                                },
                                 onCopy: () => _copyRecord(context, expense),
                               );
                             },
@@ -1495,6 +1520,7 @@ class _CopiedToastState extends State<_CopiedToast>
                       color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.none,
                     ),
                   ),
                 ],

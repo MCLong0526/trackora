@@ -118,7 +118,6 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       final a = widget.account!;
       _type = a.type;
 
-      // For liability accounts, opening balance is stored as negative — show abs value
       final displayBalance =
           _type.isLiability ? a.openingBalance.abs() : a.openingBalance;
       _balanceController.text =
@@ -167,8 +166,6 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
 
     try {
       final enteredBalance = double.tryParse(_balanceController.text) ?? 0.0;
-      // For liability accounts, user enters the amount they owe (positive),
-      // which we store as negative so the balance calculation treats it as debt.
       final openingBalance =
           _type.isLiability ? -enteredBalance.abs() : enteredBalance;
       final now = DateTime.now();
@@ -240,17 +237,41 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.xmark, size: 22),
-          onPressed: () => Navigator.pop(context),
+        backgroundColor: brand.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+          ),
         ),
-        title: Text(_isEdit ? 'Edit Account' : 'New Account'),
+        title: Text(
+          _isEdit ? 'Edit Account' : 'New Account',
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
         actions: [
           if (_isEdit)
-            IconButton(
-              icon: const Icon(CupertinoIcons.delete, size: 20),
-              color: AppColors.expense,
-              onPressed: _delete,
+            GestureDetector(
+              onTap: _delete,
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.blush,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.delete,
+                  size: 17,
+                  color: AppColors.expense,
+                ),
+              ),
             ),
         ],
       ),
@@ -258,87 +279,33 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 10),
-                child: Text(
-                  'Account Type',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
-                ),
-              ),
+              _sectionLabel('Account Type', brand),
+              const SizedBox(height: 10),
               _typeSelector(brand),
-              const SizedBox(height: 20),
-              if (_hasProviderList) ...[
-                _providerPicker(brand),
-                if (_useCustomName) ...[
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _customNameController,
-                    textCapitalization: TextCapitalization.words,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: _type == AccountType.bank
-                          ? 'Enter bank name'
-                          : _type == AccountType.creditCard
-                              ? 'Enter card name'
-                              : 'Enter e-wallet name',
-                      labelText: _type == AccountType.bank
-                          ? 'Bank Name'
-                          : _type == AccountType.creditCard
-                              ? 'Card Name'
-                              : 'E-Wallet Name',
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Please enter a name';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ] else ...[
-                TextFormField(
-                  controller: _nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    hintText: _type.isLiability
-                        ? 'e.g. Car Loan, Home Loan'
-                        : 'e.g. My Wallet, Piggy Bank',
-                    labelText: 'Account Name',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Please enter a name';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _balanceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  hintText: '0.00',
-                  labelText: _type.isLiability
-                      ? 'Current Balance Owed (optional)'
-                      : 'Opening Balance (optional)',
-                ),
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    if (double.tryParse(v) == null) {
-                      return 'Enter a valid amount';
-                    }
-                  }
-                  return null;
-                },
+              const SizedBox(height: 22),
+              _sectionLabel(
+                _hasProviderList
+                    ? (_type == AccountType.bank
+                        ? 'Bank'
+                        : _type == AccountType.creditCard
+                            ? 'Credit Card'
+                            : 'E-Wallet')
+                    : 'Account Name',
+                brand,
               ),
+              const SizedBox(height: 10),
+              _nameCard(brand),
+              const SizedBox(height: 22),
+              _sectionLabel(
+                _type.isLiability
+                    ? 'Balance Owed'
+                    : 'Opening Balance',
+                brand,
+              ),
+              const SizedBox(height: 10),
+              _balanceCard(brand),
               const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.only(left: 4),
@@ -350,18 +317,32 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
+              SizedBox(
+                height: 54,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          _isEdit ? 'Update Account' : 'Create Account',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      )
-                    : Text(_isEdit ? 'Update Account' : 'Create Account'),
+                ),
               ),
             ],
           ),
@@ -370,36 +351,344 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     );
   }
 
-  Widget _providerPicker(BrandColors brand) {
+  Widget _sectionLabel(String text, BrandColors brand) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: brand.inkSoft,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _nameCard(BrandColors brand) {
+    final divider = Container(
+      height: 0.5,
+      margin: const EdgeInsets.only(left: 46),
+      color: brand.divider,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Column(
+          children: [
+            if (_hasProviderList) ...[
+              _providerRow(brand),
+              if (_useCustomName) ...[
+                divider,
+                _customNameRow(brand),
+              ],
+            ] else ...[
+              _freeNameRow(brand),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _providerRow(BrandColors brand) {
     final label = _type == AccountType.bank
         ? 'Bank'
         : _type == AccountType.creditCard
             ? 'Credit Card'
             : 'E-Wallet';
     final display = _useCustomName
-        ? 'Other / Custom'
+        ? 'Custom'
         : (_selectedProvider ?? 'Select $label');
 
-    return SectionCard(
+    return InkWell(
       onTap: () => _showProviderPicker(brand),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: _accentColorFor(_type).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _iconFor(_type),
+                size: 16,
+                color: _accentColorFor(_type),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+              ),
+            ),
+            Text(
+              display,
+              style: TextStyle(color: brand.inkSoft, fontSize: 15),
+            ),
+            const SizedBox(width: 4),
+            Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _customNameRow(BrandColors brand) {
+    final hint = _type == AccountType.bank
+        ? 'Enter bank name'
+        : _type == AccountType.creditCard
+            ? 'Enter card name'
+            : 'Enter e-wallet name';
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 12),
       child: Row(
         children: [
-          Icon(
-            _iconFor(_type),
-            color: _accentColorFor(_type),
-            size: 20,
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(CupertinoIcons.pencil, size: 18, color: brand.inkSoft),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'Select $label',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            child: TextFormField(
+              controller: _customNameController,
+              textCapitalization: TextCapitalization.words,
+              autofocus: true,
+              style: const TextStyle(fontSize: 15),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Please enter a name';
+                return null;
+              },
             ),
           ),
-          Text(display, style: TextStyle(color: brand.inkSoft)),
-          const SizedBox(width: 4),
-          Icon(CupertinoIcons.chevron_down, size: 14, color: brand.inkSoft),
         ],
+      ),
+    );
+  }
+
+  Widget _freeNameRow(BrandColors brand) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 12),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(_iconFor(_type), size: 18, color: _accentColorFor(_type)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextFormField(
+              controller: _nameController,
+              textCapitalization: TextCapitalization.words,
+              style: const TextStyle(fontSize: 15),
+              decoration: InputDecoration(
+                hintText: _type.isLiability
+                    ? 'e.g. Car Loan, Home Loan'
+                    : 'e.g. My Wallet, Piggy Bank',
+                hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Please enter a name';
+                return null;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _balanceCard(BrandColors brand) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 12),
+          child: Row(
+            children: [
+              Icon(
+                _type.isLiability
+                    ? CupertinoIcons.minus_circle
+                    : CupertinoIcons.money_dollar_circle,
+                size: 18,
+                color: _type.isLiability ? AppColors.expense : brand.inkSoft,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _balanceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: '0.00',
+                    hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  validator: (v) {
+                    if (v != null && v.isNotEmpty) {
+                      if (double.tryParse(v) == null) return 'Enter a valid amount';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _typeSelector(BrandColors brand) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('ASSET', brand),
+        const SizedBox(height: 8),
+        SectionCard(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: _assetTypes.map((t) => _typeChip(t, brand)).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _groupLabel('LIABILITY', brand),
+        const SizedBox(height: 8),
+        SectionCard(
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _typeChip(AccountType.creditCard, brand),
+                  _typeChip(AccountType.loan, brand),
+                  _typeChip(AccountType.mortgage, brand),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  _typeChip(AccountType.bnpl, brand),
+                  _typeChip(AccountType.otherLiability, brand),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupLabel(String text, BrandColors brand) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
+          color: brand.inkSoft,
+        ),
+      ),
+    );
+  }
+
+  Widget _typeChip(AccountType type, BrandColors brand) {
+    final selected = _type == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _type = type;
+          _selectedProvider = null;
+          _useCustomName = false;
+          _customNameController.clear();
+          _nameController.clear();
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? (type.isLiability
+                    ? AppColors.expense.withValues(alpha: 0.85)
+                    : brand.accentDark)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                _iconFor(type),
+                size: 18,
+                color: selected
+                    ? (type.isLiability ? Colors.white : foregroundOn(brand.accentDark))
+                    : brand.inkSoft,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                type.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: selected
+                      ? (type.isLiability ? Colors.white : foregroundOn(brand.accentDark))
+                      : brand.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -452,6 +741,13 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                           : _selectedProvider == p && !_useCustomName;
 
                       return ListTile(
+                        leading: isCustom
+                            ? Icon(CupertinoIcons.pencil, color: brand.inkSoft, size: 18)
+                            : Icon(
+                                _iconFor(_type),
+                                color: _accentColorFor(_type),
+                                size: 18,
+                              ),
                         title: Text(
                           p,
                           style: TextStyle(
@@ -484,106 +780,6 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _typeSelector(BrandColors brand) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _groupLabel('ASSET ACCOUNTS', brand),
-        const SizedBox(height: 8),
-        SectionCard(
-          padding: const EdgeInsets.all(4),
-          child: Row(
-            children: _assetTypes.map((t) => _typeChip(t, brand)).toList(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _groupLabel('LIABILITY ACCOUNTS', brand),
-        const SizedBox(height: 8),
-        SectionCard(
-          padding: const EdgeInsets.all(4),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  _typeChip(AccountType.creditCard, brand),
-                  _typeChip(AccountType.loan, brand),
-                  _typeChip(AccountType.mortgage, brand),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  _typeChip(AccountType.bnpl, brand),
-                  _typeChip(AccountType.otherLiability, brand),
-                  const Expanded(child: SizedBox()),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _groupLabel(String text, BrandColors brand) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.6,
-        color: brand.inkSoft,
-      ),
-    );
-  }
-
-  Widget _typeChip(AccountType type, BrandColors brand) {
-    final selected = _type == type;
-    final iconData = _iconFor(type);
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() {
-          _type = type;
-          _selectedProvider = null;
-          _useCustomName = false;
-          _customNameController.clear();
-          _nameController.clear();
-        }),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected
-                ? (type.isLiability
-                    ? AppColors.expense.withValues(alpha: 0.85)
-                    : brand.accentDark)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                iconData,
-                size: 18,
-                color: selected ? Colors.white : brand.inkSoft,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                type.label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : brand.ink,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

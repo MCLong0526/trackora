@@ -7,12 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../repositories/firebase_expense_repository.dart';
+import '../../repositories/local_expense_repository.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
 import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/receipt_preview.dart';
@@ -159,6 +163,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
 
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    final isOnline = ref.read(isOnlineProvider);
     final expenses = ref.read(expenseRepositoryProvider);
     final storage = ref.read(storageServiceProvider);
 
@@ -166,7 +171,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       String? receiptUrl = _existingReceiptUrl;
       String? uploadedNewUrl;
 
-      if (_newReceipt != null) {
+      if (_newReceipt != null && isOnline) {
         dev.log(
           '[RECEIPT_UPLOAD] User selected new receipt — uploading for user ${user.uid}',
           name: 'AddEditExpense',
@@ -175,25 +180,36 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           uploadedNewUrl = await storage.saveReceipt(user.uid, _newReceipt!);
           receiptUrl = uploadedNewUrl;
           dev.log(
-            '[RECEIPT_UPLOAD] Upload succeeded. URL obtained.',
+            '[RECEIPT_UPLOAD] Upload succeeded.',
             name: 'AddEditExpense',
           );
         } catch (uploadError) {
           dev.log(
-            '[RECEIPT_UPLOAD] Upload failed: $uploadError',
+            '[RECEIPT_UPLOAD] Upload failed: $uploadError — saving entry without receipt.',
             name: 'AddEditExpense',
             error: uploadError,
           );
-          if (mounted) {
-            final msg = _storageErrorMessage(uploadError);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
-            );
-          }
-          // Keep existing receipt so an edit doesn't wipe the old attachment.
+          // Don't block save — proceed without the new receipt.
           receiptUrl = _existingReceiptUrl;
-          setState(() => _saving = false);
-          return;
+        }
+      } else if (_newReceipt != null && !isOnline) {
+        dev.log(
+          '[RECEIPT_UPLOAD] Offline — saving receipt locally, will upload on sync.',
+          name: 'AddEditExpense',
+        );
+        try {
+          receiptUrl = await storage.saveReceiptLocally(user.uid, _newReceipt!);
+          dev.log(
+            '[RECEIPT_UPLOAD] Saved locally: $receiptUrl',
+            name: 'AddEditExpense',
+          );
+        } catch (localSaveError) {
+          dev.log(
+            '[RECEIPT_UPLOAD] Local save failed: $localSaveError — continuing without receipt.',
+            name: 'AddEditExpense',
+            error: localSaveError,
+          );
+          receiptUrl = _existingReceiptUrl;
         }
       }
 
@@ -233,24 +249,24 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           updatedAt: now,
         );
         dev.log(
-          '[FIRESTORE_SAVE] Updating expense ${updated.id} | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
+          '[SAVE] Updating expense ${updated.id} | online: $isOnline | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
           name: 'AddEditExpense',
         );
-        await expenses.updateExpense(user.uid, updated);
-        dev.log('[FIRESTORE_SAVE] Update complete.', name: 'AddEditExpense');
-
-        // Delete the old receipt from Storage only after the Firestore document
-        // has been successfully updated with the new URL.
-        if (uploadedNewUrl != null && _existingReceiptUrl != null) {
-          dev.log(
-            '[FIREBASE_STORAGE] Deleting replaced receipt after successful update.',
-            name: 'AddEditExpense',
-          );
-          await storage.delete(_existingReceiptUrl!);
+        if (isOnline) {
+          await expenses.updateExpense(user.uid, updated);
+          if (uploadedNewUrl != null && _existingReceiptUrl != null) {
+            await storage.delete(_existingReceiptUrl!);
+          }
+        } else {
+          // Offline: write to local Hive directly and mark pending.
+          await LocalExpenseRepository().updateExpense(user.uid, updated);
+          if (storageMode == StorageMode.firebase) {
+            await SyncService().markPending(user.uid, updated.id);
+          }
         }
       } else {
         final e = Expense(
-          id: '',
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
           amount: amount,
           category: category,
           note: _noteController.text.trim(),
@@ -264,13 +280,26 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
           updatedAt: now,
         );
         dev.log(
-          '[FIRESTORE_SAVE] Adding new expense | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
+          '[SAVE] Adding expense ${e.id} | online: $isOnline | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
           name: 'AddEditExpense',
         );
-        await expenses.addExpense(user.uid, e);
-        dev.log('[FIRESTORE_SAVE] Add complete.', name: 'AddEditExpense');
+        if (isOnline) {
+          await expenses.addExpense(user.uid, e);
+        } else {
+          // Offline: write to local Hive and mark as pending sync.
+          await LocalExpenseRepository().upsertExpense(user.uid, e);
+          if (storageMode == StorageMode.firebase) {
+            await SyncService().markPending(user.uid, e.id);
+          }
+        }
       }
-      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        if (!isOnline) {
+          _showOfflineSavedBanner();
+        }
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,8 +311,32 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     }
   }
 
-  static String _storageErrorMessage(Object e) {
-    return 'Receipt upload failed: $e';
+  void _showOfflineSavedBanner() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: const Color(0xFF2A6FB5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: const Row(
+          children: [
+            Icon(CupertinoIcons.cloud, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Saved offline — will sync when connected',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _delete() async {
@@ -308,9 +361,24 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       ),
     );
     if (confirm != true) return;
-    await ref
-        .read(expenseRepositoryProvider)
-        .deleteExpense(user.uid, widget.expense!.id);
+    final expenseId = widget.expense!.id;
+    // Always remove from local cache immediately.
+    await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
+    if (storageMode == StorageMode.firebase) {
+      // Remove from pending upserts so we don't re-upload a deleted item.
+      await SyncService().clearPending(user.uid, expenseId);
+      final isOnline = ref.read(isOnlineProvider);
+      if (isOnline) {
+        try {
+          await FirebaseExpenseRepository().deleteExpense(user.uid, expenseId);
+        } catch (_) {
+          // Mark for retry on next sync.
+          await SyncService().markPendingDelete(user.uid, expenseId);
+        }
+      } else {
+        await SyncService().markPendingDelete(user.uid, expenseId);
+      }
+    }
     if (mounted) Navigator.pop(context);
   }
 

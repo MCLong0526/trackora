@@ -30,6 +30,12 @@ class StorageService {
     return _uploadSupabaseReceipt(userId, file);
   }
 
+  /// Saves a receipt to local app documents regardless of storage mode.
+  /// Used when offline in Firebase mode — the returned relative path is stored
+  /// in the expense and later uploaded to Supabase during sync.
+  Future<String> saveReceiptLocally(String userId, File file) =>
+      _saveLocalReceipt(userId, file);
+
   Future<String> _uploadSupabaseReceipt(String userId, File file) async {
     final filename = file.path.split('/').last;
     final dotIndex = filename.lastIndexOf('.');
