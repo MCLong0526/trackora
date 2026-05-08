@@ -137,14 +137,14 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
         let ctx = session.receivedApplicationContext
         if !ctx.isEmpty { applyContext(ctx) }
 
-        if _hasData {
-            syncStatus = .synced(Date())
-        } else if session.isReachable {
-            // 3. Phone is in foreground — ask it for a fresh push.
+        if session.isReachable {
+            // 3. Phone is in foreground — always ask for a fresh push so stale
+            //    data is replaced even when the Watch already has cached values.
             session.sendMessage(["type": "requestSync"], replyHandler: { [weak self] reply in
                 DispatchQueue.main.async {
-                    self?.applyContext(reply)
-                    self?.syncStatus = .synced(Date())
+                    guard let self = self else { return }
+                    if !reply.isEmpty { self.applyContext(reply) }
+                    self.syncStatus = self._hasData ? .synced(Date()) : .offline
                 }
             }, errorHandler: { [weak self] _ in
                 DispatchQueue.main.async {
@@ -152,7 +152,7 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
                 }
             })
         } else {
-            syncStatus = .offline
+            syncStatus = _hasData ? .synced(Date()) : .offline
         }
     }
 

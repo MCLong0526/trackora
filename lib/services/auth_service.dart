@@ -4,6 +4,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../app_config.dart';
 import '../models/app_user.dart';
+import 'sync_service.dart';
 
 // Thrown when the user's session is too old for a sensitive operation and
 // re-authentication is required.
@@ -70,6 +71,11 @@ class AuthService {
   // Signs out the current user.
   Future<void> signOut() async {
     if (storageMode == StorageMode.local) return;
+    // Stop any in-flight upload for the outgoing user before tearing down
+    // the auth session — otherwise a sync started under account A could
+    // continue pushing to A's UID while account B is signing in, or worse,
+    // race against B's first writes.
+    SyncService.cancelInFlight();
     await _auth.signOut();
     // Also sign out of Google so the next login shows the account picker.
     try {

@@ -165,6 +165,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(autoSyncProvider); // keep offline→online sync listener alive
     final auth = ref.watch(authStateProvider);
 
     // Attach the Apple Watch bridge once we have a signed-in / offline user.
@@ -179,6 +180,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
             repository: ref.read(expenseRepositoryProvider),
             accountRepository: ref.read(accountRepositoryProvider),
             prefsService: ref.read(prefsServiceProvider),
+            onSessionActivated: () =>
+                ref.read(widgetSyncServiceProvider).repushToWatch(),
           );
       // Drain the queue once the user is known (covers the case where
       // auth resolves after our cold-start drain ran).
@@ -194,6 +197,8 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
             repository: ref.read(expenseRepositoryProvider),
             accountRepository: ref.read(accountRepositoryProvider),
             prefsService: ref.read(prefsServiceProvider),
+            onSessionActivated: () =>
+                ref.read(widgetSyncServiceProvider).repushToWatch(),
           );
       _drainWidgetQueue();
     });
