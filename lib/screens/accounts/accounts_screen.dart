@@ -9,7 +9,6 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/masked_amount.dart';
-import '../../widgets/section_card.dart';
 import 'add_edit_account_screen.dart';
 
 class AccountsScreen extends ConsumerWidget {
@@ -27,7 +26,6 @@ class AccountsScreen extends ConsumerWidget {
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
 
     final balances = _computeBalances(accounts, allExpenses);
-    final totalBalance = balances.values.fold<double>(0, (s, v) => s + v);
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -50,19 +48,8 @@ class AccountsScreen extends ConsumerWidget {
             ? _empty(context, brand)
             : CustomScrollView(
                 slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: _TotalCard(
-                        symbol: symbol,
-                        total: totalBalance,
-                        visible: visible,
-                        ref: ref,
-                      ),
-                    ),
-                  ),
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                     sliver: SliverList.separated(
                       itemCount: accounts.length,
                       separatorBuilder: (_, _) =>
@@ -172,72 +159,6 @@ class AccountsScreen extends ConsumerWidget {
   }
 }
 
-class _TotalCard extends StatelessWidget {
-  final String symbol;
-  final double total;
-  final bool visible;
-  final WidgetRef ref;
-
-  const _TotalCard({
-    required this.symbol,
-    required this.total,
-    required this.visible,
-    required this.ref,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return SectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'TOTAL BALANCE',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () =>
-                    ref.read(balanceVisibleProvider.notifier).toggle(),
-                behavior: HitTestBehavior.opaque,
-                child: Icon(
-                  visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
-                  size: 20,
-                  color: brand.inkSoft,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          MaskedAmount(
-            visibleText: formatMoney(symbol, total),
-            visible: visible,
-            currencyPrefix: symbol,
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              color: total >= 0 ? brand.ink : AppColors.expense,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Across all accounts',
-            style: TextStyle(fontSize: 12, color: brand.inkSoft),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _AccountCard extends StatelessWidget {
   final Account account;
@@ -351,6 +272,16 @@ class _AccountCard extends StatelessWidget {
         return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
       case AccountType.cash:
         return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
+      case AccountType.creditCard:
+        return (bg: AppColors.blush, accent: const Color(0xFFB03060));
+      case AccountType.loan:
+        return (bg: AppColors.peach, accent: const Color(0xFF9C4A1A));
+      case AccountType.mortgage:
+        return (bg: AppColors.sand, accent: const Color(0xFF6B4D2A));
+      case AccountType.bnpl:
+        return (bg: AppColors.lilac, accent: const Color(0xFF5C3A9E));
+      case AccountType.otherLiability:
+        return (bg: AppColors.blush, accent: const Color(0xFF7A4040));
     }
   }
 
@@ -362,9 +293,22 @@ class _AccountCard extends StatelessWidget {
         return CupertinoIcons.device_phone_portrait;
       case AccountType.cash:
         return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.loan:
+        return CupertinoIcons.doc_text_fill;
+      case AccountType.mortgage:
+        return CupertinoIcons.house_fill;
+      case AccountType.bnpl:
+        return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability:
+        return CupertinoIcons.minus_circle_fill;
     }
   }
 }
+
+
+// ── Public helpers ────────────────────────────────────────────────────────────
 
 /// Public helper to compute a single account's balance from a list of expenses.
 double computeAccountBalance(Account account, List<Expense> expenses) {

@@ -19,7 +19,9 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.0
   cloud_firestore: ^5.4.0
-  firebase_storage: ^12.3.0
+
+  # Supabase (receipt image storage)
+  supabase_flutter: ^2.9.0
 
   # State management
   flutter_riverpod: ^2.5.1

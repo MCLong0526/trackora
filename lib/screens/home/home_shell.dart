@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
-import '../settings/settings_screen.dart';
+import 'assets_screen.dart';
 import 'dashboard_screen.dart';
 import 'statistics_screen.dart';
 import 'budget_screen.dart';
@@ -24,7 +24,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     DashboardScreen(),
     StatisticsScreen(),
     BudgetScreen(),
-    SettingsScreen(),
+    AssetsScreen(),
   ];
 
   static const _navPurple = Color(0xFF6366F1);
@@ -54,7 +54,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   ),
                 );
               },
-              child: const Icon(CupertinoIcons.add, size: 26, color: Colors.white),
+              child: const Icon(
+                CupertinoIcons.add,
+                size: 26,
+                color: Colors.white,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -115,8 +119,8 @@ class _BottomBar extends StatelessWidget {
                 onTap: () => onTap(2),
               ),
               _NavItem(
-                icon: CupertinoIcons.person,
-                label: 'Me',
+                icon: CupertinoIcons.chart_pie_fill,
+                label: context.t('tab.assets'),
                 selected: index == 3,
                 onTap: () => onTap(3),
               ),

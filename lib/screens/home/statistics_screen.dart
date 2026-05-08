@@ -16,6 +16,8 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
@@ -89,8 +91,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   _StatsRange? _prevRange() {
     switch (_period) {
       case _StatsPeriod.week:
-        final start =
-            _startOfWeek(_anchor).subtract(const Duration(days: 7));
+        final start = _startOfWeek(_anchor).subtract(const Duration(days: 7));
         return _StatsRange(
           start: start,
           endExclusive: start.add(const Duration(days: 7)),
@@ -194,8 +195,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           final prevExpenses = prevRange != null
               ? allExpenses.where((e) => _inRange(e, prevRange)).toList()
               : <Expense>[];
-          final prevTotal =
-              prevExpenses.fold<double>(0, (s, e) => s + e.amount);
+          final prevTotal = prevExpenses.fold<double>(
+            0,
+            (s, e) => s + e.amount,
+          );
           final prevLabel = prevRange?.label ?? '';
 
           return SingleChildScrollView(
@@ -370,10 +373,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ReportHeader(
-          rangeLabel: range.label,
-          period: _period,
-        ),
+        _ReportHeader(rangeLabel: range.label, period: _period),
         const SizedBox(height: 14),
         _SpendingHeader(
           period: _period,
@@ -428,9 +428,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             ),
           ),
           Positioned.fill(
-            child: IgnorePointer(
-              child: Container(color: brand.background),
-            ),
+            child: IgnorePointer(child: Container(color: brand.background)),
           ),
         ],
       ),
@@ -446,19 +444,20 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       final boundary =
           captureKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
-      if (boundary == null) throw StateError('Could not locate capture boundary.');
+      if (boundary == null)
+        throw StateError('Could not locate capture boundary.');
       final image = await boundary.toImage(pixelRatio: 2.5);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw StateError('Snapshot encoding returned null.');
+      if (byteData == null)
+        throw StateError('Snapshot encoding returned null.');
       final bytes = byteData.buffer.asUint8List();
       final dir = await getTemporaryDirectory();
       final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final file = File('${dir.path}/trackora_stats_$ts.png');
       await file.writeAsBytes(bytes, flush: true);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png', name: 'trackora_stats.png')],
-        subject: 'Trackora — Statistics',
-      );
+      await Share.shareXFiles([
+        XFile(file.path, mimeType: 'image/png', name: 'trackora_stats.png'),
+      ], subject: 'Trackora — Statistics');
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(failedMsg)));
@@ -516,6 +515,8 @@ class _TopActionBar extends StatelessWidget {
             onTap: onShare ?? () {},
           ),
         ),
+        const SizedBox(width: 10),
+        const ProfileAvatarButton(),
       ],
     );
   }
@@ -677,10 +678,7 @@ class _SpendingHeader extends StatelessWidget {
             if (hasComparison) ...[
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: (isIncrease ? AppColors.expense : AppColors.income)
                       .withValues(alpha: 0.15),
@@ -746,7 +744,7 @@ class _SpendingHeader extends StatelessWidget {
 
 // ── Line chart ─────────────────────────────────────────────────
 
-class _LineChartCard extends StatelessWidget {
+class _LineChartCard extends StatefulWidget {
   final List<Expense> expenses;
   final _StatsRange range;
   final _StatsPeriod period;
@@ -760,12 +758,53 @@ class _LineChartCard extends StatelessWidget {
   });
 
   @override
+  State<_LineChartCard> createState() => _LineChartCardState();
+}
+
+class _LineChartCardState extends State<_LineChartCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _animProgress;
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _animProgress = CurvedAnimation(
+      parent: _animCtrl,
+      curve: Curves.easeOutCubic,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _animCtrl.forward();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _LineChartCard old) {
+    super.didUpdateWidget(old);
+    // Replay animation when period or data changes
+    if (old.period != widget.period ||
+        old.range.label != widget.range.label ||
+        old.expenses.length != widget.expenses.length) {
+      _animCtrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chartAccent = isDark ? brand.accent : brand.accentDark;
 
-    final isAll = period == _StatsPeriod.all;
+    final isAll = widget.period == _StatsPeriod.all;
     final series = isAll ? _emptySeries : _buildSeries();
     final values = series.values;
     final total = values.fold<double>(0, (s, v) => s + v);
@@ -797,7 +836,7 @@ class _LineChartCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            formatMoney(symbol, total),
+            formatMoney(widget.symbol, total),
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w900,
@@ -830,13 +869,17 @@ class _LineChartCard extends StatelessWidget {
             )
           else
             SizedBox(
-              height: period == _StatsPeriod.month ? 230 : 200,
-              child: _buildChart(
-                series: series,
-                chartMax: chartMax,
-                accent: chartAccent,
-                brand: brand,
-                isDark: isDark,
+              height: widget.period == _StatsPeriod.month ? 230 : 200,
+              child: AnimatedBuilder(
+                animation: _animProgress,
+                builder: (ctx, _) => _buildChart(
+                  series: series,
+                  chartMax: chartMax,
+                  accent: chartAccent,
+                  brand: brand,
+                  isDark: isDark,
+                  animProgress: _animProgress.value,
+                ),
               ),
             ),
         ],
@@ -845,7 +888,7 @@ class _LineChartCard extends StatelessWidget {
   }
 
   String _subtitle(BuildContext context) {
-    return switch (period) {
+    return switch (widget.period) {
       _StatsPeriod.week => context.t('stats.lineChart.weekSubtitle'),
       _StatsPeriod.month => context.t('stats.lineChart.monthSubtitle'),
       _StatsPeriod.sixMonth => context.t('stats.lineChart.monthSubtitle'),
@@ -861,7 +904,9 @@ class _LineChartCard extends StatelessWidget {
   );
 
   _LineSeries _buildSeries() {
-    switch (period) {
+    final expenses = widget.expenses;
+    final range = widget.range;
+    switch (widget.period) {
       case _StatsPeriod.week:
         final start = range.start!;
         final values = List<double>.filled(7, 0);
@@ -885,12 +930,9 @@ class _LineChartCard extends StatelessWidget {
             values[e.date.day - 1] += e.amount;
           }
         }
-        final labels = [
-          for (int i = 0; i < daysInMonth; i++) '${i + 1}',
-        ];
+        final labels = [for (int i = 0; i < daysInMonth; i++) '${i + 1}'];
         return _LineSeries(values: values, labels: labels, denseLabels: false);
       case _StatsPeriod.sixMonth:
-        // Monthly buckets over 6 months
         final start = range.start!;
         final values = List<double>.filled(6, 0);
         for (final e in expenses) {
@@ -903,9 +945,7 @@ class _LineChartCard extends StatelessWidget {
         }
         final labels = [
           for (int i = 0; i < 6; i++)
-            DateFormat('MMM').format(
-              DateTime(start.year, start.month + i, 1),
-            ),
+            DateFormat('MMM').format(DateTime(start.year, start.month + i, 1)),
         ];
         return _LineSeries(values: values, labels: labels, denseLabels: true);
       case _StatsPeriod.year:
@@ -946,10 +986,14 @@ class _LineChartCard extends StatelessWidget {
     required Color accent,
     required BrandColors brand,
     required bool isDark,
+    required double animProgress,
   }) {
+    // Animate Y values from 0 → real value
+    final animatedValues = series.values.map((v) => v * animProgress).toList();
+
     final spots = [
-      for (int i = 0; i < series.values.length; i++)
-        FlSpot(i.toDouble(), series.values[i]),
+      for (int i = 0; i < animatedValues.length; i++)
+        FlSpot(i.toDouble(), animatedValues[i]),
     ];
     final lineColor = brand.ink;
     final lineBar = LineChartBarData(
@@ -977,6 +1021,7 @@ class _LineChartCard extends StatelessWidget {
     final reservedBottom = shouldRotate ? 48.0 : 28.0;
 
     return LineChart(
+      duration: Duration.zero,
       LineChartData(
         minX: 0,
         maxX: (n - 1).toDouble().clamp(0.0, double.infinity),
@@ -989,7 +1034,7 @@ class _LineChartCard extends StatelessWidget {
         ),
         borderData: FlBorderData(show: false),
         lineTouchData: LineTouchData(
-          enabled: true,
+          enabled: animProgress >= 0.99,
           touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (_) => AppColors.ink,
             tooltipPadding: const EdgeInsets.symmetric(
@@ -1000,30 +1045,30 @@ class _LineChartCard extends StatelessWidget {
             fitInsideHorizontally: true,
             fitInsideVertically: true,
             getTooltipItems: (spots) => spots.map((spot) {
-                final i = spot.x.toInt();
-                final label = i < series.labels.length ? series.labels[i] : '';
-                final displayLabel = period == _StatsPeriod.month
-                    ? 'Day $label'
-                    : label;
-                return LineTooltipItem(
-                  '$displayLabel\n',
-                  const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: formatMoney(symbol, spot.y),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
+              final i = spot.x.toInt();
+              final label = i < series.labels.length ? series.labels[i] : '';
+              final displayLabel = widget.period == _StatsPeriod.month
+                  ? 'Day $label'
+                  : label;
+              return LineTooltipItem(
+                '$displayLabel\n',
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 10,
+                ),
+                children: [
+                  TextSpan(
+                    text: formatMoney(widget.symbol, spot.y),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
                     ),
-                  ],
-                );
-              }).toList(),
+                  ),
+                ],
+              );
+            }).toList(),
           ),
         ),
         titlesData: FlTitlesData(
@@ -1074,7 +1119,8 @@ class _LineChartCard extends StatelessWidget {
           ),
         ),
         lineBarsData: [lineBar],
-        showingTooltipIndicators: series.denseLabels && n <= 12
+        showingTooltipIndicators:
+            series.denseLabels && n <= 12 && animProgress >= 0.99
             ? [
                 for (int i = 0; i < n; i++)
                   if (series.values[i] > 0)
@@ -1272,7 +1318,9 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: _page == i ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: _page == i
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                       color: _page == i ? brand.ink : brand.inkSoft,
                     ),
                   ),
@@ -1437,7 +1485,7 @@ class _ReportTag extends StatelessWidget {
 
 // ── Category donut chart ────────────────────────────────────────
 
-class _CategoryCard extends StatelessWidget {
+class _CategoryCard extends StatefulWidget {
   final List<Expense> expenses;
   final String symbol;
   final String rangeLabel;
@@ -1451,14 +1499,19 @@ class _CategoryCard extends StatelessWidget {
   });
 
   @override
+  State<_CategoryCard> createState() => _CategoryCardState();
+}
+
+class _CategoryCardState extends State<_CategoryCard> {
+  @override
   Widget build(BuildContext context) {
     final Map<String, double> totals = {};
-    for (final e in expenses) {
+    for (final e in widget.expenses) {
       totals[e.category] = (totals[e.category] ?? 0) + e.amount;
     }
     final sorted = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final total = expenses.fold<double>(0, (s, e) => s + e.amount);
+    final total = widget.expenses.fold<double>(0, (s, e) => s + e.amount);
     final brand = context.brand;
 
     return SectionCard(
@@ -1467,7 +1520,7 @@ class _CategoryCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (expenses.isEmpty)
+          if (widget.expenses.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
@@ -1481,49 +1534,28 @@ class _CategoryCard extends StatelessWidget {
           else ...[
             // Donut chart centered
             Center(
-              child: SizedBox(
-                width: 200,
-                height: 200,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    PieChart(
-                      PieChartData(
-                        sectionsSpace: 3,
-                        centerSpaceRadius: 62,
-                        pieTouchData: PieTouchData(
-                          touchCallback: (event, response) {
-                            if (event is! FlTapUpEvent ||
-                                response == null ||
-                                response.touchedSection == null) return;
-                            final idx =
-                                response.touchedSection!.touchedSectionIndex;
-                            if (idx >= 0 && idx < sorted.length) {
-                              _showCategoryRecords(context, sorted[idx]);
-                            }
-                          },
-                        ),
-                        sections: List.generate(sorted.length, (i) {
-                          final entry = sorted[i];
-                          final s = styleFor(entry.key);
-                          final pct = total == 0 ? 0.0 : entry.value / total;
-                          return PieChartSectionData(
-                            value: entry.value,
-                            color: s.accent,
-                            radius: 36,
-                            title: pct >= 0.08 ? '${(pct * 100).round()}%' : '',
-                            titleStyle: TextStyle(
-                              color: foregroundOn(s.accent),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          );
-                        }),
+              child: AnimatedDonutChart(
+                key: ValueKey('${widget.rangeLabel}_${widget.expenses.length}'),
+                size: 200,
+                strokeWidth: 36,
+                showLabels: true,
+                segments: sorted
+                    .map(
+                      (entry) => DonutSegment(
+                        value: entry.value,
+                        color: _donutColorFor(entry.key),
                       ),
-                    ),
-                    _CenterTotalLabel(total: total, symbol: symbol),
-                  ],
+                    )
+                    .toList(),
+                centerChild: _CenterTotalLabel(
+                  total: total,
+                  symbol: widget.symbol,
                 ),
+                onSegmentTap: (idx) {
+                  if (idx < sorted.length) {
+                    _showCategoryRecords(context, sorted[idx]);
+                  }
+                },
               ),
             ),
             const SizedBox(height: 20),
@@ -1532,7 +1564,7 @@ class _CategoryCard extends StatelessWidget {
               _LegendRow(
                 entry: entry,
                 total: total,
-                symbol: symbol,
+                symbol: widget.symbol,
                 onTap: () => _showCategoryRecords(context, entry),
               ),
           ],
@@ -1546,8 +1578,9 @@ class _CategoryCard extends StatelessWidget {
     MapEntry<String, double> entry,
   ) {
     HapticFeedback.selectionClick();
-    final records = expenses.where((e) => e.category == entry.key).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final records =
+        widget.expenses.where((e) => e.category == entry.key).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1564,8 +1597,8 @@ class _CategoryCard extends StatelessWidget {
             category: entry.key,
             records: records,
             total: entry.value,
-            symbol: symbol,
-            rangeLabel: rangeLabel,
+            symbol: widget.symbol,
+            rangeLabel: widget.rangeLabel,
           ),
         ),
       ),
@@ -1626,7 +1659,7 @@ class _LegendRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final s = styleFor(entry.key);
+    final c = _donutColorFor(entry.key);
     final pct = total == 0 ? 0.0 : entry.value / total;
     return GestureDetector(
       onTap: () {
@@ -1641,10 +1674,7 @@ class _LegendRow extends StatelessWidget {
             Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: s.accent,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1806,13 +1836,8 @@ class _CategoryRecordsSheet extends StatelessWidget {
 class _RecordRow extends StatelessWidget {
   final Expense expense;
   final String symbol;
-  final Color? amountColor;
 
-  const _RecordRow({
-    required this.expense,
-    required this.symbol,
-    this.amountColor,
-  });
+  const _RecordRow({required this.expense, required this.symbol});
 
   @override
   Widget build(BuildContext context) {
@@ -1851,7 +1876,7 @@ class _RecordRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    color: amountColor ?? AppColors.expense,
+                    color: AppColors.expense,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -1972,4 +1997,25 @@ class _VisibilitySwitchRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Donut chart color palette ───────────────────────────────────
+// Soft, premium mid-tone colors tuned for chart rendering — inspired
+// by the welcome screen donut illustration. Intentionally separate
+// from kCategoryStyles.accent which is designed for ink-on-pastel.
+
+Color _donutColorFor(String category) {
+  const colors = <String, Color>{
+    'Food': Color(0xFFE8925A), // warm peach-amber
+    'Transport': Color(0xFF5FABF5), // calm sky blue
+    'Shopping': Color(0xFF9B8BE8), // soft lavender
+    'Entertainment': Color(0xFFE87878), // soft coral-rose
+    'Health': Color(0xFF5DC98A), // fresh mint green
+    'Bills': Color(0xFFD4A845), // warm gold
+    'Groceries': Color(0xFF4BC4A8), // bright teal
+    'Salary': Color(0xFF5DC98A), // fresh mint green
+    'Others': Color(0xFFA0A0AA), // neutral slate
+    'Transfer': Color(0xFF78AEDD), // muted blue-gray
+  };
+  return colors[category] ?? const Color(0xFFA0A0AA);
 }

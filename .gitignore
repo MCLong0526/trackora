@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .claude/
+
+# Supabase secrets — fill in supabase_config.dart locally, never commit
+lib/supabase_config.dart

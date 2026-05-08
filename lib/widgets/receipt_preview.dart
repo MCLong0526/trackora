@@ -23,6 +23,7 @@ class ReceiptPreview extends StatelessWidget {
   const ReceiptPreview({super.key, required this.stored, this.size = 64});
 
   bool get _isImage {
+    if (StorageService.isRemote(stored) || StorageService.isFirebasePath(stored)) return true;
     final lower = stored.toLowerCase();
     return lower.endsWith('.png') ||
         lower.endsWith('.jpg') ||
@@ -66,6 +67,10 @@ class _ImageThumb extends StatelessWidget {
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _FileBadge(),
       );
+    }
+    if (StorageService.isFirebasePath(stored)) {
+      // Legacy Firebase Storage path — no longer resolvable after migration.
+      return _FileBadge(missing: true);
     }
     return FutureBuilder<File?>(
       future: StorageService.resolveLocal(stored),
@@ -134,6 +139,7 @@ class _ViewerContent extends StatelessWidget {
   const _ViewerContent({required this.stored, required this.fallbackColor});
 
   bool get _isImage {
+    if (StorageService.isRemote(stored) || StorageService.isFirebasePath(stored)) return true;
     final lower = stored.toLowerCase();
     return lower.endsWith('.png') ||
         lower.endsWith('.jpg') ||
@@ -150,11 +156,7 @@ class _ViewerContent extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              CupertinoIcons.doc_text,
-              color: Colors.white70,
-              size: 64,
-            ),
+            const Icon(CupertinoIcons.doc_text, color: Colors.white70, size: 64),
             const SizedBox(height: 12),
             Text(
               stored.split('/').last,
@@ -175,6 +177,17 @@ class _ViewerContent extends StatelessWidget {
             color: Colors.white70,
             size: 48,
           ),
+        ),
+      );
+    }
+    if (StorageService.isFirebasePath(stored)) {
+      // Legacy Firebase Storage path — no longer resolvable after migration.
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          context.t('expense.receiptMissing'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70),
         ),
       );
     }

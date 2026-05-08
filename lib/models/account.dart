@@ -1,6 +1,25 @@
-enum AccountType { bank, eWallet, cash }
+enum AccountType {
+  // Asset accounts
+  bank,
+  eWallet,
+  cash,
+  // Liability accounts
+  creditCard,
+  loan,
+  mortgage,
+  bnpl,
+  otherLiability,
+}
 
 extension AccountTypeLabel on AccountType {
+  bool get isLiability => const {
+        AccountType.creditCard,
+        AccountType.loan,
+        AccountType.mortgage,
+        AccountType.bnpl,
+        AccountType.otherLiability,
+      }.contains(this);
+
   String get label {
     switch (this) {
       case AccountType.bank:
@@ -9,6 +28,16 @@ extension AccountTypeLabel on AccountType {
         return 'E-Wallet';
       case AccountType.cash:
         return 'Cash';
+      case AccountType.creditCard:
+        return 'Credit Card';
+      case AccountType.loan:
+        return 'Loan';
+      case AccountType.mortgage:
+        return 'Mortgage';
+      case AccountType.bnpl:
+        return 'BNPL';
+      case AccountType.otherLiability:
+        return 'Other Debt';
     }
   }
 
@@ -20,6 +49,16 @@ extension AccountTypeLabel on AccountType {
         return 'eWallet';
       case AccountType.cash:
         return 'cash';
+      case AccountType.creditCard:
+        return 'creditCard';
+      case AccountType.loan:
+        return 'loan';
+      case AccountType.mortgage:
+        return 'mortgage';
+      case AccountType.bnpl:
+        return 'bnpl';
+      case AccountType.otherLiability:
+        return 'otherLiability';
     }
   }
 
@@ -31,6 +70,16 @@ extension AccountTypeLabel on AccountType {
         return AccountType.eWallet;
       case 'cash':
         return AccountType.cash;
+      case 'creditCard':
+        return AccountType.creditCard;
+      case 'loan':
+        return AccountType.loan;
+      case 'mortgage':
+        return AccountType.mortgage;
+      case 'bnpl':
+        return AccountType.bnpl;
+      case 'otherLiability':
+        return AccountType.otherLiability;
       default:
         return AccountType.cash;
     }
