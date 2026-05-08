@@ -4,6 +4,11 @@ import WatchConnectivity
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  // WCSession.delegate is a weak reference. Without a strong owner here the
+  // WatchUserInfoBridge would be deallocated immediately after installation,
+  // leaving session.delegate == nil and causing WCErrorCodeSessionMissingDelegate.
+  private var _watchBridge: WatchUserInfoBridge?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -37,7 +42,8 @@ import WatchConnectivity
       binaryMessenger: messenger
     )
     let bridge = WatchUserInfoBridge(wrapping: original, channel: channel)
-    session.delegate = bridge
+    _watchBridge = bridge          // Strong retain — keeps bridge alive for the app lifetime
+    session.delegate = bridge      // WCSession.delegate is weak; _watchBridge prevents dealloc
     // Ensure activation if the plugin registered lazily (idempotent when activating).
     if session.activationState == .notActivated {
       session.activate()
