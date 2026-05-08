@@ -61,4 +61,24 @@ final class WatchUserInfoBridge: NSObject, WCSessionDelegate {
             self.channel.invokeMethod("onWatchUserInfo", arguments: userInfo)
         }
     }
+
+    // MARK: – Handle sendMessage with replyHandler (Watch Sync button)
+    // The watch_connectivity plugin's messageStream doesn't support reply handlers.
+    // For requestSync we reply immediately with the last applicationContext the phone
+    // pushed (which contains the full dashboard snapshot), so the Watch Sync button
+    // gets up-to-date stats without a round-trip async reply.
+    // For any other message type we forward to the original plugin delegate.
+    func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String: Any],
+        replyHandler: @escaping ([String: Any]) -> Void
+    ) {
+        let type = message["type"] as? String
+        if type == "requestSync" {
+            print("[PHONE_SYNC] requestSync via sendMessage — replying with applicationContext")
+            replyHandler(session.applicationContext)
+            return
+        }
+        original.session?(session, didReceiveMessage: message, replyHandler: replyHandler)
+    }
 }

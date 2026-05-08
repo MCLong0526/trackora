@@ -16,9 +16,9 @@ import '../services/prefs_service.dart';
 ///   MethodChannel (`onWatchUserInfo`). We also keep a messageStream
 ///   listener as a fallback for sendMessage-based delivery.
 ///
-/// Phone → watch: call [syncToWatch] to push the latest currency symbol
-///   via WCSession applicationContext. The full balance/budget push is
-///   handled by WidgetSyncService.push() on every dashboard rebuild.
+/// Phone → watch: WidgetSyncService.push() pushes the full dashboard
+///   snapshot (currency + totals + accounts + recentExpenses) via
+///   WCSession applicationContext on every dashboard rebuild.
 class WatchService {
   final WatchConnectivity _watch = WatchConnectivity();
   static const _watchQueueChannel = MethodChannel('trackora/watch_queue');
@@ -26,7 +26,6 @@ class WatchService {
 
   String? _userId;
   ExpenseRepository? _repository;
-  PrefsService? _prefsService;
 
   bool _subscribed = false;
 
@@ -40,7 +39,6 @@ class WatchService {
   }) async {
     _userId = userId;
     _repository = repository;
-    _prefsService = prefsService;
 
     if (_subscribed) return;
     _subscribed = true;
@@ -95,21 +93,11 @@ class WatchService {
     }
   }
 
-  /// Pushes the current currency symbol to the watch via applicationContext.
-  /// The full balance/budget push happens in WidgetSyncService.push().
-  Future<void> syncToWatch() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
-    try {
-      final currency = await _prefsService?.currencySymbol() ?? '\$';
-      final supported = await _watch.isSupported;
-      if (!supported) return;
-      await _watch.updateApplicationContext({'currency': currency});
-    } on MissingPluginException {
-      return;
-    } catch (_) {
-      // Best-effort; never throw from a sync call.
-    }
-  }
+  /// Full context sync is handled by WidgetSyncService.push() which pushes
+  /// currency + monthSpent + budget + savings + accounts + recentExpenses.
+  /// Pushing partial data here would replace that full context, so this is
+  /// intentionally a no-op. Call WidgetSyncService.push() for a full refresh.
+  Future<void> syncToWatch() async {}
 
   Future<void> dispose() async {
     await _sub?.cancel();
@@ -123,11 +111,6 @@ class WatchService {
     required ExpenseRepository repository,
   }) async {
     final type = message['type'] as String?;
-    if (type == 'requestSync') {
-      // Phone-side: push latest applicationContext back to watch.
-      await syncToWatch();
-      return;
-    }
     if (type != 'addExpense') return;
     final amount = (message['amount'] as num?)?.toDouble();
     final category = message['category'] as String?;
