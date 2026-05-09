@@ -10,6 +10,7 @@ import '../../models/borrow_lending.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/receipt_preview.dart';
 
 /// Add or edit a borrow / lending record.
@@ -177,12 +178,17 @@ class _AddEditBorrowLendingScreenState
           ),
         );
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(
+          context,
+          _isEdit ? 'Record updated' : 'Record saved',
+          type: AppToastType.success,
+        );
+        Navigator.pop(context);
+      }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t('common.saveFailed'))),
-        );
+        AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
       }
     } finally {
       if (mounted) setState(() => _saving = false);

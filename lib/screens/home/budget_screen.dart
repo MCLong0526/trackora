@@ -12,6 +12,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
@@ -90,7 +91,16 @@ Future<void> showMonthlyBudgetEditor(
     },
   );
   if (result != null) {
-    await ref.read(expenseRepositoryProvider).setMonthlyBudget(userId, result);
+    try {
+      await ref.read(expenseRepositoryProvider).setMonthlyBudget(userId, result);
+      if (context.mounted) {
+        AppToast.show(context, 'Budget updated', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(context, 'Failed to save budget', type: AppToastType.error);
+      }
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart' show kExpenseCategories;
 
@@ -186,12 +187,17 @@ class _AddEditInstallmentScreenState
       } else {
         await svc.add(user.uid, i);
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(
+          context,
+          _isEdit ? 'Installment updated' : 'Installment added',
+          type: AppToastType.success,
+        );
+        Navigator.pop(context);
+      }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.t('common.saveFailed'))));
+        AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -220,10 +226,19 @@ class _AddEditInstallmentScreenState
       ),
     );
     if (ok != true) return;
-    await ref
-        .read(installmentServiceProvider)
-        .delete(user.uid, widget.installment!.id);
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref
+          .read(installmentServiceProvider)
+          .delete(user.uid, widget.installment!.id);
+      if (mounted) {
+        AppToast.show(context, 'Installment deleted', type: AppToastType.success);
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+      }
+    }
   }
 
   Future<void> _toggleCancelled() async {
@@ -232,7 +247,17 @@ class _AddEditInstallmentScreenState
     final i = widget.installment!;
     final svc = ref.read(installmentServiceProvider);
     if (i.cancelled) {
-      await svc.reactivate(user.uid, i);
+      try {
+        await svc.reactivate(user.uid, i);
+        if (mounted) {
+          AppToast.show(context, 'Reactivated', type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (mounted) {
+          AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+        }
+      }
     } else {
       final ok = await showCupertinoDialog<bool>(
         context: context,
@@ -253,18 +278,36 @@ class _AddEditInstallmentScreenState
         ),
       );
       if (ok != true) return;
-      await svc.setCancelled(user.uid, i, true);
+      try {
+        await svc.setCancelled(user.uid, i, true);
+        if (mounted) {
+          AppToast.show(context, 'Installment cancelled', type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (mounted) {
+          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+        }
+      }
     }
-    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _markCompleted() async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null || !_isEdit) return;
-    await ref
-        .read(installmentServiceProvider)
-        .markCompleted(user.uid, widget.installment!);
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref
+          .read(installmentServiceProvider)
+          .markCompleted(user.uid, widget.installment!);
+      if (mounted) {
+        AppToast.show(context, 'Marked as completed', type: AppToastType.success);
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed to complete', type: AppToastType.error);
+      }
+    }
   }
 
   Future<void> _pickStartDate() async {

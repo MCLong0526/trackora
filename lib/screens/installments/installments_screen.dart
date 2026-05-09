@@ -9,6 +9,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/section_card.dart';
 import 'add_edit_installment_screen.dart';
 import 'installment_detail_screen.dart';
@@ -582,7 +583,16 @@ class _InstallmentSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await svc.markCompleted(userId!, installment);
+                try {
+                  await svc.markCompleted(userId!, installment);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Marked as completed', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to complete', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('inst.markCompleted')),
             ),
@@ -591,7 +601,16 @@ class _InstallmentSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await svc.reactivate(userId!, installment);
+                try {
+                  await svc.reactivate(userId!, installment);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Reactivated', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('inst.reactivate')),
             )
@@ -642,9 +661,18 @@ class _InstallmentSwipeActions extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref
-          .read(installmentServiceProvider)
-          .setCancelled(userId!, installment, true);
+      try {
+        await ref
+            .read(installmentServiceProvider)
+            .setCancelled(userId!, installment, true);
+        if (context.mounted) {
+          AppToast.show(context, 'Installment cancelled', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+        }
+      }
     }
   }
 
@@ -669,7 +697,16 @@ class _InstallmentSwipeActions extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(installmentServiceProvider).delete(userId!, installment.id);
+      try {
+        await ref.read(installmentServiceProvider).delete(userId!, installment.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Installment deleted', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

@@ -7,6 +7,7 @@ import '../../models/saving_plan.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 
 /// Create / edit a saving plan.
 ///
@@ -184,12 +185,17 @@ class _AddEditSavingPlanScreenState
           ),
         );
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(
+          context,
+          _isEdit ? 'Plan updated' : 'Plan created',
+          type: AppToastType.success,
+        );
+        Navigator.pop(context);
+      }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t('common.saveFailed'))),
-        );
+        AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
       }
     } finally {
       if (mounted) setState(() => _saving = false);

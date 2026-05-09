@@ -9,6 +9,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_installment_screen.dart';
 
 class InstallmentDetailScreen extends ConsumerWidget {
@@ -348,10 +349,22 @@ class _StatusCard extends ConsumerWidget {
         if (userId == null) return;
         HapticFeedback.selectionClick();
         final svc = ref.read(installmentServiceProvider);
-        if (paid) {
-          await svc.markUnpaid(userId!, inst, month);
-        } else {
-          await svc.markPaid(userId!, inst, month);
+        try {
+          if (paid) {
+            await svc.markUnpaid(userId!, inst, month);
+            if (context.mounted) {
+              AppToast.show(context, 'Marked as unpaid', type: AppToastType.success);
+            }
+          } else {
+            await svc.markPaid(userId!, inst, month);
+            if (context.mounted) {
+              AppToast.show(context, 'Marked as paid', type: AppToastType.success);
+            }
+          }
+        } catch (_) {
+          if (context.mounted) {
+            AppToast.show(context, 'Failed to update payment', type: AppToastType.error);
+          }
         }
       },
       child: Container(
@@ -600,17 +613,35 @@ class _ActionButtons extends ConsumerWidget {
                 onTap: isActive
                     ? () async {
                         if (userId == null) return;
-                        await ref
-                            .read(installmentServiceProvider)
-                            .markCompleted(userId!, inst);
-                        if (context.mounted) Navigator.pop(context);
+                        try {
+                          await ref
+                              .read(installmentServiceProvider)
+                              .markCompleted(userId!, inst);
+                          if (context.mounted) {
+                            AppToast.show(context, 'Marked as completed', type: AppToastType.success);
+                            Navigator.pop(context);
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to complete', type: AppToastType.error);
+                          }
+                        }
                       }
                     : isCancelled
                     ? () async {
                         if (userId == null) return;
-                        await ref
-                            .read(installmentServiceProvider)
-                            .reactivate(userId!, inst);
+                        try {
+                          await ref
+                              .read(installmentServiceProvider)
+                              .reactivate(userId!, inst);
+                          if (context.mounted) {
+                            AppToast.show(context, 'Reactivated', type: AppToastType.success);
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                          }
+                        }
                       }
                     : () {},
               ),
@@ -664,9 +695,18 @@ class _ActionButtons extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref
-          .read(installmentServiceProvider)
-          .setCancelled(userId!, inst, true);
+      try {
+        await ref
+            .read(installmentServiceProvider)
+            .setCancelled(userId!, inst, true);
+        if (context.mounted) {
+          AppToast.show(context, 'Installment cancelled', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+        }
+      }
     }
   }
 
@@ -691,8 +731,17 @@ class _ActionButtons extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(installmentServiceProvider).delete(userId!, inst.id);
-      if (context.mounted) Navigator.pop(context);
+      try {
+        await ref.read(installmentServiceProvider).delete(userId!, inst.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Installment deleted', type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

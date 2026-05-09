@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/person.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_person_screen.dart';
 
 const _avatarColors = [
@@ -200,7 +201,16 @@ class _PersonCard extends ConsumerWidget {
       confirmDismiss: (_) => _confirmDelete(context, ref),
       onDismissed: (_) async {
         if (userId == null) return;
-        await ref.read(personServiceProvider).delete(userId!, person.id);
+        try {
+          await ref.read(personServiceProvider).delete(userId!, person.id);
+          if (context.mounted) {
+            AppToast.show(context, 'Person removed', type: AppToastType.success);
+          }
+        } catch (_) {
+          if (context.mounted) {
+            AppToast.show(context, 'Failed to remove person', type: AppToastType.error);
+          }
+        }
       },
       child: GestureDetector(
         onTap: onTap,

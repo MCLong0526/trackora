@@ -8,6 +8,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_borrow_lending_screen.dart';
 import 'borrow_lending_detail_screen.dart';
 
@@ -582,9 +583,18 @@ class _BorrowSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await ref
-                    .read(borrowLendingServiceProvider)
-                    .markSettled(userId!, record);
+                try {
+                  await ref
+                      .read(borrowLendingServiceProvider)
+                      .markSettled(userId!, record);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Marked as settled', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to settle', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('bl.markSettled')),
             ),
@@ -626,7 +636,16 @@ class _BorrowSwipeActions extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(borrowLendingServiceProvider).delete(userId!, record.id);
+      try {
+        await ref.read(borrowLendingServiceProvider).delete(userId!, record.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Record deleted', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

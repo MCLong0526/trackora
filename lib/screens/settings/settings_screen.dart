@@ -16,6 +16,7 @@ import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
@@ -199,6 +200,14 @@ class SettingsScreen extends ConsumerWidget {
                     destructive: true,
                     onTap: () async {
                       await ref.read(authServiceProvider).signOut();
+                      if (context.mounted) {
+                        AppToast.show(
+                          context,
+                          'Signed out',
+                          type: AppToastType.info,
+                          icon: CupertinoIcons.square_arrow_right,
+                        );
+                      }
                       rootNavKey.currentState?.pushAndRemoveUntil(
                         CupertinoPageRoute(
                           builder: (_) => const WelcomeScreen(),
@@ -1419,13 +1428,17 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
     _onSyncState(SyncState.syncing);
     try {
       final user = ref.read(authStateProvider).valueOrNull;
-      if (user != null) {
-        await _sync.syncPendingIfAuthenticated(
-          localUserId: user.uid,
-          onState: _onSyncState,
-        );
+      if (user == null) {
+        _onSyncState(SyncState.failed);
+        return;
       }
-      await _sync.syncIfAuthenticated(onState: _onSyncState);
+      // Only sync pending changes for the authenticated user.
+      // Do NOT call syncIfAuthenticated here — that re-uploads the offline
+      // user's entire local store and can resurrect records deleted from Firebase.
+      await _sync.syncPendingIfAuthenticated(
+        localUserId: user.uid,
+        onState: _onSyncState,
+      );
       if (mounted) {
         setState(() => _lastSynced = DateTime.now());
         await ref.read(watchServiceProvider).syncToWatch();
@@ -1469,31 +1482,11 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   }
 
   void _showSuccessBanner() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        backgroundColor: AppColors.income,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: const Row(
-          children: [
-            Icon(
-              CupertinoIcons.checkmark_circle_fill,
-              color: Colors.white,
-              size: 20,
-            ),
-            SizedBox(width: 10),
-            Text(
-              'Sync complete',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        duration: const Duration(seconds: 3),
-      ),
+    AppToast.show(
+      context,
+      'Sync complete',
+      type: AppToastType.success,
+      icon: CupertinoIcons.checkmark_circle_fill,
     );
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) setState(() => _state = SyncState.idle);
@@ -1501,23 +1494,11 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        backgroundColor: AppColors.expense,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Text(
-          'Sync failed: $msg',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        duration: const Duration(seconds: 4),
-      ),
+    AppToast.show(
+      context,
+      'Sync failed',
+      type: AppToastType.error,
+      icon: CupertinoIcons.exclamationmark_circle_fill,
     );
   }
 

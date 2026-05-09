@@ -14,6 +14,7 @@ import '../../services/money_format.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/expense_card.dart';
 import '../../widgets/month_filter_bar.dart';
 import '../../widgets/profile_avatar_button.dart';
@@ -154,12 +155,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => const CalendarScreen(),
-                      ),
-                    ),
+                    onTap: () => CalendarDialog.show(context),
                     behavior: HitTestBehavior.opaque,
                     child: Row(
                       children: [
@@ -279,6 +275,14 @@ class DashboardScreen extends ConsumerWidget {
                                           uid, expense.id);
                                     }
                                   }
+                                  if (context.mounted) {
+                                    AppToast.show(
+                                      context,
+                                      'Record deleted',
+                                      type: AppToastType.info,
+                                      icon: CupertinoIcons.trash,
+                                    );
+                                  }
                                 },
                                 onCopy: () => _copyRecord(context, expense),
                               );
@@ -364,22 +368,18 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   void _copyRecord(BuildContext context, Expense original) {
-    _showCopiedToast(context);
+    AppToast.show(
+      context,
+      'Record has been copied',
+      type: AppToastType.info,
+      icon: CupertinoIcons.doc_on_doc,
+    );
     Navigator.push(
       context,
       CupertinoPageRoute(
         builder: (_) => AddEditExpenseScreen(copyFrom: original),
       ),
     );
-  }
-
-  void _showCopiedToast(BuildContext context) {
-    final overlay = Overlay.of(context, rootOverlay: true);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (ctx) => _CopiedToast(onDone: () => entry.remove()),
-    );
-    overlay.insert(entry);
   }
 
   void _showAllBillsSheet(
@@ -1444,91 +1444,3 @@ class _BillRow extends StatelessWidget {
   }
 }
 
-// ── Copied toast ───────────────────────────────────────────────
-
-class _CopiedToast extends StatefulWidget {
-  final VoidCallback onDone;
-
-  const _CopiedToast({required this.onDone});
-
-  @override
-  State<_CopiedToast> createState() => _CopiedToastState();
-}
-
-class _CopiedToastState extends State<_CopiedToast>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _ctrl.forward();
-    Future<void>.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted) {
-        _ctrl.reverse().then((_) => widget.onDone());
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      bottom: 120,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        child: FadeTransition(
-          opacity: _opacity,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.ink,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    CupertinoIcons.doc_on_doc,
-                    color: Colors.white,
-                    size: 15,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Record has been copied',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
