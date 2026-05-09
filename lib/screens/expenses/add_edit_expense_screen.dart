@@ -19,6 +19,7 @@ import '../../services/i18n.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/receipt_preview.dart';
 import '../../widgets/section_card.dart';
 
@@ -148,14 +149,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isAccountTransfer && _toAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a destination account')),
+      AppToast.show(
+        context,
+        'Please select a destination account',
+        type: AppToastType.error,
       );
       return;
     }
     if (_isAccountTransfer && _toAccountId == _accountId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Source and destination accounts must be different')),
+      AppToast.show(
+        context,
+        'Source and destination accounts must be different',
+        type: AppToastType.error,
       );
       return;
     }
@@ -297,13 +302,22 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       if (mounted) {
         if (!isOnline) {
           _showOfflineSavedBanner();
+        } else {
+          AppToast.show(
+            context,
+            _isEdit ? 'Entry updated' : 'Entry saved',
+            type: AppToastType.success,
+            icon: CupertinoIcons.checkmark_circle_fill,
+          );
         }
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${context.t('common.saveFailed')}: $e')),
+        AppToast.show(
+          context,
+          '${context.t('common.saveFailed')}: $e',
+          type: AppToastType.error,
         );
       }
     } finally {
@@ -312,30 +326,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
   }
 
   void _showOfflineSavedBanner() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        backgroundColor: const Color(0xFF2A6FB5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: const Row(
-          children: [
-            Icon(CupertinoIcons.cloud, color: Colors.white, size: 18),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Saved offline — will sync when connected',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-        duration: const Duration(seconds: 4),
-      ),
+    AppToast.show(
+      context,
+      'Saved offline — will sync when connected',
+      type: AppToastType.info,
+      icon: CupertinoIcons.cloud,
     );
   }
 

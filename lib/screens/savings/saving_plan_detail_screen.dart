@@ -8,6 +8,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plans_screen.dart' show spAccent, spTint;
 
@@ -173,15 +174,24 @@ Future<void> _showAddContributionSheet(
     },
   );
   if (amount == null || amount <= 0) return;
-  await ref.read(savingPlanServiceProvider).addContribution(
-        user.uid,
-        plan,
-        SavingContribution(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          amount: amount,
-          date: DateTime.now(),
-        ),
-      );
+  try {
+    await ref.read(savingPlanServiceProvider).addContribution(
+          user.uid,
+          plan,
+          SavingContribution(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            amount: amount,
+            date: DateTime.now(),
+          ),
+        );
+    if (context.mounted) {
+      AppToast.show(context, 'Contribution added', type: AppToastType.success);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+    }
+  }
 }
 
 class _Hero extends StatelessWidget {
@@ -540,7 +550,7 @@ class _SlotCell extends ConsumerWidget {
     }
 
     return GestureDetector(
-      onTap: () => _toggle(ref),
+      onTap: () => _toggle(ref, context),
       child: Container(
         decoration: BoxDecoration(
           color: bgColor,
@@ -594,7 +604,7 @@ class _SlotCell extends ConsumerWidget {
     return DateFormat('MMM').format(d);
   }
 
-  Future<void> _toggle(WidgetRef ref) async {
+  Future<void> _toggle(WidgetRef ref, BuildContext context) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final svc = ref.read(savingPlanServiceProvider);
@@ -611,19 +621,37 @@ class _SlotCell extends ConsumerWidget {
         }
       }
       if (targetId != null) {
-        await svc.removeContribution(user.uid, plan, targetId);
+        try {
+          await svc.removeContribution(user.uid, plan, targetId);
+          if (context.mounted) {
+            AppToast.show(context, 'Contribution removed', type: AppToastType.success);
+          }
+        } catch (_) {
+          if (context.mounted) {
+            AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
+          }
+        }
       }
     } else {
-      await svc.addContribution(
-        user.uid,
-        plan,
-        SavingContribution(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          amount: amount,
-          date: DateTime.now(),
-          slotIndex: slot,
-        ),
-      );
+      try {
+        await svc.addContribution(
+          user.uid,
+          plan,
+          SavingContribution(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            amount: amount,
+            date: DateTime.now(),
+            slotIndex: slot,
+          ),
+        );
+        if (context.mounted) {
+          AppToast.show(context, 'Contribution added', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+        }
+      }
     }
   }
 }
@@ -706,9 +734,18 @@ class _ContributionHistory extends ConsumerWidget {
                       onTap: () async {
                         final user = ref.read(authStateProvider).valueOrNull;
                         if (user == null) return;
-                        await ref
-                            .read(savingPlanServiceProvider)
-                            .removeContribution(user.uid, plan, c.id);
+                        try {
+                          await ref
+                              .read(savingPlanServiceProvider)
+                              .removeContribution(user.uid, plan, c.id);
+                          if (context.mounted) {
+                            AppToast.show(context, 'Contribution removed', type: AppToastType.success);
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
+                          }
+                        }
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(4),
@@ -766,17 +803,35 @@ class _ActionRow extends ConsumerWidget {
                     ? () async {
                         final user = ref.read(authStateProvider).valueOrNull;
                         if (user == null) return;
-                        await ref
-                            .read(savingPlanServiceProvider)
-                            .markCompleted(user.uid, plan);
+                        try {
+                          await ref
+                              .read(savingPlanServiceProvider)
+                              .markCompleted(user.uid, plan);
+                          if (context.mounted) {
+                            AppToast.show(context, 'Plan completed', type: AppToastType.success);
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
+                          }
+                        }
                       }
                     : isCancelled
                     ? () async {
                         final user = ref.read(authStateProvider).valueOrNull;
                         if (user == null) return;
-                        await ref
-                            .read(savingPlanServiceProvider)
-                            .setCancelled(user.uid, plan, false);
+                        try {
+                          await ref
+                              .read(savingPlanServiceProvider)
+                              .setCancelled(user.uid, plan, false);
+                          if (context.mounted) {
+                            AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                          }
+                        }
                       }
                     : () {},
               ),
@@ -795,9 +850,18 @@ class _ActionRow extends ConsumerWidget {
                   onTap: () async {
                     final user = ref.read(authStateProvider).valueOrNull;
                     if (user == null) return;
-                    await ref
-                        .read(savingPlanServiceProvider)
-                        .setCancelled(user.uid, plan, true);
+                    try {
+                      await ref
+                          .read(savingPlanServiceProvider)
+                          .setCancelled(user.uid, plan, true);
+                      if (context.mounted) {
+                        AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+                      }
+                    }
                   },
                 ),
               )
@@ -840,8 +904,17 @@ class _ActionRow extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
-      if (context.mounted) Navigator.pop(context);
+      try {
+        await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Plan deleted', type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

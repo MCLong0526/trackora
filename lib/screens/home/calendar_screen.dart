@@ -869,3 +869,711 @@ class _SummaryTile extends StatelessWidget {
     );
   }
 }
+
+// ── Calendar Modal Dialog ──────────────────────────────────────
+
+class CalendarDialog extends ConsumerStatefulWidget {
+  const CalendarDialog({super.key});
+
+  static Future<void> show(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CalendarDialog(),
+    );
+  }
+
+  @override
+  ConsumerState<CalendarDialog> createState() => _CalendarDialogState();
+}
+
+class _CalendarDialogState extends ConsumerState<CalendarDialog> {
+  late DateTime _month;
+  DateTime? _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month, 1);
+    _selectedDay = DateTime(now.year, now.month, now.day);
+  }
+
+  void _goToToday() {
+    HapticFeedback.selectionClick();
+    final now = DateTime.now();
+    setState(() {
+      _month = DateTime(now.year, now.month, 1);
+      _selectedDay = DateTime(now.year, now.month, now.day);
+    });
+  }
+
+  void _prevMonth() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _month = DateTime(_month.year, _month.month - 1, 1);
+      _selectedDay = null;
+    });
+  }
+
+  void _nextMonth() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _month = DateTime(_month.year, _month.month + 1, 1);
+      _selectedDay = null;
+    });
+  }
+
+  Map<int, ({bool hasExpense, bool hasIncome})> _computeDayDots(
+    List<Expense> expenses,
+  ) {
+    final map = <int, ({bool hasExpense, bool hasIncome})>{};
+    for (final e in expenses) {
+      final day = e.date.day;
+      final prev = map[day] ?? (hasExpense: false, hasIncome: false);
+      if (e.type.isOutflow) {
+        map[day] = (hasExpense: true, hasIncome: prev.hasIncome);
+      } else if (e.type.isInflow) {
+        map[day] = (hasExpense: prev.hasExpense, hasIncome: true);
+      }
+    }
+    return map;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final allExpenses =
+        ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+
+    final monthExpenses = allExpenses
+        .where(
+          (e) => e.date.year == _month.year && e.date.month == _month.month,
+        )
+        .toList();
+    final dayDots = _computeDayDots(monthExpenses);
+
+    final selectedDayExpenses = _selectedDay == null
+        ? const <Expense>[]
+        : (allExpenses
+              .where(
+                (e) =>
+                    e.date.year == _selectedDay!.year &&
+                    e.date.month == _selectedDay!.month &&
+                    e.date.day == _selectedDay!.day,
+              )
+              .toList()
+            ..sort((a, b) => b.date.compareTo(a.date)));
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DialogCalendarCard(
+                        month: _month,
+                        dayDots: dayDots,
+                        selectedDay: _selectedDay,
+                        recordCount: monthExpenses.length,
+                        onPrev: _prevMonth,
+                        onNext: _nextMonth,
+                        onToday: _goToToday,
+                        onDayTap: (day) {
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedDay = day);
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      if (_selectedDay != null)
+                        _DialogDaySection(
+                          day: _selectedDay!,
+                          expenses: selectedDayExpenses,
+                          symbol: symbol,
+                          accounts: accounts,
+                          onAddExpense: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              CupertinoPageRoute(
+                                builder: (_) => const AddEditExpenseScreen(),
+                              ),
+                            );
+                          },
+                          onTapExpense: (expense) {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              CupertinoPageRoute(
+                                builder: (_) =>
+                                    AddEditExpenseScreen(expense: expense),
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogCalendarCard extends StatelessWidget {
+  final DateTime month;
+  final Map<int, ({bool hasExpense, bool hasIncome})> dayDots;
+  final DateTime? selectedDay;
+  final int recordCount;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
+  final ValueChanged<DateTime> onDayTap;
+
+  const _DialogCalendarCard({
+    required this.month,
+    required this.dayDots,
+    required this.selectedDay,
+    required this.recordCount,
+    required this.onPrev,
+    required this.onNext,
+    required this.onToday,
+    required this.onDayTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final firstWeekday = DateTime(month.year, month.month, 1).weekday;
+    final leadingBlanks = firstWeekday % 7;
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      DateFormat('MMMM yyyy').format(month),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: brand.ink,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: brand.inkSoft.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$recordCount',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: onToday,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Today',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: onPrev,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.chevron_left,
+                    size: 14,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onNext,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 14,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: weekdays
+                .map(
+                  (d) => Expanded(
+                    child: Center(
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 6),
+          LayoutBuilder(
+            builder: (_, constraints) {
+              final cellW = constraints.maxWidth / 7;
+              final cellH = cellW * 1.15;
+              final totalCells = leadingBlanks + daysInMonth;
+              final rowCount = (totalCells / 7).ceil();
+              final now = DateTime.now();
+
+              return Column(
+                children: List.generate(rowCount, (row) {
+                  return Row(
+                    children: List.generate(7, (col) {
+                      final idx = row * 7 + col;
+                      if (idx < leadingBlanks || idx >= totalCells) {
+                        return SizedBox(width: cellW, height: cellH);
+                      }
+                      final dayNum = idx - leadingBlanks + 1;
+                      final date =
+                          DateTime(month.year, month.month, dayNum);
+                      final dots = dayDots[dayNum];
+                      final isSelected = selectedDay != null &&
+                          selectedDay!.year == date.year &&
+                          selectedDay!.month == date.month &&
+                          selectedDay!.day == date.day;
+                      final isToday = now.year == date.year &&
+                          now.month == date.month &&
+                          now.day == date.day;
+
+                      return SizedBox(
+                        width: cellW,
+                        height: cellH,
+                        child: _DotCell(
+                          dayNum: dayNum,
+                          dots: dots,
+                          isSelected: isSelected,
+                          isToday: isToday,
+                          onTap: () => onDayTap(date),
+                        ),
+                      );
+                    }),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DotCell extends StatelessWidget {
+  final int dayNum;
+  final ({bool hasExpense, bool hasIncome})? dots;
+  final bool isSelected;
+  final bool isToday;
+  final VoidCallback onTap;
+
+  const _DotCell({
+    required this.dayNum,
+    required this.dots,
+    required this.isSelected,
+    required this.isToday,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final hasExpense = dots?.hasExpense ?? false;
+    final hasIncome = dots?.hasIncome ?? false;
+
+    final Color dayColor;
+    final Color? circleColor;
+    final Border? circleBorder;
+
+    if (isSelected) {
+      circleColor = brand.inkSoft.withValues(alpha: 0.18);
+      dayColor = brand.ink;
+      circleBorder = isToday
+          ? Border.all(color: const Color(0xFF3D6FD4), width: 1.5)
+          : null;
+    } else if (isToday) {
+      circleColor = null;
+      dayColor = const Color(0xFF3D6FD4);
+      circleBorder = Border.all(color: const Color(0xFF3D6FD4), width: 1.5);
+    } else {
+      circleColor = null;
+      dayColor = brand.ink;
+      circleBorder = null;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: circleColor,
+              shape: BoxShape.circle,
+              border: circleBorder,
+            ),
+            child: Center(
+              child: Text(
+                '$dayNum',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight:
+                      isToday || isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: dayColor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasIncome)
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: AppColors.income,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              if (hasIncome && hasExpense) const SizedBox(width: 2),
+              if (hasExpense)
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: AppColors.expense,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DialogDaySection extends StatelessWidget {
+  final DateTime day;
+  final List<Expense> expenses;
+  final String symbol;
+  final List<dynamic> accounts;
+  final VoidCallback onAddExpense;
+  final void Function(Expense) onTapExpense;
+
+  const _DialogDaySection({
+    required this.day,
+    required this.expenses,
+    required this.symbol,
+    required this.accounts,
+    required this.onAddExpense,
+    required this.onTapExpense,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final countLabel = expenses.isEmpty
+        ? 'NO RECORDS'
+        : '${expenses.length} ${expenses.length == 1 ? 'RECORD' : 'RECORDS'}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            '${DateFormat('EEEE, MMMM d').format(day).toUpperCase()} · $countLabel',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: brand.inkSoft,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+        if (expenses.isNotEmpty)
+          Container(
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < expenses.length; i++) ...[
+                  if (i > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 46),
+                      child: Container(height: 0.5, color: brand.divider),
+                    ),
+                  _DialogTransactionRow(
+                    expense: expenses[i],
+                    symbol: symbol,
+                    account: accounts
+                        .where((a) => a.id == expenses[i].accountId)
+                        .firstOrNull,
+                    onTap: () => onTapExpense(expenses[i]),
+                  ),
+                ],
+              ],
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 26),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    CupertinoIcons.doc_text,
+                    size: 28,
+                    color: brand.inkSoft,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No records for this day',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: onAddExpense,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: brand.accentDark,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    CupertinoIcons.plus,
+                    size: 14,
+                    color: foregroundOn(brand.accentDark),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Add Entry',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogTransactionRow extends StatelessWidget {
+  final Expense expense;
+  final String symbol;
+  final dynamic account;
+  final VoidCallback onTap;
+
+  const _DialogTransactionRow({
+    required this.expense,
+    required this.symbol,
+    required this.account,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isIncome =
+        expense.type == EntryType.income || expense.type == EntryType.receive;
+    final style =
+        (expense.type == EntryType.transfer ||
+                expense.type == EntryType.receive)
+            ? CategoryStyle(
+                background: AppColors.blush,
+                accent: AppColors.expense,
+                icon: CupertinoIcons.arrow_right_arrow_left_circle_fill,
+              )
+            : styleFor(expense.category);
+
+    final timeStr = DateFormat('HH:mm').format(expense.date);
+    final categoryLabel = context.categoryLabel(expense.category);
+
+    final amountStr = isIncome
+        ? formatMoney(symbol, expense.amount, forceSign: true)
+        : formatMoney(symbol, -expense.amount);
+    final amountColor = isIncome ? AppColors.income : brand.ink;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: isIncome ? AppColors.income : style.accent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              timeStr,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: brand.inkSoft,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                expense.note.trim().isEmpty
+                    ? categoryLabel
+                    : expense.note.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: brand.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              amountStr,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: amountColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

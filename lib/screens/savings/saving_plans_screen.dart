@@ -6,6 +6,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plan_detail_screen.dart';
 
@@ -628,9 +629,18 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await ref
-                    .read(savingPlanServiceProvider)
-                    .markCompleted(userId!, plan);
+                try {
+                  await ref
+                      .read(savingPlanServiceProvider)
+                      .markCompleted(userId!, plan);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan completed', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('inst.markCompleted')),
             ),
@@ -639,9 +649,18 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await ref
-                    .read(savingPlanServiceProvider)
-                    .setCancelled(userId!, plan, false);
+                try {
+                  await ref
+                      .read(savingPlanServiceProvider)
+                      .setCancelled(userId!, plan, false);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('inst.reactivate')),
             )
@@ -651,9 +670,18 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (userId == null) return;
-                await ref
-                    .read(savingPlanServiceProvider)
-                    .setCancelled(userId!, plan, true);
+                try {
+                  await ref
+                      .read(savingPlanServiceProvider)
+                      .setCancelled(userId!, plan, true);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+                  }
+                }
               },
               child: Text(context.t('common.cancel')),
             ),
@@ -734,15 +762,24 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
     );
     controller.dispose();
     if (amount == null || amount <= 0) return;
-    await ref.read(savingPlanServiceProvider).addContribution(
-          userId!,
-          plan,
-          SavingContribution(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
-            amount: amount,
-            date: DateTime.now(),
-          ),
-        );
+    try {
+      await ref.read(savingPlanServiceProvider).addContribution(
+            userId!,
+            plan,
+            SavingContribution(
+              id: DateTime.now().microsecondsSinceEpoch.toString(),
+              amount: amount,
+              date: DateTime.now(),
+            ),
+          );
+      if (context.mounted) {
+        AppToast.show(context, 'Contribution added', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+      }
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
@@ -766,7 +803,16 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref.read(savingPlanServiceProvider).delete(userId!, plan.id);
+      try {
+        await ref.read(savingPlanServiceProvider).delete(userId!, plan.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Plan deleted', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/person.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 
 /// Avatar background colors (indices 0–7) matching brand pastels.
 const _avatarColors = [
@@ -85,7 +86,18 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
       } else {
         await svc.add(user.uid, person);
       }
-      if (mounted) Navigator.pop(context, person);
+      if (mounted) {
+        AppToast.show(
+          context,
+          _isEdit ? 'Person updated' : 'Person added',
+          type: AppToastType.success,
+        );
+        Navigator.pop(context, person);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed to save person', type: AppToastType.error);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

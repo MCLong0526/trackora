@@ -6,6 +6,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../models/account.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/section_card.dart';
 
 const _kCustomLabel = 'Other / Custom';
@@ -187,11 +188,20 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         );
         await repo.add(user.uid, account);
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(
+          context,
+          _isEdit ? 'Account updated' : 'Account created',
+          type: AppToastType.success,
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
+        AppToast.show(
+          context,
+          'Failed to save account',
+          type: AppToastType.error,
         );
       }
     } finally {
@@ -227,7 +237,10 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     await ref
         .read(accountRepositoryProvider)
         .delete(user.uid, widget.account!.id);
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      AppToast.show(context, 'Account deleted', type: AppToastType.success);
+      Navigator.pop(context);
+    }
   }
 
   @override

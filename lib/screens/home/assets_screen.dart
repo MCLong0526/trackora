@@ -210,7 +210,7 @@ class _Header extends StatelessWidget {
 
 // ── Net Worth Hero Card ───────────────────────────────────────────────────────
 
-class _NetWorthCard extends StatelessWidget {
+class _NetWorthCard extends StatefulWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
@@ -222,36 +222,64 @@ class _NetWorthCard extends StatelessWidget {
   });
 
   @override
+  State<_NetWorthCard> createState() => _NetWorthCardState();
+}
+
+class _NetWorthCardState extends State<_NetWorthCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF201E2C) : const Color(0xFFEDE9FF);
     final ink = isDark ? brand.ink : const Color(0xFF111028);
     final soft = isDark ? brand.inkSoft : const Color(0xFF686176);
-    final netWorth = snapshot.netWorth;
+    final netWorth = widget.snapshot.netWorth;
     final netColor = netWorth < 0 ? AppColors.expense : ink;
 
-    return SectionCard(
-      color: bg,
-      pastel: !isDark,
-      radius: 26,
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top row: NET WORTH label
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: SectionCard(
+          color: bg,
+          pastel: !isDark,
+          radius: 26,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top row: label + account count
               Row(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    CupertinoIcons.chart_pie_fill,
-                    size: 11,
-                    color: soft,
-                  ),
-                  const SizedBox(width: 5),
+                  Icon(CupertinoIcons.chart_pie_fill, size: 10, color: soft),
+                  const SizedBox(width: 4),
                   Text(
                     'NET WORTH',
                     style: TextStyle(
@@ -261,145 +289,146 @@ class _NetWorthCard extends StatelessWidget {
                       color: soft,
                     ),
                   ),
+                  const Spacer(),
+                  Text(
+                    '${widget.snapshot.accounts.length} account${widget.snapshot.accounts.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: soft,
+                    ),
+                  ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Large net worth amount
-          MaskedAmount(
-            visibleText: formatMoney(symbol, netWorth),
-            visible: visible,
-            currencyPrefix: symbol,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w900,
-              color: netColor,
-              height: 1.0,
-              letterSpacing: -1,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            '${snapshot.accounts.length} account${snapshot.accounts.length == 1 ? '' : 's'} tracked',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: soft,
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Asset/liability split bar
-          _AssetLiabilityBar(snapshot: snapshot),
-          const SizedBox(height: 8),
-          // Small split labels
-          Row(
-            children: [
+              const SizedBox(height: 8),
+              // Animated net worth amount
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: netWorth),
+                duration: const Duration(milliseconds: 650),
+                curve: Curves.easeOutCubic,
+                builder: (_, value, _) => MaskedAmount(
+                  visibleText: formatMoney(widget.symbol, value),
+                  visible: widget.visible,
+                  currencyPrefix: widget.symbol,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: netColor,
+                    height: 1.0,
+                    letterSpacing: -1,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Asset/liability split bar
+              _AssetLiabilityBar(snapshot: widget.snapshot),
+              const SizedBox(height: 6),
+              // Split labels
               Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.income,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Assets',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: soft,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Liabilities',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: soft,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.expense,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(height: 0.5, color: soft.withValues(alpha: 0.18)),
+              const SizedBox(height: 12),
+              // Assets & Liabilities tiles
+              Row(
+                children: [
+                  Expanded(
+                    child: _WorthTile(
+                      label: 'Assets',
+                      value: widget.snapshot.totalAssets,
+                      symbol: widget.symbol,
+                      visible: widget.visible,
                       color: AppColors.income,
-                      shape: BoxShape.circle,
+                      icon: CupertinoIcons.arrow_up_right,
+                      isDark: isDark,
+                      onTap: () => _showBreakdown(
+                        context,
+                        title: 'Assets',
+                        color: AppColors.income,
+                        icon: CupertinoIcons.arrow_up_right,
+                        items: _buildAssetItems(widget.snapshot),
+                        total: widget.snapshot.totalAssets,
+                        symbol: widget.symbol,
+                        visible: widget.visible,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Assets',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: soft,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Liabilities',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: soft,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _WorthTile(
+                      label: 'Liabilities',
+                      value: widget.snapshot.totalLiabilities,
+                      symbol: widget.symbol,
+                      visible: widget.visible,
                       color: AppColors.expense,
-                      shape: BoxShape.circle,
+                      icon: CupertinoIcons.arrow_down_right,
+                      isDark: isDark,
+                      onTap: () => _showBreakdown(
+                        context,
+                        title: 'Liabilities',
+                        color: AppColors.expense,
+                        icon: CupertinoIcons.arrow_down_right,
+                        items: _buildLiabilityItems(widget.snapshot),
+                        total: widget.snapshot.totalLiabilities,
+                        symbol: widget.symbol,
+                        visible: widget.visible,
+                      ),
                     ),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Subtle divider
-          Container(
-            height: 0.5,
-            color: soft.withValues(alpha: 0.18),
-          ),
-          const SizedBox(height: 16),
-          // Assets & Liabilities tiles
-          Row(
-            children: [
-              Expanded(
-                child: _WorthTile(
-                  label: 'Assets',
-                  value: snapshot.totalAssets,
-                  symbol: symbol,
-                  visible: visible,
-                  color: AppColors.income,
-                  icon: CupertinoIcons.arrow_up_right,
-                  isDark: isDark,
-                  onTap: () => _showBreakdown(
-                    context,
-                    title: 'Assets',
-                    color: AppColors.income,
-                    icon: CupertinoIcons.arrow_up_right,
-                    items: _buildAssetItems(snapshot),
-                    total: snapshot.totalAssets,
-                    symbol: symbol,
-                    visible: visible,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _WorthTile(
-                  label: 'Liabilities',
-                  value: snapshot.totalLiabilities,
-                  symbol: symbol,
-                  visible: visible,
-                  color: AppColors.expense,
-                  icon: CupertinoIcons.arrow_down_right,
-                  isDark: isDark,
-                  onTap: () => _showBreakdown(
-                    context,
-                    title: 'Liabilities',
-                    color: AppColors.expense,
-                    icon: CupertinoIcons.arrow_down_right,
-                    items: _buildLiabilityItems(snapshot),
-                    total: snapshot.totalLiabilities,
-                    symbol: symbol,
-                    visible: visible,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

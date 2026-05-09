@@ -18,6 +18,7 @@ private extension Color {
     static let income     = Color(red: 0.349, green: 0.761, blue: 0.541) // #59C28A
     static let expense    = Color(red: 0.914, green: 0.420, blue: 0.420) // #E96B6B
     static let lilac      = Color(red: 0.894, green: 0.843, blue: 0.961) // #E4D7F5
+    static let cta        = Color(red: 0.388, green: 0.400, blue: 0.945) // #6366F1 — matches mobile FAB
 }
 
 struct ContentView: View {
@@ -174,8 +175,8 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(Color.accent)
-            .foregroundColor(.black.opacity(0.75))
+            .background(Color.cta)
+            .foregroundColor(.white)
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)

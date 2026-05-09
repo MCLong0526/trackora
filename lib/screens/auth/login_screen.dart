@@ -10,6 +10,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../home/home_shell.dart';
 import 'signup_screen.dart';
 import 'welcome_screen.dart';
@@ -277,6 +278,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _goHome() {
     if (!mounted) return;
+    AppToast.show(
+      context,
+      'Signed in successfully',
+      type: AppToastType.success,
+      icon: CupertinoIcons.checkmark_seal_fill,
+    );
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeShell()),
       (route) => false,
@@ -521,16 +528,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   email: emailCtrl.text.trim(),
                 );
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password reset email sent. Check your inbox.'),
-                    ),
+                  AppToast.show(
+                    context,
+                    'Password reset email sent. Check your inbox.',
+                    type: AppToastType.success,
                   );
                 }
               } catch (_) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Could not send reset email.')),
+                  AppToast.show(
+                    context,
+                    'Could not send reset email.',
+                    type: AppToastType.error,
                   );
                 }
               }

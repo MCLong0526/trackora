@@ -8,6 +8,7 @@ import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/receipt_preview.dart';
 import 'add_edit_borrow_lending_screen.dart';
 
@@ -369,9 +370,18 @@ class _RepaymentHistory extends ConsumerWidget {
             onTap: () async {
               final user = ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
-              await ref
-                  .read(borrowLendingServiceProvider)
-                  .removeRepayment(user.uid, record, r.id);
+              try {
+                await ref
+                    .read(borrowLendingServiceProvider)
+                    .removeRepayment(user.uid, record, r.id);
+                if (context.mounted) {
+                  AppToast.show(context, 'Repayment removed', type: AppToastType.success);
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(context, 'Failed to remove repayment', type: AppToastType.error);
+                }
+              }
             },
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -442,15 +452,24 @@ class _RepaymentHistory extends ConsumerWidget {
       },
     );
     if (amount == null || amount <= 0) return;
-    await ref.read(borrowLendingServiceProvider).addRepayment(
-          user.uid,
-          record,
-          BorrowLendingRepayment(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
-            amount: amount,
-            date: DateTime.now(),
-          ),
-        );
+    try {
+      await ref.read(borrowLendingServiceProvider).addRepayment(
+            user.uid,
+            record,
+            BorrowLendingRepayment(
+              id: DateTime.now().microsecondsSinceEpoch.toString(),
+              amount: amount,
+              date: DateTime.now(),
+            ),
+          );
+      if (context.mounted) {
+        AppToast.show(context, 'Repayment added', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(context, 'Failed to add repayment', type: AppToastType.error);
+      }
+    }
   }
 }
 
@@ -483,9 +502,18 @@ class _ActionRow extends ConsumerWidget {
             onTap: () async {
               final user = ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
-              await ref
-                  .read(borrowLendingServiceProvider)
-                  .markSettled(user.uid, record);
+              try {
+                await ref
+                    .read(borrowLendingServiceProvider)
+                    .markSettled(user.uid, record);
+                if (context.mounted) {
+                  AppToast.show(context, 'Marked as settled', type: AppToastType.success);
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(context, 'Failed to settle', type: AppToastType.error);
+                }
+              }
             },
           ),
         if (record.status == BorrowLendingStatus.cancelled)
@@ -495,9 +523,18 @@ class _ActionRow extends ConsumerWidget {
             onTap: () async {
               final user = ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
-              await ref
-                  .read(borrowLendingServiceProvider)
-                  .setCancelled(user.uid, record, false);
+              try {
+                await ref
+                    .read(borrowLendingServiceProvider)
+                    .setCancelled(user.uid, record, false);
+                if (context.mounted) {
+                  AppToast.show(context, 'Reactivated', type: AppToastType.success);
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                }
+              }
             },
           )
         else if (record.status != BorrowLendingStatus.settled)
@@ -508,9 +545,18 @@ class _ActionRow extends ConsumerWidget {
             onTap: () async {
               final user = ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
-              await ref
-                  .read(borrowLendingServiceProvider)
-                  .setCancelled(user.uid, record, true);
+              try {
+                await ref
+                    .read(borrowLendingServiceProvider)
+                    .setCancelled(user.uid, record, true);
+                if (context.mounted) {
+                  AppToast.show(context, 'Cancelled', type: AppToastType.success);
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+                }
+              }
             },
           ),
         _ActionBtn(
@@ -545,10 +591,19 @@ class _ActionRow extends ConsumerWidget {
       ),
     );
     if (ok == true) {
-      await ref
-          .read(borrowLendingServiceProvider)
-          .delete(user.uid, record.id);
-      if (context.mounted) Navigator.pop(context);
+      try {
+        await ref
+            .read(borrowLendingServiceProvider)
+            .delete(user.uid, record.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Record deleted', type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+        }
+      }
     }
   }
 }

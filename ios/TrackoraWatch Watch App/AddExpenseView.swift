@@ -252,9 +252,9 @@ struct AddExpenseView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(amount > 0
-                    ? Color(red: 0.812, green: 0.937, blue: 0.886)
+                    ? Color(red: 0.388, green: 0.400, blue: 0.945)
                     : Color(white: 0.2))
-                .foregroundColor(amount > 0 ? Color(white: 0.1) : Color(white: 0.35))
+                .foregroundColor(amount > 0 ? .white : Color(white: 0.35))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
