@@ -41,7 +41,7 @@ class DashboardScreen extends ConsumerWidget {
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final monthSpent = monthExpenses
-        .where((e) => e.type.isOutflow)
+        .where((e) => e.type == EntryType.expense)
         .fold<double>(0, (s, e) => s + e.amount);
 
     final monthIncome = monthExpenses
@@ -65,7 +65,7 @@ class DashboardScreen extends ConsumerWidget {
     double todaySpent = 0;
     double weekSpent = 0;
     for (final e in allExpenses) {
-      if (!e.type.isOutflow) continue;
+      if (e.type != EntryType.expense) continue;
       if (!e.date.isBefore(todayStart)) todaySpent += e.amount;
       if (!e.date.isBefore(weekStart)) weekSpent += e.amount;
     }

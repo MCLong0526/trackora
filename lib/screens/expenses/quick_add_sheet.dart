@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_config.dart';
+import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
@@ -11,38 +12,32 @@ import '../../services/money_format.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_expense_screen.dart' show kExpenseCategories;
 
-/// Compact quick-add dialog — opens directly from the iOS widget's
-/// **Custom** button (`trackora://quickadd`) and from the small
-/// widget's chrome tap.
-///
-/// Why this exists: iOS WidgetKit does not allow text input inside a
-/// widget. The next best thing is to pop up a tiny dialog that's still
-/// faster than the full add-expense screen — keypad amount entry, a row
-/// of category chips, save. The full screen remains available via the
-/// FAB / `trackora://add`.
-///
-/// On save the widget's shared totals are nudged optimistically so the
-/// home screen reflects the new entry without waiting for the next
-/// dashboard rebuild (the dashboard still re-pushes authoritative
-/// numbers when reopened).
+/// Compact quick-add dialog — opens from iOS Back Tap, widget deep-links,
+/// Siri shortcut (`trackora://quickadd`), or the Action Button.
 class QuickAddSheet extends ConsumerStatefulWidget {
-  /// Optional preset amount. Used by the iOS-16 fallback link
-  /// `trackora://quickadd?amount=10` so older iOS still gets a one-tap
-  /// flow even without App Intents.
   final double? presetAmount;
+  final String? presetCategory;
 
-  const QuickAddSheet({super.key, this.presetAmount});
+  const QuickAddSheet({super.key, this.presetAmount, this.presetCategory});
 
-  static Future<void> show(BuildContext context, {double? presetAmount}) {
+  static Future<void> show(
+    BuildContext context, {
+    double? presetAmount,
+    String? presetCategory,
+  }) {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: context.t('quickAdd.title'),
       barrierColor: Colors.black.withValues(alpha: 0.42),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (_, _, _) => QuickAddSheet(presetAmount: presetAmount),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (_, _, _) => QuickAddSheet(
+        presetAmount: presetAmount,
+        presetCategory: presetCategory,
+      ),
       transitionBuilder: (_, animation, _, child) {
         final curved = CurvedAnimation(
           parent: animation,
@@ -50,8 +45,11 @@ class QuickAddSheet extends ConsumerStatefulWidget {
         );
         return FadeTransition(
           opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.08),
+              end: Offset.zero,
+            ).animate(curved),
             child: child,
           ),
         );
@@ -68,6 +66,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   int _amountCents = 0;
   String _category = kExpenseCategories.first;
+  String? _accountId;
+  final _noteCtrl = TextEditingController();
   bool _saving = false;
   String? _error;
 
@@ -79,6 +79,16 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     if (widget.presetAmount != null && widget.presetAmount! > 0) {
       _amountCents = _toCents(widget.presetAmount!);
     }
+    if (widget.presetCategory != null &&
+        kExpenseCategories.contains(widget.presetCategory)) {
+      _category = widget.presetCategory!;
+    }
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    super.dispose();
   }
 
   int _toCents(double amount) {
@@ -140,9 +150,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       amount: amount,
       category: _category,
-      note: 'Quick add',
+      note: _noteCtrl.text.trim(),
       date: now,
       type: EntryType.expense,
+      accountId: _accountId,
       createdAt: now,
       updatedAt: now,
     );
@@ -151,7 +162,6 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (isOnline) {
         await repo.addExpense(user.uid, expense);
       } else {
-        // Offline: save to local Hive and mark pending.
         await LocalExpenseRepository().upsertExpense(user.uid, expense);
         if (storageMode == StorageMode.firebase) {
           await SyncService().markPending(user.uid, expense.id);
@@ -165,7 +175,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             nextDraftAmount: amount,
           );
       HapticFeedback.mediumImpact();
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(
+          context,
+          isOnline ? 'Expense saved' : 'Saved offline — will sync when connected',
+          type: AppToastType.success,
+          icon: CupertinoIcons.checkmark_circle_fill,
+        );
+        Navigator.pop(context);
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -176,158 +194,413 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     }
   }
 
+  void _showAccountPicker(List<Account> accounts, BrandColors brand) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: brand.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 360,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: Text(
+                  'Select Account',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    ListTile(
+                      leading: Icon(CupertinoIcons.xmark_circle, color: brand.inkSoft),
+                      title: Text('None', style: TextStyle(color: brand.inkSoft)),
+                      trailing: _accountId == null
+                          ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                          : null,
+                      onTap: () {
+                        setState(() => _accountId = null);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    ...accounts.map((a) {
+                      final isSelected = _accountId == a.id;
+                      return ListTile(
+                        leading: Icon(
+                          _iconForAccountType(a.type),
+                          color: _accentForAccountType(a.type),
+                        ),
+                        title: Text(
+                          a.name,
+                          style: TextStyle(
+                            color: brand.ink,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          a.type.label,
+                          style: TextStyle(color: brand.inkSoft),
+                        ),
+                        trailing: isSelected
+                            ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                            : null,
+                        onTap: () {
+                          setState(() => _accountId = a.id);
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _iconForAccountType(AccountType type) {
+    switch (type) {
+      case AccountType.bank: return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet: return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash: return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.creditCard: return CupertinoIcons.creditcard_fill;
+      case AccountType.loan: return CupertinoIcons.doc_text_fill;
+      case AccountType.mortgage: return CupertinoIcons.house_fill;
+      case AccountType.bnpl: return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability: return CupertinoIcons.minus_circle_fill;
+    }
+  }
+
+  Color _accentForAccountType(AccountType type) {
+    switch (type) {
+      case AccountType.bank: return const Color(0xFF2A6FB5);
+      case AccountType.eWallet: return const Color(0xFF8B5CF6);
+      case AccountType.cash: return const Color(0xFF2A7D5A);
+      case AccountType.creditCard:
+      case AccountType.loan:
+      case AccountType.mortgage:
+      case AccountType.bnpl:
+      case AccountType.otherLiability: return AppColors.expense;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final selectedAccount = accounts.where((a) => a.id == _accountId).firstOrNull;
 
     return SafeArea(
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.fromLTRB(
+          16,
           20,
-          20,
-          20,
+          16,
           MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: Center(
           child: SingleChildScrollView(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Material(
                 color: Colors.transparent,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 28,
-                        offset: const Offset(0, 12),
+                        color: Colors.black.withValues(alpha: 0.20),
+                        blurRadius: 32,
+                        offset: const Offset(0, 14),
                       ),
                     ],
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              context.t('quickAdd.title'),
-                              style: Theme.of(context).textTheme.titleLarge,
+                      // Header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                context.t('quickAdd.title'),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: brand.ink,
+                                ),
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(CupertinoIcons.xmark, size: 20),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: () => Navigator.pop(context),
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: brand.background,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  CupertinoIcons.xmark,
+                                  size: 14,
+                                  color: brand.inkSoft,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      _AmountDisplay(
-                        value: formatMoney(symbol, _amount),
-                        muted: _amountCents == 0,
+                      const SizedBox(height: 16),
+
+                      // Amount display
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _AmountDisplay(
+                          value: formatMoney(symbol, _amount),
+                          muted: _amountCents == 0,
+                          brand: brand,
+                        ),
                       ),
                       if (_error != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                           child: Text(
                             _error!,
                             style: const TextStyle(
                               color: AppColors.expense,
                               fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
-                      const SizedBox(height: 12),
-                      _AmountKeypad(
-                        onDigit: _appendDigit,
-                        onBackspace: _backspace,
-                        onClear: _clearAmount,
-                        saving: _saving,
+                      const SizedBox(height: 14),
+
+                      // Keypad
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _AmountKeypad(
+                          onDigit: _appendDigit,
+                          onBackspace: _backspace,
+                          onClear: _clearAmount,
+                          saving: _saving,
+                          brand: brand,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        context.t('expense.category'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+
+                      // Category chips
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          context.t('expense.category'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: brand.inkSoft,
+                            letterSpacing: 0.4,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: kExpenseCategories.map((c) {
-                          final selected = c == _category;
-                          final s = styleFor(c);
-                          return GestureDetector(
-                            onTap: () => setState(() => _category = c),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 120),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? brand.accentDark
-                                    : s.background,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.chip,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: kExpenseCategories.map((c) {
+                            final selected = c == _category;
+                            final s = styleFor(c);
+                            return GestureDetector(
+                              onTap: () => setState(() => _category = c),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 120),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 7,
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    s.icon,
-                                    size: 14,
-                                    color: selected
-                                        ? foregroundOn(brand.accentDark)
-                                        : s.accent,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    context.categoryLabel(c),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                decoration: BoxDecoration(
+                                  color: selected ? brand.accentDark : s.background,
+                                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      s.icon,
+                                      size: 13,
                                       color: selected
                                           ? foregroundOn(brand.accentDark)
-                                          : AppColors.ink,
+                                          : s.accent,
                                     ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      context.categoryLabel(c),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: selected
+                                            ? foregroundOn(brand.accentDark)
+                                            : AppColors.ink,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Divider
+                      Divider(height: 1, thickness: 0.5, color: brand.divider),
+
+                      // Account row
+                      InkWell(
+                        onTap: accounts.isEmpty
+                            ? null
+                            : () => _showAccountPicker(accounts, brand),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 13,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                selectedAccount != null
+                                    ? _iconForAccountType(selectedAccount.type)
+                                    : CupertinoIcons.creditcard,
+                                size: 17,
+                                color: selectedAccount != null
+                                    ? _accentForAccountType(selectedAccount.type)
+                                    : brand.inkSoft,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Account',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: brand.ink,
                                   ),
-                                ],
+                                ),
+                              ),
+                              Text(
+                                selectedAccount?.name ??
+                                    (accounts.isEmpty ? 'None' : 'None'),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: brand.inkSoft,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              if (accounts.isNotEmpty)
+                                Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 12,
+                                  color: brand.inkSoft,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: brand.divider,
+                        indent: 20,
+                      ),
+
+                      // Notes row
+                      Padding(
+                        padding: const EdgeInsets.only(left: 20, right: 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 13),
+                              child: Icon(
+                                CupertinoIcons.doc_text,
+                                size: 17,
+                                color: brand.inkSoft,
                               ),
                             ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: _saving || _amountCents == 0
-                              ? null
-                              : _save,
-                          child: _saving
-                              ? SizedBox(
-                                  height: 16,
-                                  width: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimary,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: _noteCtrl,
+                                maxLines: 1,
+                                style: TextStyle(fontSize: 14, color: brand.ink),
+                                decoration: InputDecoration(
+                                  hintText: context.t('expense.note'),
+                                  hintStyle: TextStyle(
+                                    color: brand.inkSoft,
+                                    fontSize: 14,
                                   ),
-                                )
-                              : Text(context.t('common.save')),
+                                  filled: false,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(vertical: 13),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Save button
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: SizedBox(
+                          height: 50,
+                          child: FilledButton(
+                            onPressed: _saving || _amountCents == 0 ? null : _save,
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _saving
+                                ? SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Theme.of(context).colorScheme.onPrimary,
+                                    ),
+                                  )
+                                : Text(
+                                    context.t('common.save'),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                          ),
                         ),
                       ),
                     ],
@@ -345,20 +618,24 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 class _AmountDisplay extends StatelessWidget {
   final String value;
   final bool muted;
+  final BrandColors brand;
 
-  const _AmountDisplay({required this.value, required this.muted});
+  const _AmountDisplay({
+    required this.value,
+    required this.muted,
+    required this.brand,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
     return Container(
       width: double.infinity,
-      height: 74,
+      height: 68,
       alignment: Alignment.centerRight,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: brand.background,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: brand.divider),
       ),
       child: FittedBox(
@@ -369,9 +646,9 @@ class _AmountDisplay extends StatelessWidget {
           maxLines: 1,
           style: TextStyle(
             color: muted ? brand.inkSoft : brand.ink,
-            fontSize: 38,
+            fontSize: 36,
             fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+            letterSpacing: -0.5,
           ),
         ),
       ),
@@ -384,12 +661,14 @@ class _AmountKeypad extends StatelessWidget {
   final VoidCallback onBackspace;
   final VoidCallback onClear;
   final bool saving;
+  final BrandColors brand;
 
   const _AmountKeypad({
     required this.onDigit,
     required this.onBackspace,
     required this.onClear,
     required this.saving,
+    required this.brand,
   });
 
   @override
@@ -407,6 +686,7 @@ class _AmountKeypad extends StatelessWidget {
                 Expanded(
                   child: _KeypadButton(
                     onTap: saving ? null : () => onDigit(digit),
+                    brand: brand,
                     child: Text('$digit'),
                   ),
                 ),
@@ -421,6 +701,7 @@ class _AmountKeypad extends StatelessWidget {
             Expanded(
               child: _KeypadButton(
                 onTap: saving ? null : onClear,
+                brand: brand,
                 child: const Text('C'),
               ),
             ),
@@ -428,6 +709,7 @@ class _AmountKeypad extends StatelessWidget {
             Expanded(
               child: _KeypadButton(
                 onTap: saving ? null : () => onDigit(0),
+                brand: brand,
                 child: const Text('0'),
               ),
             ),
@@ -435,7 +717,8 @@ class _AmountKeypad extends StatelessWidget {
             Expanded(
               child: _KeypadButton(
                 onTap: saving ? null : onBackspace,
-                child: const Icon(CupertinoIcons.delete_left, size: 22),
+                brand: brand,
+                child: const Icon(CupertinoIcons.delete_left, size: 20),
               ),
             ),
           ],
@@ -448,29 +731,32 @@ class _AmountKeypad extends StatelessWidget {
 class _KeypadButton extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
+  final BrandColors brand;
 
-  const _KeypadButton({required this.child, required this.onTap});
+  const _KeypadButton({
+    required this.child,
+    required this.onTap,
+    required this.brand,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
     return SizedBox(
-      height: 48,
+      height: 46,
       child: Material(
         color: brand.background,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           child: IconTheme.merge(
             data: IconThemeData(color: brand.ink),
             child: DefaultTextStyle.merge(
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: brand.ink,
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
               ),
               child: Center(child: child),
             ),

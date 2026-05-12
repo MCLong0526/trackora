@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../models/expense.dart';
 import '../../services/auth_service.dart';
 import '../../services/export_service.dart';
 import '../../services/i18n.dart';
+import '../../services/live_activity_service.dart';
 import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
 import '../../services/sync_service.dart';
@@ -118,6 +120,10 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: 'Daily at 8 PM',
                   onTap: () {},
                 ),
+                if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+                  _GroupDivider(),
+                  _LiveActivityToggleTile(currency: symbol),
+                ],
                 if (email.isNotEmpty && email != localUserEmail) ...[
                   _GroupDivider(),
                   _Tile(
@@ -1360,6 +1366,111 @@ class _Tile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Live Activity Toggle ──────────────────────────────────────────────────────
+
+class _LiveActivityToggleTile extends StatefulWidget {
+  final String currency;
+  const _LiveActivityToggleTile({required this.currency});
+
+  @override
+  State<_LiveActivityToggleTile> createState() =>
+      _LiveActivityToggleTileState();
+}
+
+class _LiveActivityToggleTileState extends State<_LiveActivityToggleTile> {
+  bool _enabled = false;
+  final _prefs = PrefsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _prefs.liveActivityEnabled().then((v) {
+      if (mounted) setState(() => _enabled = v);
+    });
+  }
+
+  Future<void> _toggle(bool value) async {
+    HapticFeedback.selectionClick();
+    setState(() => _enabled = value);
+    await _prefs.setLiveActivityEnabled(value);
+    if (value) {
+      final error = await LiveActivityService.start(
+        currency: widget.currency,
+        todaySpent: 0,
+      );
+      if (error != null) {
+        if (!mounted) return;
+        // Revert toggle and show the native error so the user knows what happened.
+        setState(() => _enabled = false);
+        await _prefs.setLiveActivityEnabled(false);
+        if (!mounted) return;
+        AppToast.show(
+          context,
+          'Could not start Live Activity: $error',
+          type: AppToastType.error,
+          icon: CupertinoIcons.exclamationmark_circle,
+        );
+      }
+    } else {
+      await LiveActivityService.stop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.peach,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(
+              CupertinoIcons.bolt_horizontal_fill,
+              size: 16,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick Add Live Activity',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+                Text(
+                  'Dynamic Island & Lock Screen shortcut',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CupertinoSwitch(
+            value: _enabled,
+            activeTrackColor: AppColors.income,
+            onChanged: _toggle,
+          ),
+        ],
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:watch_connectivity/watch_connectivity.dart';
 
 import '../models/account.dart';
 import '../models/expense.dart';
+import 'live_activity_service.dart';
 
 /// Pushes summary numbers to the home-screen widget and the paired watch app.
 /// The iOS/Android widget extension reads these via shared UserDefaults.
@@ -67,6 +68,12 @@ class WidgetSyncService {
         androidName: _androidWidgetProvider,
       );
     }());
+
+    // Keep Live Activity in sync with latest spending (no-ops if not active).
+    LiveActivityService.update(
+      currency: currencySymbol,
+      todaySpent: todaySpent,
+    );
 
     // Push the same totals to the paired Apple Watch via WCSession
     // applicationContext so the watch gets live data even on first install,

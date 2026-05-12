@@ -9,6 +9,7 @@ import '../models/expense.dart';
 import '../models/installment.dart';
 import '../models/app_user.dart';
 import '../models/person.dart';
+import '../models/precious_metal.dart';
 import '../models/saving_plan.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/borrow_lending_repository.dart';
@@ -24,8 +25,10 @@ import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_person_repository.dart';
+import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
 import '../repositories/person_repository.dart';
+import '../repositories/precious_metal_repository.dart';
 import '../repositories/saving_plan_repository.dart';
 import '../services/auth_service.dart';
 import '../services/borrow_lending_service.dart';
@@ -453,6 +456,21 @@ final pendingSyncCountProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(0);
   return SyncService().pendingCountStream(user.uid);
+});
+
+/// Always local so writes are immediately visible regardless of Firestore rules.
+/// Firebase sync is handled separately by SyncService.
+final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>(
+  (_) => LocalPreciousMetalRepository(),
+);
+
+/// Stream of all precious metal transactions for the active user.
+/// Always reads from local Hive — guaranteed to reflect writes immediately.
+final preciousMetalsProvider =
+    StreamProvider.autoDispose<List<PreciousMetal>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return LocalPreciousMetalRepository().getAll(user.uid);
 });
 
 /// Watches for offline→online transitions and automatically uploads pending

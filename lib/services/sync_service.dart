@@ -10,11 +10,13 @@ import '../repositories/firebase_account_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
 import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
+import '../repositories/firebase_precious_metal_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
+import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
 import '../repositories/local_storage.dart';
 import 'storage_service.dart';
@@ -381,6 +383,16 @@ class SyncService {
       if (r.id.isEmpty) continue;
       if (!stillCurrent()) return;
       await fbBL.upsertById(toUid, r);
+    }
+
+    // ── Precious Metals ──────────────────────────────────────────────────
+    final localMetals = LocalPreciousMetalRepository();
+    final fbMetals = FirebasePreciousMetalRepository();
+    final metals = await localMetals.getAll(fromUid).first;
+    for (final m in metals) {
+      if (m.id.isEmpty) continue;
+      if (!stillCurrent()) return;
+      await fbMetals.upsertById(toUid, m);
     }
   }
 }

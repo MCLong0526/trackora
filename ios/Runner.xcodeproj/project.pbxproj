@@ -13,6 +13,7 @@
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		4EEB5110E71774664FA2AEB3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7CB21D991F78E425B0ECA02C /* GoogleService-Info.plist */; };
 		506837AE377ADCC8A5CFA89D /* TrackoraWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 86CDD61C18757ABDA4A2A644 /* TrackoraWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5ADE624A2FB190B7001B060C /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 5ADE62402FB190B7001B060C /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6BF5A771A5FEA11306FF3CDB /* TrackoraWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF63247AEB5BB112C8CF97F9 /* TrackoraWidget.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
@@ -21,8 +22,13 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		AA0001BBCC00DD00EE00FF00 /* TrackoraWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5A58FC3C2FA4B7E100A168C0 /* TrackoraWatch Watch App.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B1C2D3E4F5A6789012345602 /* OcrService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6789012345601 /* OcrService.swift */; };
+		B1C2D3E4F5A6789012345604 /* ShareImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6789012345603 /* ShareImportService.swift */; };
 		C2839FC784954CC923A7868C /* QuickAddExpenseIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006AAD33775106DBCB35BA17 /* QuickAddExpenseIntent.swift */; };
 		C986E2F9F492571C65967B16 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CDB314DBB024361242B6D27 /* Foundation.framework */; };
+		CC001122334455667788CC02 /* TrackoraLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC001122334455667788CC01 /* TrackoraLiveActivityAttributes.swift */; };
+		CC001122334455667788CC03 /* TrackoraLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC001122334455667788CC01 /* TrackoraLiveActivityAttributes.swift */; };
+		DD001122334455667788DD02 /* LiveActivityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD001122334455667788DD01 /* LiveActivityService.swift */; };
 		F02E8AEFA4DF3523C69E7F8B /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D64D391D9C528DFA768D54D2 /* Pods_RunnerTests.framework */; };
 		FF5E12F885374BAC8BFDE264 /* WatchUserInfoBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */; };
 /* End PBXBuildFile section */
@@ -56,6 +62,13 @@
 			remoteGlobalIDString = 5A58FC3B2FA4B7E100A168C0;
 			remoteInfo = "TrackoraWatch Watch App";
 		};
+		5ADE62482FB190B7001B060C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5ADE623F2FB190B7001B060C;
+			remoteInfo = ShareExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -86,6 +99,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
+				5ADE624A2FB190B7001B060C /* ShareExtension.appex in Embed App Extensions */,
 				506837AE377ADCC8A5CFA89D /* TrackoraWidget.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
@@ -105,6 +119,7 @@
 		5A58FC3C2FA4B7E100A168C0 /* TrackoraWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TrackoraWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A58FC482FA4B7E100A168C0 /* TrackoraWatch Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TrackoraWatch Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A58FC522FA4B7E100A168C0 /* TrackoraWatch Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TrackoraWatch Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5ADE62402FB190B7001B060C /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6107D37B6789C791040C3794 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -126,19 +141,23 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A9C43DDAB4B918ECF77891FB /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		B1C2D3E4F5A6789012345601 /* OcrService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcrService.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A6789012345603 /* ShareImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareImportService.swift; sourceTree = "<group>"; };
 		CA9BBD8F55F83AB8B6BE50EC /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
+		CC001122334455667788CC01 /* TrackoraLiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackoraLiveActivityAttributes.swift; sourceTree = "<group>"; };
 		CF63247AEB5BB112C8CF97F9 /* TrackoraWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrackoraWidget.swift; sourceTree = "<group>"; };
 		D64D391D9C528DFA768D54D2 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD001122334455667788DD01 /* LiveActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityService.swift; sourceTree = "<group>"; };
 		F65611B8F4763908F029A0C5 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		5A9D21332FADE825009D7C8A /* Exceptions for "TrackoraWatch Watch App" folder in "TrackoraWatch Watch App" target */ = {
+		5ADE624E2FB190B7001B060C /* Exceptions for "ShareExtension" folder in "ShareExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"TrackoraWatch-Watch-App-Info.plist",
+				Info.plist,
 			);
-			target = 5A58FC3B2FA4B7E100A168C0 /* TrackoraWatch Watch App */;
+			target = 5ADE623F2FB190B7001B060C /* ShareExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -146,7 +165,6 @@
 		5A58FC3D2FA4B7E100A168C0 /* TrackoraWatch Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				5A9D21332FADE825009D7C8A /* Exceptions for "TrackoraWatch Watch App" folder in "TrackoraWatch Watch App" target */,
 			);
 			explicitFileTypes = {
 			};
@@ -177,6 +195,18 @@
 			path = "TrackoraWatch Watch AppUITests";
 			sourceTree = "<group>";
 		};
+		5ADE62412FB190B7001B060C /* ShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5ADE624E2FB190B7001B060C /* Exceptions for "ShareExtension" folder in "ShareExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -203,6 +233,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		5A58FC4F2FA4B7E100A168C0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5ADE623D2FB190B7001B060C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -287,6 +324,7 @@
 				5A58FC3D2FA4B7E100A168C0 /* TrackoraWatch Watch App */,
 				5A58FC4B2FA4B7E100A168C0 /* TrackoraWatch Watch AppTests */,
 				5A58FC552FA4B7E100A168C0 /* TrackoraWatch Watch AppUITests */,
+				5ADE62412FB190B7001B060C /* ShareExtension */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				7CB21D991F78E425B0ECA02C /* GoogleService-Info.plist */,
@@ -305,6 +343,7 @@
 				5A58FC482FA4B7E100A168C0 /* TrackoraWatch Watch AppTests.xctest */,
 				5A58FC522FA4B7E100A168C0 /* TrackoraWatch Watch AppUITests.xctest */,
 				86CDD61C18757ABDA4A2A644 /* TrackoraWidget.appex */,
+				5ADE62402FB190B7001B060C /* ShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -322,6 +361,10 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				8A5BCD2D2F00111100AAA002 /* OpenQuickAddIntent.swift */,
 				7D257AF9F6D84CF1AA455841 /* WatchUserInfoBridge.swift */,
+				B1C2D3E4F5A6789012345601 /* OcrService.swift */,
+				B1C2D3E4F5A6789012345603 /* ShareImportService.swift */,
+				CC001122334455667788CC01 /* TrackoraLiveActivityAttributes.swift */,
+				DD001122334455667788DD01 /* LiveActivityService.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -421,6 +464,26 @@
 			productReference = 5A58FC522FA4B7E100A168C0 /* TrackoraWatch Watch AppUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		5ADE623F2FB190B7001B060C /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5ADE624F2FB190B7001B060C /* Build configuration list for PBXNativeTarget "ShareExtension" */;
+			buildPhases = (
+				5ADE623C2FB190B7001B060C /* Sources */,
+				5ADE623D2FB190B7001B060C /* Frameworks */,
+				5ADE623E2FB190B7001B060C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5ADE62412FB190B7001B060C /* ShareExtension */,
+			);
+			name = ShareExtension;
+			productName = ShareExtension;
+			productReference = 5ADE62402FB190B7001B060C /* ShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		97C146ED1CF9000F007C117D /* Runner */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
@@ -443,6 +506,7 @@
 			dependencies = (
 				4788D3AD914E66DA937EC491 /* PBXTargetDependency */,
 				AA0001BBCC00DD00EE00FF02 /* PBXTargetDependency */,
+				5ADE62492FB190B7001B060C /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -492,6 +556,9 @@
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 5A58FC3B2FA4B7E100A168C0;
 					};
+					5ADE623F2FB190B7001B060C = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					97C146ED1CF9000F007C117D = {
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
@@ -520,6 +587,7 @@
 				5A58FC472FA4B7E100A168C0 /* TrackoraWatch Watch AppTests */,
 				5A58FC512FA4B7E100A168C0 /* TrackoraWatch Watch AppUITests */,
 				D7D5E2078D4C9375E9D1033F /* TrackoraWidget */,
+				5ADE623F2FB190B7001B060C /* ShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -547,6 +615,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		5A58FC502FA4B7E100A168C0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5ADE623E2FB190B7001B060C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -732,6 +807,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5ADE623C2FB190B7001B060C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EA1CF9000F007C117D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -741,6 +823,10 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				8A5BCD2E2F00111100AAA001 /* OpenQuickAddIntent.swift in Sources */,
 				FF5E12F885374BAC8BFDE264 /* WatchUserInfoBridge.swift in Sources */,
+				B1C2D3E4F5A6789012345602 /* OcrService.swift in Sources */,
+				B1C2D3E4F5A6789012345604 /* ShareImportService.swift in Sources */,
+				CC001122334455667788CC02 /* TrackoraLiveActivityAttributes.swift in Sources */,
+				DD001122334455667788DD02 /* LiveActivityService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -750,6 +836,7 @@
 			files = (
 				6BF5A771A5FEA11306FF3CDB /* TrackoraWidget.swift in Sources */,
 				C2839FC784954CC923A7868C /* QuickAddExpenseIntent.swift in Sources */,
+				CC001122334455667788CC03 /* TrackoraLiveActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -776,6 +863,11 @@
 			isa = PBXTargetDependency;
 			target = 5A58FC3B2FA4B7E100A168C0 /* TrackoraWatch Watch App */;
 			targetProxy = 5A58FC532FA4B7E100A168C0 /* PBXContainerItemProxy */;
+		};
+		5ADE62492FB190B7001B060C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5ADE623F2FB190B7001B060C /* ShareExtension */;
+			targetProxy = 5ADE62482FB190B7001B060C /* PBXContainerItemProxy */;
 		};
 		AA0001BBCC00DD00EE00FF02 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1280,6 +1372,129 @@
 			};
 			name = Profile;
 		};
+		5ADE624B2FB190B7001B060C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 73MXPYW34M;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.michaelchia.trackora.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5ADE624C2FB190B7001B060C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 73MXPYW34M;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.michaelchia.trackora.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5ADE624D2FB190B7001B060C /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 73MXPYW34M;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShareExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.michaelchia.trackora.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Profile;
+		};
 		97C147031CF9000F007C117D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1563,6 +1778,16 @@
 				5A58FC642FA4B7E200A168C0 /* Debug */,
 				5A58FC652FA4B7E200A168C0 /* Release */,
 				5A58FC662FA4B7E200A168C0 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5ADE624F2FB190B7001B060C /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5ADE624B2FB190B7001B060C /* Debug */,
+				5ADE624C2FB190B7001B060C /* Release */,
+				5ADE624D2FB190B7001B060C /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
