@@ -13,6 +13,7 @@ class PrefsService {
   static const _kHomeCardOrder = 'home_card_order';
   static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
   static const _kStatsSectionsVisible = 'stats_sections_visible';
+  static const _kLiveActivityEnabled = 'live_activity_enabled';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -136,6 +137,16 @@ class PrefsService {
     final p = await SharedPreferences.getInstance();
     await p.setString(_kCurrencyCode, code);
     await p.setString(_kCurrency, symbol);
+  }
+
+  Future<bool> liveActivityEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_kLiveActivityEnabled) ?? false;
+  }
+
+  Future<void> setLiveActivityEnabled(bool enabled) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kLiveActivityEnabled, enabled);
   }
 
   /// Stored as one of: 'system', 'light', 'dark'. Default is 'system'.

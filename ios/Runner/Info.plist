@@ -93,5 +93,7 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Trackora uses Face ID to let you sign in quickly and securely.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

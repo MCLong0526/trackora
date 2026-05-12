@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
+import '../../models/precious_metal.dart';
 import '../../models/saving_plan.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
@@ -18,6 +19,7 @@ import '../../widgets/section_card.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
 import '../people/people_screen.dart';
+import '../precious_metals/precious_metals_screen.dart';
 import '../savings/saving_plans_screen.dart';
 
 bool _isDiscretionary(Expense e) =>
@@ -297,6 +299,8 @@ class BudgetScreen extends ConsumerWidget {
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
+    final metals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
@@ -558,6 +562,15 @@ class BudgetScreen extends ConsumerWidget {
                 ],
               );
             },
+          ),
+          // ── Precious Metals section ───────────────────────────
+          const SizedBox(height: 20),
+          _GroupHeader(label: 'Precious Metals'),
+          const SizedBox(height: 10),
+          _PreciousMetalsHubCard(
+            metals: metals,
+            symbol: symbol,
+            onTap: () => _push(context, const PreciousMetalsScreen()),
           ),
         ],
       ),
@@ -974,6 +987,220 @@ class _CircleProgress extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Precious Metals hub card ───────────────────────────────────────────────────
+
+class _PreciousMetalsHubCard extends StatelessWidget {
+  final List<PreciousMetal> metals;
+  final String symbol;
+  final VoidCallback onTap;
+
+  const _PreciousMetalsHubCard({
+    required this.metals,
+    required this.symbol,
+    required this.onTap,
+  });
+
+  Map<MetalType, double> _computeHoldings() {
+    final map = <MetalType, double>{};
+    for (final m in metals) {
+      final cur = map[m.metalType] ?? 0.0;
+      map[m.metalType] = m.action == MetalAction.buy
+          ? cur + m.weightGrams
+          : cur - m.weightGrams;
+    }
+    return map;
+  }
+
+  double _computeTotalValue() {
+    double total = 0;
+    for (final m in metals) {
+      total += m.action == MetalAction.buy ? m.totalAmount : -m.totalAmount;
+    }
+    return total < 0 ? 0 : total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final holdings = _computeHoldings();
+    final totalValue = _computeTotalValue();
+    final hasMetals = metals.isNotEmpty;
+
+    const goldColor = Color(0xFFD4AF37);
+    const goldDark = Color(0xFF3A2E00);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF1E1A0E), const Color(0xFF151210)]
+                : [const Color(0xFFFFFBF0), const Color(0xFFFFF3C4)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: goldColor.withValues(alpha: isDark ? 0.12 : 0.15),
+              blurRadius: 20,
+              spreadRadius: -4,
+              offset: const Offset(0, 6),
+            ),
+          ],
+          border: Border.all(
+            color: goldColor.withValues(alpha: isDark ? 0.18 : 0.22),
+            width: 1,
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        child: Row(
+          children: [
+            // Left: icon container
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? goldColor.withValues(alpha: 0.15)
+                    : goldColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Center(
+                child: Text(
+                  '✦',
+                  style: TextStyle(fontSize: 22, color: goldColor),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Middle: title + breakdown
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Precious Metals',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : goldDark,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: goldColor.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'METALS',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: goldColor,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  if (hasMetals) ...[
+                    Text(
+                      formatMoney(symbol, totalValue),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : goldDark,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: MetalType.values
+                          .where((t) => (holdings[t] ?? 0) > 0)
+                          .map((t) => _MetalChip(
+                                metalType: t,
+                                grams: holdings[t]!,
+                                isDark: isDark,
+                              ))
+                          .toList(),
+                    ),
+                  ] else
+                    Text(
+                      'Track gold, silver & more',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : const Color(0xFF8B7A30),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Right: chevron
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 14,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.4)
+                  : const Color(0xFFB8961E),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetalChip extends StatelessWidget {
+  final MetalType metalType;
+  final double grams;
+  final bool isDark;
+
+  const _MetalChip({
+    required this.metalType,
+    required this.grams,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = metalType.primaryColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.18 : 0.13),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        '${metalType.label}: ${grams.toStringAsFixed(1)}g',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }

@@ -5,10 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/precious_metal.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/masked_amount.dart';
+import '../precious_metals/precious_metals_screen.dart';
 import 'add_edit_account_screen.dart';
 
 class AccountsScreen extends ConsumerWidget {
@@ -21,6 +23,8 @@ class AccountsScreen extends ConsumerWidget {
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final visible = ref.watch(balanceVisibleProvider);
+    final metals = ref.watch(preciousMetalsProvider).valueOrNull ??
+        const <PreciousMetal>[];
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
@@ -44,38 +48,63 @@ class AccountsScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: accounts.isEmpty
-            ? _empty(context, brand)
-            : CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                    sliver: SliverList.separated(
-                      itemCount: accounts.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 10),
-                      itemBuilder: (ctx, i) {
-                        final account = accounts[i];
-                        final balance = balances[account.id] ?? 0.0;
-                        return _AccountCard(
-                          account: account,
-                          balance: balance,
-                          symbol: symbol,
-                          visible: visible,
-                          onTap: () => Navigator.push(
-                            ctx,
-                            CupertinoPageRoute(
-                              builder: (_) =>
-                                  AddEditAccountScreen(account: account),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
-                ],
+        child: CustomScrollView(
+          slivers: [
+            if (accounts.isEmpty)
+              SliverToBoxAdapter(child: _empty(context, brand))
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                sliver: SliverList.separated(
+                  itemCount: accounts.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: 10),
+                  itemBuilder: (ctx, i) {
+                    final account = accounts[i];
+                    final balance = balances[account.id] ?? 0.0;
+                    return _AccountCard(
+                      account: account,
+                      balance: balance,
+                      symbol: symbol,
+                      visible: visible,
+                      onTap: () => Navigator.push(
+                        ctx,
+                        CupertinoPageRoute(
+                          builder: (_) =>
+                              AddEditAccountScreen(account: account),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
+            // Precious Metals section
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                child: Text(
+                  'Precious Metals',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+              sliver: SliverToBoxAdapter(
+                child: _PreciousMetalsCard(
+                  metals: metals,
+                  symbol: symbol,
+                  visible: visible,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -307,6 +336,180 @@ class _AccountCard extends StatelessWidget {
   }
 }
 
+
+// ── Precious Metals Card ──────────────────────────────────────────────────────
+
+class _PreciousMetalsCard extends StatelessWidget {
+  final List<PreciousMetal> metals;
+  final String symbol;
+  final bool visible;
+
+  const _PreciousMetalsCard({
+    required this.metals,
+    required this.symbol,
+    required this.visible,
+  });
+
+  Map<MetalType, double> get _holdings {
+    final map = <MetalType, double>{};
+    for (final m in metals) {
+      final cur = map[m.metalType] ?? 0.0;
+      map[m.metalType] = m.action == MetalAction.buy
+          ? cur + m.weightGrams
+          : cur - m.weightGrams;
+    }
+    return map;
+  }
+
+  double get _totalValue {
+    double t = 0;
+    for (final m in metals) {
+      t += m.action == MetalAction.buy ? m.totalAmount : -m.totalAmount;
+    }
+    return t.abs();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final holdings = _holdings;
+    final goldGrams = holdings[MetalType.gold] ?? 0.0;
+    final silverGrams = holdings[MetalType.silver] ?? 0.0;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3C4),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                CupertinoIcons.circle_grid_hex_fill,
+                size: 22,
+                color: Color(0xFFD4AF37),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Precious Metals',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (metals.isEmpty)
+                    Text(
+                      'Tap to track gold & silver',
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    )
+                  else
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        if (goldGrams != 0)
+                          _MetalChip(
+                            label: '${goldGrams.toStringAsFixed(2)}g Gold',
+                            color: const Color(0xFFD4AF37),
+                            bg: const Color(0xFFFFF3C4),
+                          ),
+                        if (silverGrams != 0)
+                          _MetalChip(
+                            label: '${silverGrams.toStringAsFixed(2)}g Silver',
+                            color: const Color(0xFF9BA5B0),
+                            bg: const Color(0xFFECEDF0),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            if (metals.isNotEmpty) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MaskedAmount(
+                    visibleText: formatMoney(symbol, _totalValue),
+                    visible: visible,
+                    currencyPrefix: symbol,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: brand.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${metals.length} record${metals.length == 1 ? '' : 's'}',
+                    style: TextStyle(fontSize: 11, color: brand.inkSoft),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 6),
+            ],
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 14,
+              color: brand.inkSoft,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetalChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+
+  const _MetalChip({required this.label, required this.color, required this.bg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
 
 // ── Public helpers ────────────────────────────────────────────────────────────
 

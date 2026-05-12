@@ -16,6 +16,8 @@ import 'screens/auth/welcome_screen.dart';
 import 'screens/expenses/quick_add_sheet.dart';
 import 'screens/home/home_shell.dart';
 import 'services/deep_link_service.dart';
+import 'services/live_activity_service.dart';
+import 'services/prefs_service.dart';
 import 'services/widget_intent_service.dart';
 import 'services/widget_sync_service.dart';
 import 'state/providers.dart';
@@ -100,6 +102,7 @@ class TrackoraApp extends ConsumerStatefulWidget {
 
 class _TrackoraAppState extends ConsumerState<TrackoraApp>
     with WidgetsBindingObserver {
+  static const _shareChannel = MethodChannel('trackora/share_import');
   final _widgetIntents = WidgetIntentService();
 
   @override
@@ -112,6 +115,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       DeepLinkService.attach(rootNavKey);
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
+      _restoreLiveActivity();
     });
   }
 
@@ -126,10 +130,26 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     if (state == AppLifecycleState.resumed) {
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
+      // Detect a share that was made while the app was in background.
+      // Covers the case where extensionContext.open() didn't fire the URL.
+      DeepLinkService.checkAndOpenPendingShare(rootNavKey);
       // Push fresh data to Watch on every foreground resume so the Watch
       // has up-to-date stats without needing the user to open the phone app.
       _syncToWatch();
+      // Restore Live Activity if user has it enabled (handles iOS end-of-life
+      // after the system's 12-hour limit and cold restarts).
+      _restoreLiveActivity();
     }
+  }
+
+  Future<void> _restoreLiveActivity() async {
+    final prefs = PrefsService();
+    final enabled = await prefs.liveActivityEnabled();
+    if (!enabled) return;
+    final currency = await prefs.currencySymbol();
+    // Start with 0 todaySpent; WidgetSyncService.push() on the same resume
+    // cycle will call LiveActivityService.update() with the real value.
+    await LiveActivityService.start(currency: currency, todaySpent: 0);
   }
 
   Future<void> _syncToWatch() async {
@@ -150,12 +170,26 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     }
   }
 
-  /// Drains the iOS App Shortcut "Quick Add Expense" trigger flag.
-  /// Set by `OpenQuickAddIntent` when the user invokes the shortcut
-  /// from Back Tap, Siri, the Action Button, or the Shortcuts app.
+  /// Drains the iOS App Shortcut trigger flag and routes to the right action:
+  ///
+  /// - Pending image (shared screenshot / notification receipt) → OCR confirmation.
+  /// - No pending image → Quick Add sheet.
   Future<void> _maybeOpenQuickAdd() async {
     final pending = await _widgetIntents.consumePendingQuickAdd();
     if (!pending) return;
+
+    // If a shared/notification receipt image is waiting, OCR it instead.
+    try {
+      final result = await _shareChannel.invokeMethod<Map<Object?, Object?>>(
+        'checkPendingShare',
+      );
+      if (result != null && result.isNotEmpty) {
+        DeepLinkService.openImportScreenForBackTap(rootNavKey);
+        return;
+      }
+    } catch (_) {}
+
+    // No pending image → original Quick Add behaviour.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = rootNavKey.currentContext;
       if (ctx == null) return;

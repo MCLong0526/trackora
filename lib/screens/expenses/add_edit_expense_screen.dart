@@ -1,8 +1,10 @@
 import 'dart:developer' as dev;
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -40,41 +42,115 @@ class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? expense;
   /// When set, pre-fills the form from this expense but saves as a NEW record.
   final Expense? copyFrom;
+  final EntryType? initialType;
+  final double? initialAmount;
 
-  const AddEditExpenseScreen({super.key, this.expense, this.copyFrom});
+  const AddEditExpenseScreen({super.key, this.expense, this.copyFrom, this.initialType, this.initialAmount});
 
   @override
   ConsumerState<AddEditExpenseScreen> createState() =>
       _AddEditExpenseScreenState();
 }
 
-class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
+class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   final _counterpartController = TextEditingController();
+  final _amountFocus = FocusNode();
 
-  EntryType _type = EntryType.expense;
+  late AnimationController _entranceCtrl;
+  late Animation<double> _entranceFade;
+  late Animation<Offset> _entranceSlide;
+
+  late AnimationController _closeCtrl;
+  late AnimationController _snapCtrl;
+  double _dragOffset = 0.0;
+  double _snapStartOffset = 0.0;
+
+  late AnimationController _saveBtnCtrl;
+  late Animation<double> _saveBtnBounce;
+  bool _saveSuccess = false;
+
+  late AnimationController _typeMenuCtrl;
+  late List<Animation<double>> _typeChipAnimations;
+  bool _typeMenuOpen = false;
+
+  late PageController _typePageCtrl;
+  double _typePageOffset = 0;
+
+  late EntryType _type;
   String _category = kExpenseCategories.first;
   DateTime _date = DateTime.now();
   String? _accountId;
   String? _toAccountId;
   bool _isAccountTransfer = false;
   bool _saving = false;
+  bool _hasValidAmount = false;
   File? _newReceipt;
   String? _existingReceiptUrl;
 
   bool get _isEdit => widget.expense != null;
 
-  bool get _isPersonTransfer =>
-      (_type == EntryType.transfer || _type == EntryType.receive) &&
-      !_isAccountTransfer;
-
-  bool get _showAccountTransferOption => _type == EntryType.transfer;
+  Color get _typeColor {
+    switch (_type) {
+      case EntryType.income:
+        return const Color(0xFF1F7A60);
+      case EntryType.transfer:
+        return const Color(0xFFB23A4A);
+      case EntryType.receive:
+        return const Color(0xFF2A6FB5);
+      case EntryType.expense:
+        return const Color(0xFF6B40A8);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+
+    _entranceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _entranceFade = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _entranceSlide = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+
+    _closeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _snapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+    );
+
+    _saveBtnCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 460),
+    );
+    _saveBtnBounce = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.07), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 1.07, end: 0.95), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _saveBtnCtrl, curve: Curves.easeOut));
+
+    _typeMenuCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _typeChipAnimations = List.generate(4, (i) {
+      return CurvedAnimation(
+        parent: _typeMenuCtrl,
+        curve: Interval(i * 0.07, 0.55 + i * 0.07, curve: Curves.easeOutBack),
+      );
+    });
+
+    _type = widget.initialType ?? EntryType.expense;
     final template = widget.expense ?? widget.copyFrom;
     if (template != null) {
       _amountController.text = template.amount.toStringAsFixed(2);
@@ -89,15 +165,125 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       if (template.type == EntryType.transfer && template.toAccountId != null) {
         _isAccountTransfer = true;
       }
+    } else if (widget.initialAmount != null && widget.initialAmount! > 0) {
+      _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+    }
+
+    final initialTypeIndex = _typeIndexFor(_type);
+    _typePageCtrl = PageController(
+      initialPage: initialTypeIndex,
+      viewportFraction: 0.90,
+    );
+    _typePageOffset = initialTypeIndex.toDouble();
+    _typePageCtrl.addListener(() {
+      setState(() => _typePageOffset = _typePageCtrl.page ?? _typePageOffset);
+    });
+
+    _hasValidAmount = _checkAmountValid();
+    _amountController.addListener(_onAmountChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _entranceCtrl.forward();
+    });
+  }
+
+  bool _checkAmountValid() {
+    final text = _amountController.text;
+    return text.isNotEmpty && (double.tryParse(text) ?? 0) > 0;
+  }
+
+  void _onAmountChanged() {
+    final valid = _checkAmountValid();
+    if (valid != _hasValidAmount) {
+      setState(() => _hasValidAmount = valid);
     }
   }
 
   @override
   void dispose() {
+    _amountController.removeListener(_onAmountChanged);
+    _entranceCtrl.dispose();
+    _closeCtrl.dispose();
+    _snapCtrl.dispose();
+    _saveBtnCtrl.dispose();
+    _typeMenuCtrl.dispose();
+    _typePageCtrl.dispose();
     _amountController.dispose();
+    _amountFocus.dispose();
     _noteController.dispose();
     _counterpartController.dispose();
     super.dispose();
+  }
+
+  // ─── Close / Dismiss ─────────────────────────────────────────────────────────
+
+  void _onSnapTick() {
+    if (!mounted) return;
+    setState(() {
+      _dragOffset = _snapStartOffset *
+          (1.0 - Curves.easeOutCubic.transform(_snapCtrl.value));
+    });
+    if (_snapCtrl.isCompleted) {
+      _snapCtrl.removeListener(_onSnapTick);
+      _dragOffset = 0.0;
+      _snapStartOffset = 0.0;
+    }
+  }
+
+  void _snapBack() {
+    _snapStartOffset = _dragOffset;
+    _snapCtrl
+      ..stop()
+      ..reset()
+      ..removeListener(_onSnapTick)
+      ..addListener(_onSnapTick)
+      ..forward();
+  }
+
+  Future<void> _animatedClose() async {
+    if (_closeCtrl.isAnimating) return;
+    _snapCtrl.stop();
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+    await _closeCtrl.forward();
+    if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildDragHandle(BrandColors brand) {
+    final pillW = (36.0 + (_dragOffset * 0.3).clamp(0.0, 20.0));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) {
+        final dy = details.delta.dy;
+        if (dy > 0 || _dragOffset > 0) {
+          setState(() {
+            _dragOffset = (_dragOffset + dy).clamp(0.0, 260.0);
+          });
+        }
+      },
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (_dragOffset > 90 || velocity > 600) {
+          _animatedClose();
+        } else {
+          _snapBack();
+        }
+      },
+      child: SizedBox(
+        height: 24,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: pillW,
+            height: 4,
+            decoration: BoxDecoration(
+              color: brand.inkSoft.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   List<String> get _categories {
@@ -194,7 +380,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             name: 'AddEditExpense',
             error: uploadError,
           );
-          // Don't block save — proceed without the new receipt.
           receiptUrl = _existingReceiptUrl;
         }
       } else if (_newReceipt != null && !isOnline) {
@@ -263,7 +448,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
             await storage.delete(_existingReceiptUrl!);
           }
         } else {
-          // Offline: write to local Hive directly and mark pending.
           await LocalExpenseRepository().updateExpense(user.uid, updated);
           if (storageMode == StorageMode.firebase) {
             await SyncService().markPending(user.uid, updated.id);
@@ -291,7 +475,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         if (isOnline) {
           await expenses.addExpense(user.uid, e);
         } else {
-          // Offline: write to local Hive and mark as pending sync.
           await LocalExpenseRepository().upsertExpense(user.uid, e);
           if (storageMode == StorageMode.firebase) {
             await SyncService().markPending(user.uid, e.id);
@@ -300,17 +483,16 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       }
 
       if (mounted) {
-        if (!isOnline) {
-          _showOfflineSavedBanner();
-        } else {
-          AppToast.show(
-            context,
-            _isEdit ? 'Entry updated' : 'Entry saved',
-            type: AppToastType.success,
-            icon: CupertinoIcons.checkmark_circle_fill,
-          );
-        }
-        Navigator.pop(context);
+        if (!isOnline) _showOfflineSavedBanner();
+        FocusScope.of(context).unfocus();
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _saving = false;
+          _saveSuccess = true;
+        });
+        await _saveBtnCtrl.forward(from: 0);
+        await Future.delayed(const Duration(milliseconds: 480));
+        if (mounted) await _animatedClose();
       }
     } catch (e) {
       if (mounted) {
@@ -321,7 +503,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && !_saveSuccess) setState(() => _saving = false);
     }
   }
 
@@ -357,17 +539,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
     if (confirm != true) return;
     final expenseId = widget.expense!.id;
-    // Always remove from local cache immediately.
     await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
     if (storageMode == StorageMode.firebase) {
-      // Remove from pending upserts so we don't re-upload a deleted item.
       await SyncService().clearPending(user.uid, expenseId);
       final isOnline = ref.read(isOnlineProvider);
       if (isOnline) {
         try {
           await FirebaseExpenseRepository().deleteExpense(user.uid, expenseId);
         } catch (_) {
-          // Mark for retry on next sync.
           await SyncService().markPendingDelete(user.uid, expenseId);
         }
       } else {
@@ -382,129 +561,880 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     final brand = context.brand;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final dateLabel = DateFormat('MMM d, yyyy').format(_date);
-    final selectedChipFg = foregroundOn(brand.accentDark);
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
 
     return Scaffold(
       backgroundColor: brand.background,
-      appBar: AppBar(
-        backgroundColor: brand.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: brand.surface,
-              shape: BoxShape.circle,
+      body: AnimatedBuilder(
+        animation: _closeCtrl,
+        builder: (context, child) {
+          final t = Curves.easeInCubic.transform(_closeCtrl.value);
+          final screenH = MediaQuery.of(context).size.height;
+          final totalY = _dragOffset + t * screenH * 0.26;
+          final scale = (1.0 - totalY / (screenH * 1.6)).clamp(0.78, 1.0);
+          final opacity = (1.0 - totalY / 230.0).clamp(0.0, 1.0);
+          return Opacity(
+            opacity: opacity,
+            child: Transform.translate(
+              offset: Offset(0, totalY),
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
             ),
-            child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+          );
+        },
+        child: GestureDetector(
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            if (_typeMenuOpen) {
+              setState(() => _typeMenuOpen = false);
+              _typeMenuCtrl.reverse();
+            }
+          },
+          behavior: HitTestBehavior.translucent,
+          child: SafeArea(
+            child: FadeTransition(
+              opacity: _entranceFade,
+              child: SlideTransition(
+                position: _entranceSlide,
+                child: Form(
+                  key: _formKey,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Column(
+                        children: [
+                          // ── Inline header (replaces AppBar so whole page animates) ──
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: _animatedClose,
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: brand.surface,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _isEdit ? context.t('expense.edit') : context.t('expense.new'),
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                                  ),
+                                ),
+                                if (_isEdit)
+                                  GestureDetector(
+                                    onTap: _delete,
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.blush,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        CupertinoIcons.delete,
+                                        size: 17,
+                                        color: AppColors.expense,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          // ── Drag handle ──────────────────────────────────────────
+                          _buildDragHandle(brand),
+                          Expanded(
+                            child: PageView.builder(
+                              clipBehavior: Clip.none,
+                              controller: _typePageCtrl,
+                              itemCount: 4,
+                              onPageChanged: _switchType,
+                              itemBuilder: (context, i) => _buildFullTypeCard(
+                                index: i,
+                                brand: brand,
+                                symbol: symbol,
+                                dateLabel: dateLabel,
+                                accounts: accounts,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _pageIndicator(brand),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
+                    // Type picker chips — float above the bottom bar
+                    Positioned(
+                      bottom: 86,
+                      left: 16,
+                      right: 16,
+                      child: _typeChipsOverlay(brand),
+                    ),
+                    // Bottom action bar
+                    Positioned(
+                      bottom: 16,
+                      left: 20,
+                      right: 20,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _typeMenuButton(brand),
+                          const SizedBox(width: 12),
+                          Expanded(child: _floatingSavePill(brand)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-        title: Text(
-          _isEdit ? context.t('expense.edit') : context.t('expense.new'),
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-        ),
-        actions: [
-          if (_isEdit)
-            GestureDetector(
-              onTap: _delete,
-              child: Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.blush,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.delete,
-                  size: 17,
-                  color: AppColors.expense,
-                ),
-              ),
-            ),
-        ],
       ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-            children: [
-              _typeToggle(),
-              const SizedBox(height: 14),
-              _amountCard(symbol),
-              const SizedBox(height: 20),
-              if (_showAccountTransferOption) ...[
-                _accountTransferToggle(brand),
-                const SizedBox(height: 14),
-              ],
-              if (_type == EntryType.transfer && _isAccountTransfer) ...[
-                _groupedDetailsCard(
-                  brand: brand,
-                  accounts: accounts,
-                  dateLabel: dateLabel,
-                  isAccountTransfer: true,
-                ),
-              ] else ...[
-                if (_isPersonTransfer) ...[
-                  _counterpartField(brand),
-                  const SizedBox(height: 14),
-                ] else ...[
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 10),
-                    child: Text(
-                      context.t('expense.category'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  _categoryChips(selectedChipFg, brand),
-                  const SizedBox(height: 18),
-                ],
-                _groupedDetailsCard(
-                  brand: brand,
-                  accounts: accounts,
-                  dateLabel: dateLabel,
-                  isAccountTransfer: false,
-                ),
-              ],
-              const SizedBox(height: 28),
-              SizedBox(
-                height: 54,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: _saving
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(
-                          _isEdit
-                              ? context.t('common.update')
-                              : context.t('expense.saveEntry'),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                ),
-              ),
-            ],
+    ),
+  );
+  }
+
+  // ─── Type Card Swiper ─────────────────────────────────────────────────────────
+
+  static const _kTypes = [
+    EntryType.expense,
+    EntryType.income,
+    EntryType.transfer,
+    EntryType.receive,
+  ];
+
+  int _typeIndexFor(EntryType t) => _kTypes.indexOf(t);
+
+  void _switchType(int index) {
+    final t = _kTypes[index];
+    if (_type == t) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _type = t;
+      _isAccountTransfer = false;
+      _toAccountId = null;
+      if (!(t == EntryType.transfer || t == EntryType.receive)) {
+        if (!_categories.contains(_category)) {
+          _category = _categories.first;
+        }
+      }
+    });
+  }
+
+  // ─── Page Indicator ───────────────────────────────────────────────────────────
+
+  Widget _pageIndicator(BrandColors brand) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(4, (i) {
+        final distance = (_typePageOffset - i).abs().clamp(0.0, 1.0);
+        final progress = 1.0 - distance;
+        final activeAccent = _kTypeAccents[_typeIndexFor(_type)];
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: 8.0 + (progress * 18.0),
+          height: 8,
+          decoration: BoxDecoration(
+            color: activeAccent.withValues(alpha: 0.20 + (progress * 0.80)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }),
+    );
+  }
+
+  // ─── Type Menu Button ─────────────────────────────────────────────────────────
+
+  Widget _typeMenuButton(BrandColors brand) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _typeMenuOpen = !_typeMenuOpen);
+        if (_typeMenuOpen) {
+          _typeMenuCtrl.forward(from: 0);
+        } else {
+          _typeMenuCtrl.reverse();
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: _typeMenuOpen ? _typeColor : brand.surface,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: _typeMenuOpen
+                  ? _typeColor.withValues(alpha: 0.30)
+                  : Colors.black.withValues(alpha: 0.07),
+              blurRadius: _typeMenuOpen ? 16 : 8,
+              offset: const Offset(0, 4),
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: AnimatedRotation(
+          turns: _typeMenuOpen ? 0.125 : 0,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          child: Icon(
+            CupertinoIcons.square_grid_2x2,
+            size: 20,
+            color: _typeMenuOpen ? Colors.white : brand.ink,
           ),
         ),
       ),
     );
   }
+
+  // ─── Type Chips Overlay ───────────────────────────────────────────────────────
+
+  static const _kTypeLabels = ['Expense', 'Income', 'Transfer', 'Receive'];
+
+  Widget _typeChipsOverlay(BrandColors brand) {
+    return AnimatedBuilder(
+      animation: _typeMenuCtrl,
+      builder: (context, _) {
+        if (_typeMenuCtrl.value == 0 && !_typeMenuOpen) {
+          return const SizedBox.shrink();
+        }
+        return Row(
+          children: List.generate(4, (i) {
+            final t = _kTypes[i];
+            final isSelected = t == _type;
+            final chipAnim = _typeChipAnimations[i];
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i < 3 ? 7 : 0),
+                child: Transform.scale(
+                  scale: chipAnim.value,
+                  alignment: Alignment.bottomCenter,
+                  child: Opacity(
+                    opacity: chipAnim.value.clamp(0.0, 1.0),
+                    child: GestureDetector(
+                      onTap: () => _selectTypeFromMenu(i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? _kTypeAccents[i] : brand.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isSelected
+                                  ? _kTypeAccents[i].withValues(alpha: 0.28)
+                                  : Colors.black.withValues(alpha: 0.06),
+                              blurRadius: isSelected ? 14 : 6,
+                              offset: const Offset(0, 4),
+                              spreadRadius: -2,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _kTypeIcons[i],
+                              size: 18,
+                              color: isSelected ? Colors.white : _kTypeAccents[i],
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              _kTypeLabels[i],
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected ? Colors.white : brand.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+
+  void _selectTypeFromMenu(int index) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _typeMenuOpen = false;
+      _typeMenuCtrl.reverse();
+    });
+    final targetType = _kTypes[index];
+    if (targetType != _type) {
+      _typePageCtrl.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  // ─── Full Type Cards ──────────────────────────────────────────────────────────
+
+  static const _kTypeAccents = [
+    Color(0xFF6B40A8),
+    Color(0xFF1F7A60),
+    Color(0xFFB23A4A),
+    Color(0xFF2A6FB5),
+  ];
+
+  static const _kTypeIcons = [
+    CupertinoIcons.minus_circle_fill,
+    CupertinoIcons.plus_circle_fill,
+    CupertinoIcons.arrow_right_arrow_left_circle_fill,
+    CupertinoIcons.arrow_down_left_circle_fill,
+  ];
+
+  Widget _buildFullTypeCard({
+    required int index,
+    required BrandColors brand,
+    required String symbol,
+    required String dateLabel,
+    required List<Account> accounts,
+  }) {
+    final type = _kTypes[index];
+    final isActive = type == _type;
+    final distance = (_typePageOffset - index).abs().clamp(0.0, 1.0);
+    final scale = 1.0 - (distance * 0.10);
+    final opacity = (1.0 - (distance * 0.50)).clamp(0.0, 1.0);
+    final translateY = distance * 18.0;
+    final blurAmount = distance * 2.5;
+
+    const labels = ['Expense', 'Income', 'Transfer', 'Receive'];
+    const subtitles = [
+      'Money going out',
+      'Money coming in',
+      'Send to someone',
+      'Receive from someone',
+    ];
+    final bgColors = [AppColors.lilac, AppColors.mint, AppColors.blush, AppColors.sky];
+
+    final accent = _kTypeAccents[index];
+    final bg = bgColors[index];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final cardChild = Container(
+      margin: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.18),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
+                  spreadRadius: -4,
+                ),
+              ]
+            : [],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: isActive
+            ? _activeCardContent(
+                type: type,
+                accent: accent,
+                icon: _kTypeIcons[index],
+                label: labels[index],
+                subtitle: subtitles[index],
+                brand: brand,
+                symbol: symbol,
+                dateLabel: dateLabel,
+                accounts: accounts,
+                isDark: isDark,
+              )
+            : _inactiveCardPreview(
+                accent: accent,
+                icon: _kTypeIcons[index],
+                label: labels[index],
+                subtitle: subtitles[index],
+              ),
+      ),
+    );
+
+    return Transform(
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.001)
+        ..translateByDouble(0.0, translateY, 0.0, 1.0)
+        ..scaleByDouble(scale, scale, 1.0, 1.0),
+      alignment: Alignment.topCenter,
+      child: Opacity(
+        opacity: opacity,
+        child: blurAmount > 0.3
+            ? ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: blurAmount,
+                  sigmaY: blurAmount,
+                ),
+                child: cardChild,
+              )
+            : cardChild,
+      ),
+    );
+  }
+
+  Widget _activeCardContent({
+    required EntryType type,
+    required Color accent,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required BrandColors brand,
+    required String symbol,
+    required String dateLabel,
+    required List<Account> accounts,
+    required bool isDark,
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, size: 26, color: accent),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: accent.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Amount field
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  symbol,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black.withValues(alpha: 0.45),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: TextFormField(
+                  controller: _amountController,
+                  focusNode: _amountFocus,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(
+                    fontSize: 46,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -2,
+                    color: Colors.black,
+                  ),
+                  decoration: InputDecoration(
+                    filled: false,
+                    hintText: '0.00',
+                    hintStyle: TextStyle(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 46,
+                      letterSpacing: -2,
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return context.t('validation.enterAmount');
+                    }
+                    final n = double.tryParse(v);
+                    if (n == null || n <= 0) {
+                      return context.t('validation.invalidAmount');
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Category section (expense / income)
+          if (type == EntryType.expense || type == EntryType.income) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 2, bottom: 10),
+              child: Text(
+                context.t('expense.category'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: accent.withValues(alpha: 0.85),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            _categorySelector(brand),
+            const SizedBox(height: 8),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.3),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Row(
+                key: ValueKey(_category),
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: styleFor(_category).accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.categoryLabel(_category),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: styleFor(_category).accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Transfer-specific
+          if (type == EntryType.transfer) ...[
+            _accountTransferToggle(brand),
+            const SizedBox(height: 12),
+            if (!_isAccountTransfer) ...[
+              _counterpartField(brand),
+              const SizedBox(height: 12),
+            ],
+          ],
+          // Receive-specific
+          if (type == EntryType.receive) ...[
+            _counterpartField(brand),
+            const SizedBox(height: 12),
+          ],
+          // Details card (account / date / note / receipt)
+          _groupedDetailsCard(
+            brand: brand,
+            accounts: accounts,
+            dateLabel: dateLabel,
+            isAccountTransfer: type == EntryType.transfer && _isAccountTransfer,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inactiveCardPreview({
+    required Color accent,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, size: 26, color: accent),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: accent.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          ListenableBuilder(
+            listenable: _amountController,
+            builder: (context, _) => Text(
+              _amountController.text.isEmpty ? '0.00' : _amountController.text,
+              style: TextStyle(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -2,
+                color: Colors.black.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Category Selector ───────────────────────────────────────────────────────
+
+  Widget _categorySelector(BrandColors brand) {
+    final cats = _categories;
+    return SizedBox(
+      height: 64,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        itemCount: cats.length,
+        itemBuilder: (context, idx) {
+          final c = cats[idx];
+          final selected = c == _category;
+          final s = styleFor(c);
+          return GestureDetector(
+            onTap: () {
+              if (_category == c) return;
+              HapticFeedback.selectionClick();
+              setState(() => _category = c);
+            },
+            child: Padding(
+              padding: EdgeInsets.only(right: idx < cats.length - 1 ? 8 : 0),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: selected ? s.accent : brand.surface,
+                  shape: BoxShape.circle,
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                            color: s.accent.withValues(alpha: 0.30),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                            spreadRadius: -3,
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                ),
+                child: Icon(
+                  s.icon,
+                  size: 20,
+                  color: selected ? Colors.white : s.accent,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ─── Floating Save Pill ───────────────────────────────────────────────────────
+
+  static const _kSuccessGreen = Color(0xFF20A060);
+
+  Widget _floatingSavePill(BrandColors brand) {
+    final active = _hasValidAmount && !_saving && !_saveSuccess;
+    final bgColor = _saveSuccess
+        ? _kSuccessGreen
+        : (_saving || _hasValidAmount)
+            ? _typeColor
+            : brand.surface;
+
+    return AnimatedBuilder(
+      animation: _saveBtnBounce,
+      builder: (context, child) => Transform.scale(
+        scale: _saveSuccess ? _saveBtnBounce.value : 1.0,
+        child: child,
+      ),
+      child: GestureDetector(
+        onTap: () {
+          if (_saving || _saveSuccess) return;
+          if (_typeMenuOpen) {
+            setState(() => _typeMenuOpen = false);
+            _typeMenuCtrl.reverse();
+          }
+          HapticFeedback.mediumImpact();
+          _save();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+          height: 56,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: (_saving || _hasValidAmount || _saveSuccess)
+                ? [
+                    BoxShadow(
+                      color: bgColor.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 7),
+                      spreadRadius: -3,
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+          ),
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, anim) => ScaleTransition(
+                scale: anim,
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: _saveSuccess
+                  ? const Row(
+                      key: ValueKey('success'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 20),
+                        SizedBox(width: 9),
+                        Text(
+                          'Saved!',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
+                    )
+                  : _saving
+                      ? const SizedBox(
+                          key: ValueKey('saving'),
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          key: const ValueKey('idle'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              CupertinoIcons.checkmark_circle_fill,
+                              color: active ? Colors.white : brand.inkSoft,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 9),
+                            Text(
+                              _isEdit
+                                  ? context.t('common.update')
+                                  : context.t('expense.saveEntry'),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: active ? Colors.white : brand.inkSoft,
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                          ],
+                        ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  // ─── Account Transfer Toggle ──────────────────────────────────────────────────
 
   Widget _accountTransferToggle(BrandColors brand) {
     return SectionCard(
@@ -554,7 +1484,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
-  // Grouped card: Account (or From/To), Date, Note, Receipt
+  // ─── Grouped Details Card ─────────────────────────────────────────────────────
+
   Widget _groupedDetailsCard({
     required BrandColors brand,
     required List<Account> accounts,
@@ -571,13 +1502,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -681,6 +1605,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
+  // ─── Inline Account Row ───────────────────────────────────────────────────────
+
   Widget _inlineAccountRow({
     required List<Account> accounts,
     required BrandColors brand,
@@ -736,6 +1662,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       ),
     );
   }
+
+  // ─── Receipt Content ──────────────────────────────────────────────────────────
 
   Widget _receiptInlineContent(BrandColors brand) {
     final hasNew = _newReceipt != null;
@@ -822,89 +1750,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     );
   }
 
-  Widget _amountCard(String symbol) {
-    Color cardColor;
-    switch (_type) {
-      case EntryType.income:
-        cardColor = AppColors.mint;
-        break;
-      case EntryType.transfer:
-        cardColor = AppColors.blush;
-        break;
-      case EntryType.receive:
-        cardColor = AppColors.sky;
-        break;
-      case EntryType.expense:
-        cardColor = AppColors.lilac;
-        break;
-    }
-    return SectionCard(
-      color: cardColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t('expense.amount'),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  symbol,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: TextFormField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  style: const TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
-                  ),
-                  decoration: const InputDecoration(
-                    filled: false,
-                    hintText: '0.00',
-                    hintStyle: TextStyle(
-                      color: AppColors.inkSoft,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 38,
-                      letterSpacing: -1,
-                    ),
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) {
-                      return context.t('validation.enterAmount');
-                    }
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) {
-                      return context.t('validation.invalidAmount');
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // ─── Counterpart Field ────────────────────────────────────────────────────────
 
   Widget _counterpartField(BrandColors brand) {
     final label = _type == EntryType.transfer
@@ -981,51 +1827,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
     }
   }
 
-  Widget _categoryChips(Color selectedChipFg, BrandColors brand) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _categories.map((c) {
-        final selected = c == _category;
-        final s = styleFor(c);
-        return GestureDetector(
-          onTap: () => setState(() => _category = c),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 10,
-            ),
-            decoration: BoxDecoration(
-              color: selected ? brand.accentDark : s.background,
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  s.icon,
-                  size: 16,
-                  color: selected ? selectedChipFg : s.accent,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.categoryLabel(c),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? selectedChipFg : AppColors.ink,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-
   void _showAccountPicker(
       List<Account> accounts,
       BrandColors brand, {
@@ -1033,6 +1834,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
         required void Function(String? id) onSelect,
         bool allowNone = true,
       }) {
+    FocusScope.of(context).unfocus();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: brand.surface,
@@ -1058,7 +1860,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                     ),
                   ),
                 ),
-
                 Expanded(
                   child: ListView(
                     children: [
@@ -1074,19 +1875,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                           ),
                           trailing: selectedId == null
                               ? Icon(
-                            CupertinoIcons.checkmark_alt,
-                            color: brand.accentDark,
-                          )
+                                  CupertinoIcons.checkmark_alt,
+                                  color: brand.accentDark,
+                                )
                               : null,
                           onTap: () {
                             onSelect(null);
                             Navigator.pop(ctx);
                           },
                         ),
-
                       ...accounts.map((a) {
                         final isSelected = selectedId == a.id;
-
                         return ListTile(
                           leading: Icon(
                             _iconForType(a.type),
@@ -1105,9 +1904,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
                           ),
                           trailing: isSelected
                               ? Icon(
-                            CupertinoIcons.checkmark_alt,
-                            color: brand.accentDark,
-                          )
+                                  CupertinoIcons.checkmark_alt,
+                                  color: brand.accentDark,
+                                )
                               : null,
                           onTap: () {
                             onSelect(a.id);
@@ -1125,6 +1924,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       },
     );
   }
+
+  // ─── Account Type Helpers ─────────────────────────────────────────────────────
 
   IconData _iconForType(AccountType type) {
     switch (type) {
@@ -1166,64 +1967,5 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen> {
       case AccountType.otherLiability:
         return const Color(0xFF7A4040);
     }
-  }
-
-
-  Widget _typeToggle() {
-    final brand = context.brand;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Row(
-        children: [
-          _typeChip(context.t('expense.expense'), EntryType.expense),
-          _typeChip(context.t('expense.income'), EntryType.income),
-          _typeChip('Transfer', EntryType.transfer),
-          _typeChip('Receive', EntryType.receive),
-        ],
-      ),
-    );
-  }
-
-  Widget _typeChip(String label, EntryType type) {
-    final brand = context.brand;
-    final selected = _type == type;
-    final selectedFg = foregroundOn(brand.accentDark);
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _type = type;
-            _isAccountTransfer = false;
-            _toAccountId = null;
-            if (!(_type == EntryType.transfer || _type == EntryType.receive)) {
-              if (!_categories.contains(_category)) {
-                _category = _categories.first;
-              }
-            }
-          });
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? brand.accentDark : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: selected ? selectedFg : brand.ink,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

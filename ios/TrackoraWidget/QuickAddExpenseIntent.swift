@@ -78,7 +78,7 @@ struct QuickAddExpenseIntent: AppIntent {
     }
 }
 
-/// Updates the widget's draft amount for the +/- controls.
+/// Updates the widget's draft amount for the +/- controls (small/medium widget).
 ///
 /// This stays entirely in the widget extension through App Group
 /// UserDefaults, so tapping +/- does not open Trackora on iOS 17+.
@@ -109,6 +109,51 @@ struct AdjustDraftAmountIntent: AppIntent {
         let next = min(max(base + delta, 1), 9999)
         defaults.set(next, forKey: "widgetDraftAmount")
 
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
+
+/// Appends a digit to the large-widget numpad draft amount (integer cents).
+/// Tapping "5" on the numpad calls AppendDigitIntent(digit: 5).
+/// Amounts are stored as integer cents in `widgetDraftCents`:
+///   current=125 (=$1.25), digit=3 → new=1253 (=$12.53)
+@available(iOS 17.0, *)
+struct AppendDigitIntent: AppIntent {
+    static var title: LocalizedStringResource = "Append digit to draft amount"
+    static var description = IntentDescription("Build up a quick-add amount digit by digit on the large Trackora widget.")
+    static var isDiscoverable: Bool = false
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "Digit") var digit: Int
+
+    init() { self.digit = 0 }
+    init(digit: Int) { self.digit = digit }
+
+    func perform() async throws -> some IntentResult {
+        guard let defaults = UserDefaults(suiteName: trackoraAppGroup) else { return .result() }
+        let current = defaults.integer(forKey: "widgetDraftCents")
+        let next = min(current * 10 + digit, 999999) // max $9,999.99
+        defaults.set(next, forKey: "widgetDraftCents")
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
+
+/// Removes the last digit from the large-widget numpad draft amount.
+@available(iOS 17.0, *)
+struct BackspaceDigitIntent: AppIntent {
+    static var title: LocalizedStringResource = "Remove last digit from draft amount"
+    static var description = IntentDescription("Delete the last digit typed on the large Trackora widget numpad.")
+    static var isDiscoverable: Bool = false
+    static var openAppWhenRun: Bool = false
+
+    init() {}
+
+    func perform() async throws -> some IntentResult {
+        guard let defaults = UserDefaults(suiteName: trackoraAppGroup) else { return .result() }
+        let current = defaults.integer(forKey: "widgetDraftCents")
+        defaults.set(current / 10, forKey: "widgetDraftCents")
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
