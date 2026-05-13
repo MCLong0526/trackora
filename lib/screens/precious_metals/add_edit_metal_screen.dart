@@ -54,8 +54,8 @@ class _State extends ConsumerState<AddEditMetalScreen> {
     _date = widget.metal?.date ?? DateTime.now();
     _accountId = widget.metal?.accountId;
 
-    if (_isEdit) {
-      final m = widget.metal!;
+    final m = widget.metal;
+    if (m != null) {
       if (m.weightGrams > 0) _weightCtrl.text = _fmt(m.weightGrams);
       if (m.pricePerGram != null) _priceCtrl.text = _fmt(m.pricePerGram!);
       if (m.totalAmount > 0) _totalCtrl.text = _fmt(m.totalAmount);
