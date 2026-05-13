@@ -26,6 +26,9 @@ dependencies:
   # State management
   flutter_riverpod: ^2.5.1
 
+  # HTTP (live metal prices)
+  http: ^1.2.2
+
   # UI / charts / fonts
   fl_chart: ^0.69.0
   google_fonts: ^6.2.1
