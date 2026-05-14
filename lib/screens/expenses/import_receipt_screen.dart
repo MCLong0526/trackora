@@ -492,6 +492,14 @@ class _ImportReceiptScreenState extends ConsumerState<ImportReceiptScreen> {
         return CupertinoIcons.device_phone_portrait;
       case AccountType.cash:
         return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.investment:
+        return CupertinoIcons.chart_bar_fill;
+      case AccountType.savings:
+        return CupertinoIcons.archivebox_fill;
+      case AccountType.crypto:
+        return CupertinoIcons.bitcoin_circle_fill;
+      case AccountType.forex:
+        return CupertinoIcons.globe;
       case AccountType.creditCard:
         return CupertinoIcons.creditcard_fill;
       case AccountType.loan:
@@ -513,6 +521,14 @@ class _ImportReceiptScreenState extends ConsumerState<ImportReceiptScreen> {
         return const Color(0xFF8B5CF6);
       case AccountType.cash:
         return const Color(0xFF2A7D5A);
+      case AccountType.investment:
+        return const Color(0xFF2E9E5A);
+      case AccountType.savings:
+        return const Color(0xFF2E7EB5);
+      case AccountType.crypto:
+        return const Color(0xFFE8820E);
+      case AccountType.forex:
+        return const Color(0xFF7F4FD4);
       case AccountType.creditCard:
       case AccountType.loan:
       case AccountType.mortgage:

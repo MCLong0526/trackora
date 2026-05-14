@@ -11,10 +11,10 @@ import '../../models/saving_plan.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
-import '../accounts/accounts_screen.dart';
 import '../accounts/add_edit_account_screen.dart';
 
 class AssetsScreen extends ConsumerStatefulWidget {
@@ -25,16 +25,6 @@ class AssetsScreen extends ConsumerStatefulWidget {
 }
 
 class _AssetsScreenState extends ConsumerState<AssetsScreen> {
-  final _expanded = <AccountType, bool>{
-    AccountType.bank: false,
-    AccountType.eWallet: false,
-    AccountType.cash: false,
-    AccountType.creditCard: false,
-    AccountType.loan: false,
-    AccountType.mortgage: false,
-    AccountType.bnpl: false,
-    AccountType.otherLiability: false,
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -91,25 +81,18 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                     )
                   else ...[
                     _SectionLabel('Accounts'),
-                    const SizedBox(height: 8),
-                    _AccountsCard(
-                      snapshot: snapshot,
+                    const SizedBox(height: 12),
+                    AccountCarouselSection(
+                      accounts: accounts,
+                      balances: {
+                        for (final a in snapshot.accounts)
+                          a.account.id: a.balance,
+                      },
+                      allExpenses: expenses,
                       symbol: symbol,
                       visible: visible,
-                      expanded: _expanded,
-                      onToggle: (type) => setState(
-                        () => _expanded[type] = !(_expanded[type] ?? false),
-                      ),
-                      onAccountTap: (item) => _push(
-                        context,
-                        AddEditAccountScreen(account: item.account),
-                      ),
                     ),
-                    const SizedBox(height: 10),
-                    _ManageRow(
-                      onManage: () => _push(context, const AccountsScreen()),
-                      onAdd: () => _push(context, const AddEditAccountScreen()),
-                    ),
+                    const SizedBox(height: 8),
                   ],
                   if (snapshot.hasBorrowLend) ...[
                     const SizedBox(height: 20),
@@ -173,13 +156,14 @@ class _SectionLabel extends StatelessWidget {
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   final VoidCallback onAddAccount;
   const _Header({required this.onAddAccount});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final visible = ref.watch(balanceVisibleProvider);
     return Row(
       children: [
         Expanded(
@@ -202,6 +186,30 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        GestureDetector(
+          onTap: () => ref.read(balanceVisibleProvider.notifier).toggle(),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: brand.surface,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(
+              visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+              size: 17,
+              color: brand.inkSoft,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],
     );
@@ -547,303 +555,6 @@ class _WorthTile extends StatelessWidget {
   }
 }
 
-// ── Accounts Card (all types grouped in one card) ─────────────────────────────
-
-class _AccountsCard extends StatelessWidget {
-  final _AssetSnapshot snapshot;
-  final String symbol;
-  final bool visible;
-  final Map<AccountType, bool> expanded;
-  final ValueChanged<AccountType> onToggle;
-  final ValueChanged<_AccountAsset> onAccountTap;
-
-  const _AccountsCard({
-    required this.snapshot,
-    required this.symbol,
-    required this.visible,
-    required this.expanded,
-    required this.onToggle,
-    required this.onAccountTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final types = AccountType.values
-        .where((t) => snapshot.typeAccounts(t).isNotEmpty)
-        .toList();
-
-    return SectionCard(
-      radius: 22,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          for (var ti = 0; ti < types.length; ti++) ...[
-            if (ti > 0)
-              Divider(height: 1, thickness: 1, color: brand.divider),
-            _AccountTypeSection(
-              type: types[ti],
-              accounts: snapshot.typeAccounts(types[ti]),
-              typeTotal: snapshot.typeTotal(types[ti]),
-              symbol: symbol,
-              visible: visible,
-              expanded: expanded[types[ti]] ?? false,
-              onToggle: () => onToggle(types[ti]),
-              onAccountTap: onAccountTap,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountTypeSection extends StatelessWidget {
-  final AccountType type;
-  final List<_AccountAsset> accounts;
-  final double typeTotal;
-  final String symbol;
-  final bool visible;
-  final bool expanded;
-  final VoidCallback onToggle;
-  final ValueChanged<_AccountAsset> onAccountTap;
-
-  const _AccountTypeSection({
-    required this.type,
-    required this.accounts,
-    required this.typeTotal,
-    required this.symbol,
-    required this.visible,
-    required this.expanded,
-    required this.onToggle,
-    required this.onAccountTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final style = _styleFor(type);
-
-    return Column(
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: style.bg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(_iconFor(type), size: 16, color: style.accent),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    type.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: brand.ink,
-                    ),
-                  ),
-                ),
-                MaskedAmount(
-                  visibleText: formatMoney(symbol, typeTotal),
-                  visible: visible,
-                  currencyPrefix: symbol,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: typeTotal < 0 ? AppColors.expense : brand.ink,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                AnimatedRotation(
-                  turns: expanded ? 0 : -0.25,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    CupertinoIcons.chevron_down,
-                    size: 13,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (expanded) ...[
-          Divider(height: 1, thickness: 1, color: brand.divider),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Column(
-              children: [
-                for (var i = 0; i < accounts.length; i++) ...[
-                  _AccountRow(
-                    item: accounts[i],
-                    symbol: symbol,
-                    visible: visible,
-                    onTap: () => onAccountTap(accounts[i]),
-                  ),
-                  if (i < accounts.length - 1)
-                    Divider(
-                      height: 16,
-                      thickness: 1,
-                      color: brand.divider.withValues(alpha: 0.5),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _AccountRow extends StatelessWidget {
-  final _AccountAsset item;
-  final String symbol;
-  final bool visible;
-  final VoidCallback onTap;
-
-  const _AccountRow({
-    required this.item,
-    required this.symbol,
-    required this.visible,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.account.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: brand.ink,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            MaskedAmount(
-              visibleText: formatMoney(symbol, item.balance),
-              visible: visible,
-              currencyPrefix: symbol,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: item.balance < 0 ? AppColors.expense : brand.ink,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(CupertinoIcons.chevron_right, size: 12, color: brand.inkSoft),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Manage Row ────────────────────────────────────────────────────────────────
-
-class _ManageRow extends StatelessWidget {
-  final VoidCallback onManage;
-  final VoidCallback onAdd;
-
-  const _ManageRow({required this.onManage, required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            icon: CupertinoIcons.add_circled,
-            label: 'Add Account',
-            color: brand.accentDark,
-            onTap: onAdd,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ActionButton(
-            icon: CupertinoIcons.list_bullet,
-            label: 'Manage',
-            color: brand.inkSoft,
-            onTap: onManage,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 44,
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Borrow / Lend Card ────────────────────────────────────────────────────────
 
@@ -1584,48 +1295,6 @@ Map<String, double> _computeBalances(
     }
   }
   return balances;
-}
-
-({Color bg, Color accent}) _styleFor(AccountType type) {
-  switch (type) {
-    case AccountType.bank:
-      return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
-    case AccountType.eWallet:
-      return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
-    case AccountType.cash:
-      return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
-    case AccountType.creditCard:
-      return (bg: AppColors.blush, accent: const Color(0xFFB03060));
-    case AccountType.loan:
-      return (bg: AppColors.peach, accent: const Color(0xFF9C4A1A));
-    case AccountType.mortgage:
-      return (bg: AppColors.sand, accent: const Color(0xFF6B4D2A));
-    case AccountType.bnpl:
-      return (bg: AppColors.lilac, accent: const Color(0xFF5C3A9E));
-    case AccountType.otherLiability:
-      return (bg: AppColors.blush, accent: const Color(0xFF7A4040));
-  }
-}
-
-IconData _iconFor(AccountType type) {
-  switch (type) {
-    case AccountType.bank:
-      return CupertinoIcons.building_2_fill;
-    case AccountType.eWallet:
-      return CupertinoIcons.device_phone_portrait;
-    case AccountType.cash:
-      return CupertinoIcons.money_dollar_circle_fill;
-    case AccountType.creditCard:
-      return CupertinoIcons.creditcard_fill;
-    case AccountType.loan:
-      return CupertinoIcons.doc_text_fill;
-    case AccountType.mortgage:
-      return CupertinoIcons.house_fill;
-    case AccountType.bnpl:
-      return CupertinoIcons.cart_fill;
-    case AccountType.otherLiability:
-      return CupertinoIcons.minus_circle_fill;
-  }
 }
 
 void _push(BuildContext context, Widget screen) {

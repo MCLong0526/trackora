@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../models/account.dart';
@@ -78,6 +79,7 @@ const kCommonCreditCards = [
 ];
 
 const _assetTypes = [AccountType.bank, AccountType.eWallet, AccountType.cash];
+const _extraAssetTypes = [AccountType.investment, AccountType.savings, AccountType.crypto, AccountType.forex];
 
 class AddEditAccountScreen extends ConsumerStatefulWidget {
   final Account? account;
@@ -98,6 +100,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   String? _selectedProvider;
   bool _useCustomName = false;
   bool _saving = false;
+  double _animatedBalance = 0;
 
   bool get _isEdit => widget.account != null;
 
@@ -123,6 +126,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           _type.isLiability ? a.openingBalance.abs() : a.openingBalance;
       _balanceController.text =
           displayBalance > 0 ? displayBalance.toStringAsFixed(2) : '';
+      _animatedBalance = displayBalance > 0 ? displayBalance : 0;
 
       if (_hasProviderList) {
         final providers = _providers;
@@ -138,6 +142,15 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         _nameController.text = a.name;
       }
     }
+    _nameController.addListener(_onNameChanged);
+    _customNameController.addListener(_onNameChanged);
+    _balanceController.addListener(_onBalanceChanged);
+  }
+
+  void _onNameChanged() => setState(() {});
+  void _onBalanceChanged() {
+    final v = double.tryParse(_balanceController.text) ?? 0.0;
+    setState(() => _animatedBalance = v);
   }
 
   @override
@@ -269,31 +282,21 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           _isEdit ? 'Edit Account' : 'New Account',
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
-        actions: [
-          if (_isEdit)
-            GestureDetector(
-              onTap: _delete,
-              child: Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.blush,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.delete,
-                  size: 17,
-                  color: AppColors.expense,
-                ),
-              ),
-            ),
-        ],
+        actions: const [],
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
+              if (_isEdit) ...[
+                _livePreview(),
+                const SizedBox(height: 22),
+              ],
               _sectionLabel('Account Type', brand),
               const SizedBox(height: 10),
               _typeSelector(brand),
@@ -312,9 +315,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               _nameCard(brand),
               const SizedBox(height: 22),
               _sectionLabel(
-                _type.isLiability
-                    ? 'Balance Owed'
-                    : 'Opening Balance',
+                _type.isLiability ? 'Balance Owed' : 'Opening Balance',
                 brand,
               ),
               const SizedBox(height: 10),
@@ -357,10 +358,291 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                         ),
                 ),
               ),
+              if (_isEdit) ...[
+                const SizedBox(height: 32),
+                _dangerZone(brand),
+              ],
             ],
           ),
         ),
       ),
+        ),
+    );
+  }
+
+  List<Color> _cardGradient(AccountType t) {
+    switch (t) {
+      case AccountType.bank:
+        return [const Color(0xFFCFE0FF), const Color(0xFFA8C5F5)];
+      case AccountType.eWallet:
+        return [const Color(0xFFD2F0DD), const Color(0xFFA8DDC0)];
+      case AccountType.cash:
+        return [const Color(0xFFFBE9C2), const Color(0xFFF2D38C)];
+      case AccountType.investment:
+        return [const Color(0xFFD3F5E0), const Color(0xFFA8E8C2)];
+      case AccountType.savings:
+        return [const Color(0xFFD0EEFF), const Color(0xFFA5D5F5)];
+      case AccountType.crypto:
+        return [const Color(0xFFFFE8CC), const Color(0xFFFFD099)];
+      case AccountType.forex:
+        return [const Color(0xFFEAD5FF), const Color(0xFFD0A8F5)];
+      case AccountType.creditCard:
+        return [const Color(0xFFFCD7D7), const Color(0xFFF5B6B6)];
+      case AccountType.loan:
+        return [const Color(0xFFFFE3BC), const Color(0xFFFFCD83)];
+      case AccountType.mortgage:
+        return [const Color(0xFFEDE5D8), const Color(0xFFD9CAAB)];
+      case AccountType.bnpl:
+        return [const Color(0xFFE4D7F5), const Color(0xFFCBB3E8)];
+      case AccountType.otherLiability:
+        return [const Color(0xFFFAD3D3), const Color(0xFFF0ADAD)];
+    }
+  }
+
+  Color _cardInk(AccountType t) {
+    switch (t) {
+      case AccountType.bank:
+        return const Color(0xFF1E3F8A);
+      case AccountType.eWallet:
+        return const Color(0xFF1B5A3D);
+      case AccountType.cash:
+        return const Color(0xFF7A5512);
+      case AccountType.investment:
+        return const Color(0xFF1A5E36);
+      case AccountType.savings:
+        return const Color(0xFF1A4A6E);
+      case AccountType.crypto:
+        return const Color(0xFF8A4E04);
+      case AccountType.forex:
+        return const Color(0xFF4E2A8A);
+      case AccountType.creditCard:
+        return const Color(0xFF922C2C);
+      case AccountType.loan:
+        return const Color(0xFF8A5A04);
+      case AccountType.mortgage:
+        return const Color(0xFF6B4D2A);
+      case AccountType.bnpl:
+        return const Color(0xFF5C3A9E);
+      case AccountType.otherLiability:
+        return const Color(0xFF7A4040);
+    }
+  }
+
+  Widget _livePreview() {
+    final gradient = _cardGradient(_type);
+    final ink = _cardInk(_type);
+    final accent = _accentColorFor(_type);
+    final previewName = _resolvedName.isEmpty
+        ? (widget.account?.name ?? _type.label)
+        : _resolvedName;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: 160,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: gradient[1].withValues(alpha: 0.55),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 32,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          Positioned(
+            right: -60,
+            top: -60,
+            child: Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accent.withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -20,
+            bottom: -50,
+            child: Text(
+              _type.label.toUpperCase().substring(0, 1),
+              style: TextStyle(
+                fontSize: 160,
+                fontWeight: FontWeight.w900,
+                color: accent.withValues(alpha: 0.10),
+                height: 1,
+              ),
+            ),
+          ),
+          Positioned(
+            top: -40,
+            left: -20,
+            child: Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.40),
+                    Colors.white.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _type.label.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 9,
+                    letterSpacing: 1.3,
+                    color: ink.withValues(alpha: 0.60),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  previewName,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: ink,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Spacer(),
+                Text(
+                  _type.isLiability ? 'BALANCE OWED' : 'BALANCE',
+                  style: TextStyle(
+                    fontSize: 9,
+                    letterSpacing: 1.3,
+                    color: ink.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: _animatedBalance),
+                  duration: const Duration(milliseconds: 360),
+                  curve: Curves.easeOutCubic,
+                  builder: (ctx, v, _) => Text(
+                    NumberFormat.currency(symbol: 'RM ', decimalDigits: 2)
+                        .format(v),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dangerZone(BrandColors brand) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Danger Zone', brand),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(
+              color: AppColors.expense.withValues(alpha: 0.18),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.expense.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: InkWell(
+              onTap: _delete,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.expense.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.delete,
+                        size: 16,
+                        color: AppColors.expense,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Delete Account',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.expense,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            'Permanently removes this account. Cannot be undone.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: brand.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 13,
+                      color: AppColors.expense.withValues(alpha: 0.45),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -523,9 +805,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               textCapitalization: TextCapitalization.words,
               style: const TextStyle(fontSize: 15),
               decoration: InputDecoration(
-                hintText: _type.isLiability
-                    ? 'e.g. Car Loan, Home Loan'
-                    : 'e.g. My Wallet, Piggy Bank',
+                hintText: _type.namePlaceholder,
                 hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
                 filled: false,
                 border: InputBorder.none,
@@ -608,8 +888,16 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         const SizedBox(height: 8),
         SectionCard(
           padding: const EdgeInsets.all(4),
-          child: Row(
-            children: _assetTypes.map((t) => _typeChip(t, brand)).toList(),
+          child: Column(
+            children: [
+              Row(
+                children: _assetTypes.map((t) => _typeChip(t, brand)).toList(),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: _extraAssetTypes.map((t) => _typeChip(t, brand)).toList(),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 14),
@@ -707,7 +995,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   void _showProviderPicker(BrandColors brand) {
-    final providers = List<String>.from(_providers);
+    final allProviders = List<String>.from(_providers);
     final label = _type == AccountType.bank
         ? 'Select Bank'
         : _type == AccountType.creditCard
@@ -717,80 +1005,115 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: brand.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 420,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: providers.length,
-                    separatorBuilder: (_, _) => Divider(
-                      height: 1,
-                      color: brand.inkSoft.withValues(alpha: 0.12),
-                    ),
-                    itemBuilder: (context, index) {
-                      final p = providers[index];
-                      final isCustom = p == _kCustomLabel;
-                      final isSelected = isCustom
-                          ? _useCustomName
-                          : _selectedProvider == p && !_useCustomName;
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final filtered = query.isEmpty
+                ? allProviders
+                : allProviders
+                    .where((p) =>
+                        p.toLowerCase().contains(query.toLowerCase()))
+                    .toList();
 
-                      return ListTile(
-                        leading: isCustom
-                            ? Icon(CupertinoIcons.pencil, color: brand.inkSoft, size: 18)
-                            : Icon(
-                                _iconFor(_type),
-                                color: _accentColorFor(_type),
-                                size: 18,
-                              ),
-                        title: Text(
-                          p,
-                          style: TextStyle(
-                            color: brand.ink,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+            return SafeArea(
+              top: false,
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.72,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: brand.background,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextField(
+                          autofocus: false,
+                          onChanged: (v) => setSheetState(() => query = v),
+                          style: TextStyle(fontSize: 14, color: brand.ink),
+                          decoration: InputDecoration(
+                            hintText: 'Search…',
+                            hintStyle: TextStyle(color: brand.inkSoft, fontSize: 14),
+                            prefixIcon: Icon(CupertinoIcons.search, size: 16, color: brand.inkSoft),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
                           ),
                         ),
-                        trailing: isSelected
-                            ? Icon(
-                                CupertinoIcons.checkmark_alt,
-                                color: brand.accentDark,
-                              )
-                            : null,
-                        onTap: () {
-                          setState(() {
-                            _selectedProvider = p;
-                            _useCustomName = isCustom;
-                            if (!isCustom) _customNameController.clear();
-                          });
-                          Navigator.pop(ctx);
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          color: brand.inkSoft.withValues(alpha: 0.12),
+                        ),
+                        itemBuilder: (context, index) {
+                          final p = filtered[index];
+                          final isCustom = p == _kCustomLabel;
+                          final isSelected = isCustom
+                              ? _useCustomName
+                              : _selectedProvider == p && !_useCustomName;
+
+                          return ListTile(
+                            leading: isCustom
+                                ? Icon(CupertinoIcons.pencil, color: brand.inkSoft, size: 18)
+                                : Icon(
+                                    _iconFor(_type),
+                                    color: _accentColorFor(_type),
+                                    size: 18,
+                                  ),
+                            title: Text(
+                              p,
+                              style: TextStyle(
+                                color: brand.ink,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                            trailing: isSelected
+                                ? Icon(
+                                    CupertinoIcons.checkmark_alt,
+                                    color: brand.accentDark,
+                                  )
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _selectedProvider = p;
+                                _useCustomName = isCustom;
+                                if (!isCustom) _customNameController.clear();
+                              });
+                              Navigator.pop(ctx);
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -804,6 +1127,14 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         return PhosphorIconsFill.deviceMobile;
       case AccountType.cash:
         return PhosphorIconsFill.currencyDollar;
+      case AccountType.investment:
+        return PhosphorIconsFill.chartLineUp;
+      case AccountType.savings:
+        return PhosphorIconsFill.piggyBank;
+      case AccountType.crypto:
+        return PhosphorIconsFill.currencyBtc;
+      case AccountType.forex:
+        return PhosphorIconsFill.globe;
       case AccountType.creditCard:
         return CupertinoIcons.creditcard_fill;
       case AccountType.loan:
@@ -825,6 +1156,14 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         return const Color(0xFF1F7A60);
       case AccountType.cash:
         return const Color(0xFFA0801C);
+      case AccountType.investment:
+        return const Color(0xFF2E9E5A);
+      case AccountType.savings:
+        return const Color(0xFF2E7EB5);
+      case AccountType.crypto:
+        return const Color(0xFFE8820E);
+      case AccountType.forex:
+        return const Color(0xFF7F4FD4);
       case AccountType.creditCard:
         return const Color(0xFFB03060);
       case AccountType.loan:

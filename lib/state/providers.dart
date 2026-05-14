@@ -14,10 +14,12 @@ import '../models/saving_plan.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/borrow_lending_repository.dart';
 import '../repositories/expense_repository.dart';
+import '../repositories/firebase_account_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
 import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
 import '../repositories/firebase_person_repository.dart';
+import '../repositories/firebase_precious_metal_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/installment_repository.dart';
 import '../repositories/local_account_repository.dart';
@@ -65,9 +67,14 @@ final isOnlineProvider = Provider<bool>((ref) {
 
 final authServiceProvider = Provider((_) => AuthService());
 
-final accountRepositoryProvider = Provider<AccountRepository>(
-  (_) => LocalAccountRepository(),
-);
+final accountRepositoryProvider = Provider<AccountRepository>((_) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalAccountRepository();
+    case StorageMode.firebase:
+      return FirebaseAccountRepository();
+  }
+});
 
 /// Stream of all accounts for the active user.
 final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
@@ -458,19 +465,21 @@ final pendingSyncCountProvider = StreamProvider.autoDispose<int>((ref) {
   return SyncService().pendingCountStream(user.uid);
 });
 
-/// Always local so writes are immediately visible regardless of Firestore rules.
-/// Firebase sync is handled separately by SyncService.
-final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>(
-  (_) => LocalPreciousMetalRepository(),
-);
+final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((_) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalPreciousMetalRepository();
+    case StorageMode.firebase:
+      return FirebasePreciousMetalRepository();
+  }
+});
 
 /// Stream of all precious metal transactions for the active user.
-/// Always reads from local Hive — guaranteed to reflect writes immediately.
 final preciousMetalsProvider =
     StreamProvider.autoDispose<List<PreciousMetal>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return LocalPreciousMetalRepository().getAll(user.uid);
+  return ref.read(preciousMetalRepositoryProvider).getAll(user.uid);
 });
 
 /// Watches for offline→online transitions and automatically uploads pending

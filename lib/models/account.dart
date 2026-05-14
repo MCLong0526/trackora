@@ -3,6 +3,10 @@ enum AccountType {
   bank,
   eWallet,
   cash,
+  investment,
+  savings,
+  crypto,
+  forex,
   // Liability accounts
   creditCard,
   loan,
@@ -20,6 +24,26 @@ extension AccountTypeLabel on AccountType {
         AccountType.otherLiability,
       }.contains(this);
 
+  String get namePlaceholder {
+    switch (this) {
+      case AccountType.investment:
+        return 'e.g. Portfolio, ETF Account';
+      case AccountType.savings:
+        return 'e.g. High-Yield Savings';
+      case AccountType.crypto:
+        return 'e.g. BTC Wallet, ETH';
+      case AccountType.forex:
+        return 'e.g. USD Account';
+      case AccountType.loan:
+      case AccountType.mortgage:
+      case AccountType.bnpl:
+      case AccountType.otherLiability:
+        return 'e.g. Car Loan, Home Loan';
+      default:
+        return 'e.g. My Wallet, Piggy Bank';
+    }
+  }
+
   String get label {
     switch (this) {
       case AccountType.bank:
@@ -28,6 +52,14 @@ extension AccountTypeLabel on AccountType {
         return 'E-Wallet';
       case AccountType.cash:
         return 'Cash';
+      case AccountType.investment:
+        return 'Investment';
+      case AccountType.savings:
+        return 'Savings';
+      case AccountType.crypto:
+        return 'Crypto';
+      case AccountType.forex:
+        return 'Forex';
       case AccountType.creditCard:
         return 'Credit Card';
       case AccountType.loan:
@@ -49,6 +81,14 @@ extension AccountTypeLabel on AccountType {
         return 'eWallet';
       case AccountType.cash:
         return 'cash';
+      case AccountType.investment:
+        return 'investment';
+      case AccountType.savings:
+        return 'savings';
+      case AccountType.crypto:
+        return 'crypto';
+      case AccountType.forex:
+        return 'forex';
       case AccountType.creditCard:
         return 'creditCard';
       case AccountType.loan:
@@ -70,6 +110,14 @@ extension AccountTypeLabel on AccountType {
         return AccountType.eWallet;
       case 'cash':
         return AccountType.cash;
+      case 'investment':
+        return AccountType.investment;
+      case 'savings':
+        return AccountType.savings;
+      case 'crypto':
+        return AccountType.crypto;
+      case 'forex':
+        return AccountType.forex;
       case 'creditCard':
         return AccountType.creditCard;
       case 'loan':

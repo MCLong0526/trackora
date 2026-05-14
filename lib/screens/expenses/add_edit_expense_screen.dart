@@ -491,6 +491,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           _saveSuccess = true;
         });
         await _saveBtnCtrl.forward(from: 0);
+        if (mounted) {
+          AppToast.show(
+            context,
+            _isEdit ? 'Entry updated' : 'Entry saved',
+            type: AppToastType.success,
+          );
+        }
         await Future.delayed(const Duration(milliseconds: 480));
         if (mounted) await _animatedClose();
       }
@@ -553,7 +560,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         await SyncService().markPendingDelete(user.uid, expenseId);
       }
     }
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      AppToast.show(context, 'Entry deleted', type: AppToastType.success);
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -1935,6 +1945,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         return CupertinoIcons.device_phone_portrait;
       case AccountType.cash:
         return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.investment:
+        return CupertinoIcons.chart_bar_fill;
+      case AccountType.savings:
+        return CupertinoIcons.archivebox_fill;
+      case AccountType.crypto:
+        return CupertinoIcons.bitcoin_circle_fill;
+      case AccountType.forex:
+        return CupertinoIcons.globe;
       case AccountType.creditCard:
         return CupertinoIcons.creditcard_fill;
       case AccountType.loan:
@@ -1956,6 +1974,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         return const Color(0xFF1F7A60);
       case AccountType.cash:
         return const Color(0xFFA0801C);
+      case AccountType.investment:
+        return const Color(0xFF2E9E5A);
+      case AccountType.savings:
+        return const Color(0xFF2E7EB5);
+      case AccountType.crypto:
+        return const Color(0xFFE8820E);
+      case AccountType.forex:
+        return const Color(0xFF7F4FD4);
       case AccountType.creditCard:
         return const Color(0xFFB03060);
       case AccountType.loan:
