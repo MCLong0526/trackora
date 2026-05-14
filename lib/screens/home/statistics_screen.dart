@@ -202,7 +202,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           final prevLabel = prevRange?.label ?? '';
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -211,7 +211,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   onManage: () => _showVisibilitySheet(context),
                   onShare: _isSharing ? null : () => _shareSnapshot(context),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
                 // ── 2. Period pills (W M 6M Y All)
                 _PeriodPills(
@@ -237,9 +237,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                     });
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // ── 3. Spending header with comparison
+                // ── 3. Spending header with comparison + exclude toggle
                 _SpendingHeader(
                   period: _period,
                   anchor: _anchor,
@@ -251,6 +251,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   showNav: _period != _StatsPeriod.all,
                   onPrev: () => _step(-1),
                   onNext: () => _step(1),
+                  excludeFixed: _excludeFixed,
+                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
                 ),
                 const SizedBox(height: 14),
 
@@ -262,8 +264,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   allExpenses: allExpenses,
                   range: range,
                   symbol: symbol,
-                  excludeFixed: _excludeFixed,
-                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
                 ),
               ],
             ),
@@ -313,8 +313,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     required List<Expense> allExpenses,
     required _StatsRange range,
     required String symbol,
-    bool excludeFixed = true,
-    ValueChanged<bool>? onExcludeChanged,
     bool forReport = false,
   }) {
     final showLine =
@@ -332,8 +330,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       period: _period,
       symbol: symbol,
       stacked: forReport,
-      excludeFixed: excludeFixed,
-      onExcludeChanged: onExcludeChanged,
     );
   }
 
@@ -483,6 +479,37 @@ class _StatsRange {
   });
 }
 
+// ── Floating card with shadow ───────────────────────────────────
+
+class _FloatCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _FloatCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: context.brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF000000).withValues(alpha: 0.055),
+            blurRadius: 24,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
 // ── Top action bar ─────────────────────────────────────────────
 
 class _TopActionBar extends StatelessWidget {
@@ -501,23 +528,52 @@ class _TopActionBar extends StatelessWidget {
             style: Theme.of(context).textTheme.displayMedium,
           ),
         ),
-        CircleIconButton(
+        _ActionBtn(
           icon: CupertinoIcons.slider_horizontal_3,
-          size: 40,
           onTap: onManage,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Opacity(
           opacity: onShare == null ? 0.5 : 1,
-          child: CircleIconButton(
+          child: _ActionBtn(
             icon: CupertinoIcons.share,
-            size: 40,
             onTap: onShare ?? () {},
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ActionBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: brand.surface,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF000000).withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 18, color: brand.ink),
+      ),
     );
   }
 }
@@ -534,16 +590,18 @@ class _PeriodPills extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (final p in _StatsPeriod.values) ...[
-          _PeriodPill(
-            label: _label(p),
-            selected: period == p,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onChanged(p);
-            },
+        for (int i = 0; i < _StatsPeriod.values.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: _PeriodPill(
+              label: _label(_StatsPeriod.values[i]),
+              selected: period == _StatsPeriod.values[i],
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onChanged(_StatsPeriod.values[i]);
+              },
+            ),
           ),
-          if (p != _StatsPeriod.values.last) const SizedBox(width: 8),
         ],
       ],
     );
@@ -572,23 +630,132 @@ class _PeriodPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? brand.accentDark : brand.surface,
-          borderRadius: BorderRadius.circular(AppRadius.chip),
+          color: selected
+              ? brand.accentDark
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : Colors.white.withValues(alpha: 0.72)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? brand.accentDark.withValues(alpha: 0.45)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.13)
+                    : Colors.white.withValues(alpha: 0.85)),
+            width: 0.8,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: brand.accentDark.withValues(alpha: 0.32),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFF000000).withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF000000).withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
-        child: Text(
-          label,
+        child: Center(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 180),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: selected ? foregroundOn(brand.accentDark) : brand.inkSoft,
+            ),
+            child: Text(label),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared glass tab pill ──────────────────────────────────────
+
+class _GlassTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color accentDark;
+
+  const _GlassTab({
+    required this.label,
+    required this.selected,
+    required this.accentDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? accentDark
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.07)
+                : Colors.white.withValues(alpha: 0.72)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? accentDark.withValues(alpha: 0.45)
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.13)
+                  : Colors.white.withValues(alpha: 0.85)),
+          width: 0.8,
+        ),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: accentDark.withValues(alpha: 0.30),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: const Color(0xFF000000).withValues(alpha: 0.07),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF000000).withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Center(
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: selected ? foregroundOn(brand.accentDark) : brand.ink,
+            fontWeight: FontWeight.w700,
+            color: selected ? foregroundOn(accentDark) : brand.inkSoft,
           ),
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ),
     );
@@ -608,6 +775,8 @@ class _SpendingHeader extends StatelessWidget {
   final bool showNav;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final bool? excludeFixed;
+  final ValueChanged<bool>? onExcludeChanged;
 
   const _SpendingHeader({
     required this.period,
@@ -620,6 +789,8 @@ class _SpendingHeader extends StatelessWidget {
     required this.showNav,
     required this.onPrev,
     required this.onNext,
+    this.excludeFixed,
+    this.onExcludeChanged,
   });
 
   @override
@@ -630,84 +801,117 @@ class _SpendingHeader extends StatelessWidget {
         ? ((currentTotal - prevTotal) / prevTotal * 100)
         : 0.0;
     final isIncrease = pctChange > 0;
-
     final periodHeader = _buildPeriodHeader();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                periodHeader,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-            if (showNav) ...[
-              _navBtn(context, CupertinoIcons.chevron_left, onPrev),
-              const SizedBox(width: 6),
-              _navBtn(context, CupertinoIcons.chevron_right, onNext),
-            ],
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Flexible(
-              child: FittedBox(
-                alignment: Alignment.centerLeft,
-                fit: BoxFit.scaleDown,
+    return _FloatCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
                 child: Text(
-                  formatMoney(symbol, currentTotal),
+                  periodHeader,
                   style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1,
-                    color: brand.ink,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
-            ),
-            if (hasComparison) ...[
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (isIncrease ? AppColors.expense : AppColors.income)
-                      .withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${isIncrease ? '↑' : '↓'}${pctChange.abs().toStringAsFixed(0)}%',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: isIncrease ? AppColors.expense : AppColors.income,
-                  ),
-                ),
-              ),
+              if (showNav) ...[
+                _navBtn(context, CupertinoIcons.chevron_left, onPrev),
+                const SizedBox(width: 6),
+                _navBtn(context, CupertinoIcons.chevron_right, onNext),
+              ],
             ],
-          ],
-        ),
-        if (hasComparison) ...[
-          const SizedBox(height: 4),
-          Text(
-            'vs $prevLabel · ${formatMoney(symbol, prevTotal)}',
-            style: TextStyle(
-              fontSize: 12,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
           ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Flexible(
+                child: FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatMoney(symbol, currentTotal),
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1.5,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+              ),
+              if (hasComparison) ...[
+                const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (isIncrease
+                              ? AppColors.expense
+                              : AppColors.income)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${isIncrease ? '↑' : '↓'}${pctChange.abs().toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isIncrease ? AppColors.expense : AppColors.income,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (hasComparison) ...[
+            const SizedBox(height: 6),
+            Text(
+              'vs $prevLabel · ${formatMoney(symbol, prevTotal)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: brand.inkSoft,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (onExcludeChanged != null) ...[
+            const SizedBox(height: 14),
+            Container(height: 1, color: brand.divider),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Exclude bills + installments',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+                ),
+                CupertinoSwitch(
+                  value: excludeFixed ?? true,
+                  onChanged: onExcludeChanged,
+                ),
+              ],
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -727,16 +931,17 @@ class _SpendingHeader extends StatelessWidget {
   }
 
   Widget _navBtn(BuildContext context, IconData icon, VoidCallback onTap) {
+    final brand = context.brand;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: context.brand.surface,
+          color: brand.background,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 17, color: context.brand.ink),
+        child: Icon(icon, size: 17, color: brand.ink),
       ),
     );
   }
@@ -811,40 +1016,52 @@ class _LineChartCardState extends State<_LineChartCard>
     final maxV = values.fold<double>(0, (m, v) => v > m ? v : m);
     final chartMax = maxV == 0 ? 1.0 : maxV * 1.25;
 
-    return SectionCard(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+    return _FloatCard(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.t('stats.lineChart.title'),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: brand.ink,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('stats.lineChart.title'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: brand.inkSoft,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _subtitle(context),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: brand.inkSoft.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            _subtitle(context),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: brand.inkSoft,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Text(
             formatMoney(widget.symbol, total),
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 30,
               fontWeight: FontWeight.w900,
               letterSpacing: -1,
               color: brand.ink,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           if (isAll)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1159,8 +1376,6 @@ class _ChartsCarousel extends StatefulWidget {
   final _StatsPeriod period;
   final String symbol;
   final bool stacked;
-  final bool excludeFixed;
-  final ValueChanged<bool>? onExcludeChanged;
 
   const _ChartsCarousel({
     required this.showLine,
@@ -1171,8 +1386,6 @@ class _ChartsCarousel extends StatefulWidget {
     required this.period,
     required this.symbol,
     required this.stacked,
-    this.excludeFixed = true,
-    this.onExcludeChanged,
   });
 
   @override
@@ -1259,78 +1472,33 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Exclude bills + installments toggle
-        if (widget.onExcludeChanged != null)
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-            decoration: BoxDecoration(
-              color: brand.surface,
-              borderRadius: BorderRadius.circular(AppRadius.field),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Exclude bills + installments',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                ),
-                CupertinoSwitch(
-                  value: widget.excludeFixed,
-                  onChanged: widget.onExcludeChanged,
-                ),
-              ],
-            ),
-          ),
-        // "By Category" / "Trend" tab switcher
+        // "By Category" / "Trend" — individual floating glass tabs
         Row(
           children: [
             for (var i = 0; i < pages.length; i++) ...[
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  _controller.animateToPage(
-                    i,
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                  );
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: _page == i ? brand.ink : Colors.transparent,
-                        width: 2.5,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    pages[i].label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: _page == i
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: _page == i ? brand.ink : brand.inkSoft,
-                    ),
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _controller.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                    );
+                  },
+                  child: _GlassTab(
+                    label: pages[i].label,
+                    selected: _page == i,
+                    accentDark: brand.accentDark,
                   ),
                 ),
               ),
-              if (i < pages.length - 1) const SizedBox(width: 20),
             ],
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         SizedBox(
           height: 540,
           child: PageView(
@@ -1338,7 +1506,11 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
             onPageChanged: (i) => setState(() => _page = i),
             children: [
               for (final page in pages)
-                SingleChildScrollView(child: page.builder(context)),
+                // Donut card manages its own internal scroll; trend uses SingleChildScrollView
+                if (page.id == 'donut')
+                  page.builder(context)
+                else
+                  SingleChildScrollView(child: page.builder(context)),
             ],
           ),
         ),
@@ -1380,7 +1552,7 @@ class _ReportHeader extends StatelessWidget {
       _StatsPeriod.all => 'stats.filterAll',
     };
     final generated = DateFormat('MMM d, yyyy · HH:mm').format(DateTime.now());
-    return SectionCard(
+    return _FloatCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1514,62 +1686,129 @@ class _CategoryCardState extends State<_CategoryCard> {
     final total = widget.expenses.fold<double>(0, (s, e) => s + e.amount);
     final brand = context.brand;
 
-    return SectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (widget.expenses.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  context.t('stats.noCategorySpend'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: brand.inkSoft),
-                ),
-              ),
-            )
-          else ...[
-            // Donut chart centered
-            Center(
-              child: AnimatedDonutChart(
-                key: ValueKey('${widget.rangeLabel}_${widget.expenses.length}'),
-                size: 200,
-                strokeWidth: 36,
-                showLabels: true,
-                segments: sorted
-                    .map(
-                      (entry) => DonutSegment(
-                        value: entry.value,
-                        color: _donutColorFor(entry.key),
-                      ),
-                    )
-                    .toList(),
-                centerChild: _CenterTotalLabel(
-                  total: total,
-                  symbol: widget.symbol,
-                ),
-                onSegmentTap: (idx) {
-                  if (idx < sorted.length) {
-                    _showCategoryRecords(context, sorted[idx]);
-                  }
-                },
-              ),
+    if (widget.expenses.isEmpty) {
+      return _FloatCard(
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32),
+          child: Center(
+            child: Text(
+              context.t('stats.noCategorySpend'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: brand.inkSoft),
             ),
-            const SizedBox(height: 20),
-            // Legend rows — full width below the chart
-            for (final entry in sorted.take(6))
-              _LegendRow(
-                entry: entry,
-                total: total,
-                symbol: widget.symbol,
-                onTap: () => _showCategoryRecords(context, entry),
+          ),
+        ),
+      );
+    }
+
+    // Use LayoutBuilder to detect if height is bounded (in PageView) vs unbounded (stacked/report)
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final bounded = constraints.hasBoundedHeight;
+
+        final chart = Center(
+          child: AnimatedDonutChart(
+            key: ValueKey('${widget.rangeLabel}_${widget.expenses.length}'),
+            size: 190,
+            strokeWidth: 34,
+            showLabels: true,
+            segments: sorted
+                .map(
+                  (entry) => DonutSegment(
+                    value: entry.value,
+                    color: _donutColorFor(entry.key),
+                  ),
+                )
+                .toList(),
+            centerChild: _CenterTotalLabel(total: total, symbol: widget.symbol),
+            onSegmentTap: (idx) {
+              if (idx < sorted.length) {
+                _showCategoryRecords(context, sorted[idx]);
+              }
+            },
+          ),
+        );
+
+        final legendItems = sorted.take(6).map((entry) => _LegendRow(
+          entry: entry,
+          total: total,
+          symbol: widget.symbol,
+          onTap: () => _showCategoryRecords(context, entry),
+        )).toList();
+
+        if (bounded) {
+          // Bounded height (in PageView): chart stays fixed, only legend scrolls
+          return Container(
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF000000).withValues(alpha: 0.055),
+                  blurRadius: 24,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'BY CATEGORY',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: brand.inkSoft,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      chart,
+                      const SizedBox(height: 18),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+                    children: legendItems,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Unbounded height (stacked/report mode): inline layout
+        return _FloatCard(
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'BY CATEGORY',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
+                  letterSpacing: 0.8,
+                ),
               ),
-          ],
-        ],
-      ),
+              const SizedBox(height: 16),
+              chart,
+              const SizedBox(height: 22),
+              ...legendItems,
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1668,33 +1907,57 @@ class _LegendRow extends StatelessWidget {
       },
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                context.categoryLabel(entry.key),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: brand.ink,
+            Row(
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(color: c, shape: BoxShape.circle),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    context.categoryLabel(entry.key),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(pct * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: brand.inkSoft,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  formatMoney(symbol, entry.value),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: brand.ink,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              '${(pct * 100).toStringAsFixed(0)}%  ·  ${formatMoney(symbol, entry.value)}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: brand.inkSoft,
+            const SizedBox(height: 5),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: pct.clamp(0.0, 1.0),
+                minHeight: 4,
+                backgroundColor: brand.background,
+                valueColor: AlwaysStoppedAnimation<Color>(c),
               ),
             ),
           ],

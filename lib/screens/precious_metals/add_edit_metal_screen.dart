@@ -715,11 +715,11 @@ class _InputGroup extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: AppShadows.soft,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.field),
+        borderRadius: BorderRadius.circular(22),
         child: Column(children: children),
       ),
     );
@@ -816,6 +816,7 @@ class _Field extends StatelessWidget {
                       fontWeight: FontWeight.w400,
                       color: brand.inkSoft.withValues(alpha: 0.45),
                     ),
+                    filled: false,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
