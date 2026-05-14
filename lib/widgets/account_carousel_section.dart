@@ -1,0 +1,2762 @@
+import 'dart:math' show pi, cos, sin, Random;
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+import '../models/account.dart';
+import '../models/expense.dart';
+import '../services/money_format.dart';
+import '../state/providers.dart';
+import 'masked_amount.dart';
+import '../screens/accounts/add_edit_account_screen.dart';
+
+const _kCustomLabel = 'Other / Custom';
+
+// ── Pastel palette ────────────────────────────────────────────
+typedef _Pal = ({
+  Color a,
+  Color b,
+  Color ink,
+  Color accent,
+  String glyph,
+  String label
+});
+
+_Pal _paletteForAccountType(AccountType type) {
+  switch (type) {
+    case AccountType.bank:
+      return (
+        a: const Color(0xFFCFE0FF),
+        b: const Color(0xFFA8C5F5),
+        ink: const Color(0xFF1E3F8A),
+        accent: const Color(0xFF3C6FE0),
+        glyph: '◆',
+        label: 'BANK',
+      );
+    case AccountType.eWallet:
+      return (
+        a: const Color(0xFFD2F0DD),
+        b: const Color(0xFFA8DDC0),
+        ink: const Color(0xFF1B5A3D),
+        accent: const Color(0xFF33A874),
+        glyph: '◐',
+        label: 'E-WALLET',
+      );
+    case AccountType.cash:
+      return (
+        a: const Color(0xFFFBE9C2),
+        b: const Color(0xFFF2D38C),
+        ink: const Color(0xFF7A5512),
+        accent: const Color(0xFFC99838),
+        glyph: '\$',
+        label: 'CASH',
+      );
+    case AccountType.creditCard:
+      return (
+        a: const Color(0xFFFCD7D7),
+        b: const Color(0xFFF5B6B6),
+        ink: const Color(0xFF922C2C),
+        accent: const Color(0xFFCC4545),
+        glyph: '✦',
+        label: 'CREDIT',
+      );
+    case AccountType.loan:
+      return (
+        a: const Color(0xFFFFE3BC),
+        b: const Color(0xFFFFCD83),
+        ink: const Color(0xFF8A5A04),
+        accent: const Color(0xFFE89A14),
+        glyph: '▲',
+        label: 'LOAN',
+      );
+    case AccountType.mortgage:
+      return (
+        a: const Color(0xFFEDE5D8),
+        b: const Color(0xFFD9CAAB),
+        ink: const Color(0xFF6B4D2A),
+        accent: const Color(0xFF9B7045),
+        glyph: '⌂',
+        label: 'MORTGAGE',
+      );
+    case AccountType.bnpl:
+      return (
+        a: const Color(0xFFE4D7F5),
+        b: const Color(0xFFCBB3E8),
+        ink: const Color(0xFF5C3A9E),
+        accent: const Color(0xFF8B5FD4),
+        glyph: '⬡',
+        label: 'BNPL',
+      );
+    case AccountType.otherLiability:
+      return (
+        a: const Color(0xFFFAD3D3),
+        b: const Color(0xFFF0ADAD),
+        ink: const Color(0xFF7A4040),
+        accent: const Color(0xFFB55555),
+        glyph: '−',
+        label: 'DEBT',
+      );
+    case AccountType.investment:
+      return (
+        a: const Color(0xFFD3F5E0),
+        b: const Color(0xFFA8E8C2),
+        ink: const Color(0xFF1A5E36),
+        accent: const Color(0xFF2E9E5A),
+        glyph: '▲',
+        label: 'INVEST',
+      );
+    case AccountType.savings:
+      return (
+        a: const Color(0xFFD0EEFF),
+        b: const Color(0xFFA5D5F5),
+        ink: const Color(0xFF1A4A6E),
+        accent: const Color(0xFF2E7EB5),
+        glyph: '◎',
+        label: 'SAVINGS',
+      );
+    case AccountType.crypto:
+      return (
+        a: const Color(0xFFFFE8CC),
+        b: const Color(0xFFFFD099),
+        ink: const Color(0xFF8A4E04),
+        accent: const Color(0xFFE8820E),
+        glyph: '◈',
+        label: 'CRYPTO',
+      );
+    case AccountType.forex:
+      return (
+        a: const Color(0xFFEAD5FF),
+        b: const Color(0xFFD0A8F5),
+        ink: const Color(0xFF4E2A8A),
+        accent: const Color(0xFF7F4FD4),
+        glyph: '◇',
+        label: 'FOREX',
+      );
+  }
+}
+
+// ── Public wrapper ────────────────────────────────────────────
+/// Drop-in carousel section used on both AccountsScreen and AssetsScreen.
+class AccountCarouselSection extends StatelessWidget {
+  final List<Account> accounts;
+  final Map<String, double> balances;
+  final List<Expense> allExpenses;
+  final String symbol;
+  final bool visible;
+
+  const AccountCarouselSection({
+    super.key,
+    required this.accounts,
+    required this.balances,
+    required this.allExpenses,
+    required this.symbol,
+    required this.visible,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (accounts.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (ctx, constraints) => _AccountCarousel(
+        accounts: accounts,
+        balances: balances,
+        allExpenses: allExpenses,
+        symbol: symbol,
+        visible: visible,
+        availableWidth: constraints.maxWidth,
+      ),
+    );
+  }
+}
+
+// ── Carousel ──────────────────────────────────────────────────
+class _AccountCarousel extends StatefulWidget {
+  final List<Account> accounts;
+  final Map<String, double> balances;
+  final List<Expense> allExpenses;
+  final String symbol;
+  final bool visible;
+  final double availableWidth;
+
+  const _AccountCarousel({
+    required this.accounts,
+    required this.balances,
+    required this.allExpenses,
+    required this.symbol,
+    required this.visible,
+    required this.availableWidth,
+  });
+
+  @override
+  State<_AccountCarousel> createState() => _AccountCarouselState();
+}
+
+class _AccountCarouselState extends State<_AccountCarousel>
+    with SingleTickerProviderStateMixin {
+  int _activeIndex = 0;
+  bool _isFlipped = false;
+  late final AnimationController _flipCtrl;
+  late final Animation<double> _flipAnim;
+
+  static const double _cardW = 280.0;
+  static const double _cardH = 184.0;
+  static const double _cardHFlipped = 420.0;
+  static const double _cardSpacing = 270.0;
+  static const _springCurve = Cubic(0.34, 1.36, 0.64, 1.0);
+
+  @override
+  void initState() {
+    super.initState();
+    _flipCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _flipAnim = CurvedAnimation(
+      parent: _flipCtrl,
+      curve: Curves.easeInOutQuart,
+    );
+  }
+
+  @override
+  void dispose() {
+    _flipCtrl.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int i) {
+    if (i == _activeIndex) return;
+    if (_isFlipped) {
+      _flipCtrl.reverse();
+      setState(() {
+        _isFlipped = false;
+        _activeIndex = i;
+      });
+    } else {
+      setState(() => _activeIndex = i);
+    }
+  }
+
+  void _toggleFlip() {
+    if (_isFlipped) {
+      _flipCtrl.reverse();
+    } else {
+      _flipCtrl.forward();
+    }
+    setState(() => _isFlipped = !_isFlipped);
+  }
+
+  void _unflip() {
+    _flipCtrl.reverse();
+    setState(() => _isFlipped = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final centerX = (widget.availableWidth - _cardW) / 2;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v < -200 && _activeIndex < widget.accounts.length - 1) {
+          _goTo(_activeIndex + 1);
+        } else if (v > 200 && _activeIndex > 0) {
+          _goTo(_activeIndex - 1);
+        }
+      },
+      child: Column(
+        children: [
+          // ── Cards ─────────────────────────────────────────
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 560),
+            curve: Curves.easeInOutCubic,
+            height: _isFlipped ? _cardHFlipped + 20 : _cardH + 20,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (final i in (List.generate(
+                  widget.accounts.length,
+                  (idx) => idx,
+                )..sort((a, b) => a == _activeIndex
+                      ? 1
+                      : b == _activeIndex
+                          ? -1
+                          : 0)))
+                  _buildCard(i, centerX),
+              ],
+            ),
+          ),
+
+          // ── Pagination dots ────────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            child: _isFlipped
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        widget.accounts.length,
+                        (i) {
+                          final active = i == _activeIndex;
+                          return GestureDetector(
+                            onTap: () => _goTo(i),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 3),
+                              width: active ? 22 : 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? const Color(0xFF1a1410)
+                                    : Colors.black.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+          ),
+
+          // ── Add Account button ─────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOutCubic,
+            child: _isFlipped
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                    child: _AddAccountButton(
+                      onTap: () => showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        useSafeArea: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const _AddAccountSheet(),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(int i, double centerX) {
+    final offset = i - _activeIndex;
+    final absOffset = offset.abs();
+    final isCenter = offset == 0;
+    final isOther = _isFlipped && !isCenter;
+
+    final tx = offset * _cardSpacing;
+    final scale = isCenter ? 1.0 : 0.86;
+    final opacity = absOffset > 2
+        ? 0.0
+        : isOther
+            ? 0.0
+            : (isCenter ? 1.0 : 0.38);
+    final fanDeg = offset * -8.0;
+
+    final account = widget.accounts[i];
+    final balance = widget.balances[account.id] ?? 0.0;
+    final pal = _paletteForAccountType(account.type);
+    final recentTxns = widget.allExpenses
+        .where(
+            (e) => e.accountId == account.id || e.toAccountId == account.id)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return AnimatedPositioned(
+      key: ValueKey(account.id),
+      duration: const Duration(milliseconds: 480),
+      curve: _springCurve,
+      left: centerX + tx,
+      top: 10,
+      width: _cardW,
+      height: isCenter && _isFlipped ? _cardHFlipped : _cardH,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 320),
+        opacity: opacity,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 480),
+          curve: _springCurve,
+          scale: scale,
+          child: GestureDetector(
+            onTap: isCenter ? _toggleFlip : () => _goTo(i),
+            child: _FlipCard(
+              account: account,
+              balance: balance,
+              symbol: widget.symbol,
+              visible: widget.visible,
+              pal: pal,
+              isCenter: isCenter,
+              flipAnim: _flipAnim,
+              fanDeg: fanDeg,
+              recentTxns: recentTxns.take(3).toList(),
+              onClose: _unflip,
+              onEdit: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AddEditAccountScreen(account: account),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Flip Card ─────────────────────────────────────────────────
+class _FlipCard extends StatelessWidget {
+  final Account account;
+  final double balance;
+  final String symbol;
+  final bool visible;
+  final _Pal pal;
+  final bool isCenter;
+  final Animation<double> flipAnim;
+  final double fanDeg;
+  final List<Expense> recentTxns;
+  final VoidCallback onClose;
+  final VoidCallback onEdit;
+
+  const _FlipCard({
+    required this.account,
+    required this.balance,
+    required this.symbol,
+    required this.visible,
+    required this.pal,
+    required this.isCenter,
+    required this.flipAnim,
+    required this.fanDeg,
+    required this.recentTxns,
+    required this.onClose,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isCenter) {
+      final fanRad = fanDeg * pi / 180;
+      return Transform(
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.001)
+          ..rotateY(fanRad),
+        alignment: Alignment.center,
+        child: _CardFront(
+          account: account,
+          balance: balance,
+          symbol: symbol,
+          visible: visible,
+          pal: pal,
+          showFlipHint: false,
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: flipAnim,
+      builder: (context, _) {
+        final angle = flipAnim.value * pi;
+        final showFront = angle < pi / 2;
+        return Transform(
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.001)
+            ..rotateY(angle),
+          alignment: Alignment.center,
+          child: showFront
+              ? _CardFront(
+                  account: account,
+                  balance: balance,
+                  symbol: symbol,
+                  visible: visible,
+                  pal: pal,
+                  showFlipHint: true,
+                )
+              : Transform(
+                  transform: Matrix4.identity()..rotateY(pi),
+                  alignment: Alignment.center,
+                  child: _CardBack(
+                    account: account,
+                    balance: balance,
+                    symbol: symbol,
+                    visible: visible,
+                    pal: pal,
+                    recentTxns: recentTxns,
+                    onClose: onClose,
+                    onEdit: onEdit,
+                  ),
+                ),
+        );
+      },
+    );
+  }
+}
+
+// ── Card Front ────────────────────────────────────────────────
+class _CardFront extends ConsumerWidget {
+  final Account account;
+  final double balance;
+  final String symbol;
+  final bool visible;
+  final _Pal pal;
+  final bool showFlipHint;
+
+  const _CardFront({
+    required this.account,
+    required this.balance,
+    required this.symbol,
+    required this.visible,
+    required this.pal,
+    required this.showFlipHint,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeg = balance < 0;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [pal.a, pal.b],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          const BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 4,
+            offset: Offset(0, -2),
+          ),
+          BoxShadow(
+            color: pal.b.withValues(alpha: 0.55),
+            blurRadius: 24,
+            spreadRadius: -2,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 40,
+            spreadRadius: -4,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          Positioned(
+            right: -70,
+            top: -70,
+            child: Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: pal.accent.withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -40,
+            top: -40,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: pal.accent.withValues(alpha: 0.22),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -20,
+            bottom: -54,
+            child: Text(
+              pal.glyph,
+              style: TextStyle(
+                fontSize: 170,
+                fontWeight: FontWeight.w900,
+                color: pal.accent.withValues(alpha: 0.10),
+                height: 1,
+              ),
+            ),
+          ),
+          Positioned(
+            top: -40,
+            left: -20,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.45),
+                    Colors.white.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pal.label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            letterSpacing: 1.3,
+                            color: pal.ink.withValues(alpha: 0.60),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          account.name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: pal.ink,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              DateFormat('MMM d').format(account.createdAt),
+                              style: TextStyle(
+                                fontSize: 9,
+                                letterSpacing: 1.2,
+                                color: pal.ink.withValues(alpha: 0.55),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => ref.read(balanceVisibleProvider.notifier).toggle(),
+                              child: Icon(
+                                visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                                size: 13,
+                                color: pal.ink.withValues(alpha: 0.55),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        MaskedAmount(
+                          visibleText: formatMoney(symbol, balance),
+                          visible: visible,
+                          currencyPrefix: symbol,
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: isNeg
+                                ? const Color(0xFFC23030)
+                                : pal.ink,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (showFlipHint)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        account.type.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: pal.ink.withValues(alpha: 0.70),
+                        ),
+                      ),
+                      Text(
+                        'TAP TO FLIP',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: pal.ink.withValues(alpha: 0.55),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Card Back ─────────────────────────────────────────────────
+class _CardBack extends StatelessWidget {
+  final Account account;
+  final double balance;
+  final String symbol;
+  final bool visible;
+  final _Pal pal;
+  final List<Expense> recentTxns;
+  final VoidCallback onClose;
+  final VoidCallback onEdit;
+
+  const _CardBack({
+    required this.account,
+    required this.balance,
+    required this.symbol,
+    required this.visible,
+    required this.pal,
+    required this.recentTxns,
+    required this.onClose,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isNeg = balance < 0;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [pal.b, pal.a],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          const BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 4,
+            offset: Offset(0, -2),
+          ),
+          BoxShadow(
+            color: pal.b.withValues(alpha: 0.55),
+            blurRadius: 24,
+            spreadRadius: -2,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 40,
+            spreadRadius: -4,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  pal.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.3,
+                    color: pal.ink.withValues(alpha: 0.70),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onClose,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.55),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '✕',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: pal.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              account.name,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: pal.ink,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'BALANCE · ${DateFormat('MMM d').format(account.createdAt)}',
+              style: TextStyle(
+                fontSize: 10,
+                letterSpacing: 1.2,
+                color: pal.ink.withValues(alpha: 0.60),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            MaskedAmount(
+              visibleText: formatMoney(symbol, balance),
+              visible: visible,
+              currencyPrefix: symbol,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: isNeg ? const Color(0xFFC23030) : pal.ink,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _EditPill(ink: pal.ink, onTap: onEdit),
+            const SizedBox(height: 16),
+            Text(
+              'RECENT',
+              style: TextStyle(
+                fontSize: 10,
+                letterSpacing: 1.2,
+                color: pal.ink.withValues(alpha: 0.70),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (recentTxns.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'No recent activity',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: pal.ink.withValues(alpha: 0.55),
+                  ),
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.30),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: recentTxns.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final e = entry.value;
+                    final isLast = idx == recentTxns.length - 1;
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      e.note.isNotEmpty
+                                          ? e.note
+                                          : e.category,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: pal.ink,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      DateFormat('MMM d').format(e.date),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color:
+                                            pal.ink.withValues(alpha: 0.55),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                e.type.isInflow
+                                    ? '+${formatMoney(symbol, e.amount)}'
+                                    : '−${formatMoney(symbol, e.amount)}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: e.type.isInflow
+                                      ? const Color(0xFF1B8A4A)
+                                      : pal.ink,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!isLast)
+                          Container(
+                            height: 0.5,
+                            margin:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            color: pal.ink.withValues(alpha: 0.10),
+                          ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Edit pill ─────────────────────────────────────────────────
+class _EditPill extends StatelessWidget {
+  final Color ink;
+  final VoidCallback? onTap;
+
+  const _EditPill({required this.ink, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.65),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.pencil, size: 14, color: ink),
+            const SizedBox(width: 6),
+            Text(
+              'Edit Account',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Add Account button ────────────────────────────────────────
+class _AddAccountButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _AddAccountButton({required this.onTap});
+
+  @override
+  State<_AddAccountButton> createState() => _AddAccountButtonState();
+}
+
+class _AddAccountButtonState extends State<_AddAccountButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          height: 50,
+          decoration: BoxDecoration(
+            color: const Color(0xFF5A4FE6),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF5A4FE6).withValues(alpha: 0.32),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.add, color: Colors.white, size: 17),
+              const SizedBox(width: 7),
+              const Text(
+                'Add Account',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Add Account types ─────────────────────────────────────────
+class _AType {
+  final String label;
+  final String sub;
+  final AccountType type;
+  final IconData icon;
+  final String defaultName;
+
+  const _AType({
+    required this.label,
+    required this.sub,
+    required this.type,
+    required this.icon,
+    required this.defaultName,
+  });
+}
+
+const _kAddTypes = [
+  _AType(
+    label: 'Bank',
+    sub: 'Savings, current',
+    type: AccountType.bank,
+    icon: PhosphorIconsFill.bank,
+    defaultName: 'New Bank Account',
+  ),
+  _AType(
+    label: 'E-Wallet',
+    sub: 'TNG, GrabPay...',
+    type: AccountType.eWallet,
+    icon: PhosphorIconsFill.deviceMobile,
+    defaultName: 'New e-Wallet',
+  ),
+  _AType(
+    label: 'Cash',
+    sub: 'Wallet, on-hand',
+    type: AccountType.cash,
+    icon: PhosphorIconsFill.currencyDollar,
+    defaultName: 'Cash',
+  ),
+  _AType(
+    label: 'Credit Card',
+    sub: 'Visa, Master, AMEX',
+    type: AccountType.creditCard,
+    icon: CupertinoIcons.creditcard_fill,
+    defaultName: 'New Credit Card',
+  ),
+];
+
+const _kOtherTypes = [
+  _AType(
+    label: 'Investment',
+    sub: 'Stocks, ETFs, funds',
+    type: AccountType.investment,
+    icon: PhosphorIconsFill.chartLineUp,
+    defaultName: 'Investment Account',
+  ),
+  _AType(
+    label: 'Savings',
+    sub: 'Fixed deposit, savings',
+    type: AccountType.savings,
+    icon: PhosphorIconsFill.piggyBank,
+    defaultName: 'Savings Account',
+  ),
+  _AType(
+    label: 'Crypto',
+    sub: 'Bitcoin, altcoins',
+    type: AccountType.crypto,
+    icon: PhosphorIconsFill.currencyBtc,
+    defaultName: 'Crypto Wallet',
+  ),
+  _AType(
+    label: 'Forex',
+    sub: 'USD, EUR, JPY',
+    type: AccountType.forex,
+    icon: PhosphorIconsFill.globe,
+    defaultName: 'Forex Account',
+  ),
+  _AType(
+    label: 'Loan',
+    sub: 'Personal, auto',
+    type: AccountType.loan,
+    icon: PhosphorIconsFill.receipt,
+    defaultName: 'Loan',
+  ),
+  _AType(
+    label: 'Mortgage',
+    sub: 'Home loan',
+    type: AccountType.mortgage,
+    icon: CupertinoIcons.house_fill,
+    defaultName: 'Mortgage',
+  ),
+  _AType(
+    label: 'BNPL',
+    sub: 'Buy now, pay later',
+    type: AccountType.bnpl,
+    icon: CupertinoIcons.cart_fill,
+    defaultName: 'BNPL Account',
+  ),
+  _AType(
+    label: 'Other Debt',
+    sub: 'IOUs, other debt',
+    type: AccountType.otherLiability,
+    icon: CupertinoIcons.minus_circle_fill,
+    defaultName: 'Other Debt',
+  ),
+];
+
+// Colors for swatches (mapped to AccountType)
+const _kSwatchTypes = [
+  AccountType.bank,
+  AccountType.eWallet,
+  AccountType.cash,
+  AccountType.loan,
+  AccountType.creditCard,
+];
+
+const _kConfettiColors = [
+  Color(0xFF5A4FE6),
+  Color(0xFF33B07A),
+  Color(0xFFE89A14),
+  Color(0xFFD94747),
+  Color(0xFF7A56C5),
+];
+
+// ── Add Account sheet ─────────────────────────────────────────
+class _AddAccountSheet extends ConsumerStatefulWidget {
+  const _AddAccountSheet();
+
+  @override
+  ConsumerState<_AddAccountSheet> createState() => _AddAccountSheetState();
+}
+
+class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
+    with TickerProviderStateMixin {
+  int _step = 0;
+  _AType? _selectedType;
+  AccountType _swatchColor = AccountType.bank;
+  final _nameCtrl = TextEditingController();
+  final _balanceCtrl = TextEditingController();
+  bool _success = false;
+  bool _saving = false;
+  double _animatedBalance = 0;
+
+  late final AnimationController _tileCtrl;
+  late final AnimationController _stepCtrl;
+  late final AnimationController _confettiCtrl;
+  late final Animation<double> _confettiAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _tileCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
+    _stepCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+
+    _confettiCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _confettiAnim = CurvedAnimation(
+      parent: _confettiCtrl,
+      curve: const Cubic(0.2, 0.7, 0.3, 1.0),
+    );
+
+    _balanceCtrl.addListener(() {
+      final v = double.tryParse(_balanceCtrl.text) ?? 0.0;
+      setState(() => _animatedBalance = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tileCtrl.dispose();
+    _stepCtrl.dispose();
+    _confettiCtrl.dispose();
+    _nameCtrl.dispose();
+    _balanceCtrl.dispose();
+    super.dispose();
+  }
+
+  // Staggered tile animation
+  Animation<double> _tileAnim(int i) {
+    final start = i * 0.10;
+    final end = (start + 0.60).clamp(0.0, 1.0);
+    return CurvedAnimation(
+      parent: _tileCtrl,
+      curve: Interval(start, end,
+          curve: const Cubic(0.34, 1.56, 0.64, 1.0)),
+    );
+  }
+
+  void _selectType(_AType t) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _selectedType = t;
+      _swatchColor = t.type;
+      _nameCtrl.clear();
+      _balanceCtrl.clear();
+      _animatedBalance = 0;
+      _success = false;
+    });
+    Future.delayed(const Duration(milliseconds: 60), () {
+      if (mounted) {
+        setState(() => _step = 1);
+        _stepCtrl.forward(from: 0);
+      }
+    });
+  }
+
+  void _goBack() {
+    HapticFeedback.selectionClick();
+    _stepCtrl.reverse().then((_) {
+      if (mounted) setState(() => _step = 0);
+    });
+  }
+
+  Future<void> _submit() async {
+    if (_saving || _success) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _saving = true);
+
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) {
+      setState(() => _saving = false);
+      return;
+    }
+    final repo = ref.read(accountRepositoryProvider);
+    final t = _selectedType!;
+    final rawBalance = double.tryParse(_balanceCtrl.text) ?? 0.0;
+    final opening = t.type.isLiability ? -rawBalance.abs() : rawBalance;
+    final name = _nameCtrl.text.trim().isEmpty ? t.defaultName : _nameCtrl.text.trim();
+
+    try {
+      await repo.add(
+        user.uid,
+        Account(
+          id: '',
+          name: name,
+          type: t.type,
+          openingBalance: opening,
+          createdAt: DateTime.now(),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _success = true;
+        });
+        _confettiCtrl.forward(from: 0);
+        await Future.delayed(const Duration(milliseconds: 1400));
+        if (mounted) Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = _paletteForAccountType(_swatchColor);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF2F0F4),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Nav bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 16, 0),
+            child: Row(
+              children: [
+                AnimatedOpacity(
+                  opacity: _step == 1 ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _step == 1 ? _goBack : null,
+                    child: const Icon(CupertinoIcons.chevron_left,
+                        size: 22, color: Color(0xFF1a1410)),
+                  ),
+                ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Text(
+                      _step == 0 ? 'Add Account' : 'Account Details',
+                      key: ValueKey(_step),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1a1410),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 38),
+              ],
+            ),
+          ),
+          // Step indicator
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF5A4FE6),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _step >= 1
+                          ? const Color(0xFF5A4FE6)
+                          : Colors.black.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Steps — intrinsic height with AnimatedSwitcher
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 480),
+            switchInCurve: const Cubic(0.34, 1.36, 0.64, 1.0),
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) {
+              final isNew = child.key == ValueKey(_step);
+              final slide = Tween<Offset>(
+                begin: Offset(isNew ? 0.3 : -0.3, 0),
+                end: Offset.zero,
+              ).animate(anim);
+              return FadeTransition(
+                opacity: anim,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: _step == 0
+                ? _Step1(
+                    key: const ValueKey(0),
+                    tileAnim: _tileAnim,
+                    onSelect: _selectType,
+                  )
+                : _Step2(
+                    key: const ValueKey(1),
+                    selectedType: _selectedType!,
+                    swatchColor: _swatchColor,
+                    pal: pal,
+                    nameCtrl: _nameCtrl,
+                    balanceCtrl: _balanceCtrl,
+                    animatedBalance: _animatedBalance,
+                    success: _success,
+                    saving: _saving,
+                    confettiAnim: _confettiAnim,
+                    onSwatchChanged: (t) =>
+                        setState(() => _swatchColor = t),
+                    onSubmit: _submit,
+                  ),
+          ),
+          SizedBox(
+              height: MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 20),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Step 1: type selection ────────────────────────────────────
+class _Step1 extends StatelessWidget {
+  final Animation<double> Function(int) tileAnim;
+  final ValueChanged<_AType> onSelect;
+
+  const _Step1({super.key, required this.tileAnim, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'What type of account?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: Color(0xFF1a1410),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Choose one to get started.',
+            style: TextStyle(
+                fontSize: 13, color: Colors.black.withValues(alpha: 0.45)),
+          ),
+          const SizedBox(height: 18),
+          // 2×2 grid
+          Row(
+            children: [
+              for (int i = 0; i < 2; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i == 0 ? 6 : 0),
+                    child: _TileCard(
+                      aType: _kAddTypes[i],
+                      anim: tileAnim(i),
+                      onTap: () => onSelect(_kAddTypes[i]),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (int i = 2; i < 4; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i == 2 ? 6 : 0),
+                    child: _TileCard(
+                      aType: _kAddTypes[i],
+                      anim: tileAnim(i),
+                      onTap: () => onSelect(_kAddTypes[i]),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Other row
+          AnimatedBuilder(
+            animation: tileAnim(4),
+            builder: (ctx, child) {
+              final v = tileAnim(4).value;
+              return Opacity(
+                opacity: v.clamp(0.0, 1.0),
+                child: Transform.scale(scale: 0.5 + 0.5 * v, child: child),
+              );
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                showModalBottomSheet<_AType>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => const _OtherTypesSheet(),
+                ).then((t) {
+                  if (t != null) onSelect(t);
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F0F4),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.ellipsis_circle_fill,
+                        size: 18,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Other Types',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1a1410),
+                            ),
+                          ),
+                          Text(
+                            '8 extra categories',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.black.withValues(alpha: 0.45),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(CupertinoIcons.chevron_right,
+                        size: 14,
+                        color: Colors.black.withValues(alpha: 0.25)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Other Types Sheet ─────────────────────────────────────────
+class _OtherTypesSheet extends StatelessWidget {
+  const _OtherTypesSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF2F0F4),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 10),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Other Types',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            color: Color(0xFF1a1410),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '8 extra categories',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black.withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.07),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 13,
+                        color: Colors.black.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            // List
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: _kOtherTypes.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final t = entry.value;
+                  final pal = _paletteForAccountType(t.type);
+                  final isLast = i == _kOtherTypes.length - 1;
+                  return Column(
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.vertical(
+                          top: i == 0 ? const Radius.circular(16) : Radius.zero,
+                          bottom: isLast ? const Radius.circular(16) : Radius.zero,
+                        ),
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.pop(context, t);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [pal.a, pal.b],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                                child: Icon(t.icon, size: 18, color: pal.ink),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      t.label,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1a1410),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      t.sub,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black.withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                CupertinoIcons.chevron_right,
+                                size: 13,
+                                color: Colors.black.withValues(alpha: 0.25),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (!isLast)
+                        Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          indent: 70,
+                          color: Colors.black.withValues(alpha: 0.07),
+                        ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Tile card ─────────────────────────────────────────────────
+class _TileCard extends StatefulWidget {
+  final _AType aType;
+  final Animation<double> anim;
+  final VoidCallback onTap;
+
+  const _TileCard({
+    required this.aType,
+    required this.anim,
+    required this.onTap,
+  });
+
+  @override
+  State<_TileCard> createState() => _TileCardState();
+}
+
+class _TileCardState extends State<_TileCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = _paletteForAccountType(widget.aType.type);
+    return AnimatedBuilder(
+      animation: widget.anim,
+      builder: (ctx, child) {
+        final v = widget.anim.value;
+        final rotDeg = (1 - v) * -10.0;
+        return Opacity(
+          opacity: v.clamp(0.0, 1.0),
+          child: Transform(
+            transform: Matrix4.identity()
+              ..scaleByDouble(0.5 + 0.5 * v, 0.5 + 0.5 * v, 1.0, 1.0)
+              ..rotateZ(rotDeg * pi / 180),
+            alignment: Alignment.center,
+            child: child,
+          ),
+        );
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          child: Container(
+            height: 140,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [pal.a, pal.b],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: pal.b.withValues(alpha: 0.45),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Stack(
+              children: [
+                // Circle accent bg
+                Positioned(
+                  right: -10,
+                  top: -10,
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: pal.accent.withValues(alpha: 0.14),
+                    ),
+                  ),
+                ),
+                // Watermark glyph
+                Positioned(
+                  right: -10,
+                  bottom: -28,
+                  child: Text(
+                    pal.glyph,
+                    style: TextStyle(
+                      fontSize: 110,
+                      fontWeight: FontWeight.w900,
+                      color: pal.accent.withValues(alpha: 0.15),
+                      height: 1,
+                    ),
+                  ),
+                ),
+                // Shine
+                Positioned(
+                  top: -30,
+                  left: -20,
+                  child: Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.55),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(widget.aType.icon,
+                          size: 26, color: pal.ink),
+                      const Spacer(),
+                      Text(
+                        widget.aType.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                          color: pal.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.aType.sub,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: pal.ink.withValues(alpha: 0.65),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Step 2: details form ──────────────────────────────────────
+class _Step2 extends StatefulWidget {
+  final _AType selectedType;
+  final AccountType swatchColor;
+  final _Pal pal;
+  final TextEditingController nameCtrl;
+  final TextEditingController balanceCtrl;
+  final double animatedBalance;
+  final bool success;
+  final bool saving;
+  final Animation<double> confettiAnim;
+  final ValueChanged<AccountType> onSwatchChanged;
+  final VoidCallback onSubmit;
+
+  const _Step2({
+    super.key,
+    required this.selectedType,
+    required this.swatchColor,
+    required this.pal,
+    required this.nameCtrl,
+    required this.balanceCtrl,
+    required this.animatedBalance,
+    required this.success,
+    required this.saving,
+    required this.confettiAnim,
+    required this.onSwatchChanged,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_Step2> createState() => _Step2State();
+}
+
+class _Step2State extends State<_Step2> {
+  String? _selectedProvider;
+  bool _useCustomName = false;
+
+  bool get _hasProviderList =>
+      widget.selectedType.type == AccountType.bank ||
+      widget.selectedType.type == AccountType.eWallet;
+
+  List<String> get _providerList =>
+      widget.selectedType.type == AccountType.bank
+          ? kCommonBanks
+          : kCommonWallets;
+
+  @override
+  void didUpdateWidget(_Step2 old) {
+    super.didUpdateWidget(old);
+    if (old.selectedType.type != widget.selectedType.type) {
+      setState(() {
+        _selectedProvider = null;
+        _useCustomName = false;
+      });
+    }
+  }
+
+  void _showProviderPicker() {
+    final label = widget.selectedType.type == AccountType.bank
+        ? 'Select Bank'
+        : 'Select E-Wallet';
+    final allProviders = List<String>.from(_providerList);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          final filtered = query.isEmpty
+              ? allProviders
+              : allProviders
+                  .where((p) => p.toLowerCase().contains(query.toLowerCase()))
+                  .toList();
+          return Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFFF2F0F4),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.70,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 10),
+                        width: 36, height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700,
+                          color: Color(0xFF1a1410),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: TextField(
+                          autofocus: false,
+                          onChanged: (v) => setSheet(() => query = v),
+                          style: const TextStyle(fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Search…',
+                            hintStyle: TextStyle(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                fontSize: 14),
+                            prefixIcon: Icon(CupertinoIcons.search,
+                                size: 16,
+                                color: Colors.black.withValues(alpha: 0.35)),
+                            border: InputBorder.none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          color: Colors.black.withValues(alpha: 0.07),
+                        ),
+                        itemBuilder: (_, index) {
+                          final p = filtered[index];
+                          final isCustom = p == _kCustomLabel;
+                          final isSelected = isCustom
+                              ? _useCustomName
+                              : _selectedProvider == p && !_useCustomName;
+                          return ListTile(
+                            leading: isCustom
+                                ? Icon(CupertinoIcons.pencil,
+                                    size: 18,
+                                    color: Colors.black.withValues(alpha: 0.45))
+                                : Icon(
+                                    widget.selectedType.icon,
+                                    size: 18,
+                                    color: widget.pal.accent,
+                                  ),
+                            title: Text(
+                              p,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: const Color(0xFF1a1410),
+                              ),
+                            ),
+                            trailing: isSelected
+                                ? const Icon(CupertinoIcons.checkmark_alt,
+                                    color: Color(0xFF5A4FE6))
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _selectedProvider = p;
+                                _useCustomName = isCustom;
+                                if (!isCustom) {
+                                  widget.nameCtrl.text = p;
+                                } else {
+                                  widget.nameCtrl.clear();
+                                }
+                              });
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = widget.nameCtrl.text.isEmpty
+        ? widget.selectedType.defaultName
+        : widget.nameCtrl.text;
+
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Live preview card ────────────────────────────
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 360),
+            height: 168,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [widget.pal.a, widget.pal.b],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.pal.b.withValues(alpha: 0.50),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 32,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Stack(
+              children: [
+                Positioned(
+                  right: -70,
+                  top: -70,
+                  child: Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: widget.pal.accent.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: -20,
+                  bottom: -54,
+                  child: Text(
+                    widget.pal.glyph,
+                    style: TextStyle(
+                      fontSize: 180,
+                      fontWeight: FontWeight.w900,
+                      color: widget.pal.accent.withValues(alpha: 0.10),
+                      height: 1,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: -40,
+                  left: -20,
+                  child: Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.45),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.pal.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.3,
+                          color: widget.pal.ink.withValues(alpha: 0.60),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        displayName,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: widget.pal.ink,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Text(
+                        'BALANCE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.3,
+                          color: widget.pal.ink.withValues(alpha: 0.55),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: widget.animatedBalance),
+                        duration: const Duration(milliseconds: 360),
+                        curve: Curves.easeOutCubic,
+                        builder: (ctx, v, _) => Text(
+                          NumberFormat.currency(
+                            symbol: 'RM ',
+                            decimalDigits: 2,
+                          ).format(v),
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: widget.pal.ink,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── Form fields ──────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                // Provider picker row (bank / e-wallet only)
+                if (_hasProviderList) ...[
+                  InkWell(
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(16)),
+                    onTap: _showProviderPicker,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: widget.pal.accent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(widget.selectedType.icon,
+                                size: 15, color: widget.pal.accent),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              widget.selectedType.type == AccountType.bank
+                                  ? 'BANK'
+                                  : 'E-WALLET',
+                              style: TextStyle(
+                                fontSize: 11,
+                                letterSpacing: 0.5,
+                                color: Colors.black.withValues(alpha: 0.4),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _useCustomName
+                                ? 'Custom'
+                                : (_selectedProvider ??
+                                    (widget.selectedType.type ==
+                                            AccountType.bank
+                                        ? 'Select bank'
+                                        : 'Select e-wallet')),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: _selectedProvider != null
+                                  ? const Color(0xFF1a1410)
+                                  : Colors.black.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(CupertinoIcons.chevron_right,
+                              size: 13,
+                              color: Colors.black.withValues(alpha: 0.25)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Custom name field — only when "Other / Custom" selected
+                  if (_useCustomName) ...[
+                    Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: Colors.black.withValues(alpha: 0.08),
+                        indent: 16),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'NAME',
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 0.5,
+                              color: Colors.black.withValues(alpha: 0.4),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          TextField(
+                            controller: widget.nameCtrl,
+                            autofocus: true,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1a1410),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: widget.selectedType.defaultName,
+                              hintStyle: TextStyle(
+                                color: Colors.black.withValues(alpha: 0.25),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ] else ...[
+                  // Free name field for non-provider types
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'NAME',
+                          style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 0.5,
+                            color: Colors.black.withValues(alpha: 0.4),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: widget.nameCtrl,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1a1410),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: widget.selectedType.defaultName,
+                            hintStyle: TextStyle(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Colors.black.withValues(alpha: 0.08),
+                    indent: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'STARTING BALANCE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 0.5,
+                          color: Colors.black.withValues(alpha: 0.4),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            'RM',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black.withValues(alpha: 0.55),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: TextField(
+                              controller: widget.balanceCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1a1410),
+                              ),
+                              decoration: InputDecoration(
+                                hintText: '0.00',
+                                hintStyle: TextStyle(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Color picker ─────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CARD COLOR',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                    color: Colors.black.withValues(alpha: 0.4),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: _kSwatchTypes.map((t) {
+                    final sp = _paletteForAccountType(t);
+                    final isSelected = widget.swatchColor == t;
+                    return GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        widget.onSwatchChanged(t);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        curve: const Cubic(0.34, 1.56, 0.64, 1.0),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                              colors: [sp.a, sp.b],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight),
+                          shape: BoxShape.circle,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black
+                                        .withValues(alpha: 0.18),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                  const BoxShadow(
+                                    color: Colors.white,
+                                    spreadRadius: 3,
+                                  ),
+                                  BoxShadow(
+                                    color: sp.accent,
+                                    spreadRadius: 5,
+                                  ),
+                                ]
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black
+                                        .withValues(alpha: 0.08),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        transform: isSelected
+                            ? (Matrix4.identity()..scaleByDouble(1.12, 1.12, 1.0, 1.0))
+                            : Matrix4.identity(),
+                        child: isSelected
+                            ? Center(
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0.0, end: 1.0),
+                                  duration: const Duration(milliseconds: 300),
+                                  builder: (ctx, v, _) => CustomPaint(
+                                    size: const Size(20, 20),
+                                    painter: _TickPainter(
+                                        progress: v,
+                                        color: Colors.white),
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── CTA button + confetti ─────────────────────────
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Confetti pieces
+              if (widget.success)
+                ...List.generate(12, (i) {
+                  final angle =
+                      (i / 12) * 2 * pi + (Random().nextDouble() * 0.35);
+                  final dist = 60 + Random().nextDouble() * 50;
+                  final cx = cos(angle) * dist;
+                  final cy = sin(angle) * dist;
+                  final cr = Random().nextDouble() * 2 * pi;
+                  final c = _kConfettiColors[i % 5];
+                  return AnimatedBuilder(
+                    animation: widget.confettiAnim,
+                    builder: (ctx, _) {
+                      final v = widget.confettiAnim.value;
+                      return Positioned(
+                        left: (MediaQuery.of(ctx).size.width - 40) / 2 +
+                            cx * v -
+                            4,
+                        top: 24 + cy * v - 4,
+                        child: Opacity(
+                          opacity: (1 - v).clamp(0.0, 1.0),
+                          child: Transform.rotate(
+                            angle: cr * v,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: c,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+              // Button
+              GestureDetector(
+                onTap: widget.onSubmit,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: widget.success
+                        ? const Color(0xFF1B8A4A)
+                        : const Color(0xFF5A4FE6),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (widget.success
+                                ? const Color(0xFF1B8A4A)
+                                : const Color(0xFF5A4FE6))
+                            .withValues(alpha: 0.35),
+                        blurRadius: 22,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: widget.success
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration:
+                                    const Duration(milliseconds: 480),
+                                curve: const Cubic(0.34, 1.56, 0.64, 1.0),
+                                builder: (ctx, v, _) => Transform.scale(
+                                  scale: v,
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                    ),
+                                    child: Center(
+                                      child: CustomPaint(
+                                        size: const Size(14, 14),
+                                        painter: _TickPainter(
+                                          progress: v,
+                                          color: const Color(0xFF1B8A4A),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Account Added',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ],
+                          )
+                        : widget.saving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Add Account',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+
+}
+
+// ── Tick painter (animates stroke-dashoffset) ─────────────────
+class _TickPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _TickPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    // Checkmark path: (25%, 50%) → (45%, 70%) → (75%, 30%)
+    final p1 = Offset(size.width * 0.2, size.height * 0.5);
+    final p2 = Offset(size.width * 0.45, size.height * 0.72);
+    final p3 = Offset(size.width * 0.78, size.height * 0.28);
+
+    final total = (p2 - p1).distance + (p3 - p2).distance;
+    final drawn = total * progress;
+
+    if (drawn <= 0) return;
+
+    final firstLeg = (p2 - p1).distance;
+    if (drawn <= firstLeg) {
+      final t = drawn / firstLeg;
+      canvas.drawLine(p1, Offset.lerp(p1, p2, t)!, paint);
+    } else {
+      canvas.drawLine(p1, p2, paint);
+      final remaining = drawn - firstLeg;
+      final secondLeg = (p3 - p2).distance;
+      final t = (remaining / secondLeg).clamp(0.0, 1.0);
+      canvas.drawLine(p2, Offset.lerp(p2, p3, t)!, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TickPainter old) =>
+      old.progress != progress || old.color != color;
+}

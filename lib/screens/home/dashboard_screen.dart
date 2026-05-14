@@ -1273,7 +1273,7 @@ class _DottedDividerPainter extends CustomPainter {
 
 // ── All Activity bottom sheet ──────────────────────────────────
 
-class _AllBillsSheet extends StatelessWidget {
+class _AllBillsSheet extends ConsumerWidget {
   final List<Expense> expenses;
   final double total;
   final String symbol;
@@ -1286,9 +1286,57 @@ class _AllBillsSheet extends StatelessWidget {
     required this.month,
   });
 
+  Future<void> _deleteExpense(
+    BuildContext context,
+    WidgetRef ref,
+    Expense expense,
+  ) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final uid = user.uid;
+    await LocalExpenseRepository().deleteExpense(uid, expense.id);
+    if (storageMode == StorageMode.firebase) {
+      await SyncService().clearPending(uid, expense.id);
+      final isOnline = ref.read(isOnlineProvider);
+      if (isOnline) {
+        try {
+          await FirebaseExpenseRepository().deleteExpense(uid, expense.id);
+        } catch (_) {
+          await SyncService().markPendingDelete(uid, expense.id);
+        }
+      } else {
+        await SyncService().markPendingDelete(uid, expense.id);
+      }
+    }
+    if (context.mounted) {
+      AppToast.show(
+        context,
+        'Record deleted',
+        type: AppToastType.info,
+        icon: CupertinoIcons.trash,
+      );
+    }
+  }
+
+  void _copyRecord(BuildContext context, Expense original) {
+    AppToast.show(
+      context,
+      'Record has been copied',
+      type: AppToastType.info,
+      icon: CupertinoIcons.doc_on_doc,
+    );
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddEditExpenseScreen(copyFrom: original),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
@@ -1371,71 +1419,51 @@ class _AllBillsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Flexible(
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: expenses.length,
-              separatorBuilder: (_, _) =>
-                  Divider(height: 1, color: brand.divider),
-              itemBuilder: (ctx, i) =>
-                  _BillRow(expense: expenses[i], symbol: symbol),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BillRow extends StatelessWidget {
-  final Expense expense;
-  final String symbol;
-
-  const _BillRow({required this.expense, required this.symbol});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final title = expense.note.trim().isEmpty
-        ? context.categoryLabel(expense.category)
-        : expense.note.trim();
-    final isIncome = expense.type == EntryType.income;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
+            child: Container(
+              decoration: BoxDecoration(
+                color: brand.surface,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: expenses.length,
+                  separatorBuilder: (_, _) => Padding(
+                    padding: const EdgeInsets.only(left: 70),
+                    child: Container(height: 0.5, color: brand.divider),
                   ),
+                  itemBuilder: (ctx, i) {
+                    final expense = expenses[i];
+                    final acct = accounts
+                        .where((a) => a.id == expense.accountId)
+                        .firstOrNull;
+                    return ExpenseCard(
+                      key: ValueKey(expense.id),
+                      expense: expense,
+                      currencySymbol: symbol,
+                      account: acct,
+                      flat: true,
+                      onTap: () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) =>
+                              AddEditExpenseScreen(expense: expense),
+                        ),
+                      ),
+                      onEdit: () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) =>
+                              AddEditExpenseScreen(expense: expense),
+                        ),
+                      ),
+                      onDelete: () => _deleteExpense(context, ref, expense),
+                      onCopy: () => _copyRecord(context, expense),
+                    );
+                  },
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${DateFormat('MMM d').format(expense.date)} · ${context.categoryLabel(expense.category)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            (isIncome ? '+' : '') + formatMoney(symbol, expense.amount),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: isIncome ? AppColors.income : AppColors.expense,
+              ),
             ),
           ),
         ],

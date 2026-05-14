@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
@@ -9,10 +8,12 @@ import '../../models/precious_metal.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import 'add_edit_account_screen.dart';
 
+// ── AccountsScreen ────────────────────────────────────────────
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
 
@@ -23,12 +24,11 @@ class AccountsScreen extends ConsumerWidget {
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final visible = ref.watch(balanceVisibleProvider);
-    final metals = ref.watch(preciousMetalsProvider).valueOrNull ??
-        const <PreciousMetal>[];
+    final metals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-
     final balances = _computeBalances(accounts, allExpenses);
 
     return Scaffold(
@@ -36,6 +36,14 @@ class AccountsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Accounts'),
         actions: [
+          IconButton(
+            icon: Icon(
+              visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+              size: 22,
+            ),
+            onPressed: () =>
+                ref.read(balanceVisibleProvider.notifier).toggle(),
+          ),
           IconButton(
             icon: const Icon(CupertinoIcons.add, size: 22),
             onPressed: () => Navigator.push(
@@ -49,36 +57,23 @@ class AccountsScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: CustomScrollView(
+          clipBehavior: Clip.none,
           slivers: [
             if (accounts.isEmpty)
               SliverToBoxAdapter(child: _empty(context, brand))
             else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                sliver: SliverList.separated(
-                  itemCount: accounts.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: 10),
-                  itemBuilder: (ctx, i) {
-                    final account = accounts[i];
-                    final balance = balances[account.id] ?? 0.0;
-                    return _AccountCard(
-                      account: account,
-                      balance: balance,
-                      symbol: symbol,
-                      visible: visible,
-                      onTap: () => Navigator.push(
-                        ctx,
-                        CupertinoPageRoute(
-                          builder: (_) =>
-                              AddEditAccountScreen(account: account),
-                        ),
-                      ),
-                    );
-                  },
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: AccountCarouselSection(
+                    accounts: accounts,
+                    balances: balances,
+                    allExpenses: allExpenses,
+                    symbol: symbol,
+                    visible: visible,
+                  ),
                 ),
               ),
-            // Precious Metals section
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
@@ -120,13 +115,9 @@ class AccountsScreen extends ConsumerWidget {
     for (final e in expenses) {
       final aid = e.accountId;
       if (aid != null && balances.containsKey(aid)) {
-        if (e.type.isInflow) {
-          balances[aid] = (balances[aid] ?? 0) + e.amount;
-        } else {
-          balances[aid] = (balances[aid] ?? 0) - e.amount;
-        }
+        balances[aid] = (balances[aid] ?? 0) +
+            (e.type.isInflow ? e.amount : -e.amount);
       }
-      // Credit destination for account-to-account transfers
       final toId = e.toAccountId;
       if (toId != null && balances.containsKey(toId)) {
         balances[toId] = (balances[toId] ?? 0) + e.amount;
@@ -188,157 +179,7 @@ class AccountsScreen extends ConsumerWidget {
   }
 }
 
-
-class _AccountCard extends StatelessWidget {
-  final Account account;
-  final double balance;
-  final String symbol;
-  final bool visible;
-  final VoidCallback onTap;
-
-  const _AccountCard({
-    required this.account,
-    required this.balance,
-    required this.symbol,
-    required this.visible,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final style = _styleFor(account.type);
-    final icon = _iconFor(account.type);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: style.bg,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, size: 22, color: style.accent),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    account.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    account.type.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: brand.inkSoft,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                MaskedAmount(
-                  visibleText: formatMoney(symbol, balance),
-                  visible: visible,
-                  currencyPrefix: symbol,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: balance >= 0 ? brand.ink : AppColors.expense,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  DateFormat('MMM d').format(account.createdAt),
-                  style: TextStyle(fontSize: 11, color: brand.inkSoft),
-                ),
-              ],
-            ),
-            const SizedBox(width: 6),
-            Icon(
-              CupertinoIcons.chevron_right,
-              size: 14,
-              color: brand.inkSoft,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  ({Color bg, Color accent}) _styleFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return (bg: AppColors.sky, accent: const Color(0xFF2A6FB5));
-      case AccountType.eWallet:
-        return (bg: AppColors.mint, accent: const Color(0xFF1F7A60));
-      case AccountType.cash:
-        return (bg: AppColors.butter, accent: const Color(0xFFA0801C));
-      case AccountType.creditCard:
-        return (bg: AppColors.blush, accent: const Color(0xFFB03060));
-      case AccountType.loan:
-        return (bg: AppColors.peach, accent: const Color(0xFF9C4A1A));
-      case AccountType.mortgage:
-        return (bg: AppColors.sand, accent: const Color(0xFF6B4D2A));
-      case AccountType.bnpl:
-        return (bg: AppColors.lilac, accent: const Color(0xFF5C3A9E));
-      case AccountType.otherLiability:
-        return (bg: AppColors.blush, accent: const Color(0xFF7A4040));
-    }
-  }
-
-  IconData _iconFor(AccountType type) {
-    switch (type) {
-      case AccountType.bank:
-        return CupertinoIcons.building_2_fill;
-      case AccountType.eWallet:
-        return CupertinoIcons.device_phone_portrait;
-      case AccountType.cash:
-        return CupertinoIcons.money_dollar_circle_fill;
-      case AccountType.creditCard:
-        return CupertinoIcons.creditcard_fill;
-      case AccountType.loan:
-        return CupertinoIcons.doc_text_fill;
-      case AccountType.mortgage:
-        return CupertinoIcons.house_fill;
-      case AccountType.bnpl:
-        return CupertinoIcons.cart_fill;
-      case AccountType.otherLiability:
-        return CupertinoIcons.minus_circle_fill;
-    }
-  }
-}
-
-
-// ── Precious Metals Card ──────────────────────────────────────────────────────
-
+// ── Precious Metals Card ──────────────────────────────────────
 class _PreciousMetalsCard extends StatelessWidget {
   final List<PreciousMetal> metals;
   final String symbol;
@@ -511,9 +352,7 @@ class _MetalChip extends StatelessWidget {
   }
 }
 
-// ── Public helpers ────────────────────────────────────────────────────────────
-
-/// Public helper to compute a single account's balance from a list of expenses.
+// ── Public helpers ────────────────────────────────────────────
 double computeAccountBalance(Account account, List<Expense> expenses) {
   double balance = account.openingBalance;
   for (final e in expenses) {
@@ -524,7 +363,6 @@ double computeAccountBalance(Account account, List<Expense> expenses) {
         balance -= e.amount;
       }
     }
-    // Credit this account when it is the destination of an account-to-account transfer
     if (e.toAccountId == account.id) {
       balance += e.amount;
     }
@@ -532,7 +370,6 @@ double computeAccountBalance(Account account, List<Expense> expenses) {
   return balance;
 }
 
-/// Compute total balance across all accounts.
 double computeTotalAccountBalance(
   List<Account> accounts,
   List<Expense> expenses,

@@ -10,14 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/precious_metal.dart';
-import '../../repositories/firebase_precious_metal_repository.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import 'precious_metals_design2_test.dart'; // TEST — remove when done
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live price provider
@@ -182,6 +181,14 @@ IconData _iconForAccountType(AccountType type) {
       return CupertinoIcons.device_phone_portrait;
     case AccountType.cash:
       return CupertinoIcons.money_dollar_circle_fill;
+    case AccountType.investment:
+      return CupertinoIcons.chart_bar_fill;
+    case AccountType.savings:
+      return CupertinoIcons.archivebox_fill;
+    case AccountType.crypto:
+      return CupertinoIcons.bitcoin_circle_fill;
+    case AccountType.forex:
+      return CupertinoIcons.globe;
     case AccountType.creditCard:
       return CupertinoIcons.creditcard_fill;
     case AccountType.loan:
@@ -203,6 +210,14 @@ Color _accentForAccountType(AccountType type) {
       return const Color(0xFF1F7A60);
     case AccountType.cash:
       return const Color(0xFFA0801C);
+    case AccountType.investment:
+      return const Color(0xFF2E9E5A);
+    case AccountType.savings:
+      return const Color(0xFF2E7EB5);
+    case AccountType.crypto:
+      return const Color(0xFFE8820E);
+    case AccountType.forex:
+      return const Color(0xFF7F4FD4);
     case AccountType.creditCard:
       return const Color(0xFFB03060);
     case AccountType.loan:
@@ -295,9 +310,6 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     await ref.read(preciousMetalRepositoryProvider).delete(user.uid, metal.id);
-    if (storageMode == StorageMode.firebase) {
-      FirebasePreciousMetalRepository().delete(user.uid, metal.id).catchError((_) {});
-    }
     if (mounted) {
       AppToast.show(context, 'Record deleted', type: AppToastType.info,
           icon: CupertinoIcons.trash);
@@ -446,6 +458,14 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
                     ),
                   ],
                 ),
+              ),
+            ),
+
+            // ── Design 2 test preview banner (TEST — remove when done) ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: _Design2PreviewBanner(),
               ),
             ),
 
@@ -1474,42 +1494,6 @@ class _MetalBadge extends StatelessWidget {
   }
 }
 
-class _LastPriceChip extends StatelessWidget {
-  final double price;
-  final String symbol;
-  final bool isLive;
-  const _LastPriceChip({
-    required this.price,
-    required this.symbol,
-    this.isLive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isLive ? AppColors.income : const Color(0xFF9BA5B0);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '${isLive ? 'LIVE' : 'LAST'} · ${formatMoney(symbol, price)}/g',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
@@ -1878,51 +1862,6 @@ class _FilledBtnState extends State<_FilledBtn>
 // ─────────────────────────────────────────────────────────────────────────────
 // Transaction list
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _TxGroup extends StatelessWidget {
-  final List<PreciousMetal> items;
-  final String symbol;
-  final BrandColors brand;
-  final ValueChanged<PreciousMetal> onTap;
-
-  const _TxGroup({
-    required this.items,
-    required this.symbol,
-    required this.brand,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: AppShadows.soft,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Column(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0)
-                Padding(
-                  padding: const EdgeInsets.only(left: 70),
-                  child: Container(height: 0.5, color: brand.divider),
-                ),
-              _TxRow(
-                metal: items[i],
-                symbol: symbol,
-                brand: brand,
-                onTap: () => onTap(items[i]),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _TxRow extends StatelessWidget {
   final PreciousMetal metal;
@@ -2331,89 +2270,6 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Empty state
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Empty extends StatelessWidget {
-  final MetalType metalType;
-  final VoidCallback onBuy;
-  final BrandColors brand;
-
-  const _Empty({
-    required this.metalType,
-    required this.onBuy,
-    required this.brand,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = metalType.primaryColor;
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: AppShadows.soft,
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: c.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Center(
-              child: CustomPaint(
-                size: const Size(34, 20),
-                painter: _IngotPainter(metal: metalType),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'No ${metalType.label} transactions',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: brand.ink,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Record your first purchase to start\ntracking your ${metalType.label.toLowerCase()} holdings.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: brand.inkSoft,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 20),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-            color: c,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-            onPressed: onBuy,
-            child: Text(
-              'Buy ${metalType.label}',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: metalType == MetalType.gold
-                    ? const Color(0xFF4A2E00)
-                    : Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // History sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2722,9 +2578,9 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
           accountId: _accountId,
         );
         await repo.update(user.uid, updated);
-        _bgSyncUpdate(user.uid, updated);
         if (mounted) {
           setState(() { _saving = false; _saveSuccess = true; });
+          AppToast.show(context, 'Record updated', type: AppToastType.success);
           await Future.delayed(const Duration(milliseconds: 450));
           if (mounted) Navigator.pop(context);
         }
@@ -2742,9 +2598,9 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
           createdAt: now,
         );
         await repo.add(user.uid, newM);
-        _bgSyncAdd(user.uid, newM);
         if (mounted) {
           setState(() { _saving = false; _saveSuccess = true; });
+          AppToast.show(context, 'Record saved', type: AppToastType.success);
           await Future.delayed(const Duration(milliseconds: 650));
           if (mounted) Navigator.pop(context);
         }
@@ -2785,29 +2641,16 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
     try {
       final id = widget.editMetal!.id;
       await ref.read(preciousMetalRepositoryProvider).delete(user.uid, id);
-      _bgSyncDelete(user.uid, id);
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppToast.show(context, 'Record deleted', type: AppToastType.success);
+        Navigator.pop(context);
+      }
     } catch (_) {
       if (mounted) {
         AppToast.show(context, 'Delete failed', type: AppToastType.error);
         setState(() => _saving = false);
       }
     }
-  }
-
-  void _bgSyncAdd(String uid, PreciousMetal m) {
-    if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().add(uid, m).catchError((_) {});
-  }
-
-  void _bgSyncUpdate(String uid, PreciousMetal m) {
-    if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().update(uid, m).catchError((_) {});
-  }
-
-  void _bgSyncDelete(String uid, String id) {
-    if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().delete(uid, id).catchError((_) {});
   }
 
   Future<void> _pickDate() async {
@@ -3524,123 +3367,6 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Input pill (inside colored add card)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _InputPill extends StatelessWidget {
-  final String label;
-  final String? prefix;
-  final String? suffix;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final Color metalColor;
-  final bool isDark;
-  final Color cardInk;
-  final String hint;
-  final VoidCallback? onTap;
-  final FocusNode? nextFocus;
-
-  const _InputPill({
-    required this.label,
-    required this.controller,
-    required this.focusNode,
-    required this.metalColor,
-    required this.isDark,
-    required this.cardInk,
-    required this.hint,
-    this.prefix,
-    this.suffix,
-    this.onTap,
-    this.nextFocus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ink = isDark ? metalColor : cardInk;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: metalColor.withValues(alpha: isDark ? 0.14 : 0.10),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: metalColor.withValues(alpha: isDark ? 0.26 : 0.18),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: metalColor.withValues(alpha: 0.70),
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              if (prefix != null) ...[
-                Text(
-                  prefix!,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: ink.withValues(alpha: 0.50),
-                  ),
-                ),
-                const SizedBox(width: 2),
-              ],
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  textInputAction: nextFocus != null
-                      ? TextInputAction.next
-                      : TextInputAction.done,
-                  onTap: onTap,
-                  onSubmitted: (_) {
-                    if (nextFocus != null) {
-                      FocusScope.of(context).requestFocus(nextFocus);
-                    }
-                  },
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: ink,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: hint,
-                    hintStyle: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: ink.withValues(alpha: 0.32),
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    suffixText: suffix,
-                    suffixStyle: TextStyle(
-                      fontSize: 13,
-                      color: metalColor.withValues(alpha: 0.65),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Sheet detail rows
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3888,6 +3614,74 @@ class _SheetNoteRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST — Design 2 preview banner (remove with import + SliverToBoxAdapter above)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Design2PreviewBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const PreciousMetalsDesign2Test(),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE4E9EE),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE4E9EE),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text('2', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF555F6B))),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Design 2 — Neumorphic',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                  Text(
+                    'Test preview · tap to open',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(CupertinoIcons.chevron_right, size: 16, color: brand.inkSoft),
+          ],
+        ),
       ),
     );
   }
