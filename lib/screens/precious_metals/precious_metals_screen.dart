@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -15,7 +18,6 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
-import 'add_edit_metal_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live price provider
@@ -30,9 +32,32 @@ const _currencySymbolMap = {
 class _SpotData {
   final double goldPerGram;
   final double silverPerGram;
-  const _SpotData({required this.goldPerGram, required this.silverPerGram});
+  final double usdToLocal;
+  const _SpotData({
+    required this.goldPerGram,
+    required this.silverPerGram,
+    required this.usdToLocal,
+  });
   double forMetal(MetalType m) =>
       m == MetalType.gold ? goldPerGram : silverPerGram;
+}
+
+class _PricePoint {
+  final DateTime time;
+  final double priceUsdOzt;
+  const _PricePoint({required this.time, required this.priceUsdOzt});
+}
+
+@immutable
+class _ChartQuery {
+  final String ticker;
+  final String range;
+  const _ChartQuery({required this.ticker, required this.range});
+  @override
+  bool operator ==(Object other) =>
+      other is _ChartQuery && ticker == other.ticker && range == other.range;
+  @override
+  int get hashCode => Object.hash(ticker, range);
 }
 
 final _liveSpotProvider =
@@ -102,7 +127,50 @@ final _liveSpotProvider =
     return _SpotData(
       goldPerGram: goldUsd / ozt * rate,
       silverPerGram: silverUsd / ozt * rate,
+      usdToLocal: rate,
     );
+  },
+);
+
+final _liveChartProvider =
+    FutureProvider.autoDispose.family<List<_PricePoint>, _ChartQuery>(
+  (ref, q) async {
+    final (interval, range) = switch (q.range) {
+      '1D' => ('5m', '1d'),
+      '1W' => ('1h', '5d'),
+      '3M' => ('1d', '3mo'),
+      '1Y' => ('1wk', '1y'),
+      'ALL' => ('1mo', 'max'),
+      _ => ('1d', '1mo'),
+    };
+    final resp = await http.get(
+      Uri.parse(
+        'https://query1.finance.yahoo.com/v8/finance/chart/${q.ticker}?interval=$interval&range=$range',
+      ),
+      headers: {'User-Agent': 'Mozilla/5.0'},
+    ).timeout(const Duration(seconds: 15));
+    if (resp.statusCode != 200) throw Exception('Chart unavailable');
+    final json = jsonDecode(resp.body) as Map<String, dynamic>;
+    final result =
+        ((json['chart']['result'] as List?)?.firstOrNull) as Map<String, dynamic>?;
+    if (result == null) throw Exception('No data');
+    final timestamps = (result['timestamp'] as List?)?.cast<int>() ?? [];
+    final closes =
+        ((result['indicators']['quote'] as List?)?.firstOrNull
+                as Map<String, dynamic>?)?['close'] as List? ??
+            [];
+    final pts = <_PricePoint>[];
+    final len = math.min(timestamps.length, closes.length);
+    for (var i = 0; i < len; i++) {
+      final c = closes[i];
+      if (c != null) {
+        pts.add(_PricePoint(
+          time: DateTime.fromMillisecondsSinceEpoch(timestamps[i] * 1000),
+          priceUsdOzt: (c as num).toDouble(),
+        ));
+      }
+    }
+    return pts;
   },
 );
 
@@ -164,6 +232,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
     with SingleTickerProviderStateMixin {
   int _tab = 0;
   late final PageController _pageCtrl;
+  Timer? _refreshTimer;
 
   static const _metals = [MetalType.gold, MetalType.silver];
   MetalType get _active => _metals[_tab];
@@ -172,11 +241,17 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
   void initState() {
     super.initState();
     _pageCtrl = PageController();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+      ref.invalidate(_liveSpotProvider(symbol));
+    });
   }
 
   @override
   void dispose() {
     _pageCtrl.dispose();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -210,15 +285,52 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
         items: filtered,
         symbol: symbol,
         onEdit: _openEdit,
+        onDelete: _deleteMetal,
+        onCopy: _copyMetal,
+      ),
+    );
+  }
+
+  Future<void> _deleteMetal(PreciousMetal metal) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    await ref.read(preciousMetalRepositoryProvider).delete(user.uid, metal.id);
+    if (storageMode == StorageMode.firebase) {
+      FirebasePreciousMetalRepository().delete(user.uid, metal.id).catchError((_) {});
+    }
+    if (mounted) {
+      AppToast.show(context, 'Record deleted', type: AppToastType.info,
+          icon: CupertinoIcons.trash);
+    }
+  }
+
+  void _copyMetal(PreciousMetal metal) {
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    AppToast.show(context, 'Record copied', type: AppToastType.info,
+        icon: CupertinoIcons.doc_on_doc);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddMetalSheet(
+        initialMetal: metal.metalType,
+        initialAction: metal.action,
+        copyFrom: metal,
       ),
     );
   }
 
   Future<void> _openEdit(PreciousMetal metal) async {
     if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-    await Navigator.push<dynamic>(
-      context,
-      CupertinoPageRoute(builder: (_) => AddEditMetalScreen(metal: metal)),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddMetalSheet(
+        initialMetal: metal.metalType,
+        initialAction: metal.action,
+        editMetal: metal,
+      ),
     );
   }
 
@@ -230,13 +342,8 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final spotAsync = ref.watch(_liveSpotProvider(symbol));
-    final spotData = spotAsync.valueOrNull;
 
     final metricsMap = _calcMetrics(metals);
-    final filtered = metals
-        .where((m) => m.metalType == _active)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -272,13 +379,16 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
             ),
         ],
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: SafeArea(
         child: CustomScrollView(
           slivers: [
             // ── Hero cards (PageView — swipe Gold ↔ Silver) ───────────────
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 560,
+                height: 620,
                 child: PageView.builder(
                   controller: _pageCtrl,
                   onPageChanged: (i) => setState(() => _tab = i),
@@ -298,7 +408,6 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
                         symbol: symbol,
                         isDark: isDark,
                         allItems: allForMetal,
-                        livePrice: spotData?.forMetal(m),
                       ),
                     );
                   },
@@ -344,6 +453,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
+      ),
       ),
     );
   }
@@ -466,13 +576,12 @@ class _ChartPoint {
   const _ChartPoint(this.x, this.y, this.action);
 }
 
-class _HeroCard extends StatefulWidget {
+class _HeroCard extends ConsumerStatefulWidget {
   final MetalType metalType;
   final _Metrics metrics;
   final String symbol;
   final bool isDark;
   final List<PreciousMetal> allItems;
-  final double? livePrice;
 
   const _HeroCard({
     super.key,
@@ -481,62 +590,51 @@ class _HeroCard extends StatefulWidget {
     required this.symbol,
     required this.isDark,
     required this.allItems,
-    this.livePrice,
   });
 
   @override
-  State<_HeroCard> createState() => _HeroCardState();
+  ConsumerState<_HeroCard> createState() => _HeroCardState();
 }
 
-class _HeroCardState extends State<_HeroCard> {
+class _HeroCardState extends ConsumerState<_HeroCard> {
   String _range = '1M';
-  int? _touchedIndex;
+  final _calcCtrl = TextEditingController();
+  double? _calcGrams;
 
   static const _ranges = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
-  List<PreciousMetal> get _filtered {
-    if (_range == 'ALL') return widget.allItems;
-    final now = DateTime.now();
-    final days = {'1D': 1, '1W': 7, '1M': 30, '3M': 90, '1Y': 365}[_range]!;
-    final cutoff = now.subtract(Duration(days: days));
-    return widget.allItems.where((m) => m.date.isAfter(cutoff)).toList();
+  String get _ticker =>
+      widget.metalType == MetalType.gold ? 'GC=F' : 'SI=F';
+
+  @override
+  void dispose() {
+    _calcCtrl.dispose();
+    super.dispose();
   }
 
-  List<_ChartPoint> get _chartPoints {
-    final items = _filtered;
-    final result = <_ChartPoint>[];
-    for (int i = 0; i < items.length; i++) {
-      final m = items[i];
-      final price = m.pricePerGram ??
-          (m.weightGrams > 0 ? m.totalAmount / m.weightGrams : null);
-      if (price != null && price > 0) {
-        result.add(_ChartPoint(i.toDouble(), price, m.action));
-      }
-    }
-    return result;
-  }
-
-  Color get _cardBg => widget.isDark
-      ? const Color(0xFF1B1B20)
-      : Colors.white;
-
-  Color get _ink => widget.isDark
-      ? const Color(0xFFF2F2F4)
-      : const Color(0xFF0F1020);
-
-  Color get _soft => widget.isDark
-      ? const Color(0xFFA1A1A6)
-      : const Color(0xFF7A7A8E);
-
-  Color get _divider => widget.isDark
-      ? const Color(0xFF2A2A30)
-      : const Color(0xFFEAEAEC);
+  Color get _cardBg =>
+      widget.isDark ? const Color(0xFF1B1B20) : Colors.white;
+  Color get _ink =>
+      widget.isDark ? const Color(0xFFF2F2F4) : const Color(0xFF0F1020);
+  Color get _soft =>
+      widget.isDark ? const Color(0xFFA1A1A6) : const Color(0xFF7A7A8E);
+  Color get _divider =>
+      widget.isDark ? const Color(0xFF2A2A30) : const Color(0xFFEAEAEC);
+  Color get _fieldBg =>
+      widget.isDark ? const Color(0xFF252530) : const Color(0xFFF5F5F8);
 
   @override
   Widget build(BuildContext context) {
     final metalColor = widget.metalType.primaryColor;
     final metrics = widget.metrics;
-    final displayPrice = widget.livePrice ?? metrics.latestPrice;
+    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? widget.symbol;
+    final spotAsync = ref.watch(_liveSpotProvider(symbol));
+    final spotData = spotAsync.valueOrNull;
+    final livePrice = spotData?.forMetal(widget.metalType);
+    final usdToLocal = spotData?.usdToLocal ?? 1.0;
+    final isLive = livePrice != null;
+
+    final displayPrice = livePrice ?? metrics.latestPrice;
     final estValue = (metrics.holdGrams > 0 && displayPrice != null)
         ? metrics.holdGrams * displayPrice
         : null;
@@ -546,349 +644,654 @@ class _HeroCardState extends State<_HeroCard> {
     final gainPct = (gainLoss != null && metrics.buyAmount > 0)
         ? gainLoss / metrics.buyAmount * 100
         : null;
-    final hasEst = estValue != null;
     final gainPositive = (gainLoss ?? 0) >= 0;
     final gainColor = gainPositive ? AppColors.income : AppColors.expense;
-    final gainBg = gainPositive
-        ? AppColors.income.withValues(alpha: 0.12)
-        : AppColors.expense.withValues(alpha: 0.12);
+
+    // Gram calculator computed value
+    final calcValue = (_calcGrams != null && displayPrice != null && _calcGrams! > 0)
+        ? _calcGrams! * displayPrice
+        : null;
+
+    // Historical chart
+    final chartAsync = ref.watch(
+      _liveChartProvider(_ChartQuery(ticker: _ticker, range: _range)),
+    );
+
+    const ozt = 31.1034768;
 
     return SizedBox.expand(
       child: Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: widget.isDark ? 0.30 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            // ── Row 1: metal badge + last price ─────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _MetalBadge(metalType: widget.metalType),
-                if (displayPrice != null)
-                  _LastPriceChip(
-                    price: displayPrice,
-                    symbol: widget.symbol,
-                    isLive: widget.livePrice != null,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // ── Row 2: holdings (left) + est.value + gain (right) ────────
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Holdings
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Holdings',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _soft,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          _grams(metrics.holdGrams),
-                          style: TextStyle(
-                            fontSize: 42,
-                            fontWeight: FontWeight.w900,
-                            color: _ink,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'g',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: _soft,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                // Est. value + gain badge
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (gainPct != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: gainBg,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              gainPositive
-                                  ? Icons.arrow_upward_rounded
-                                  : Icons.arrow_downward_rounded,
-                              size: 11,
-                              color: gainColor,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${gainPositive ? '+' : ''}${gainPct.toStringAsFixed(2)}%',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: gainColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      hasEst
-                          ? formatMoney(widget.symbol, estValue)
-                          : '—',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: _ink,
-                      ),
-                    ),
-                    Text(
-                      'est. value',
-                      style: TextStyle(fontSize: 11, color: _soft),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // ── Chart ────────────────────────────────────────────────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: _buildChart(metalColor),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // ── Legend + "Tap markers" hint ───────────────────────────────
-            Row(
-              children: [
-                _LegendDot(
-                  color: AppColors.income,
-                  label: 'BUY',
-                  soft: _soft,
-                ),
-                const SizedBox(width: 12),
-                _LegendDot(
-                  color: AppColors.expense,
-                  label: 'SELL',
-                  soft: _soft,
-                ),
-                const SizedBox(width: 12),
-                _LegendDash(
-                  color: _soft.withValues(alpha: 0.55),
-                  label: 'AVG',
-                  soft: _soft,
-                ),
-                const Spacer(),
-                Text(
-                  'Tap markers for details',
-                  style: TextStyle(fontSize: 10, color: _soft),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // ── Time range selector ───────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: _ranges.map((r) {
-                final active = r == _range;
-                return GestureDetector(
-                  onTap: () => setState(() => _range = r),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? widget.metalType.bgColor
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      r,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight:
-                            active ? FontWeight.w800 : FontWeight.w500,
-                        color: active ? metalColor : _soft,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 14),
-
-            // ── Stats row ─────────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.only(top: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: _divider, width: 0.5),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _StatCol(
-                      label: 'EST. VALUE',
-                      value: hasEst
-                          ? formatMoney(widget.symbol, estValue)
-                          : '—',
-                      valueColor: _ink,
-                      labelColor: _soft,
-                    ),
-                  ),
-                  Container(
-                    width: 0.5,
-                    height: 36,
-                    color: _divider,
-                  ),
-                  Expanded(
-                    child: _StatCol(
-                      label: 'AVG BUY',
-                      value: metrics.avgBuy != null
-                          ? '${formatMoney(widget.symbol, metrics.avgBuy!)}/g'
-                          : '—',
-                      valueColor: _ink,
-                      labelColor: _soft,
-                    ),
-                  ),
-                  Container(
-                    width: 0.5,
-                    height: 36,
-                    color: _divider,
-                  ),
-                  Expanded(
-                    child: _StatCol(
-                      label: 'GAIN / LOSS',
-                      value: gainLoss != null
-                          ? '${gainPositive ? '+' : ''}${formatMoney(widget.symbol, gainLoss)}'
-                          : '—',
-                      valueColor: gainLoss != null ? gainColor : _ink,
-                      labelColor: _soft,
-                    ),
-                  ),
-                ],
-              ),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color:
+                  Colors.black.withValues(alpha: widget.isDark ? 0.30 : 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
-      ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Row 1: badge + live price ──────────────────────────────
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _MetalBadge(metalType: widget.metalType),
+                  const Spacer(),
+                  // Live price section
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isLive)
+                            _LivePulseDot(color: AppColors.income)
+                          else
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _soft.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isLive ? 'LIVE' : 'LAST',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isLive ? AppColors.income : _soft,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      displayPrice != null
+                          ? Text(
+                              '${formatMoney(symbol, displayPrice)}/g',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: _ink,
+                                height: 1.0,
+                              ),
+                            )
+                          : spotAsync.isLoading
+                              ? SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5,
+                                    color: metalColor,
+                                  ),
+                                )
+                              : Text('—',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                      color: _soft)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // ── Holdings + gain row ────────────────────────────────────
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Holdings',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _soft,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            _grams(metrics.holdGrams),
+                            style: TextStyle(
+                              fontSize: 38,
+                              fontWeight: FontWeight.w900,
+                              color: _ink,
+                              height: 1.0,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'g',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _soft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (gainPct != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: gainPositive
+                                ? AppColors.income.withValues(alpha: 0.12)
+                                : AppColors.expense.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                gainPositive
+                                    ? Icons.arrow_upward_rounded
+                                    : Icons.arrow_downward_rounded,
+                                size: 11,
+                                color: gainColor,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${gainPositive ? '+' : ''}${gainPct.toStringAsFixed(2)}%',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: gainColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        estValue != null
+                            ? formatMoney(symbol, estValue)
+                            : '—',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _ink,
+                        ),
+                      ),
+                      Text(
+                        'est. value',
+                        style: TextStyle(fontSize: 10, color: _soft),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // ── Gram calculator ────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                decoration: BoxDecoration(
+                  color: _fieldBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: metalColor.withValues(alpha: 0.18),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: metalColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          CupertinoIcons.cube_box_fill,
+                          size: 16,
+                          color: metalColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'GRAM CALCULATOR',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: _soft,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          TextField(
+                            controller: _calcCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            cursorHeight: 18.0,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _ink,
+                              height: 1.2,
+                            ),
+                            strutStyle: const StrutStyle(
+                              forceStrutHeight: true,
+                              height: 1.2,
+                              fontSize: 15,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                              border: InputBorder.none,
+                              hintText: '0.00 g',
+                              hintStyle: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                                color: _soft.withValues(alpha: 0.45),
+                              ),
+                            ),
+                            onChanged: (v) {
+                              setState(() {
+                                _calcGrams = double.tryParse(v);
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutBack,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.85, end: 1.0)
+                              .animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: calcValue != null
+                          ? _CalcResult(
+                              key: ValueKey(
+                                  (calcValue / 10).round()),
+                              value: formatMoney(symbol, calcValue),
+                              color: metalColor,
+                              soft: _soft,
+                            )
+                          : const SizedBox.shrink(key: ValueKey('empty')),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Historical price chart ─────────────────────────────────
+              Expanded(
+                child: ClipRect(
+                  child: _buildHistoricalChart(
+                    chartAsync,
+                    metalColor,
+                    ozt,
+                    usdToLocal,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // ── Legend ────────────────────────────────────────────────
+              Row(
+                children: [
+                  _LegendDot(color: AppColors.income, label: 'BUY', soft: _soft),
+                  const SizedBox(width: 10),
+                  _LegendDot(color: AppColors.expense, label: 'SELL', soft: _soft),
+                  const SizedBox(width: 10),
+                  _LegendDash(
+                    color: _soft.withValues(alpha: 0.55),
+                    label: 'AVG BUY',
+                    soft: _soft,
+                  ),
+                  const Spacer(),
+                  if (chartAsync.isLoading)
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.2,
+                        color: _soft,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // ── Range tabs ─────────────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _ranges.map((r) {
+                  final active = r == _range;
+                  return GestureDetector(
+                    onTap: () => setState(() => _range = r),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? widget.metalType.bgColor
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        r,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight:
+                              active ? FontWeight.w800 : FontWeight.w500,
+                          color: active ? metalColor : _soft,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Stats row ──────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.only(top: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: _divider, width: 0.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatCol(
+                        label: 'EST. VALUE',
+                        value: estValue != null
+                            ? formatMoney(symbol, estValue)
+                            : '—',
+                        valueColor: _ink,
+                        labelColor: _soft,
+                      ),
+                    ),
+                    Container(width: 0.5, height: 36, color: _divider),
+                    Expanded(
+                      child: _StatCol(
+                        label: 'AVG BUY',
+                        value: metrics.avgBuy != null
+                            ? '${formatMoney(symbol, metrics.avgBuy!)}/g'
+                            : '—',
+                        valueColor: _ink,
+                        labelColor: _soft,
+                      ),
+                    ),
+                    Container(width: 0.5, height: 36, color: _divider),
+                    Expanded(
+                      child: _StatCol(
+                        label: 'GAIN / LOSS',
+                        value: gainLoss != null
+                            ? '${gainPositive ? '+' : ''}${formatMoney(symbol, gainLoss)}'
+                            : '—',
+                        valueColor: gainLoss != null ? gainColor : _ink,
+                        labelColor: _soft,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildChart(Color metalColor) {
-    final points = _chartPoints;
-    if (points.isEmpty) {
+  Widget _buildHistoricalChart(
+    AsyncValue<List<_PricePoint>> chartAsync,
+    Color metalColor,
+    double ozt,
+    double usdToLocal,
+  ) {
+    return chartAsync.when(
+      loading: () => Center(
+        child: CircularProgressIndicator(strokeWidth: 2, color: metalColor),
+      ),
+      error: (_, __) => _buildFallbackChart(metalColor),
+      data: (pts) {
+        if (pts.isEmpty) return _buildFallbackChart(metalColor);
+
+        // Convert USD/ozt → local/g
+        final spots = pts
+            .asMap()
+            .entries
+            .map((e) =>
+                FlSpot(e.key.toDouble(), e.value.priceUsdOzt / ozt * usdToLocal))
+            .toList();
+
+        final minY =
+            spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+        final maxY =
+            spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+        final yPad = (maxY - minY) * 0.15 + 0.01;
+
+        // Map transaction buy/sell onto nearest chart time index
+        final buyMarkers = <FlSpot>[];
+        final sellMarkers = <FlSpot>[];
+        for (final item in widget.allItems) {
+          int closest = 0;
+          int minDiff = 999999999;
+          for (int i = 0; i < pts.length; i++) {
+            final diff =
+                (pts[i].time.millisecondsSinceEpoch -
+                        item.date.millisecondsSinceEpoch)
+                    .abs();
+            if (diff < minDiff) {
+              minDiff = diff;
+              closest = i;
+            }
+          }
+          final priceLocal = pts[closest].priceUsdOzt / ozt * usdToLocal;
+          if (item.action == MetalAction.buy) {
+            buyMarkers.add(FlSpot(closest.toDouble(), priceLocal));
+          } else {
+            sellMarkers.add(FlSpot(closest.toDouble(), priceLocal));
+          }
+        }
+
+        final bars = <LineChartBarData>[
+          // Main price line
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.3,
+            color: metalColor,
+            barWidth: 2,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  metalColor.withValues(alpha: 0.18),
+                  metalColor.withValues(alpha: 0.0),
+                ],
+              ),
+            ),
+          ),
+          // Buy markers (green dots)
+          if (buyMarkers.isNotEmpty)
+            LineChartBarData(
+              spots: buyMarkers,
+              isCurved: false,
+              color: Colors.transparent,
+              barWidth: 0,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                  radius: 5,
+                  color: AppColors.income,
+                  strokeWidth: 2,
+                  strokeColor: _cardBg,
+                ),
+              ),
+              belowBarData: BarAreaData(show: false),
+            ),
+          // Sell markers (red dots)
+          if (sellMarkers.isNotEmpty)
+            LineChartBarData(
+              spots: sellMarkers,
+              isCurved: false,
+              color: Colors.transparent,
+              barWidth: 0,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                  radius: 5,
+                  color: AppColors.expense,
+                  strokeWidth: 2,
+                  strokeColor: _cardBg,
+                ),
+              ),
+              belowBarData: BarAreaData(show: false),
+            ),
+        ];
+
+        // Avg buy dashed line
+        if (widget.metrics.avgBuy != null) {
+          bars.insert(
+            1,
+            LineChartBarData(
+              spots: [
+                FlSpot(spots.first.x, widget.metrics.avgBuy!),
+                FlSpot(spots.last.x, widget.metrics.avgBuy!),
+              ],
+              isCurved: false,
+              color: _soft.withValues(alpha: 0.55),
+              barWidth: 1.2,
+              dashArray: [6, 4],
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(show: false),
+            ),
+          );
+        }
+
+        return LineChart(
+          duration: const Duration(milliseconds: 300),
+          LineChartData(
+            minY: minY - yPad,
+            maxY: maxY + yPad,
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            lineBarsData: bars,
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (_) => widget.isDark
+                    ? const Color(0xFF2A2A30)
+                    : const Color(0xFF1A1A2E),
+                tooltipPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                fitInsideHorizontally: true,
+                fitInsideVertically: true,
+                getTooltipItems: (touchedSpots) {
+                  return touchedSpots.map((s) {
+                    if (s.barIndex != 0) return null;
+                    final idx = s.spotIndex.clamp(0, pts.length - 1);
+                    final t = pts[idx].time;
+                    return LineTooltipItem(
+                      '${DateFormat('d MMM').format(t)}\n',
+                      const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: formatMoney(widget.symbol, s.y),
+                          style: TextStyle(
+                            color: metalColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: '/g',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList();
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Fallback: transaction-based chart when live data unavailable
+  Widget _buildFallbackChart(Color metalColor) {
+    final items = widget.allItems;
+    if (items.isEmpty) {
       return Center(
-        child: Text(
-          'No price data',
-          style: TextStyle(fontSize: 12, color: _soft),
-        ),
+        child: Text('No price data',
+            style: TextStyle(fontSize: 12, color: _soft)),
       );
     }
-
-    final spots = points.map((p) => FlSpot(p.x, p.y)).toList();
-    final avgBuy = widget.metrics.avgBuy;
-
+    final pts = <_ChartPoint>[];
+    for (int i = 0; i < items.length; i++) {
+      final m = items[i];
+      final price = m.pricePerGram ??
+          (m.weightGrams > 0 ? m.totalAmount / m.weightGrams : null);
+      if (price != null && price > 0) {
+        pts.add(_ChartPoint(i.toDouble(), price, m.action));
+      }
+    }
+    if (pts.isEmpty) {
+      return Center(
+          child: Text('No price data',
+              style: TextStyle(fontSize: 12, color: _soft)));
+    }
+    final spots = pts.map((p) => FlSpot(p.x, p.y)).toList();
     final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
     final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
     final yPad = (maxY - minY) * 0.2 + 1;
-
-    final priceBar = LineChartBarData(
-      spots: spots,
-      isCurved: spots.length > 2,
-      color: metalColor,
-      barWidth: 2,
-      isStrokeCapRound: true,
-      dotData: FlDotData(
-        show: true,
-        getDotPainter: (spot, _, __, index) {
-          if (index >= points.length) {
-            return FlDotCirclePainter(
-              radius: 4,
-              color: metalColor,
-              strokeWidth: 0,
-              strokeColor: Colors.transparent,
-            );
-          }
-          final isBuy = points[index].action == MetalAction.buy;
-          final isTouch = index == _touchedIndex;
-          return FlDotCirclePainter(
-            radius: isTouch ? 6 : 4.5,
-            color: isBuy ? AppColors.income : AppColors.expense,
-            strokeWidth: 1.5,
-            strokeColor: _cardBg,
-          );
-        },
-      ),
-      belowBarData: BarAreaData(
-        show: true,
-        color: metalColor.withValues(alpha: 0.08),
-      ),
-    );
-
-    final bars = <LineChartBarData>[priceBar];
-
-    // Avg buy dashed line
-    if (avgBuy != null && spots.length >= 1) {
-      bars.add(
-        LineChartBarData(
-          spots: [FlSpot(spots.first.x, avgBuy), FlSpot(spots.last.x, avgBuy)],
-          isCurved: false,
-          color: _soft.withValues(alpha: 0.55),
-          barWidth: 1.2,
-          dashArray: [6, 4],
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: false),
-        ),
-      );
-    }
-
     return LineChart(
       duration: const Duration(milliseconds: 250),
       LineChartData(
@@ -897,54 +1300,39 @@ class _HeroCardState extends State<_HeroCard> {
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
         titlesData: const FlTitlesData(show: false),
-        lineBarsData: bars,
-        lineTouchData: LineTouchData(
-          touchCallback: (event, response) {
-            setState(() {
-              if (response?.lineBarSpots == null ||
-                  !event.isInterestedForInteractions) {
-                _touchedIndex = null;
-              } else {
-                _touchedIndex = response!.lineBarSpots!.first.spotIndex;
-              }
-            });
-          },
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) =>
-                widget.isDark ? const Color(0xFF2A2A30) : const Color(0xFF1A1A2E),
-            tooltipPadding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: spots.length > 2,
+            color: metalColor,
+            barWidth: 2,
+            isStrokeCapRound: true,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, _, __, index) {
+                if (index >= pts.length) {
+                  return FlDotCirclePainter(
+                    radius: 4,
+                    color: metalColor,
+                    strokeWidth: 0,
+                    strokeColor: Colors.transparent,
+                  );
+                }
+                final isBuy = pts[index].action == MetalAction.buy;
+                return FlDotCirclePainter(
+                  radius: 4.5,
+                  color: isBuy ? AppColors.income : AppColors.expense,
+                  strokeWidth: 1.5,
+                  strokeColor: _cardBg,
+                );
+              },
             ),
-            fitInsideHorizontally: true,
-            fitInsideVertically: true,
-            getTooltipItems: (spots) => spots.map((s) {
-              final i = s.spotIndex;
-              if (i >= points.length) return null;
-              final item = _filtered[i];
-              final isBuy = item.action == MetalAction.buy;
-              return LineTooltipItem(
-                '${isBuy ? 'Buy' : 'Sell'} · ${DateFormat('d MMM').format(item.date)}\n',
-                const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-                children: [
-                  TextSpan(
-                    text:
-                        '${formatMoney(widget.symbol, s.y)}/g',
-                    style: TextStyle(
-                      color: isBuy ? AppColors.income : AppColors.expense,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
+            belowBarData: BarAreaData(
+              show: true,
+              color: metalColor.withValues(alpha: 0.08),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -953,6 +1341,77 @@ class _HeroCardState extends State<_HeroCard> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Hero card supporting widgets
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _LivePulseDot extends StatefulWidget {
+  final Color color;
+  const _LivePulseDot({required this.color});
+
+  @override
+  State<_LivePulseDot> createState() => _LivePulseDotState();
+}
+
+class _LivePulseDotState extends State<_LivePulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: false);
+    _scale = Tween<double>(begin: 1.0, end: 2.2).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+    _opacity = Tween<double>(begin: 0.7, end: 0.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 14,
+      height: 14,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, __) => Transform.scale(
+              scale: _scale.value,
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color.withValues(alpha: _opacity.value),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _MetalBadge extends StatelessWidget {
   final MetalType metalType;
@@ -1178,6 +1637,45 @@ class _StatCol extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CalcResult extends StatelessWidget {
+  final String value;
+  final Color color;
+  final Color soft;
+
+  const _CalcResult({
+    super.key,
+    required this.value,
+    required this.color,
+    required this.soft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '≈',
+          style: TextStyle(
+            fontSize: 10,
+            color: soft,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1548,6 +2046,291 @@ class _TxRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Swipeable transaction row (used in history sheet)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SwipeTxRow extends StatefulWidget {
+  final PreciousMetal metal;
+  final String symbol;
+  final BrandColors brand;
+  final VoidCallback onTap;
+  final VoidCallback? onEdit;
+  final Future<void> Function()? onDelete;
+  final VoidCallback? onCopy;
+
+  const _SwipeTxRow({
+    required this.metal,
+    required this.symbol,
+    required this.brand,
+    required this.onTap,
+    this.onEdit,
+    this.onDelete,
+    this.onCopy,
+  });
+
+  @override
+  State<_SwipeTxRow> createState() => _SwipeTxRowState();
+}
+
+class _SwipeTxRowState extends State<_SwipeTxRow>
+    with SingleTickerProviderStateMixin {
+  static const double _rightActionWidth = 140.0;
+  static const double _leftActionWidth = 80.0;
+  static const double _snapThreshold = 60.0;
+
+  late AnimationController _controller;
+  late Animation<double> _offsetAnimation;
+  double _dragOffset = 0.0;
+  int _direction = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _offsetAnimation = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDragStart(DragStartDetails _) {
+    _controller.stop();
+    _dragOffset = _offsetAnimation.value;
+    _direction = 0;
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_direction == 0) {
+      if (d.delta.dx < 0) _direction = -1;
+      if (d.delta.dx > 0) _direction = 1;
+    }
+    setState(() {
+      _dragOffset += d.delta.dx;
+      if (_direction == -1) {
+        _dragOffset = _dragOffset.clamp(-_rightActionWidth, 0.0);
+      } else {
+        _dragOffset = _dragOffset.clamp(0.0, _leftActionWidth);
+      }
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final velocity = d.primaryVelocity ?? 0;
+    final shouldOpen = _dragOffset.abs() > _snapThreshold || velocity.abs() > 300;
+    if (_direction == -1) {
+      if (shouldOpen && (widget.onDelete != null || widget.onEdit != null)) {
+        _animateTo(-_rightActionWidth);
+      } else {
+        _animateTo(0);
+      }
+    } else if (_direction == 1) {
+      if (shouldOpen && widget.onCopy != null) {
+        _animateTo(0);
+        HapticFeedback.mediumImpact();
+        widget.onCopy!();
+      } else {
+        _animateTo(0);
+      }
+    } else {
+      _animateTo(0);
+    }
+  }
+
+  void _animateTo(double target) {
+    _offsetAnimation = Tween<double>(begin: _dragOffset, end: target).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _controller.forward(from: 0);
+    setState(() => _dragOffset = target);
+  }
+
+  void _close() => _animateTo(0);
+
+  Future<void> _confirmDelete() async {
+    HapticFeedback.mediumImpact();
+    _close();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    final isBuy = widget.metal.action == MetalAction.buy;
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete Record'),
+        content: Text(
+          'Delete this ${isBuy ? 'purchase' : 'sale'} record permanently?',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      HapticFeedback.heavyImpact();
+      await widget.onDelete!();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSwipeLeft = widget.onDelete != null || widget.onEdit != null;
+    final canSwipeRight = widget.onCopy != null;
+
+    final content = _TxRow(
+      metal: widget.metal,
+      symbol: widget.symbol,
+      brand: widget.brand,
+      onTap: () {
+        if (_dragOffset != 0) {
+          _close();
+          return;
+        }
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
+    );
+
+    if (!canSwipeLeft && !canSwipeRight) return content;
+
+    return GestureDetector(
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (ctx, _) {
+          final offset =
+              _controller.isAnimating ? _offsetAnimation.value : _dragOffset;
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              if (canSwipeRight)
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  width: _leftActionWidth - 8,
+                  child: Opacity(
+                    opacity: (offset / _leftActionWidth).clamp(0.0, 1.0),
+                    child: _ActionButton(
+                      color: AppColors.income,
+                      icon: CupertinoIcons.doc_on_doc,
+                      label: 'Copy',
+                      onTap: () {
+                        _close();
+                        widget.onCopy!();
+                      },
+                    ),
+                  ),
+                ),
+              if (canSwipeLeft)
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  bottom: 0,
+                  width: _rightActionWidth - 8,
+                  child: Opacity(
+                    opacity: (-offset / _rightActionWidth).clamp(0.0, 1.0),
+                    child: Row(
+                      children: [
+                        if (widget.onEdit != null)
+                          Expanded(
+                            child: _ActionButton(
+                              color: const Color(0xFF5B8AF4),
+                              icon: CupertinoIcons.pencil,
+                              label: 'Edit',
+                              onTap: () {
+                                _close();
+                                widget.onEdit!();
+                              },
+                            ),
+                          ),
+                        if (widget.onEdit != null && widget.onDelete != null)
+                          const SizedBox(width: 6),
+                        if (widget.onDelete != null)
+                          Expanded(
+                            child: _ActionButton(
+                              color: AppColors.expense,
+                              icon: CupertinoIcons.delete,
+                              label: 'Delete',
+                              onTap: _confirmDelete,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              Transform.translate(
+                offset: Offset(offset, 0),
+                child: content,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.color,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Empty state
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1639,12 +2422,16 @@ class _HistorySheet extends StatelessWidget {
   final List<PreciousMetal> items;
   final String symbol;
   final ValueChanged<PreciousMetal> onEdit;
+  final Future<void> Function(PreciousMetal)? onDelete;
+  final ValueChanged<PreciousMetal>? onCopy;
 
   const _HistorySheet({
     required this.metalType,
     required this.items,
     required this.symbol,
     required this.onEdit,
+    this.onDelete,
+    this.onCopy,
   });
 
   @override
@@ -1725,24 +2512,33 @@ class _HistorySheet extends StatelessWidget {
                       padding: const EdgeInsets.only(left: 70),
                       child: Container(height: 0.5, color: brand.divider),
                     ),
-                    itemBuilder: (_, i) => Container(
-                      decoration: BoxDecoration(
+                    itemBuilder: (_, i) => ClipRRect(
+                      borderRadius: i == 0
+                          ? const BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            )
+                          : i == items.length - 1
+                          ? const BorderRadius.vertical(
+                              bottom: Radius.circular(16),
+                            )
+                          : BorderRadius.zero,
+                      child: ColoredBox(
                         color: brand.surface,
-                        borderRadius: i == 0
-                            ? const BorderRadius.vertical(
-                                top: Radius.circular(16),
-                              )
-                            : i == items.length - 1
-                            ? const BorderRadius.vertical(
-                                bottom: Radius.circular(16),
-                              )
-                            : null,
-                      ),
-                      child: _TxRow(
-                        metal: items[i],
-                        symbol: symbol,
-                        brand: brand,
-                        onTap: () => onEdit(items[i]),
+                        child: _SwipeTxRow(
+                          metal: items[i],
+                          symbol: symbol,
+                          brand: brand,
+                          onTap: () => onEdit(items[i]),
+                          onEdit: onDelete != null || onCopy != null
+                              ? () => onEdit(items[i])
+                              : null,
+                          onDelete: onDelete != null
+                              ? () => onDelete!(items[i])
+                              : null,
+                          onCopy: onCopy != null
+                              ? () => onCopy!(items[i])
+                              : null,
+                        ),
                       ),
                     ),
                   ),
@@ -1800,10 +2596,14 @@ class _IngotPainter extends CustomPainter {
 class _AddMetalSheet extends ConsumerStatefulWidget {
   final MetalType initialMetal;
   final MetalAction initialAction;
+  final PreciousMetal? editMetal;
+  final PreciousMetal? copyFrom;
 
   const _AddMetalSheet({
     required this.initialMetal,
     required this.initialAction,
+    this.editMetal,
+    this.copyFrom,
   });
 
   @override
@@ -1829,12 +2629,29 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
   final _priceFocus = FocusNode();
   final _totalFocus = FocusNode();
 
+  bool get _isEdit => widget.editMetal != null;
+
+  static String _fmt(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    final s = v.toStringAsFixed(6);
+    return s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+
   @override
   void initState() {
     super.initState();
     _metalType = widget.initialMetal;
     _action = widget.initialAction;
-    _date = DateTime.now();
+    _date = widget.editMetal?.date ?? DateTime.now();
+    _accountId = widget.editMetal?.accountId;
+
+    final m = widget.editMetal ?? widget.copyFrom;
+    if (m != null) {
+      if (m.weightGrams > 0) _weightCtrl.text = _fmt(m.weightGrams);
+      if (m.pricePerGram != null) _priceCtrl.text = _fmt(m.pricePerGram!);
+      if (m.totalAmount > 0) _totalCtrl.text = _fmt(m.totalAmount);
+      if (widget.editMetal != null) _notesCtrl.text = m.notes ?? '';
+    }
     _weightCtrl.addListener(_autoCalc);
     _priceCtrl.addListener(_autoCalc);
   }
@@ -1892,28 +2709,87 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
       final pricePerGram = double.tryParse(_priceCtrl.text);
       final notes =
           _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
-      final newM = PreciousMetal(
-        id: now.microsecondsSinceEpoch.toString(),
-        metalType: _metalType,
-        action: _action,
-        weightGrams: weight,
-        pricePerGram: pricePerGram,
-        totalAmount: total,
-        date: _date,
-        notes: notes,
-        accountId: _accountId,
-        createdAt: now,
-      );
-      await repo.add(user.uid, newM);
-      _bgSyncAdd(user.uid, newM);
-      if (mounted) {
-        setState(() { _saving = false; _saveSuccess = true; });
-        await Future.delayed(const Duration(milliseconds: 650));
-        if (mounted) Navigator.pop(context);
+
+      if (_isEdit) {
+        final updated = widget.editMetal!.copyWith(
+          metalType: _metalType,
+          action: _action,
+          weightGrams: weight,
+          pricePerGram: pricePerGram,
+          totalAmount: total,
+          date: _date,
+          notes: notes,
+          accountId: _accountId,
+        );
+        await repo.update(user.uid, updated);
+        _bgSyncUpdate(user.uid, updated);
+        if (mounted) {
+          setState(() { _saving = false; _saveSuccess = true; });
+          await Future.delayed(const Duration(milliseconds: 450));
+          if (mounted) Navigator.pop(context);
+        }
+      } else {
+        final newM = PreciousMetal(
+          id: now.microsecondsSinceEpoch.toString(),
+          metalType: _metalType,
+          action: _action,
+          weightGrams: weight,
+          pricePerGram: pricePerGram,
+          totalAmount: total,
+          date: _date,
+          notes: notes,
+          accountId: _accountId,
+          createdAt: now,
+        );
+        await repo.add(user.uid, newM);
+        _bgSyncAdd(user.uid, newM);
+        if (mounted) {
+          setState(() { _saving = false; _saveSuccess = true; });
+          await Future.delayed(const Duration(milliseconds: 650));
+          if (mounted) Navigator.pop(context);
+        }
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, 'Save failed', type: AppToastType.error);
+        AppToast.show(context, _isEdit ? 'Update failed' : 'Save failed', type: AppToastType.error);
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _delete() async {
+    FocusScope.of(context).unfocus();
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete Record'),
+        content: const Text('This record will be permanently deleted.'),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+
+    setState(() => _saving = true);
+    try {
+      final id = widget.editMetal!.id;
+      await ref.read(preciousMetalRepositoryProvider).delete(user.uid, id);
+      _bgSyncDelete(user.uid, id);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Delete failed', type: AppToastType.error);
         setState(() => _saving = false);
       }
     }
@@ -1922,6 +2798,16 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
   void _bgSyncAdd(String uid, PreciousMetal m) {
     if (storageMode != StorageMode.firebase) return;
     FirebasePreciousMetalRepository().add(uid, m).catchError((_) {});
+  }
+
+  void _bgSyncUpdate(String uid, PreciousMetal m) {
+    if (storageMode != StorageMode.firebase) return;
+    FirebasePreciousMetalRepository().update(uid, m).catchError((_) {});
+  }
+
+  void _bgSyncDelete(String uid, String id) {
+    if (storageMode != StorageMode.firebase) return;
+    FirebasePreciousMetalRepository().delete(uid, id).catchError((_) {});
   }
 
   Future<void> _pickDate() async {
@@ -2029,7 +2915,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
             child: Row(
               children: [
                 Text(
-                  'New Transaction',
+                  _isEdit ? 'Edit Record' : 'New Transaction',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -2037,6 +2923,24 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                   ),
                 ),
                 const Spacer(),
+                if (_isEdit)
+                  GestureDetector(
+                    onTap: _saving ? null : _delete,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.blush,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.delete,
+                        size: 15,
+                        color: AppColors.expense,
+                      ),
+                    ),
+                  ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
@@ -2128,7 +3032,18 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                         const SizedBox(height: 18),
 
                         // Large total amount
-                        Row(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.07)
+                                : Colors.white.withValues(alpha: 0.60),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
                           textBaseline: TextBaseline.alphabetic,
                           children: [
@@ -2180,6 +3095,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                               ),
                             ),
                           ],
+                          ),
                         ),
                         const SizedBox(height: 16),
 
@@ -2203,7 +3119,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                             color: metalColor.withValues(
                               alpha: isDark ? 0.20 : 0.16,
                             ),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: IntrinsicHeight(
                             child: Row(
@@ -2225,64 +3141,61 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                           letterSpacing: 0.3,
                                         ),
                                       ),
-                                      const SizedBox(height: 5),
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.baseline,
-                                        textBaseline: TextBaseline.alphabetic,
-                                        children: [
-                                          Expanded(
-                                            child: TextField(
-                                              controller: _weightCtrl,
-                                              focusNode: _weightFocus,
-                                              autofocus: false,
-                                              keyboardType: const TextInputType
-                                                  .numberWithOptions(
-                                                decimal: true,
-                                              ),
-                                              textInputAction:
-                                                  TextInputAction.next,
-                                              onTap: () =>
-                                                  _selectAll(_weightCtrl),
-                                              onSubmitted: (_) =>
-                                                  FocusScope.of(
-                                                context,
-                                              ).requestFocus(_priceFocus),
-                                              style: TextStyle(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: isDark
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: _weightCtrl,
+                                        focusNode: _weightFocus,
+                                        autofocus: false,
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
+                                        textInputAction: TextInputAction.next,
+                                        onTap: () => _selectAll(_weightCtrl),
+                                        onSubmitted: (_) => FocusScope.of(
+                                          context,
+                                        ).requestFocus(_priceFocus),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? metalColor : _cardInk,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: '0.00',
+                                          hintStyle: TextStyle(
+                                            fontSize: 16,
+                                            color: (isDark
                                                     ? metalColor
-                                                    : _cardInk,
-                                              ),
-                                              decoration: InputDecoration(
-                                                hintText: '0.00',
-                                                hintStyle: TextStyle(
-                                                  fontSize: 16,
-                                                  color: (isDark
-                                                          ? metalColor
-                                                          : _cardInk)
-                                                      .withValues(alpha: 0.35),
-                                                ),
-                                                border: InputBorder.none,
-                                                enabledBorder: InputBorder.none,
-                                                focusedBorder: InputBorder.none,
-                                                contentPadding: EdgeInsets.zero,
-                                                isDense: true,
-                                              ),
-                                            ),
+                                                    : _cardInk)
+                                                .withValues(alpha: 0.35),
                                           ),
-                                          Text(
-                                            'g',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: metalColor.withValues(
-                                                alpha: 0.65,
-                                              ),
-                                            ),
+                                          suffixText: 'g',
+                                          suffixStyle: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: metalColor.withValues(
+                                                alpha: 0.65),
                                           ),
-                                        ],
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
+                                          ),
+                                          isDense: true,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2312,62 +3225,60 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                           letterSpacing: 0.3,
                                         ),
                                       ),
-                                      const SizedBox(height: 5),
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.baseline,
-                                        textBaseline: TextBaseline.alphabetic,
-                                        children: [
-                                          Text(
-                                            symbol,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: (isDark
-                                                      ? metalColor
-                                                      : _cardInk)
-                                                  .withValues(alpha: 0.50),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Expanded(
-                                            child: TextField(
-                                              controller: _priceCtrl,
-                                              focusNode: _priceFocus,
-                                              autofocus: false,
-                                              keyboardType: const TextInputType
-                                                  .numberWithOptions(
-                                                decimal: true,
-                                              ),
-                                              textInputAction:
-                                                  TextInputAction.done,
-                                              onTap: () =>
-                                                  _selectAll(_priceCtrl),
-                                              style: TextStyle(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: isDark
+                                      const SizedBox(height: 6),
+                                      TextField(
+                                        controller: _priceCtrl,
+                                        focusNode: _priceFocus,
+                                        autofocus: false,
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
+                                        textInputAction: TextInputAction.done,
+                                        onTap: () => _selectAll(_priceCtrl),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? metalColor : _cardInk,
+                                        ),
+                                        decoration: InputDecoration(
+                                          prefixText: '$symbol ',
+                                          prefixStyle: TextStyle(
+                                            fontSize: 14,
+                                            color: (isDark
                                                     ? metalColor
-                                                    : _cardInk,
-                                              ),
-                                              decoration: InputDecoration(
-                                                hintText: 'Optional',
-                                                hintStyle: TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w400,
-                                                  color: (isDark
-                                                          ? metalColor
-                                                          : _cardInk)
-                                                      .withValues(alpha: 0.35),
-                                                ),
-                                                border: InputBorder.none,
-                                                enabledBorder: InputBorder.none,
-                                                focusedBorder: InputBorder.none,
-                                                contentPadding: EdgeInsets.zero,
-                                                isDense: true,
-                                              ),
-                                            ),
+                                                    : _cardInk)
+                                                .withValues(alpha: 0.50),
                                           ),
-                                        ],
+                                          hintText: 'Optional',
+                                          hintStyle: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w400,
+                                            color: (isDark
+                                                    ? metalColor
+                                                    : _cardInk)
+                                                .withValues(alpha: 0.35),
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
+                                          ),
+                                          isDense: true,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2466,8 +3377,8 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                 EdgeInsets.fromLTRB(16, 12, 16, 16 + bottomPad),
             child: Row(
               children: [
-                // Buy / Sell toggle
-                GestureDetector(
+                // Buy / Sell toggle (add mode only)
+                if (!_isEdit) GestureDetector(
                   onTapDown: (_) => setState(() => _togglePressed = true),
                   onTapUp: (_) {
                     setState(() {
@@ -2520,7 +3431,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                if (!_isEdit) const SizedBox(width: 12),
 
                 Expanded(
                   child: AnimatedContainer(
@@ -2583,9 +3494,11 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
-                                            _action == MetalAction.buy
-                                                ? 'Record Purchase'
-                                                : 'Record Sale',
+                                            _isEdit
+                                                ? 'Save Changes'
+                                                : (_action == MetalAction.buy
+                                                    ? 'Record Purchase'
+                                                    : 'Record Sale'),
                                             style: const TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.w700,
