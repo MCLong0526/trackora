@@ -178,6 +178,12 @@ class _AddEditTravelGroupScreenState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
           children: [
+            // Hero section — only on create
+            if (!_isEdit) ...[
+              _HeroSection(),
+              const SizedBox(height: 28),
+            ],
+
             _SectionLabel(context.t('travel.fieldName').toUpperCase()),
             _InputCard(
               child: TextField(
@@ -236,8 +242,88 @@ class _AddEditTravelGroupScreenState
                 ],
               ),
             ),
+            const SizedBox(height: 32),
+
+            // Save button
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton.filled(
+                borderRadius: BorderRadius.circular(16),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    : Text(
+                        _isEdit
+                            ? context.t('common.save')
+                            : context.t('travel.createGroup'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeroSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: brand.sky,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t('travel.planHero'),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                    letterSpacing: -0.4,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.t('travel.planHeroSub'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: brand.inkSoft,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3478F6).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              CupertinoIcons.airplane,
+              color: Color(0xFF3478F6),
+              size: 28,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -315,9 +401,9 @@ class _DateRow extends StatelessWidget {
                 ),
                 Text(
                   value,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
-                    color: const Color(0xFF3478F6),
+                    color: Color(0xFF3478F6),
                     fontWeight: FontWeight.w500,
                   ),
                 ),

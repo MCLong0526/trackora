@@ -9,6 +9,7 @@ import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
+import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
 import 'statistics_screen.dart';
@@ -49,6 +50,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       context,
       CupertinoPageRoute(
         builder: (_) => const ImportReceiptScreen(openCamera: true),
+      ),
+    );
+  }
+
+  void _openGroupTrip() {
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => const TravelGroupsScreen(),
       ),
     );
   }
@@ -104,6 +114,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             open: _fabOpen,
             onManualEntry: () => _runAddAction(_openManualEntry),
             onScanReceipt: () => _runAddAction(_openCameraOcr),
+            onGroupTrip: () => _runAddAction(_openGroupTrip),
           ),
         ],
       ),
@@ -220,11 +231,13 @@ class _SpeedDialOverlay extends StatefulWidget {
   final bool open;
   final VoidCallback onManualEntry;
   final VoidCallback onScanReceipt;
+  final VoidCallback onGroupTrip;
 
   const _SpeedDialOverlay({
     required this.open,
     required this.onManualEntry,
     required this.onScanReceipt,
+    required this.onGroupTrip,
   });
 
   @override
@@ -238,6 +251,8 @@ class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
   late final Animation<double> _moveLeft;
   late final Animation<double> _fadeRight;
   late final Animation<double> _moveRight;
+  late final Animation<double> _fadeTop;
+  late final Animation<double> _moveTop;
 
   static const double _bottomGap = 78;
 
@@ -263,6 +278,14 @@ class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
     _moveRight = CurvedAnimation(
       parent: _ctrl,
       curve: const Interval(0.08, 0.80, curve: Curves.easeOutBack),
+    );
+    _fadeTop = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.16, 0.80, curve: Curves.easeOut),
+    );
+    _moveTop = CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0.16, 0.88, curve: Curves.easeOutBack),
     );
     if (widget.open) _ctrl.value = 1;
   }
@@ -299,52 +322,77 @@ class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
                 left: 16,
                 right: 16,
                 bottom: _bottomGap,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ── Create Entry (primary purple) ──────────────────
-                    Transform.rotate(
-                      angle: -0.07,
-                      child: Transform.translate(
-                        offset: Offset(0, lerpDouble(30, 0, _moveLeft.value)!),
-                        child: Transform.scale(
-                          scale: lerpDouble(0.75, 1.0, _moveLeft.value)!,
-                          alignment: Alignment.bottomCenter,
-                          child: FadeTransition(
-                            opacity: _fadeLeft,
-                            child: _HorizDialPill(
-                              icon: CupertinoIcons.add,
-                              label: 'Create Entry',
-                              isPrimary: true,
-                              isDark: isDark,
-                              onTap: widget.onManualEntry,
-                            ),
+                    // ── Group Trip (top center) ────────────────────────
+                    Transform.translate(
+                      offset: Offset(0, lerpDouble(30, 0, _moveTop.value)!),
+                      child: Transform.scale(
+                        scale: lerpDouble(0.75, 1.0, _moveTop.value)!,
+                        alignment: Alignment.bottomCenter,
+                        child: FadeTransition(
+                          opacity: _fadeTop,
+                          child: _HorizDialPill(
+                            icon: CupertinoIcons.airplane,
+                            label: context.t('travel.groupTrip'),
+                            isPrimary: false,
+                            isDark: isDark,
+                            onTap: widget.onGroupTrip,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    // ── Scan Receipt (secondary white/glass) ───────────
-                    Transform.rotate(
-                      angle: 0.07,
-                      child: Transform.translate(
-                        offset: Offset(0, lerpDouble(30, 0, _moveRight.value)!),
-                        child: Transform.scale(
-                          scale: lerpDouble(0.75, 1.0, _moveRight.value)!,
-                          alignment: Alignment.bottomCenter,
-                          child: FadeTransition(
-                            opacity: _fadeRight,
-                            child: _HorizDialPill(
-                              icon: CupertinoIcons.camera_fill,
-                              label: 'Scan Receipt',
-                              isPrimary: false,
-                              isDark: isDark,
-                              onTap: widget.onScanReceipt,
+                    const SizedBox(height: 8),
+                    // ── Create Entry + Scan Receipt row ────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Transform.rotate(
+                          angle: -0.07,
+                          child: Transform.translate(
+                            offset:
+                                Offset(0, lerpDouble(30, 0, _moveLeft.value)!),
+                            child: Transform.scale(
+                              scale: lerpDouble(0.75, 1.0, _moveLeft.value)!,
+                              alignment: Alignment.bottomCenter,
+                              child: FadeTransition(
+                                opacity: _fadeLeft,
+                                child: _HorizDialPill(
+                                  icon: CupertinoIcons.add,
+                                  label: 'Create Entry',
+                                  isPrimary: true,
+                                  isDark: isDark,
+                                  onTap: widget.onManualEntry,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Transform.rotate(
+                          angle: 0.07,
+                          child: Transform.translate(
+                            offset: Offset(
+                                0, lerpDouble(30, 0, _moveRight.value)!),
+                            child: Transform.scale(
+                              scale: lerpDouble(0.75, 1.0, _moveRight.value)!,
+                              alignment: Alignment.bottomCenter,
+                              child: FadeTransition(
+                                opacity: _fadeRight,
+                                child: _HorizDialPill(
+                                  icon: CupertinoIcons.camera_fill,
+                                  label: 'Scan Receipt',
+                                  isPrimary: false,
+                                  isDark: isDark,
+                                  onTap: widget.onScanReceipt,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

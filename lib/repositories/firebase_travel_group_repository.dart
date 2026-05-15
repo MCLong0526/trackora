@@ -5,67 +5,82 @@ import '../models/travel_group.dart';
 import 'travel_group_repository.dart';
 
 /// Firestore paths:
-///   travelGroups/{groupId}
-///   travelGroups/{groupId}/members/{memberId}
-///   travelGroups/{groupId}/expenses/{expenseId}
+///   users/{ownerId}/travelGroups/{groupId}
+///   users/{ownerId}/travelGroups/{groupId}/members/{memberId}
+///   users/{ownerId}/travelGroups/{groupId}/expenses/{expenseId}
 class FirebaseTravelGroupRepository implements TravelGroupRepository {
   final FirebaseFirestore _db;
+
+  /// groupId → ownerId cache, populated by getGroups / addGroup
+  final _ownerCache = <String, String>{};
 
   FirebaseTravelGroupRepository({FirebaseFirestore? firestore})
       : _db = firestore ?? FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> get _groupsRef =>
-      _db.collection('travelGroups');
+  CollectionReference<Map<String, dynamic>> _groupsRef(String ownerId) =>
+      _db.collection('users').doc(ownerId).collection('travelGroups');
 
-  CollectionReference<Map<String, dynamic>> _membersRef(String groupId) =>
-      _groupsRef.doc(groupId).collection('members');
+  CollectionReference<Map<String, dynamic>> _membersRef(
+          String ownerId, String groupId) =>
+      _groupsRef(ownerId).doc(groupId).collection('members');
 
-  CollectionReference<Map<String, dynamic>> _expensesRef(String groupId) =>
-      _groupsRef.doc(groupId).collection('expenses');
+  CollectionReference<Map<String, dynamic>> _expensesRef(
+          String ownerId, String groupId) =>
+      _groupsRef(ownerId).doc(groupId).collection('expenses');
+
+  String? _ownerOf(String groupId) => _ownerCache[groupId];
 
   // ── Groups ──────────────────────────────────────────────────────────────────
 
   @override
   Stream<List<TravelGroup>> getGroups(String userId) {
-    // Returns groups where user is owner or member
-    return _groupsRef
-        .where('memberIds', arrayContains: userId)
+    return _groupsRef(userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs
-            .map((d) => TravelGroup.fromMap(d.data(), id: d.id))
-            .toList());
+        .map((s) => s.docs.map((d) {
+              _ownerCache[d.id] = userId;
+              return TravelGroup.fromMap(d.data(), id: d.id);
+            }).toList());
   }
 
   @override
   Future<String> addGroup(String userId, TravelGroup group) async {
     final data = _toFirestoreMap(group.toMap());
     if (group.id.isNotEmpty) {
-      await _groupsRef.doc(group.id).set(data);
+      await _groupsRef(userId).doc(group.id).set(data);
+      _ownerCache[group.id] = userId;
       return group.id;
     }
-    final ref = await _groupsRef.add(data);
+    final ref = await _groupsRef(userId).add(data);
+    _ownerCache[ref.id] = userId;
     return ref.id;
   }
 
   @override
   Future<void> updateGroup(TravelGroup group) async {
-    await _groupsRef.doc(group.id).update(_toFirestoreMap(group.toMap()));
+    _ownerCache[group.id] = group.ownerId;
+    await _groupsRef(group.ownerId)
+        .doc(group.id)
+        .update(_toFirestoreMap(group.toMap()));
   }
 
   @override
   Future<void> deleteGroup(String groupId) async {
-    // Delete subcollections first
-    await _deleteCollection(_membersRef(groupId));
-    await _deleteCollection(_expensesRef(groupId));
-    await _groupsRef.doc(groupId).delete();
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return;
+    await _deleteCollection(_membersRef(ownerId, groupId));
+    await _deleteCollection(_expensesRef(ownerId, groupId));
+    await _groupsRef(ownerId).doc(groupId).delete();
+    _ownerCache.remove(groupId);
   }
 
   // ── Members ─────────────────────────────────────────────────────────────────
 
   @override
   Stream<List<TravelGroupMember>> getMembers(String groupId) {
-    return _membersRef(groupId)
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return const Stream.empty();
+    return _membersRef(ownerId, groupId)
         .orderBy('createdAt')
         .snapshots()
         .map((s) => s.docs
@@ -75,32 +90,40 @@ class FirebaseTravelGroupRepository implements TravelGroupRepository {
 
   @override
   Future<String> addMember(String groupId, TravelGroupMember member) async {
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) throw StateError('Unknown owner for group $groupId');
     final data = _toFirestoreMap(member.toMap());
     if (member.id.isNotEmpty) {
-      await _membersRef(groupId).doc(member.id).set(data);
+      await _membersRef(ownerId, groupId).doc(member.id).set(data);
       return member.id;
     }
-    final ref = await _membersRef(groupId).add(data);
+    final ref = await _membersRef(ownerId, groupId).add(data);
     return ref.id;
   }
 
   @override
   Future<void> updateMember(String groupId, TravelGroupMember member) async {
-    await _membersRef(groupId)
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return;
+    await _membersRef(ownerId, groupId)
         .doc(member.id)
         .update(_toFirestoreMap(member.toMap()));
   }
 
   @override
   Future<void> removeMember(String groupId, String memberId) async {
-    await _membersRef(groupId).doc(memberId).delete();
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return;
+    await _membersRef(ownerId, groupId).doc(memberId).delete();
   }
 
   // ── Expenses ─────────────────────────────────────────────────────────────────
 
   @override
   Stream<List<TravelExpense>> getExpenses(String groupId) {
-    return _expensesRef(groupId)
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return const Stream.empty();
+    return _expensesRef(ownerId, groupId)
         .orderBy('date', descending: true)
         .snapshots()
         .map((s) => s.docs
@@ -111,25 +134,31 @@ class FirebaseTravelGroupRepository implements TravelGroupRepository {
 
   @override
   Future<String> addExpense(String groupId, TravelExpense expense) async {
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) throw StateError('Unknown owner for group $groupId');
     final data = _toFirestoreMap(expense.toMap());
     if (expense.id.isNotEmpty) {
-      await _expensesRef(groupId).doc(expense.id).set(data);
+      await _expensesRef(ownerId, groupId).doc(expense.id).set(data);
       return expense.id;
     }
-    final ref = await _expensesRef(groupId).add(data);
+    final ref = await _expensesRef(ownerId, groupId).add(data);
     return ref.id;
   }
 
   @override
   Future<void> updateExpense(String groupId, TravelExpense expense) async {
-    await _expensesRef(groupId)
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return;
+    await _expensesRef(ownerId, groupId)
         .doc(expense.id)
         .update(_toFirestoreMap(expense.toMap()));
   }
 
   @override
   Future<void> deleteExpense(String groupId, String expenseId) async {
-    await _expensesRef(groupId).doc(expenseId).delete();
+    final ownerId = _ownerOf(groupId);
+    if (ownerId == null) return;
+    await _expensesRef(ownerId, groupId).doc(expenseId).delete();
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -139,7 +168,6 @@ class FirebaseTravelGroupRepository implements TravelGroupRepository {
     for (final key in result.keys.toList()) {
       final v = result[key];
       if (v is String) {
-        // Convert ISO date strings to Firestore Timestamps
         final parsed = DateTime.tryParse(v);
         if (parsed != null) {
           result[key] = Timestamp.fromDate(parsed);

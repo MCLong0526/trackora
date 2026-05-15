@@ -89,6 +89,11 @@ class _TravelGroupDetailScreenState
     final expensesAsync =
         ref.watch(travelGroupExpensesProvider(widget.group.id));
 
+    final members = membersAsync.valueOrNull ?? [];
+    final expenses = expensesAsync.valueOrNull ?? [];
+    final svc = ref.read(travelGroupServiceProvider);
+    final settlement = svc.calculateSettlement(members, expenses);
+
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
@@ -103,8 +108,7 @@ class _TravelGroupDetailScreenState
             onPressed: () => Navigator.push(
               context,
               CupertinoPageRoute(
-                builder: (_) =>
-                    AddEditTravelGroupScreen(group: widget.group),
+                builder: (_) => AddEditTravelGroupScreen(group: widget.group),
               ),
             ),
           ),
@@ -135,80 +139,140 @@ class _TravelGroupDetailScreenState
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          // Tab 1: Expenses
           _ExpensesTab(
             group: widget.group,
             membersAsync: membersAsync,
             expensesAsync: expensesAsync,
+            settlement: settlement,
           ),
-          // Tab 2: Members
           _MembersTab(
             group: widget.group,
             membersAsync: membersAsync,
           ),
         ],
       ),
-      floatingActionButton: expensesAsync.whenOrNull(
-        data: (expenses) => membersAsync.whenOrNull(
-          data: (members) => _buildFab(context, expenses, members),
-        ),
+      // Bottom action bar — only meaningful on expenses tab
+      bottomNavigationBar: ListenableBuilder(
+        listenable: _tabCtrl,
+        builder: (context, _) {
+          if (_tabCtrl.index != 0) return const SizedBox.shrink();
+          return _BottomActionBar(
+            group: widget.group,
+            members: members,
+            expenses: expenses,
+            settlement: settlement,
+          );
+        },
       ),
     );
   }
+}
 
-  Widget _buildFab(
-    BuildContext context,
-    List<TravelExpense> expenses,
-    List<TravelGroupMember> members,
-  ) {
-    final svc = ref.read(travelGroupServiceProvider);
-    final settlement = svc.calculateSettlement(members, expenses);
+class _BottomActionBar extends StatelessWidget {
+  final TravelGroup group;
+  final List<TravelGroupMember> members;
+  final List<TravelExpense> expenses;
+  final dynamic settlement;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // Settle Up button
-        FloatingActionButton.extended(
-          heroTag: 'settle',
-          onPressed: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => SettlementScreen(
-                group: widget.group,
-                settlement: settlement,
+  const _BottomActionBar({
+    required this.group,
+    required this.members,
+    required this.expenses,
+    required this.settlement,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + safeBottom),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        border: Border(
+          top: BorderSide(color: brand.divider, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: members.isEmpty
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => AddTravelExpenseScreen(
+                            group: group,
+                            members: members,
+                          ),
+                        ),
+                      ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3478F6),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.add,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      context.t('travel.addExpense'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          backgroundColor: const Color(0xFF34C759),
-          icon: const Icon(CupertinoIcons.checkmark_seal, color: Colors.white),
-          label: Text(
-            context.t('travel.settle'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Add expense button
-        FloatingActionButton(
-          heroTag: 'add_expense',
-          onPressed: members.isEmpty
-              ? null
-              : () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => AddTravelExpenseScreen(
-                        group: widget.group,
-                        members: members,
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => SettlementScreen(
+                    group: group,
+                    settlement: settlement,
+                  ),
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF34C759),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.checkmark_seal,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      context.t('travel.settle'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
                       ),
                     ),
-                  ),
-          backgroundColor: const Color(0xFF3478F6),
-          child: const Icon(CupertinoIcons.add, color: Colors.white),
-        ),
-      ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -219,11 +283,13 @@ class _ExpensesTab extends ConsumerWidget {
   final TravelGroup group;
   final AsyncValue<List<TravelGroupMember>> membersAsync;
   final AsyncValue<List<TravelExpense>> expensesAsync;
+  final dynamic settlement;
 
   const _ExpensesTab({
     required this.group,
     required this.membersAsync,
     required this.expensesAsync,
+    required this.settlement,
   });
 
   @override
@@ -241,131 +307,190 @@ class _ExpensesTab extends ConsumerWidget {
             expenses.fold<double>(0, (sum, e) => sum + e.amount);
 
         if (expenses.isEmpty) {
-          return _EmptyExpenses(
-            group: group,
-            members: members,
-          );
+          return _EmptyExpenses(group: group, members: members);
+        }
+
+        // Group expenses by date
+        final grouped = <String, List<TravelExpense>>{};
+        final dateFmt = DateFormat('MMM d, yyyy');
+        for (final e in expenses) {
+          final key = dateFmt.format(e.date);
+          grouped.putIfAbsent(key, () => []).add(e);
+        }
+
+        // Compute per-member paid amounts for WHO PAID section
+        final paidMap = <String, double>{};
+        for (final e in expenses) {
+          paidMap[e.paidByMemberId] =
+              (paidMap[e.paidByMemberId] ?? 0) + e.amount;
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
           children: [
-            // Summary card
-            _SummaryCard(
+            // Total spent card
+            _TotalCard(
               currency: group.currency,
               totalSpent: totalSpent,
-              expenseCount: expenses.length,
               fmt: fmt,
               brand: brand,
             ),
             const SizedBox(height: 20),
 
-            // Expenses list
-            const _SectionHeader('EXPENSES'),
+            // WHO PAID section
+            if (members.isNotEmpty && totalSpent > 0) ...[
+              _SectionHeader(context.t('travel.whoPaid')),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: members.map((m) {
+                    final paid = paidMap[m.id] ?? 0;
+                    final ratio = totalSpent > 0 ? paid / totalSpent : 0.0;
+                    return _WhoPaidRow(
+                      member: m,
+                      paid: paid,
+                      ratio: ratio,
+                      currency: group.currency,
+                      fmt: fmt,
+                      brand: brand,
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Expenses grouped by date
+            _SectionHeader(context.t('travel.expenses').toUpperCase()),
             const SizedBox(height: 10),
-            Container(
-              decoration: BoxDecoration(
-                color: brand.surface,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                children: expenses.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final expense = entry.value;
-                  final paidBy = memberMap[expense.paidByMemberId];
-                  return Column(
-                    children: [
-                      _ExpenseTile(
-                        expense: expense,
-                        paidByName: paidBy?.name ?? '—',
-                        currency: group.currency,
-                        fmt: fmt,
-                        brand: brand,
-                        onTap: () => Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (_) => AddTravelExpenseScreen(
-                              group: group,
-                              members: members,
-                              expense: expense,
-                            ),
-                          ),
+            ...grouped.entries.map((entry) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8, top: 4),
+                      child: Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF8E8E93),
+                          letterSpacing: 0.4,
                         ),
-                        onDelete: () async {
-                          final confirmed = await showCupertinoDialog<bool>(
-                            context: context,
-                            builder: (ctx) => CupertinoAlertDialog(
-                              title: Text(
-                                  context.t('travel.deleteExpense')),
-                              content: Text(
-                                  context.t('travel.deleteExpenseConfirm')),
-                              actions: [
-                                CupertinoDialogAction(
-                                  isDestructiveAction: true,
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: Text(context.t('common.delete')),
-                                ),
-                                CupertinoDialogAction(
-                                  onPressed: () =>
-                                      Navigator.pop(ctx, false),
-                                  child: Text(context.t('common.cancel')),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed != true) return;
-                          try {
-                            await ref
-                                .read(travelGroupServiceProvider)
-                                .deleteExpense(group.id, expense.id);
-                            if (context.mounted) {
-                              AppToast.show(
-                                context,
-                                context.t('travel.expenseDeleted'),
-                                type: AppToastType.success,
-                              );
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              AppToast.show(
-                                context,
-                                context.t('travel.saveFailed'),
-                                type: AppToastType.error,
-                              );
-                            }
-                          }
-                        },
                       ),
-                      if (idx < expenses.length - 1)
-                        Divider(
-                          height: 1,
-                          color: brand.divider,
-                          indent: 16,
-                          endIndent: 16,
-                        ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: brand.surface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        children: entry.value.asMap().entries.map((e) {
+                          final idx = e.key;
+                          final expense = e.value;
+                          final paidBy = memberMap[expense.paidByMemberId];
+                          return Column(
+                            children: [
+                              _ExpenseTile(
+                                expense: expense,
+                                paidByName: paidBy?.name ?? '—',
+                                currency: group.currency,
+                                fmt: fmt,
+                                brand: brand,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => AddTravelExpenseScreen(
+                                      group: group,
+                                      members: members,
+                                      expense: expense,
+                                    ),
+                                  ),
+                                ),
+                                onDelete: () =>
+                                    _confirmDelete(context, ref, expense),
+                              ),
+                              if (idx < entry.value.length - 1)
+                                Divider(
+                                  height: 1,
+                                  color: brand.divider,
+                                  indent: 16,
+                                  endIndent: 16,
+                                ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                )),
           ],
         );
       },
     );
   }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    TravelExpense expense,
+  ) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(context.t('travel.deleteExpense')),
+        content: Text(context.t('travel.deleteExpenseConfirm')),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('common.delete')),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.cancel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref
+          .read(travelGroupServiceProvider)
+          .deleteExpense(group.id, expense.id);
+      if (context.mounted) {
+        AppToast.show(
+          context,
+          context.t('travel.expenseDeleted'),
+          type: AppToastType.success,
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        AppToast.show(
+          context,
+          context.t('travel.saveFailed'),
+          type: AppToastType.error,
+        );
+      }
+    }
+  }
 }
 
-class _SummaryCard extends StatelessWidget {
+class _TotalCard extends StatelessWidget {
   final String currency;
   final double totalSpent;
-  final int expenseCount;
   final NumberFormat fmt;
   final BrandColors brand;
 
-  const _SummaryCard({
+  const _TotalCard({
     required this.currency,
     required this.totalSpent,
-    required this.expenseCount,
     required this.fmt,
     required this.brand,
   });
@@ -375,49 +500,112 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: brand.surface,
+        color: const Color(0xFF3478F6),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t('travel.totalSpent'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$currency ${fmt.format(totalSpent)}',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
-                    letterSpacing: -0.6,
-                  ),
-                ),
-              ],
+          Text(
+            context.t('travel.totalSpent'),
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.white70,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: brand.sky,
-              borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 6),
+          Text(
+            '$currency ${fmt.format(totalSpent)}',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: -0.8,
             ),
-            child: Text(
-              '$expenseCount ${context.t('common.entries')}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF3478F6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WhoPaidRow extends StatelessWidget {
+  final TravelGroupMember member;
+  final double paid;
+  final double ratio;
+  final String currency;
+  final NumberFormat fmt;
+  final BrandColors brand;
+
+  const _WhoPaidRow({
+    required this.member,
+    required this.paid,
+    required this.ratio,
+    required this.currency,
+    required this.fmt,
+    required this.brand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Avatar
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3478F6).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    member.name.isNotEmpty
+                        ? member.name[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3478F6),
+                    ),
+                  ),
+                ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  member.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              Text(
+                '$currency ${fmt.format(paid)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ratio.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: const Color(0xFF3478F6).withValues(alpha: 0.10),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF3478F6)),
             ),
           ),
         ],
@@ -466,7 +654,8 @@ class _ExpenseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d');
-    final catColor = _categoryColors[expense.category] ?? const Color(0xFF8E8E93);
+    final catColor =
+        _categoryColors[expense.category] ?? const Color(0xFF8E8E93);
 
     return Dismissible(
       key: Key(expense.id),
@@ -499,7 +688,7 @@ class _ExpenseTile extends StatelessWidget {
                 ),
                 child: Icon(
                   _categoryIcons[expense.category] ??
-                      CupertinoIcons.circle_grid_hex_fill,
+                      CupertinoIcons.square_grid_2x2_fill,
                   color: catColor,
                   size: 18,
                 ),
@@ -523,7 +712,7 @@ class _ExpenseTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${context.t('travel.paid')} by $paidByName · ${dateFormat.format(expense.date)} · ${expense.splitAmong.length} people',
+                      '${context.t('travel.paid')} by $paidByName · ${dateFormat.format(expense.date)}',
                       style: TextStyle(fontSize: 12, color: brand.inkSoft),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -635,8 +824,7 @@ class _MembersTab extends ConsumerWidget {
                           group: group,
                           brand: brand,
                           onDelete: () async {
-                            final confirmed =
-                                await showCupertinoDialog<bool>(
+                            final confirmed = await showCupertinoDialog<bool>(
                               context: context,
                               builder: (ctx) => CupertinoAlertDialog(
                                 title: Text(
@@ -648,14 +836,12 @@ class _MembersTab extends ConsumerWidget {
                                     isDestructiveAction: true,
                                     onPressed: () =>
                                         Navigator.pop(ctx, true),
-                                    child:
-                                        Text(context.t('common.delete')),
+                                    child: Text(context.t('common.delete')),
                                   ),
                                   CupertinoDialogAction(
                                     onPressed: () =>
                                         Navigator.pop(ctx, false),
-                                    child:
-                                        Text(context.t('common.cancel')),
+                                    child: Text(context.t('common.cancel')),
                                   ),
                                 ],
                               ),
@@ -698,7 +884,6 @@ class _MembersTab extends ConsumerWidget {
                       ],
                     );
                   }),
-                  // Add member row
                   Divider(
                     height: 1,
                     color: brand.divider,
@@ -826,9 +1011,7 @@ class _MemberTile extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                member.name.isNotEmpty
-                    ? member.name[0].toUpperCase()
-                    : '?',
+                member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -860,8 +1043,7 @@ class _MemberTile extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF3478F6)
-                              .withValues(alpha: 0.12),
+                          color: const Color(0xFF3478F6).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
@@ -983,10 +1165,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                           final name = _nameCtrl.text.trim();
                           if (name.isEmpty) return;
                           setState(() => _saving = true);
-                          await widget.onAdd(
-                            name,
-                            _emailCtrl.text.trim(),
-                          );
+                          await widget.onAdd(name, _emailCtrl.text.trim());
                           if (mounted) setState(() => _saving = false);
                         },
                   child: _saving

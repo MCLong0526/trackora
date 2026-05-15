@@ -882,6 +882,18 @@ class AppStrings {
     'travel.selectMembers': 'Select members to split with',
     'travel.currencyHint': 'e.g. USD, EUR, MYR',
     'travel.perPerson': 'per person',
+    'travel.tripsHero': 'Trips that balance themselves.',
+    'travel.tripsHeroSub': 'Track every shared expense, effortlessly.',
+    'travel.joinCode': 'Join with code',
+    'travel.newTrip': 'New trip',
+    'travel.planHero': 'Plan the trip.\nWe\'ll do the math.',
+    'travel.planHeroSub': 'Add companions and start tracking expenses together.',
+    'travel.whoPaid': 'WHO PAID',
+    'travel.groupTrip': 'Group Trip',
+    'travel.travelers': 'Travelers',
+    'travel.youOwe': 'You owe',
+    'travel.youreOwed': 'You\'re owed',
+    'travel.balanced': 'Balanced',
   };
 
   static const _zh = <String, String>{
@@ -1649,6 +1661,18 @@ class AppStrings {
     'travel.selectMembers': '选择分摊成员',
     'travel.currencyHint': '例如 USD、EUR、MYR',
     'travel.perPerson': '每人',
+    'travel.tripsHero': '旅行费用自动平衡。',
+    'travel.tripsHeroSub': '轻松追踪每一笔共同消费。',
+    'travel.joinCode': '用代码加入',
+    'travel.newTrip': '新旅行',
+    'travel.planHero': '规划旅行。\n让我们来计算。',
+    'travel.planHeroSub': '添加同伴，一起追踪旅行支出。',
+    'travel.whoPaid': '谁付款了',
+    'travel.groupTrip': '团队旅行',
+    'travel.travelers': '旅行者',
+    'travel.youOwe': '你欠',
+    'travel.youreOwed': '别人欠你',
+    'travel.balanced': '已平衡',
   };
 
   static const _ms = <String, String>{
@@ -2439,6 +2463,18 @@ class AppStrings {
     'travel.selectMembers': 'Pilih ahli untuk bahagi',
     'travel.currencyHint': 'cth. USD, EUR, MYR',
     'travel.perPerson': 'setiap orang',
+    'travel.tripsHero': 'Perjalanan yang mengimbangi diri sendiri.',
+    'travel.tripsHeroSub': 'Jejak setiap perbelanjaan bersama, dengan mudah.',
+    'travel.joinCode': 'Sertai dengan kod',
+    'travel.newTrip': 'Perjalanan baru',
+    'travel.planHero': 'Rancang perjalanan.\nBiarkan kami kira.',
+    'travel.planHeroSub': 'Tambah rakan dan mula menjejak perbelanjaan bersama.',
+    'travel.whoPaid': 'SIAPA BAYAR',
+    'travel.groupTrip': 'Perjalanan Kumpulan',
+    'travel.travelers': 'Pengembara',
+    'travel.youOwe': 'Anda berhutang',
+    'travel.youreOwed': 'Orang berhutang pada anda',
+    'travel.balanced': 'Seimbang',
   };
 
   String t(String key) {

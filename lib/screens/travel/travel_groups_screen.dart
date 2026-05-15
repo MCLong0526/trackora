@@ -44,32 +44,171 @@ class TravelGroupsScreen extends ConsumerWidget {
           error: (e, _) => Center(
             child: Text('${context.t('common.error')}: $e'),
           ),
-          data: (groups) {
-            if (groups.isEmpty) {
-              return _EmptyState(
-                onAdd: () => Navigator.push(
+          data: (groups) => _Body(groups: groups),
+        ),
+      ),
+    );
+  }
+}
+
+class _Body extends StatelessWidget {
+  final List<TravelGroup> groups;
+  const _Body({required this.groups});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+      children: [
+        // Hero section
+        _HeroSection(),
+        const SizedBox(height: 20),
+
+        // CTA buttons
+        Row(
+          children: [
+            Expanded(
+              child: _CTAButton(
+                label: context.t('travel.newTrip'),
+                icon: CupertinoIcons.add,
+                filled: true,
+                onTap: () => Navigator.push(
                   context,
                   CupertinoPageRoute(
                     builder: (_) => const AddEditTravelGroupScreen(),
                   ),
                 ),
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              itemCount: groups.length,
-              itemBuilder: (context, i) => _GroupCard(
-                group: groups[i],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _CTAButton(
+                label: context.t('travel.joinCode'),
+                icon: CupertinoIcons.link,
+                filled: false,
+                onTap: () {},
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+
+        if (groups.isEmpty)
+          _EmptyHint()
+        else ...[
+          Text(
+            'YOUR TRIPS',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF8E8E93),
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...groups.map((g) => _GroupCard(
+                group: g,
                 onTap: () => Navigator.push(
                   context,
                   CupertinoPageRoute(
-                    builder: (_) =>
-                        TravelGroupDetailScreen(group: groups[i]),
+                    builder: (_) => TravelGroupDetailScreen(group: g),
                   ),
                 ),
+              )),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeroSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.t('travel.tripsHero'),
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: brand.ink,
+            letterSpacing: -0.5,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          context.t('travel.tripsHeroSub'),
+          style: TextStyle(
+            fontSize: 15,
+            color: brand.inkSoft,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CTAButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _CTAButton({
+    required this.label,
+    required this.icon,
+    required this.filled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    const blue = Color(0xFF3478F6);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: filled
+              ? blue
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : brand.surface),
+          borderRadius: BorderRadius.circular(16),
+          border: filled
+              ? null
+              : Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : brand.divider,
+                  width: 1,
+                ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: filled ? Colors.white : blue,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: filled ? Colors.white : blue,
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -86,14 +225,14 @@ class _GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dateFormat = DateFormat('MMM d, yyyy');
+    final dateFormat = DateFormat('MMM d');
     final now = DateTime.now();
     final isOngoing = group.endDate == null || group.endDate!.isAfter(now);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: brand.surface,
@@ -107,10 +246,10 @@ class _GroupCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Icon
+            // Airplane icon badge
             Container(
-              width: 52,
-              height: 52,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: brand.sky,
                 borderRadius: BorderRadius.circular(14),
@@ -118,7 +257,7 @@ class _GroupCard extends StatelessWidget {
               child: const Icon(
                 CupertinoIcons.airplane,
                 color: Color(0xFF3478F6),
-                size: 26,
+                size: 24,
               ),
             ),
             const SizedBox(width: 14),
@@ -155,12 +294,19 @@ class _GroupCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${group.memberIds.length} ${context.t('travel.members').toLowerCase()}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: brand.inkSoft,
-                    ),
+                  // Member avatars
+                  Row(
+                    children: [
+                      _MemberAvatars(count: group.memberIds.length),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${group.memberIds.length} ${context.t('travel.members').toLowerCase()}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -173,6 +319,47 @@ class _GroupCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MemberAvatars extends StatelessWidget {
+  final int count;
+  const _MemberAvatars({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final n = count.clamp(0, 3);
+    const colors = [Color(0xFF3478F6), Color(0xFF34C759), Color(0xFF5856D6)];
+    return SizedBox(
+      width: n * 16.0 + 4,
+      height: 20,
+      child: Stack(
+        children: List.generate(n, (i) {
+          return Positioned(
+            left: i * 14.0,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: colors[i % colors.length].withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black
+                      : Colors.white,
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                CupertinoIcons.person_fill,
+                size: 10,
+                color: colors[i % colors.length],
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -209,40 +396,37 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _EmptyState({required this.onAdd});
-
+class _EmptyHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 color: brand.sky,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(22),
               ),
               child: const Icon(
                 CupertinoIcons.airplane,
                 color: Color(0xFF3478F6),
-                size: 40,
+                size: 36,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Text(
               context.t('travel.empty'),
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: brand.ink,
-                letterSpacing: -0.4,
+                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 8),
@@ -250,18 +434,10 @@ class _EmptyState extends StatelessWidget {
               context.t('travel.emptyHint'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 color: brand.inkSoft,
                 height: 1.4,
               ),
-            ),
-            const SizedBox(height: 28),
-            CupertinoButton.filled(
-              borderRadius: BorderRadius.circular(14),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-              onPressed: onAdd,
-              child: Text(context.t('travel.createGroup')),
             ),
           ],
         ),
