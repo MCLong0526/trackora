@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/precious_metal.dart';
+import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -33,7 +34,7 @@ class AccountsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
-        title: const Text('Accounts'),
+        title: Text(context.t('account.title')),
         actions: [
           IconButton(
             icon: Icon(
@@ -72,7 +73,7 @@ class AccountsScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
                 child: Text(
-                  'Precious Metals',
+                  context.t('account.preciousMetals'),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -137,12 +138,12 @@ class AccountsScreen extends ConsumerWidget {
               child: const Icon(
                 CupertinoIcons.creditcard,
                 size: 30,
-                color: Color(0xFF2A6FB5),
+                color: AppActionBlue.color,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'No accounts yet',
+              context.t('account.noAccounts'),
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -151,14 +152,14 @@ class AccountsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Add a bank, e-wallet, or cash account to start tracking your money.',
+              context.t('account.noAccountsHint'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: brand.inkSoft),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: const Icon(CupertinoIcons.add, size: 18),
-              label: const Text('Add Account'),
+              label: Text(context.t('account.addAccount')),
               onPressed: () => showAddAccountSheet(context),
             ),
           ],
@@ -238,7 +239,7 @@ class _PreciousMetalsCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Precious Metals',
+                    context.t('account.preciousMetals'),
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -248,7 +249,7 @@ class _PreciousMetalsCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   if (metals.isEmpty)
                     Text(
-                      'Tap to track gold & silver',
+                      context.t('account.tapToTrack'),
                       style: TextStyle(fontSize: 12, color: brand.inkSoft),
                     )
                   else

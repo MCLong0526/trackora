@@ -8,6 +8,7 @@ import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
 import '../../models/saving_plan.dart';
+import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -78,7 +79,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                       onTap: () => showAddAccountSheet(context),
                     )
                   else ...[
-                    _SectionLabel('Accounts'),
+                    _SectionLabel(context.t('asset.title')),
                     const SizedBox(height: 12),
                     AccountCarouselSection(
                       accounts: accounts,
@@ -94,7 +95,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                   ],
                   if (snapshot.hasBorrowLend) ...[
                     const SizedBox(height: 20),
-                    _SectionLabel('Money Flow'),
+                    _SectionLabel(context.t('asset.moneyFlow')),
                     const SizedBox(height: 8),
                     _BorrowLendCard(
                       snapshot: snapshot,
@@ -104,7 +105,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                   ],
                   if (snapshot.activeSavingPlans.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    _SectionLabel('Savings'),
+                    _SectionLabel(context.t('asset.savings')),
                     const SizedBox(height: 8),
                     _SavingPlansCard(
                       snapshot: snapshot,
@@ -114,7 +115,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                   ],
                   if (snapshot.activeInstallments.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    _SectionLabel('Installments'),
+                    _SectionLabel(context.t('asset.installments')),
                     const SizedBox(height: 8),
                     _InstallmentsCard(
                       snapshot: snapshot,
@@ -169,12 +170,12 @@ class _Header extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Assets',
+                context.t('asset.title'),
                 style: Theme.of(context).textTheme.displayMedium,
               ),
               const SizedBox(height: 2),
               Text(
-                'Your complete financial picture',
+                context.t('asset.subtitle'),
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -255,9 +256,9 @@ class _NetWorthCardState extends State<_NetWorthCard>
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF201E2C) : const Color(0xFFEDE9FF);
-    final ink = isDark ? brand.ink : const Color(0xFF111028);
-    final soft = isDark ? brand.inkSoft : const Color(0xFF686176);
+    final bg = brand.surface;
+    final ink = brand.ink;
+    final soft = brand.inkSoft;
     final netWorth = widget.snapshot.netWorth;
     final netColor = netWorth < 0 ? AppColors.expense : ink;
 
@@ -280,7 +281,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                   Icon(CupertinoIcons.chart_pie_fill, size: 10, color: soft),
                   const SizedBox(width: 4),
                   Text(
-                    'NET WORTH',
+                    context.t('asset.netWorth'),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -340,7 +341,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Assets',
+                        context.t('asset.assets'),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -354,7 +355,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Liabilities',
+                        context.t('asset.liabilities'),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -382,7 +383,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                 children: [
                   Expanded(
                     child: _WorthTile(
-                      label: 'Assets',
+                      label: context.t('asset.assets'),
                       value: widget.snapshot.totalAssets,
                       symbol: widget.symbol,
                       visible: widget.visible,
@@ -391,10 +392,10 @@ class _NetWorthCardState extends State<_NetWorthCard>
                       isDark: isDark,
                       onTap: () => _showBreakdown(
                         context,
-                        title: 'Assets',
+                        title: context.t('asset.assets'),
                         color: AppColors.income,
                         icon: CupertinoIcons.arrow_up_right,
-                        items: _buildAssetItems(widget.snapshot),
+                        items: _buildAssetItems(widget.snapshot, context),
                         total: widget.snapshot.totalAssets,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -404,7 +405,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                   const SizedBox(width: 10),
                   Expanded(
                     child: _WorthTile(
-                      label: 'Liabilities',
+                      label: context.t('asset.liabilities'),
                       value: widget.snapshot.totalLiabilities,
                       symbol: widget.symbol,
                       visible: widget.visible,
@@ -413,10 +414,10 @@ class _NetWorthCardState extends State<_NetWorthCard>
                       isDark: isDark,
                       onTap: () => _showBreakdown(
                         context,
-                        title: 'Liabilities',
+                        title: context.t('asset.liabilities'),
                         color: AppColors.expense,
                         icon: CupertinoIcons.arrow_down_right,
-                        items: _buildLiabilityItems(widget.snapshot),
+                        items: _buildLiabilityItems(widget.snapshot, context),
                         total: widget.snapshot.totalLiabilities,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -569,8 +570,8 @@ class _BorrowLendCard extends StatelessWidget {
         children: [
           Expanded(
             child: _FlowTile(
-              label: 'You Lent',
-              sublabel: 'Others owe you',
+              label: context.t('asset.youLent'),
+              sublabel: context.t('asset.othersOweYou'),
               value: snapshot.totalLent,
               symbol: symbol,
               visible: visible,
@@ -586,8 +587,8 @@ class _BorrowLendCard extends StatelessWidget {
           ),
           Expanded(
             child: _FlowTile(
-              label: 'You Owe',
-              sublabel: 'You borrowed',
+              label: context.t('asset.youOwe'),
+              sublabel: context.t('asset.youBorrowed'),
               value: snapshot.totalBorrowed,
               symbol: symbol,
               visible: visible,
@@ -709,19 +710,19 @@ class _SavingPlansCard extends StatelessWidget {
                 currencyPrefix: symbol,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F7A60),
+                  color: kCategoryStyles['Groceries']!.accent,
                 ),
               ),
               const SizedBox(width: 2),
-              const Text(
-                ' saved',
+              Text(
+                ' ${context.t('asset.savedLabel')}',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F7A60),
+                  color: kCategoryStyles['Groceries']!.accent,
                 ),
               ),
             ],
@@ -801,13 +802,13 @@ class _SavingPlanRow extends StatelessWidget {
               value: value,
               minHeight: 5,
               backgroundColor: brand.divider,
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF1F7A60)),
+              valueColor: AlwaysStoppedAnimation(kCategoryStyles['Groceries']!.accent),
             ),
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          '${(progress * 100).round()}% saved',
+          '${(progress * 100).round()}% ${context.t('asset.savedLabel')}',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -870,9 +871,9 @@ class _InstallmentsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 2),
-                const Text(
-                  ' remaining',
-                  style: TextStyle(
+                Text(
+                  ' ${context.t('asset.remaining')}',
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.expense,
@@ -952,7 +953,7 @@ class _InstallmentRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'per month',
+                  context.t('asset.perMonth'),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -993,7 +994,7 @@ class _InstallmentRow extends StatelessWidget {
               if (remaining != null) ...[
                 const Spacer(),
                 MaskedAmount(
-                  visibleText: '${formatMoney(symbol, remaining)} left',
+                  visibleText: '${formatMoney(symbol, remaining)} ${context.t('asset.remaining')}',
                   visible: visible,
                   currencyPrefix: symbol,
                   maxLines: 1,
@@ -1029,7 +1030,7 @@ class _LoadingCard extends StatelessWidget {
           const CupertinoActivityIndicator(),
           const SizedBox(width: 12),
           Text(
-            'Loading accounts…',
+            context.t('asset.loadingAccounts'),
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -1061,15 +1062,15 @@ class _EmptyAccounts extends StatelessWidget {
               color: AppColors.sky,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(
+            child: Icon(
               CupertinoIcons.creditcard,
               size: 26,
-              color: Color(0xFF2A6FB5),
+              color: kCategoryStyles['Transport']!.accent,
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'No accounts yet',
+            context.t('asset.noAccounts'),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -1078,7 +1079,7 @@ class _EmptyAccounts extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Add bank, e-wallet, or cash accounts\nto track your net worth.',
+            context.t('asset.addAccountsDesc'),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -1090,7 +1091,7 @@ class _EmptyAccounts extends StatelessWidget {
           FilledButton.icon(
             onPressed: onTap,
             icon: const Icon(CupertinoIcons.add, size: 16),
-            label: const Text('Add Account'),
+            label: Text(context.t('asset.addAccount')),
           ),
         ],
       ),
@@ -1302,7 +1303,7 @@ class _BreakdownItem {
   });
 }
 
-List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot) {
+List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot, BuildContext context) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (!a.account.type.isLiability && a.balance > 0) {
@@ -1324,7 +1325,7 @@ List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot) {
   }
   if (snapshot.totalLent > 0) {
     items.add(_BreakdownItem(
-      name: 'Outstanding Lending',
+      name: context.t('asset.outstandingLending'),
       type: 'Lending',
       amount: snapshot.totalLent,
     ));
@@ -1332,7 +1333,7 @@ List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot) {
   return items;
 }
 
-List<_BreakdownItem> _buildLiabilityItems(_AssetSnapshot snapshot) {
+List<_BreakdownItem> _buildLiabilityItems(_AssetSnapshot snapshot, BuildContext context) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (a.account.type.isLiability && a.balance < 0) {
@@ -1354,14 +1355,14 @@ List<_BreakdownItem> _buildLiabilityItems(_AssetSnapshot snapshot) {
   }
   if (snapshot.totalBorrowed > 0) {
     items.add(_BreakdownItem(
-      name: 'Outstanding Borrowing',
+      name: context.t('asset.outstandingBorrowing'),
       type: 'Borrowing',
       amount: snapshot.totalBorrowed,
     ));
   }
   if (snapshot.installmentLiability != null && snapshot.installmentLiability! > 0) {
     items.add(_BreakdownItem(
-      name: 'Installments Remaining',
+      name: context.t('asset.installmentsRemaining'),
       type: 'Installments',
       amount: snapshot.installmentLiability!,
     ));
@@ -1497,7 +1498,7 @@ class _BreakdownSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text(
-                          'Nothing here yet',
+                          context.t('asset.nothingHere'),
                           style: TextStyle(
                             fontSize: 14,
                             color: brand.inkSoft,

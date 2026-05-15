@@ -271,7 +271,7 @@ class DashboardScreen extends ConsumerWidget {
                                   if (context.mounted) {
                                     AppToast.show(
                                       context,
-                                      'Record deleted',
+                                      context.t('expense.entryDeleted'),
                                       type: AppToastType.info,
                                       icon: CupertinoIcons.trash,
                                     );
@@ -308,7 +308,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'View all ${monthExpenses.length} entries',
+                        '${context.t('home.allBills')} · ${monthExpenses.length} ${context.t('common.entries')}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -605,7 +605,7 @@ class _SpendingOverviewCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   child: Text(
-                    'You spent',
+                    context.t('home.spent'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -786,7 +786,7 @@ class _TopStatsPill extends StatelessWidget {
           Expanded(
             child: _TopStat(
               dotColor: AppColors.income,
-              label: 'INCOME',
+              label: context.t('home.income').toUpperCase(),
               value: visible ? formatMoney(symbol, income) : '$symbol ****',
               ink: ink,
               soft: soft,
@@ -797,7 +797,7 @@ class _TopStatsPill extends StatelessWidget {
           Expanded(
             child: _TopStat(
               dotColor: AppActionBlue.color,
-              label: 'BALANCE',
+              label: context.t('account.balance'),
               value: visible ? formatMoney(symbol, balance) : '$symbol ****',
               ink: ink,
               soft: soft,
@@ -858,7 +858,7 @@ class _BudgetOverviewCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Month Budget',
+                context.t('home.budget'),
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
@@ -915,7 +915,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 1),
                         Text(
-                          'of budget',
+                          '${context.t('home.of')} ${context.t('home.budget')}',
                           style: TextStyle(
                             fontSize: 11,
                             color: brand.inkSoft,
@@ -939,7 +939,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                     value: visible
                         ? formatMoney('', budgetSpent).trim()
                         : '****',
-                    label: 'Spent',
+                    label: context.t('home.budgetSpent'),
                     valueColor: brand.ink,
                   ),
                 ),
@@ -949,7 +949,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                     value: visible
                         ? formatMoney('', budgetRemaining.abs()).trim()
                         : '****',
-                    label: overspent ? 'Overspent' : 'Remaining',
+                    label: overspent ? context.t('home.overBy') : context.t('home.budgetRemaining'),
                     valueColor: overspent
                         ? AppColors.expense
                         : AppColors.income,
@@ -985,7 +985,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               height: 219,
               child: Center(
                 child: Text(
-                  'No budget set',
+                  context.t('home.budgetNoBudget'),
                   style: TextStyle(
                     fontSize: 13,
                     color: brand.inkSoft,
@@ -1288,7 +1288,7 @@ class _AllBillsSheet extends ConsumerWidget {
     if (context.mounted) {
       AppToast.show(
         context,
-        'Record deleted',
+        context.t('expense.entryDeleted'),
         type: AppToastType.info,
         icon: CupertinoIcons.trash,
       );

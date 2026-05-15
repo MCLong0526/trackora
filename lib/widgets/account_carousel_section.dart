@@ -685,7 +685,7 @@ class _CardFront extends ConsumerWidget {
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
                             color: isNeg
-                                ? const Color(0xFFC23030)
+                                ? AppColors.expense
                                 : pal.ink,
                             letterSpacing: -0.2,
                           ),
@@ -707,7 +707,7 @@ class _CardFront extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        'TAP TO FLIP',
+                        context.t('account.tapToFlip'),
                         style: TextStyle(
                           fontSize: 10,
                           color: pal.ink.withValues(alpha: 0.55),
@@ -830,7 +830,7 @@ class _CardBack extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'BALANCE · ${DateFormat('MMM d').format(account.createdAt)}',
+              '${context.t('account.balance')} · ${DateFormat('MMM d').format(account.createdAt)}',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 1.2,
@@ -846,7 +846,7 @@ class _CardBack extends StatelessWidget {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
-                color: isNeg ? const Color(0xFFC23030) : pal.ink,
+                color: isNeg ? AppColors.expense : pal.ink,
                 letterSpacing: -0.3,
               ),
             ),
@@ -854,7 +854,7 @@ class _CardBack extends StatelessWidget {
             _EditPill(ink: pal.ink, onTap: onEdit),
             const SizedBox(height: 16),
             Text(
-              'RECENT',
+              context.t('account.recent'),
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 1.2,
@@ -867,7 +867,7 @@ class _CardBack extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  'No recent activity',
+                  context.t('account.noRecentActivity'),
                   style: TextStyle(
                     fontSize: 12,
                     color: pal.ink.withValues(alpha: 0.55),
@@ -985,7 +985,7 @@ class _EditPill extends StatelessWidget {
             Icon(CupertinoIcons.pencil, size: 14, color: ink),
             const SizedBox(width: 6),
             Text(
-              'Edit Account',
+              context.t('account.editAccount'),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -1031,14 +1031,14 @@ class _AddAccountButtonState extends State<_AddAccountButton> {
             color: AppActionBlue.color,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(CupertinoIcons.add, color: Colors.white, size: 17),
-              SizedBox(width: 7),
+              const Icon(CupertinoIcons.add, color: Colors.white, size: 17),
+              const SizedBox(width: 7),
               Text(
-                'Add Account',
-                style: TextStyle(
+                context.t('account.addAccount'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -2238,7 +2238,7 @@ class _Step2State extends State<_Step2> {
                       ),
                       const Spacer(),
                       Text(
-                        'BALANCE',
+                        context.t('account.balance'),
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
@@ -2396,7 +2396,7 @@ class _Step2State extends State<_Step2> {
                           style: TextStyle(
                             fontSize: 11,
                             letterSpacing: 0.5,
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: brand.inkSoft,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -2434,7 +2434,7 @@ class _Step2State extends State<_Step2> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'STARTING BALANCE',
+                        context.t('account.startingBalance'),
                         style: TextStyle(
                           fontSize: 11,
                           letterSpacing: 0.5,
@@ -2468,7 +2468,7 @@ class _Step2State extends State<_Step2> {
                               decoration: InputDecoration(
                                 hintText: '0.00',
                                 hintStyle: TextStyle(
-                                  color: Colors.black.withValues(alpha: 0.25),
+                                  color: brand.inkSoft,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 border: InputBorder.none,
@@ -2499,11 +2499,11 @@ class _Step2State extends State<_Step2> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'CARD COLOR',
+                  context.t('account.cardColor'),
                   style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 0.5,
-                    color: Colors.black.withValues(alpha: 0.4),
+                    color: brand.inkSoft,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -2688,9 +2688,9 @@ class _Step2State extends State<_Step2> {
                                       Colors.white),
                                 ),
                               )
-                            : const Text(
-                                'Add Account',
-                                style: TextStyle(
+                            : Text(
+                                context.t('account.addAccount'),
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,

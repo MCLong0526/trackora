@@ -337,7 +337,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (_isAccountTransfer && _toAccountId == null) {
       AppToast.show(
         context,
-        'Please select a destination account',
+        context.t('expense.selectDestAccount'),
         type: AppToastType.error,
       );
       return;
@@ -345,7 +345,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (_isAccountTransfer && _toAccountId == _accountId) {
       AppToast.show(
         context,
-        'Source and destination accounts must be different',
+        context.t('expense.sameAccountError'),
         type: AppToastType.error,
       );
       return;
@@ -494,7 +494,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (mounted) {
           AppToast.show(
             context,
-            _isEdit ? 'Entry updated' : 'Entry saved',
+            _isEdit ? context.t('expense.entryUpdated') : context.t('expense.entrySaved'),
             type: AppToastType.success,
           );
         }
@@ -517,7 +517,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   void _showOfflineSavedBanner() {
     AppToast.show(
       context,
-      'Saved offline — will sync when connected',
+      context.t('expense.savedOffline'),
       type: AppToastType.info,
       icon: CupertinoIcons.cloud,
     );
@@ -561,7 +561,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       }
     }
     if (mounted) {
-      AppToast.show(context, 'Entry deleted', type: AppToastType.success);
+      AppToast.show(context, context.t('expense.entryDeleted'), type: AppToastType.success);
       Navigator.pop(context);
     }
   }
@@ -801,8 +801,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Type Chips Overlay ───────────────────────────────────────────────────────
 
-  static const _kTypeLabels = ['Expense', 'Income', 'Transfer', 'Receive'];
-
   Widget _typeChipsOverlay(BrandColors brand) {
     return AnimatedBuilder(
       animation: _typeMenuCtrl,
@@ -810,6 +808,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (_typeMenuCtrl.value == 0 && !_typeMenuOpen) {
           return const SizedBox.shrink();
         }
+        final typeLabels = [
+          context.t('expense.expense'),
+          context.t('expense.income'),
+          context.t('expense.transfer'),
+          context.t('expense.receive'),
+        ];
         return Row(
           children: List.generate(4, (i) {
             final t = _kTypes[i];
@@ -843,7 +847,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              _kTypeLabels[i],
+                              typeLabels[i],
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -911,12 +915,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final translateY = distance * 18.0;
     final blurAmount = distance * 2.5;
 
-    const labels = ['Expense', 'Income', 'Transfer', 'Receive'];
-    const subtitles = [
-      'Money going out',
-      'Money coming in',
-      'Send to someone',
-      'Receive from someone',
+    final labels = [
+      context.t('expense.expense'),
+      context.t('expense.income'),
+      context.t('expense.transfer'),
+      context.t('expense.receive'),
+    ];
+    final subtitles = [
+      context.t('expense.typeExpenseDesc'),
+      context.t('expense.typeIncomeDesc'),
+      context.t('expense.typeTransferDesc'),
+      context.t('expense.typeReceiveDesc'),
     ];
     final bgColors = [AppColors.lilac, AppColors.mint, AppColors.blush, AppColors.sky];
 
@@ -1043,7 +1052,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black.withValues(alpha: 0.45),
+                    color: brand.inkSoft,
                   ),
                 ),
               ),
@@ -1053,17 +1062,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   controller: _amountController,
                   focusNode: _amountFocus,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 46,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -2,
-                    color: Colors.black,
+                    color: brand.ink,
                   ),
                   decoration: InputDecoration(
                     filled: false,
                     hintText: '0.00',
                     hintStyle: TextStyle(
-                      color: Colors.black.withValues(alpha: 0.22),
+                      color: brand.inkSoft.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w600,
                       fontSize: 46,
                       letterSpacing: -2,
@@ -1218,15 +1227,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           const SizedBox(height: 24),
           ListenableBuilder(
             listenable: _amountController,
-            builder: (context, _) => Text(
-              _amountController.text.isEmpty ? '0.00' : _amountController.text,
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -2,
-                color: Colors.black.withValues(alpha: 0.35),
-              ),
-            ),
+            builder: (context, _) {
+              final previewBrand = context.brand;
+              return Text(
+                _amountController.text.isEmpty ? '0.00' : _amountController.text,
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -2,
+                  color: previewBrand.inkSoft,
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -1280,7 +1292,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Floating Save Pill ───────────────────────────────────────────────────────
 
-  static const _kSuccessGreen = Color(0xFF20A060);
+  static final _kSuccessGreen = AppColors.income;
 
   Widget _floatingSavePill(BrandColors brand) {
     final active = _hasValidAmount && !_saving && !_saveSuccess;
@@ -1324,15 +1336,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 child: FadeTransition(opacity: anim, child: child),
               ),
               child: _saveSuccess
-                  ? const Row(
-                      key: ValueKey('success'),
+                  ? Row(
+                      key: const ValueKey('success'),
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 20),
-                        SizedBox(width: 9),
+                        const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 20),
+                        const SizedBox(width: 9),
                         Text(
-                          'Saved!',
-                          style: TextStyle(
+                          context.t('expense.entrySavedSuccess'),
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -1406,9 +1418,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Transfer Between My Accounts',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                Text(
+                  context.t('expense.transferBetweenAccounts'),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 Text(
                   'e.g. Maybank → Touch \'n Go',
@@ -1459,7 +1471,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               _inlineAccountRow(
                 accounts: accounts,
                 brand: brand,
-                label: 'From',
+                label: context.t('expense.from'),
                 selectedId: _accountId,
                 excludeId: _toAccountId,
                 onSelect: (id) => setState(() => _accountId = id),
@@ -1468,7 +1480,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               _inlineAccountRow(
                 accounts: accounts,
                 brand: brand,
-                label: 'To',
+                label: context.t('expense.to'),
                 selectedId: _toAccountId,
                 excludeId: _accountId,
                 onSelect: (id) => setState(() => _toAccountId = id),
@@ -1477,7 +1489,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               _inlineAccountRow(
                 accounts: accounts,
                 brand: brand,
-                label: 'Account',
+                label: context.t('expense.account'),
                 selectedId: _accountId,
                 onSelect: (id) => setState(() => _accountId = id),
               ),
@@ -1600,7 +1612,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               ),
             ),
             Text(
-              selected?.name ?? (available.isEmpty ? 'Add account' : 'None'),
+              selected?.name ?? (available.isEmpty ? context.t('expense.addAccount') : context.t('expense.none')),
               style: TextStyle(color: brand.inkSoft, fontSize: 15),
             ),
             const SizedBox(width: 4),
@@ -1702,8 +1714,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   Widget _counterpartField(BrandColors brand) {
     final label = _type == EntryType.transfer
-        ? 'To (Person / Name)'
-        : 'From (Person / Name)';
+        ? context.t('expense.toPerson')
+        : context.t('expense.fromPerson');
     final hint = _type == EntryType.transfer
         ? 'e.g. John, Company ABC'
         : 'e.g. Sarah, Client XYZ';
@@ -1744,7 +1756,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Choose from People',
+                  context.t('expense.chooseFromPeople'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1800,7 +1812,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
                   child: Text(
-                    'Select Account',
+                    context.t('expense.selectAccount'),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -1818,7 +1830,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             color: brand.inkSoft,
                           ),
                           title: Text(
-                            'None',
+                            context.t('expense.none'),
                             style: TextStyle(color: brand.inkSoft),
                           ),
                           trailing: selectedId == null

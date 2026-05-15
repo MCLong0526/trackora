@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../models/account.dart';
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -229,10 +230,8 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     final confirm = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          'All transactions linked to this account will lose their account reference. This cannot be undone.',
-        ),
+        title: Text(context.t('account.deleteAccount')),
+        content: Text(context.t('account.deleteConfirm')),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
@@ -279,7 +278,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           ),
         ),
         title: Text(
-          _isEdit ? 'Edit Account' : 'New Account',
+          _isEdit ? context.t('account.editTitle') : context.t('account.newTitle'),
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         actions: const [],
@@ -297,7 +296,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 _livePreview(),
                 const SizedBox(height: 22),
               ],
-              _sectionLabel('Account Type', brand),
+              _sectionLabel(context.t('account.typeLabel'), brand),
               const SizedBox(height: 10),
               _typeSelector(brand),
               const SizedBox(height: 22),
@@ -308,7 +307,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                         : _type == AccountType.creditCard
                             ? 'Credit Card'
                             : 'E-Wallet')
-                    : 'Account Name',
+                    : context.t('account.nameLabel'),
                 brand,
               ),
               const SizedBox(height: 10),
@@ -350,7 +349,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                           ),
                         )
                       : Text(
-                          _isEdit ? 'Update Account' : 'Create Account',
+                          _isEdit ? context.t('account.updateBtn') : context.t('account.createBtn'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -519,7 +518,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  _type.isLiability ? 'BALANCE OWED' : 'BALANCE',
+                  _type.isLiability ? 'BALANCE OWED' : context.t('account.balance'),
                   style: TextStyle(
                     fontSize: 9,
                     letterSpacing: 1.3,
@@ -555,7 +554,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Danger Zone', brand),
+        _sectionLabel(context.t('account.dangerZone'), brand),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
@@ -593,9 +592,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Delete Account',
-                            style: TextStyle(
+                          Text(
+                            context.t('account.deleteAccount'),
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: AppColors.expense,
@@ -603,7 +602,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                           ),
                           const SizedBox(height: 1),
                           Text(
-                            'Permanently removes this account. Cannot be undone.',
+                            context.t('account.dangerDesc'),
                             style: TextStyle(
                               fontSize: 11,
                               color: brand.inkSoft,
@@ -753,7 +752,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Please enter a name';
+                if (v == null || v.trim().isEmpty) return context.t('account.enterName');
                 return null;
               },
             ),
@@ -788,7 +787,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Please enter a name';
+                if (v == null || v.trim().isEmpty) return context.t('account.enterName');
                 return null;
               },
             ),

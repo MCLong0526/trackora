@@ -32,7 +32,7 @@ class QuickAddSheet extends ConsumerStatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: context.t('quickAdd.title'),
-      barrierColor: Colors.black.withValues(alpha: 0.42),
+      barrierColor: context.brand.ink.withValues(alpha: 0.42),
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (_, _, _) => QuickAddSheet(
         presetAmount: presetAmount,
@@ -178,7 +178,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (mounted) {
         AppToast.show(
           context,
-          isOnline ? 'Expense saved' : 'Saved offline — will sync when connected',
+          isOnline ? context.t('expense.entrySaved') : context.t('expense.savedOffline'),
           type: AppToastType.success,
           icon: CupertinoIcons.checkmark_circle_fill,
         );
@@ -211,7 +211,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
                 child: Text(
-                  'Select Account',
+                  context.t('expense.selectAccount'),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -224,7 +224,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   children: [
                     ListTile(
                       leading: Icon(CupertinoIcons.xmark_circle, color: brand.inkSoft),
-                      title: Text('None', style: TextStyle(color: brand.inkSoft)),
+                      title: Text(context.t('expense.none'), style: TextStyle(color: brand.inkSoft)),
                       trailing: _accountId == null
                           ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
                           : null,
@@ -500,7 +500,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'Account',
+                                  context.t('expense.account'),
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -509,8 +509,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 ),
                               ),
                               Text(
-                                selectedAccount?.name ??
-                                    (accounts.isEmpty ? 'None' : 'None'),
+                                selectedAccount?.name ?? context.t('expense.none'),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: brand.inkSoft,
