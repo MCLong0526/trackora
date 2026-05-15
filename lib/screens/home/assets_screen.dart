@@ -1398,25 +1398,35 @@ class _AccountAsset {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+double _effectiveAmountForAccount(Expense expense, String? accountCurrencyCode) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
+}
+
 Map<String, double> _computeBalances(
   List<Account> accounts,
   List<Expense> expenses,
 ) {
+  final currencyCodes = <String, String?>{
+    for (final a in accounts) a.id: a.currencyCode,
+  };
   final balances = <String, double>{
     for (final a in accounts) a.id: a.openingBalance,
   };
   for (final expense in expenses) {
     final from = expense.accountId;
     if (from != null && balances.containsKey(from)) {
+      final amt = _effectiveAmountForAccount(expense, currencyCodes[from]);
       if (expense.type.isInflow) {
-        balances[from] = (balances[from] ?? 0) + expense.amount;
+        balances[from] = (balances[from] ?? 0) + amt;
       } else {
-        balances[from] = (balances[from] ?? 0) - expense.amount;
+        balances[from] = (balances[from] ?? 0) - amt;
       }
     }
     final to = expense.toAccountId;
     if (to != null && balances.containsKey(to)) {
-      balances[to] = (balances[to] ?? 0) + expense.amount;
+      balances[to] = (balances[to] ?? 0) +
+          _effectiveAmountForAccount(expense, currencyCodes[to]);
     }
   }
   return balances;

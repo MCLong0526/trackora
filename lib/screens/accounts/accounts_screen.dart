@@ -103,6 +103,9 @@ class AccountsScreen extends ConsumerWidget {
     List<Account> accounts,
     List<Expense> expenses,
   ) {
+    final currencyCodes = <String, String?>{
+      for (final a in accounts) a.id: a.currencyCode,
+    };
     final balances = <String, double>{};
     for (final a in accounts) {
       balances[a.id] = a.openingBalance;
@@ -110,12 +113,14 @@ class AccountsScreen extends ConsumerWidget {
     for (final e in expenses) {
       final aid = e.accountId;
       if (aid != null && balances.containsKey(aid)) {
+        final amt = _effectiveAmountForAccount(e, currencyCodes[aid]);
         balances[aid] = (balances[aid] ?? 0) +
-            (e.type.isInflow ? e.amount : -e.amount);
+            (e.type.isInflow ? amt : -amt);
       }
       final toId = e.toAccountId;
       if (toId != null && balances.containsKey(toId)) {
-        balances[toId] = (balances[toId] ?? 0) + e.amount;
+        balances[toId] = (balances[toId] ?? 0) +
+            _effectiveAmountForAccount(e, currencyCodes[toId]);
       }
     }
     return balances;
@@ -336,18 +341,27 @@ class _MetalChip extends StatelessWidget {
 }
 
 // ── Public helpers ────────────────────────────────────────────
+
+/// Returns the amount an expense contributes to a specific account's balance.
+/// Matches currencies so foreign expenses are converted before being applied.
+double _effectiveAmountForAccount(Expense expense, String? accountCurrencyCode) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
+}
+
 double computeAccountBalance(Account account, List<Expense> expenses) {
   double balance = account.openingBalance;
   for (final e in expenses) {
     if (e.accountId == account.id) {
+      final amt = _effectiveAmountForAccount(e, account.currencyCode);
       if (e.type.isInflow) {
-        balance += e.amount;
+        balance += amt;
       } else {
-        balance -= e.amount;
+        balance -= amt;
       }
     }
     if (e.toAccountId == account.id) {
-      balance += e.amount;
+      balance += _effectiveAmountForAccount(e, account.currencyCode);
     }
   }
   return balance;

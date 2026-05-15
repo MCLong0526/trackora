@@ -253,11 +253,23 @@ final savingsProvider = Provider.autoDispose<double>((ref) {
   return opening + inflow - outflow;
 });
 
+/// Returns the amount to apply to an account's balance for a given expense.
+/// If the expense currency matches the account currency, use the raw amount.
+/// If they differ, use convertedAmount (base-currency equivalent) so RM
+/// accounts aren't credited/debited at the wrong exchange rate.
+double _effectiveAmount(Expense expense, String? accountCurrencyCode) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
+}
+
 /// Per-account raw balance map (in each account's own currency).
 Map<String, double> computeAccountBalanceMap(
   List<Account> accounts,
   List<Expense> all,
 ) {
+  final currencyCodes = <String, String?>{
+    for (final a in accounts) a.id: a.currencyCode,
+  };
   final balances = <String, double>{};
   for (final a in accounts) {
     balances[a.id] = a.openingBalance;
@@ -265,15 +277,16 @@ Map<String, double> computeAccountBalanceMap(
   for (final e in all) {
     final aid = e.accountId;
     if (aid != null && balances.containsKey(aid)) {
+      final amt = _effectiveAmount(e, currencyCodes[aid]);
       if (e.type.isInflow) {
-        balances[aid] = (balances[aid] ?? 0) + e.amount;
+        balances[aid] = (balances[aid] ?? 0) + amt;
       } else {
-        balances[aid] = (balances[aid] ?? 0) - e.amount;
+        balances[aid] = (balances[aid] ?? 0) - amt;
       }
     }
     final toId = e.toAccountId;
     if (toId != null && balances.containsKey(toId)) {
-      balances[toId] = (balances[toId] ?? 0) + e.amount;
+      balances[toId] = (balances[toId] ?? 0) + _effectiveAmount(e, currencyCodes[toId]);
     }
   }
   return balances;
