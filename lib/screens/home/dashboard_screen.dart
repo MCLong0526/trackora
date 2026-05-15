@@ -42,11 +42,11 @@ class DashboardScreen extends ConsumerWidget {
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final monthSpent = monthExpenses
         .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final monthIncome = monthExpenses
         .where((e) => e.type.isInflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final budgetableSpent = monthExpenses
         .where(
@@ -55,7 +55,7 @@ class DashboardScreen extends ConsumerWidget {
               e.category != 'Bills' &&
               !e.note.contains('(installment)'),
         )
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final totalBalance = ref.watch(totalAccountBalanceProvider);
 
@@ -66,8 +66,8 @@ class DashboardScreen extends ConsumerWidget {
     double weekSpent = 0;
     for (final e in allExpenses) {
       if (e.type != EntryType.expense) continue;
-      if (!e.date.isBefore(todayStart)) todaySpent += e.amount;
-      if (!e.date.isBefore(weekStart)) weekSpent += e.amount;
+      if (!e.date.isBefore(todayStart)) todaySpent += e.convertedAmount;
+      if (!e.date.isBefore(weekStart)) weekSpent += e.convertedAmount;
     }
 
     final sortedRecent = [...allExpenses]
@@ -384,7 +384,7 @@ class DashboardScreen extends ConsumerWidget {
     final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
     final total = sorted
         .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

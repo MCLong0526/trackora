@@ -304,7 +304,7 @@ class BudgetScreen extends ConsumerWidget {
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final activeInstallments = installments
         .where((i) => i.isActiveIn(month))

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/i18n.dart';
+import '../services/prefs_service.dart';
 import '../services/money_format.dart';
 import '../theme/app_theme.dart';
 
@@ -148,7 +149,12 @@ class _ExpenseCardState extends State<ExpenseCard>
           context
               .t('expense.deleteMessage')
               .replaceFirst('{category}', context.categoryLabel(widget.expense.category))
-              .replaceFirst('{amount}', formatMoney(widget.currencySymbol, widget.expense.amount)),
+              .replaceFirst('{amount}', formatMoney(
+            widget.expense.originalCurrency != null
+                ? (kSupportedCurrencies[widget.expense.originalCurrency!] ?? widget.expense.originalCurrency!)
+                : widget.currencySymbol,
+            widget.expense.amount,
+          )),
         ),
         actions: [
           CupertinoDialogAction(
@@ -370,16 +376,21 @@ class _CardContents extends StatelessWidget {
         ),
         Row(
           children: [
-            Text(
-              (isIncome || isReceive)
-                  ? formatMoney(currencySymbol, expense.amount, forceSign: true)
-                  : formatMoney(currencySymbol, -expense.amount),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: amountColor,
-              ),
-            ),
+            Builder(builder: (ctx) {
+              final displaySym = expense.originalCurrency != null
+                  ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+                  : currencySymbol;
+              return Text(
+                (isIncome || isReceive)
+                    ? formatMoney(displaySym, expense.amount, forceSign: true)
+                    : formatMoney(displaySym, -expense.amount),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
+              );
+            }),
             if (expense.receiptUrl != null) ...[
               const SizedBox(width: 6),
               Icon(CupertinoIcons.paperclip, size: 14, color: brand.inkSoft),

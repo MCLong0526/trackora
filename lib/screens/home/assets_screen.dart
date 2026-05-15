@@ -1347,9 +1347,9 @@ class _AssetSnapshot {
     for (final e in expenses) {
       if (e.date.isAfter(weekStart)) {
         if (e.type == EntryType.income || e.type == EntryType.receive) {
-          weeklyChange += e.amount;
+          weeklyChange += e.convertedAmount;
         } else if (e.type == EntryType.expense) {
-          weeklyChange -= e.amount;
+          weeklyChange -= e.convertedAmount;
         }
       }
     }
