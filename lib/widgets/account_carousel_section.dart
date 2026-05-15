@@ -25,7 +25,7 @@ typedef _Pal = ({
   Color ink,
   Color accent,
   String glyph,
-  String label
+  String labelKey
 });
 
 _Pal _paletteForAccountType(AccountType type) {
@@ -37,7 +37,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1E3F8A),
         accent: const Color(0xFF3C6FE0),
         glyph: '◆',
-        label: 'BANK',
+        labelKey: 'account.palBank',
       );
     case AccountType.eWallet:
       return (
@@ -46,7 +46,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1B5A3D),
         accent: const Color(0xFF33A874),
         glyph: '◐',
-        label: 'E-WALLET',
+        labelKey: 'account.palEWallet',
       );
     case AccountType.cash:
       return (
@@ -55,7 +55,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF7A5512),
         accent: const Color(0xFFC99838),
         glyph: '\$',
-        label: 'CASH',
+        labelKey: 'account.palCash',
       );
     case AccountType.creditCard:
       return (
@@ -64,7 +64,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF922C2C),
         accent: const Color(0xFFCC4545),
         glyph: '✦',
-        label: 'CREDIT',
+        labelKey: 'account.palCredit',
       );
     case AccountType.loan:
       return (
@@ -73,7 +73,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF8A5A04),
         accent: const Color(0xFFE89A14),
         glyph: '▲',
-        label: 'LOAN',
+        labelKey: 'account.palLoan',
       );
     case AccountType.mortgage:
       return (
@@ -82,7 +82,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF6B4D2A),
         accent: const Color(0xFF9B7045),
         glyph: '⌂',
-        label: 'MORTGAGE',
+        labelKey: 'account.palMortgage',
       );
     case AccountType.bnpl:
       return (
@@ -91,7 +91,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF5C3A9E),
         accent: const Color(0xFF8B5FD4),
         glyph: '⬡',
-        label: 'BNPL',
+        labelKey: 'account.palBnpl',
       );
     case AccountType.otherLiability:
       return (
@@ -100,7 +100,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF7A4040),
         accent: const Color(0xFFB55555),
         glyph: '−',
-        label: 'DEBT',
+        labelKey: 'account.palDebt',
       );
     case AccountType.investment:
       return (
@@ -109,7 +109,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1A5E36),
         accent: const Color(0xFF2E9E5A),
         glyph: '▲',
-        label: 'INVEST',
+        labelKey: 'account.palInvest',
       );
     case AccountType.savings:
       return (
@@ -118,7 +118,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1A4A6E),
         accent: const Color(0xFF2E7EB5),
         glyph: '◎',
-        label: 'SAVINGS',
+        labelKey: 'account.palSavings',
       );
     case AccountType.crypto:
       return (
@@ -127,7 +127,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF8A4E04),
         accent: const Color(0xFFE8820E),
         glyph: '◈',
-        label: 'CRYPTO',
+        labelKey: 'account.palCrypto',
       );
     case AccountType.forex:
       return (
@@ -136,7 +136,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF4E2A8A),
         accent: const Color(0xFF7F4FD4),
         glyph: '◇',
-        label: 'FOREX',
+        labelKey: 'account.palForex',
       );
   }
 }
@@ -630,7 +630,7 @@ class _CardFront extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          pal.label,
+                          context.t(pal.labelKey),
                           style: TextStyle(
                             fontSize: 9,
                             letterSpacing: 1.3,
@@ -700,7 +700,7 @@ class _CardFront extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        account.type.label,
+                        context.t(account.type.labelKey),
                         style: TextStyle(
                           fontSize: 11,
                           color: pal.ink.withValues(alpha: 0.70),
@@ -789,7 +789,7 @@ class _CardBack extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  pal.label,
+                  context.t(pal.labelKey),
                   style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 1.3,
@@ -1055,15 +1055,15 @@ class _AddAccountButtonState extends State<_AddAccountButton> {
 
 // ── Add Account types ─────────────────────────────────────────
 class _AType {
-  final String label;
-  final String sub;
+  final String labelKey;
+  final String subKey;
   final AccountType type;
   final IconData icon;
   final String defaultName;
 
   const _AType({
-    required this.label,
-    required this.sub,
+    required this.labelKey,
+    required this.subKey,
     required this.type,
     required this.icon,
     required this.defaultName,
@@ -1072,29 +1072,29 @@ class _AType {
 
 const _kAddTypes = [
   _AType(
-    label: 'Bank',
-    sub: 'Savings, current',
+    labelKey: 'account.typeBank',
+    subKey: 'account.typeBankSub',
     type: AccountType.bank,
     icon: PhosphorIconsFill.bank,
     defaultName: 'New Bank Account',
   ),
   _AType(
-    label: 'E-Wallet',
-    sub: 'TNG, GrabPay...',
+    labelKey: 'account.typeEWallet',
+    subKey: 'account.typeEWalletSub',
     type: AccountType.eWallet,
     icon: PhosphorIconsFill.deviceMobile,
     defaultName: 'New e-Wallet',
   ),
   _AType(
-    label: 'Cash',
-    sub: 'Wallet, on-hand',
+    labelKey: 'account.typeCash',
+    subKey: 'account.typeCashSub',
     type: AccountType.cash,
     icon: PhosphorIconsFill.currencyDollar,
     defaultName: 'Cash',
   ),
   _AType(
-    label: 'Credit Card',
-    sub: 'Visa, Master, AMEX',
+    labelKey: 'account.typeCreditCard',
+    subKey: 'account.typeCreditCardSub',
     type: AccountType.creditCard,
     icon: CupertinoIcons.creditcard_fill,
     defaultName: 'New Credit Card',
@@ -1103,57 +1103,57 @@ const _kAddTypes = [
 
 const _kOtherTypes = [
   _AType(
-    label: 'Investment',
-    sub: 'Stocks, ETFs, funds',
+    labelKey: 'account.typeInvestment',
+    subKey: 'account.typeInvestmentSub',
     type: AccountType.investment,
     icon: PhosphorIconsFill.chartLineUp,
     defaultName: 'Investment Account',
   ),
   _AType(
-    label: 'Savings',
-    sub: 'Fixed deposit, savings',
+    labelKey: 'account.typeSavings',
+    subKey: 'account.typeSavingsSub',
     type: AccountType.savings,
     icon: PhosphorIconsFill.piggyBank,
     defaultName: 'Savings Account',
   ),
   _AType(
-    label: 'Crypto',
-    sub: 'Bitcoin, altcoins',
+    labelKey: 'account.typeCrypto',
+    subKey: 'account.typeCryptoSub',
     type: AccountType.crypto,
     icon: PhosphorIconsFill.currencyBtc,
     defaultName: 'Crypto Wallet',
   ),
   _AType(
-    label: 'Forex',
-    sub: 'USD, EUR, JPY',
+    labelKey: 'account.typeForex',
+    subKey: 'account.typeForexSub',
     type: AccountType.forex,
     icon: PhosphorIconsFill.globe,
     defaultName: 'Forex Account',
   ),
   _AType(
-    label: 'Loan',
-    sub: 'Personal, auto',
+    labelKey: 'account.typeLoan',
+    subKey: 'account.typeLoanSub',
     type: AccountType.loan,
     icon: PhosphorIconsFill.receipt,
     defaultName: 'Loan',
   ),
   _AType(
-    label: 'Mortgage',
-    sub: 'Home loan',
+    labelKey: 'account.typeMortgage',
+    subKey: 'account.typeMortgageSub',
     type: AccountType.mortgage,
     icon: CupertinoIcons.house_fill,
     defaultName: 'Mortgage',
   ),
   _AType(
-    label: 'BNPL',
-    sub: 'Buy now, pay later',
+    labelKey: 'account.typeBnpl',
+    subKey: 'account.typeBnplSub',
     type: AccountType.bnpl,
     icon: CupertinoIcons.cart_fill,
     defaultName: 'BNPL Account',
   ),
   _AType(
-    label: 'Other Debt',
-    sub: 'IOUs, other debt',
+    labelKey: 'account.typeOtherDebt',
+    subKey: 'account.typeOtherDebtSub',
     type: AccountType.otherLiability,
     icon: CupertinoIcons.minus_circle_fill,
     defaultName: 'Other Debt',
@@ -1170,7 +1170,7 @@ const _kSwatchTypes = [
 ];
 
 const _kConfettiColors = [
-  Color(0xFF5A4FE6),
+  AppActionBlue.color,
   Color(0xFF33B07A),
   Color(0xFFE89A14),
   Color(0xFFD94747),
@@ -1732,7 +1732,7 @@ class _OtherTypesSheet extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      t.label,
+                                      context.t(t.labelKey),
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
@@ -1741,7 +1741,7 @@ class _OtherTypesSheet extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
-                                      t.sub,
+                                      context.t(t.subKey),
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: brand.inkSoft,
@@ -1900,7 +1900,7 @@ class _TileCardState extends State<_TileCard> {
                           size: 26, color: pal.ink),
                       const Spacer(),
                       Text(
-                        widget.aType.label,
+                        context.t(widget.aType.labelKey),
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
@@ -1910,7 +1910,7 @@ class _TileCardState extends State<_TileCard> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        widget.aType.sub,
+                        context.t(widget.aType.subKey),
                         style: TextStyle(
                           fontSize: 11,
                           color: pal.ink.withValues(alpha: 0.65),
@@ -2087,7 +2087,7 @@ class _Step2State extends State<_Step2> {
                                     color: widget.pal.accent,
                                   ),
                             title: Text(
-                              p,
+                              isCustom ? context.t('account.typeOtherCustom') : p,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: isSelected
@@ -2217,7 +2217,7 @@ class _Step2State extends State<_Step2> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.pal.label,
+                        context.t(widget.pal.labelKey),
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,

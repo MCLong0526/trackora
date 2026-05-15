@@ -71,10 +71,10 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 12),
                 ],
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Profile',
-                    style: TextStyle(
+                    context.t('settings.profile'),
+                    style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
@@ -116,8 +116,8 @@ class SettingsScreen extends ConsumerWidget {
                 _Tile(
                   icon: CupertinoIcons.bell,
                   iconColor: AppColors.sky,
-                  label: 'Reminders',
-                  trailing: 'Daily at 8 PM',
+                  label: context.t('settings.reminders'),
+                  trailing: context.t('settings.dailyAt8PM'),
                   onTap: () {},
                 ),
                 if (defaultTargetPlatform == TargetPlatform.iOS) ...[
@@ -129,7 +129,7 @@ class SettingsScreen extends ConsumerWidget {
                   _Tile(
                     icon: CupertinoIcons.envelope,
                     iconColor: AppColors.sky,
-                    label: 'Change Email',
+                    label: context.t('settings.changeEmail'),
                     trailing: email,
                     onTap: () => _showChangeEmail(context, ref, email),
                   ),
@@ -209,7 +209,7 @@ class SettingsScreen extends ConsumerWidget {
                       if (context.mounted) {
                         AppToast.show(
                           context,
-                          'Signed out',
+                          context.t('settings.signedOut'),
                           type: AppToastType.info,
                           icon: CupertinoIcons.square_arrow_right,
                         );
@@ -886,7 +886,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'MY ACCOUNTS',
+              context.t('settings.myAccounts').toUpperCase(),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -900,7 +900,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                 CupertinoPageRoute(builder: (_) => const AccountsScreen()),
               ),
               child: Text(
-                'Manage',
+                context.t('settings.manage'),
                 style: TextStyle(
                   fontSize: 13,
                   color: brand.accentDark,
@@ -953,7 +953,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Add Your First Account',
+                context.t('settings.addFirstAccount'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -982,7 +982,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
               ? Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
-                    'No positive balance to display',
+                    context.t('settings.noPositiveBalance'),
                     style: TextStyle(fontSize: 13, color: brand.inkSoft),
                   ),
                 )
@@ -1047,7 +1047,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Total',
+                                      context.t('settings.total'),
                                       style: TextStyle(
                                         fontSize: 9,
                                         color: brand.inkSoft,
@@ -1172,7 +1172,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Add Account',
+                  context.t('account.addAccount'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1427,7 +1427,7 @@ class _LiveActivityToggleTileState extends State<_LiveActivityToggleTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Quick Add Live Activity',
+                  context.t('settings.liveActivity'),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -1435,7 +1435,7 @@ class _LiveActivityToggleTileState extends State<_LiveActivityToggleTile> {
                   ),
                 ),
                 Text(
-                  'Dynamic Island & Lock Screen shortcut',
+                  context.t('settings.liveActivitySub'),
                   style: TextStyle(
                     fontSize: 12,
                     color: brand.inkSoft,
@@ -1497,10 +1497,10 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inSeconds < 60) return context.t('settings.justNow');
+    if (diff.inMinutes < 60) return context.t('settings.minutesAgo').replaceAll('{m}', '${diff.inMinutes}');
+    if (diff.inHours < 24) return context.t('settings.hoursAgo').replaceAll('{h}', '${diff.inHours}');
+    return context.t('settings.daysAgo').replaceAll('{d}', '${diff.inDays}');
   }
 
   void _onSyncState(SyncState s) {
@@ -1575,7 +1575,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   void _showSuccessBanner() {
     AppToast.show(
       context,
-      'Sync complete',
+      context.t('settings.syncComplete'),
       type: AppToastType.success,
       icon: CupertinoIcons.checkmark_circle_fill,
     );
@@ -1587,7 +1587,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   void _showError(String msg) {
     AppToast.show(
       context,
-      'Sync failed',
+      context.t('settings.syncFailed'),
       type: AppToastType.error,
       icon: CupertinoIcons.exclamationmark_circle_fill,
     );
@@ -1626,7 +1626,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
         ? AppColors.income
         : hasPending
         ? const Color(0xFFB07800)
-        : const Color(0xFF2A6FB5);
+        : AppActionBlue.color;
     final IconData iconData = isSyncing
         ? CupertinoIcons.arrow_2_circlepath
         : hasFailed
@@ -1639,21 +1639,21 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
 
     final String syncLabel;
     if (isSyncing) {
-      syncLabel = 'Uploading data…';
+      syncLabel = context.t('settings.uploading');
     } else if (hasFailed) {
-      syncLabel = 'Sync failed';
+      syncLabel = context.t('settings.syncFailed');
     } else if (_lastSynced != null) {
-      syncLabel = 'Synced · ${_relativeTime(_lastSynced!)}';
+      syncLabel = context.t('settings.syncedRelative').replaceAll('{time}', _relativeTime(_lastSynced!));
     } else if (hasSynced) {
-      syncLabel = 'Synced to Cloud';
+      syncLabel = context.t('settings.syncedToCloud');
     } else if (hasPending) {
-      syncLabel = '$pendingCount pending';
+      syncLabel = context.t('settings.pendingCount').replaceAll('{count}', '$pendingCount');
     } else {
-      syncLabel = _email != null ? 'Not synced yet' : 'Not connected';
+      syncLabel = _email != null ? context.t('settings.notSyncedYet') : context.t('settings.notConnected');
     }
 
     final bool canSync = isOnline && !isSyncing;
-    final String syncBtnLabel = _email != null ? 'Sync Now' : 'Sign In & Sync';
+    final String syncBtnLabel = _email != null ? context.t('settings.syncNow') : context.t('settings.signInSync');
 
     return Container(
       decoration: BoxDecoration(
@@ -1707,7 +1707,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Cloud Sync',
+                          context.t('settings.cloudSync'),
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -1716,7 +1716,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                         ),
                         if (hasPending)
                           Text(
-                            '$pendingCount offline entr${pendingCount == 1 ? "y" : "ies"} pending',
+                            context.t('settings.pendingOffline').replaceAll('{count}', '$pendingCount'),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -1804,7 +1804,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        isOnline ? 'Online' : 'Offline',
+                        isOnline ? context.t('settings.online') : context.t('settings.offline'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1930,7 +1930,7 @@ class _SyncSheetState extends State<_SyncSheet> {
                       child: const Icon(
                         CupertinoIcons.cloud_upload_fill,
                         size: 20,
-                        color: Color(0xFF2A6FB5),
+                        color: AppActionBlue.color,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1938,15 +1938,15 @@ class _SyncSheetState extends State<_SyncSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Sign In & Sync',
-                            style: TextStyle(
+                          Text(
+                            context.t('settings.syncSignInTitle'),
+                            style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
-                            'Your data stays local. Sync creates a backup.',
+                            context.t('settings.syncDataStaysLocal'),
                             style: TextStyle(
                               fontSize: 12,
                               color: brand.inkSoft,
@@ -1960,7 +1960,7 @@ class _SyncSheetState extends State<_SyncSheet> {
                 const SizedBox(height: 20),
                 _field(
                   controller: _emailCtrl,
-                  hint: 'Email',
+                  hint: context.t('settings.emailField'),
                   icon: CupertinoIcons.mail,
                   keyboardType: TextInputType.emailAddress,
                   brand: brand,
@@ -1986,9 +1986,9 @@ class _SyncSheetState extends State<_SyncSheet> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'Sign In & Sync',
-                            style: TextStyle(
+                        : Text(
+                            context.t('settings.syncSignInTitle'),
+                            style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -1997,7 +1997,7 @@ class _SyncSheetState extends State<_SyncSheet> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "No account? We'll create one automatically.",
+                  context.t('settings.noAccount'),
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 11, color: brand.inkSoft),
                 ),
@@ -2047,7 +2047,7 @@ class _SyncSheetState extends State<_SyncSheet> {
         controller: _passCtrl,
         obscureText: _obscure,
         decoration: InputDecoration(
-          hintText: 'Password',
+          hintText: context.t('settings.passwordField'),
           prefixIcon: Icon(CupertinoIcons.lock, size: 18, color: brand.inkSoft),
           suffixIcon: GestureDetector(
             onTap: () => setState(() => _obscure = !_obscure),
@@ -2114,11 +2114,11 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
     final newEmail = _newEmailCtrl.text.trim();
     final password = _passwordCtrl.text;
     if (newEmail.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please fill in all fields.');
+      setState(() => _error = context.t('settings.fillAllFields'));
       return;
     }
     if (!newEmail.contains('@')) {
-      setState(() => _error = 'Enter a valid email address.');
+      setState(() => _error = context.t('settings.enterValidEmail'));
       return;
     }
     setState(() {
@@ -2145,7 +2145,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
       if (mounted)
         setState(() {
           _loading = false;
-          _error = 'Something went wrong. Try again.';
+          _error = context.t('settings.somethingWentWrong');
         });
     }
   }
@@ -2178,7 +2178,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
             ),
           ),
           Text(
-            'Change Email',
+            context.t('settings.changeEmailTitle'),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -2209,7 +2209,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Verification link sent to ${_newEmailCtrl.text.trim()}.\n\nClick the link in that email to confirm your new address, then sign in again.',
+                      context.t('settings.verificationSent').replaceAll('{email}', _newEmailCtrl.text.trim()),
                       style: TextStyle(
                         fontSize: 13,
                         color: brand.ink,
@@ -2225,14 +2225,14 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
               width: double.infinity,
               child: CupertinoButton.filled(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
+                child: Text(context.t('common.done')),
               ),
             ),
           ] else ...[
             // New email field
             _Field(
               controller: _newEmailCtrl,
-              label: 'New email',
+              label: context.t('settings.newEmail'),
               hint: 'chia70857@gmail.com',
               keyboardType: TextInputType.emailAddress,
               brand: brand,
@@ -2241,7 +2241,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
             // Password field
             _Field(
               controller: _passwordCtrl,
-              label: 'Current password',
+              label: context.t('settings.currentPassword'),
               hint: '••••••••',
               obscure: _obscure,
               brand: brand,
@@ -2268,7 +2268,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
                 onPressed: _loading ? null : _submit,
                 child: _loading
                     ? const CupertinoActivityIndicator(color: Colors.white)
-                    : const Text('Send Verification Link'),
+                    : Text(context.t('settings.sendVerificationLink')),
               ),
             ),
           ],
