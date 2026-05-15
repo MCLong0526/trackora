@@ -9,13 +9,14 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../home/home_shell.dart';
 import 'signup_screen.dart';
 import 'welcome_screen.dart';
 
-const Color _kPrimary = Color(0xFF5B5FEF);
+const Color _kPrimary = Color(0xFF0066CC);
 const String _kRememberedEmail = 'remembered_email';
 const String _kRememberMe = 'remember_me';
 
@@ -280,7 +281,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     AppToast.show(
       context,
-      'Signed in successfully',
+      context.t('auth.signedInSuccess'),
       type: AppToastType.success,
       icon: CupertinoIcons.checkmark_seal_fill,
     );
@@ -317,6 +318,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -347,21 +349,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Welcome back',
-                        style: TextStyle(
+                      Text(
+                        context.t('auth.welcomeBack'),
+                        style: const TextStyle(
                           fontSize: 15,
                           color: AppColors.inkSoft,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Log in',
+                      Text(
+                        context.t('auth.signIn'),
                         style: TextStyle(
                           fontSize: 36,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111111),
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
                           letterSpacing: -0.5,
                         ),
                       ),
@@ -380,7 +382,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         onSubmitted: (_) => _signIn(),
                         validator: (v) => (v == null || v.isEmpty)
-                            ? 'Please enter your password'
+                            ? context.t('auth.enterPassword')
                             : null,
                       ),
                       const SizedBox(height: 16),
@@ -392,11 +394,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 setState(() => _rememberMe = v ?? true),
                           ),
                           const SizedBox(width: 8),
-                          const Text(
-                            'Remember me',
+                          Text(
+                            context.t('auth.rememberMe'),
                             style: TextStyle(
                               fontSize: 14,
-                              color: Color(0xFF111111),
+                              color: brand.ink,
                             ),
                           ),
                           const Spacer(),
@@ -407,9 +409,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text(
-                              'Forgot password?',
-                              style: TextStyle(
+                            child: Text(
+                              context.t('auth.forgotPassword'),
+                              style: const TextStyle(
                                 color: _kPrimary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -424,7 +426,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                       const SizedBox(height: 28),
                       _PrimaryButton(
-                        label: 'Log in',
+                        label: context.t('auth.signIn'),
                         isLoading: _isLoading,
                         onPressed: _signIn,
                       ),
@@ -464,9 +466,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'New to Trackora? ',
-                            style: TextStyle(
+                          Text(
+                            '${context.t('auth.newToApp')} ',
+                            style: const TextStyle(
                               color: AppColors.inkSoft,
                               fontSize: 14,
                             ),
@@ -478,9 +480,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 builder: (_) => const SignupScreen(),
                               ),
                             ),
-                            child: const Text(
-                              'Create account',
-                              style: TextStyle(
+                            child: Text(
+                              context.t('auth.createAccountFlat'),
+                              style: const TextStyle(
                                 color: _kPrimary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -502,10 +504,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _showForgotPassword() {
     final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    final resetTitle = context.t('auth.resetPassword');
+    final cancelLabel = context.t('common.cancel');
+    final sendLabel = context.t('auth.send');
+    final sentMsg = context.t('auth.resetEmailSent');
+    final failedMsg = context.t('auth.resetEmailFailed');
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Reset Password'),
+        title: Text(resetTitle),
         content: Padding(
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
@@ -518,7 +525,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(cancelLabel),
           ),
           CupertinoDialogAction(
             onPressed: () async {
@@ -530,7 +537,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 if (mounted) {
                   AppToast.show(
                     context,
-                    'Password reset email sent. Check your inbox.',
+                    sentMsg,
                     type: AppToastType.success,
                   );
                 }
@@ -538,13 +545,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 if (mounted) {
                   AppToast.show(
                     context,
-                    'Could not send reset email.',
+                    failedMsg,
                     type: AppToastType.error,
                   );
                 }
               }
             },
-            child: const Text('Send'),
+            child: Text(sendLabel),
           ),
         ],
       ),
@@ -568,18 +575,11 @@ class _BackButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(
+          ),
+        child: Icon(
           CupertinoIcons.chevron_left,
           size: 18,
-          color: Color(0xFF111111),
+          color: context.brand.ink,
         ),
       ),
     );
@@ -614,7 +614,7 @@ class _EmailField extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF111111)),
+      style: TextStyle(fontSize: 15, color: context.brand.ink),
       decoration: InputDecoration(
         isDense: true,
         contentPadding:
@@ -637,8 +637,8 @@ class _EmailField extends StatelessWidget {
         fillColor: Colors.white,
       ),
       validator: (v) {
-        if (v == null || v.trim().isEmpty) return 'Please enter your email';
-        if (!v.contains('@')) return 'Please enter a valid email';
+        if (v == null || v.trim().isEmpty) return context.t('auth.enterEmail');
+        if (!v.contains('@')) return context.t('auth.validEmail');
         return null;
       },
     );
@@ -667,7 +667,7 @@ class _PasswordField extends StatelessWidget {
       obscureText: obscure,
       textInputAction: TextInputAction.done,
       onFieldSubmitted: onSubmitted,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF111111)),
+      style: TextStyle(fontSize: 15, color: context.brand.ink),
       decoration: InputDecoration(
         isDense: true,
         contentPadding:
@@ -830,8 +830,8 @@ class _OrDivider extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'OR CONTINUE WITH',
-            style: TextStyle(
+            context.t('auth.continueWith'),
+            style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 1.1,
@@ -863,7 +863,7 @@ class _SocialButton extends StatelessWidget {
     return OutlinedButton(
       style: OutlinedButton.styleFrom(
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF111111),
+        foregroundColor: context.brand.ink,
         side: BorderSide(color: AppColors.divider),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),
@@ -878,7 +878,7 @@ class _SocialButton extends StatelessWidget {
           Icon(
             isApple ? Icons.apple : Icons.g_mobiledata_rounded,
             size: isApple ? 20 : 26,
-            color: const Color(0xFF111111),
+            color: context.brand.ink,
           ),
           const SizedBox(width: 8),
           Text(label),

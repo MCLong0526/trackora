@@ -11,6 +11,8 @@ import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/money_format.dart';
 import '../state/providers.dart';
+import '../services/i18n.dart';
+import '../theme/app_theme.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
 
@@ -23,7 +25,7 @@ typedef _Pal = ({
   Color ink,
   Color accent,
   String glyph,
-  String label
+  String labelKey
 });
 
 _Pal _paletteForAccountType(AccountType type) {
@@ -35,7 +37,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1E3F8A),
         accent: const Color(0xFF3C6FE0),
         glyph: '◆',
-        label: 'BANK',
+        labelKey: 'account.palBank',
       );
     case AccountType.eWallet:
       return (
@@ -44,7 +46,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1B5A3D),
         accent: const Color(0xFF33A874),
         glyph: '◐',
-        label: 'E-WALLET',
+        labelKey: 'account.palEWallet',
       );
     case AccountType.cash:
       return (
@@ -53,7 +55,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF7A5512),
         accent: const Color(0xFFC99838),
         glyph: '\$',
-        label: 'CASH',
+        labelKey: 'account.palCash',
       );
     case AccountType.creditCard:
       return (
@@ -62,7 +64,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF922C2C),
         accent: const Color(0xFFCC4545),
         glyph: '✦',
-        label: 'CREDIT',
+        labelKey: 'account.palCredit',
       );
     case AccountType.loan:
       return (
@@ -71,7 +73,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF8A5A04),
         accent: const Color(0xFFE89A14),
         glyph: '▲',
-        label: 'LOAN',
+        labelKey: 'account.palLoan',
       );
     case AccountType.mortgage:
       return (
@@ -80,7 +82,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF6B4D2A),
         accent: const Color(0xFF9B7045),
         glyph: '⌂',
-        label: 'MORTGAGE',
+        labelKey: 'account.palMortgage',
       );
     case AccountType.bnpl:
       return (
@@ -89,7 +91,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF5C3A9E),
         accent: const Color(0xFF8B5FD4),
         glyph: '⬡',
-        label: 'BNPL',
+        labelKey: 'account.palBnpl',
       );
     case AccountType.otherLiability:
       return (
@@ -98,7 +100,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF7A4040),
         accent: const Color(0xFFB55555),
         glyph: '−',
-        label: 'DEBT',
+        labelKey: 'account.palDebt',
       );
     case AccountType.investment:
       return (
@@ -107,7 +109,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1A5E36),
         accent: const Color(0xFF2E9E5A),
         glyph: '▲',
-        label: 'INVEST',
+        labelKey: 'account.palInvest',
       );
     case AccountType.savings:
       return (
@@ -116,7 +118,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF1A4A6E),
         accent: const Color(0xFF2E7EB5),
         glyph: '◎',
-        label: 'SAVINGS',
+        labelKey: 'account.palSavings',
       );
     case AccountType.crypto:
       return (
@@ -125,7 +127,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF8A4E04),
         accent: const Color(0xFFE8820E),
         glyph: '◈',
-        label: 'CRYPTO',
+        labelKey: 'account.palCrypto',
       );
     case AccountType.forex:
       return (
@@ -134,7 +136,7 @@ _Pal _paletteForAccountType(AccountType type) {
         ink: const Color(0xFF4E2A8A),
         accent: const Color(0xFF7F4FD4),
         glyph: '◇',
-        label: 'FOREX',
+        labelKey: 'account.palForex',
       );
   }
 }
@@ -256,6 +258,7 @@ class _AccountCarouselState extends State<_AccountCarousel>
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final centerX = (widget.availableWidth - _cardW) / 2;
 
     return GestureDetector(
@@ -315,8 +318,8 @@ class _AccountCarouselState extends State<_AccountCarousel>
                               height: 6,
                               decoration: BoxDecoration(
                                 color: active
-                                    ? const Color(0xFF1a1410)
-                                    : Colors.black.withValues(alpha: 0.2),
+                                    ? brand.ink
+                                    : brand.inkSoft.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -627,7 +630,7 @@ class _CardFront extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          pal.label,
+                          context.t(pal.labelKey),
                           style: TextStyle(
                             fontSize: 9,
                             letterSpacing: 1.3,
@@ -682,7 +685,7 @@ class _CardFront extends ConsumerWidget {
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
                             color: isNeg
-                                ? const Color(0xFFC23030)
+                                ? AppColors.expense
                                 : pal.ink,
                             letterSpacing: -0.2,
                           ),
@@ -697,14 +700,14 @@ class _CardFront extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        account.type.label,
+                        context.t(account.type.labelKey),
                         style: TextStyle(
                           fontSize: 11,
                           color: pal.ink.withValues(alpha: 0.70),
                         ),
                       ),
                       Text(
-                        'TAP TO FLIP',
+                        context.t('account.tapToFlip'),
                         style: TextStyle(
                           fontSize: 10,
                           color: pal.ink.withValues(alpha: 0.55),
@@ -786,7 +789,7 @@ class _CardBack extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  pal.label,
+                  context.t(pal.labelKey),
                   style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 1.3,
@@ -827,7 +830,7 @@ class _CardBack extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'BALANCE · ${DateFormat('MMM d').format(account.createdAt)}',
+              '${context.t('account.balance')} · ${DateFormat('MMM d').format(account.createdAt)}',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 1.2,
@@ -843,7 +846,7 @@ class _CardBack extends StatelessWidget {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
-                color: isNeg ? const Color(0xFFC23030) : pal.ink,
+                color: isNeg ? AppColors.expense : pal.ink,
                 letterSpacing: -0.3,
               ),
             ),
@@ -851,7 +854,7 @@ class _CardBack extends StatelessWidget {
             _EditPill(ink: pal.ink, onTap: onEdit),
             const SizedBox(height: 16),
             Text(
-              'RECENT',
+              context.t('account.recent'),
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 1.2,
@@ -864,7 +867,7 @@ class _CardBack extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  'No recent activity',
+                  context.t('account.noRecentActivity'),
                   style: TextStyle(
                     fontSize: 12,
                     color: pal.ink.withValues(alpha: 0.55),
@@ -982,7 +985,7 @@ class _EditPill extends StatelessWidget {
             Icon(CupertinoIcons.pencil, size: 14, color: ink),
             const SizedBox(width: 6),
             Text(
-              'Edit Account',
+              context.t('account.editAccount'),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -1025,24 +1028,17 @@ class _AddAccountButtonState extends State<_AddAccountButton> {
         child: Container(
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFF5A4FE6),
+            color: AppActionBlue.color,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5A4FE6).withValues(alpha: 0.32),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(CupertinoIcons.add, color: Colors.white, size: 17),
               const SizedBox(width: 7),
-              const Text(
-                'Add Account',
-                style: TextStyle(
+              Text(
+                context.t('account.addAccount'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -1059,15 +1055,15 @@ class _AddAccountButtonState extends State<_AddAccountButton> {
 
 // ── Add Account types ─────────────────────────────────────────
 class _AType {
-  final String label;
-  final String sub;
+  final String labelKey;
+  final String subKey;
   final AccountType type;
   final IconData icon;
   final String defaultName;
 
   const _AType({
-    required this.label,
-    required this.sub,
+    required this.labelKey,
+    required this.subKey,
     required this.type,
     required this.icon,
     required this.defaultName,
@@ -1076,29 +1072,29 @@ class _AType {
 
 const _kAddTypes = [
   _AType(
-    label: 'Bank',
-    sub: 'Savings, current',
+    labelKey: 'account.typeBank',
+    subKey: 'account.typeBankSub',
     type: AccountType.bank,
     icon: PhosphorIconsFill.bank,
     defaultName: 'New Bank Account',
   ),
   _AType(
-    label: 'E-Wallet',
-    sub: 'TNG, GrabPay...',
+    labelKey: 'account.typeEWallet',
+    subKey: 'account.typeEWalletSub',
     type: AccountType.eWallet,
     icon: PhosphorIconsFill.deviceMobile,
     defaultName: 'New e-Wallet',
   ),
   _AType(
-    label: 'Cash',
-    sub: 'Wallet, on-hand',
+    labelKey: 'account.typeCash',
+    subKey: 'account.typeCashSub',
     type: AccountType.cash,
     icon: PhosphorIconsFill.currencyDollar,
     defaultName: 'Cash',
   ),
   _AType(
-    label: 'Credit Card',
-    sub: 'Visa, Master, AMEX',
+    labelKey: 'account.typeCreditCard',
+    subKey: 'account.typeCreditCardSub',
     type: AccountType.creditCard,
     icon: CupertinoIcons.creditcard_fill,
     defaultName: 'New Credit Card',
@@ -1107,57 +1103,57 @@ const _kAddTypes = [
 
 const _kOtherTypes = [
   _AType(
-    label: 'Investment',
-    sub: 'Stocks, ETFs, funds',
+    labelKey: 'account.typeInvestment',
+    subKey: 'account.typeInvestmentSub',
     type: AccountType.investment,
     icon: PhosphorIconsFill.chartLineUp,
     defaultName: 'Investment Account',
   ),
   _AType(
-    label: 'Savings',
-    sub: 'Fixed deposit, savings',
+    labelKey: 'account.typeSavings',
+    subKey: 'account.typeSavingsSub',
     type: AccountType.savings,
     icon: PhosphorIconsFill.piggyBank,
     defaultName: 'Savings Account',
   ),
   _AType(
-    label: 'Crypto',
-    sub: 'Bitcoin, altcoins',
+    labelKey: 'account.typeCrypto',
+    subKey: 'account.typeCryptoSub',
     type: AccountType.crypto,
     icon: PhosphorIconsFill.currencyBtc,
     defaultName: 'Crypto Wallet',
   ),
   _AType(
-    label: 'Forex',
-    sub: 'USD, EUR, JPY',
+    labelKey: 'account.typeForex',
+    subKey: 'account.typeForexSub',
     type: AccountType.forex,
     icon: PhosphorIconsFill.globe,
     defaultName: 'Forex Account',
   ),
   _AType(
-    label: 'Loan',
-    sub: 'Personal, auto',
+    labelKey: 'account.typeLoan',
+    subKey: 'account.typeLoanSub',
     type: AccountType.loan,
     icon: PhosphorIconsFill.receipt,
     defaultName: 'Loan',
   ),
   _AType(
-    label: 'Mortgage',
-    sub: 'Home loan',
+    labelKey: 'account.typeMortgage',
+    subKey: 'account.typeMortgageSub',
     type: AccountType.mortgage,
     icon: CupertinoIcons.house_fill,
     defaultName: 'Mortgage',
   ),
   _AType(
-    label: 'BNPL',
-    sub: 'Buy now, pay later',
+    labelKey: 'account.typeBnpl',
+    subKey: 'account.typeBnplSub',
     type: AccountType.bnpl,
     icon: CupertinoIcons.cart_fill,
     defaultName: 'BNPL Account',
   ),
   _AType(
-    label: 'Other Debt',
-    sub: 'IOUs, other debt',
+    labelKey: 'account.typeOtherDebt',
+    subKey: 'account.typeOtherDebtSub',
     type: AccountType.otherLiability,
     icon: CupertinoIcons.minus_circle_fill,
     defaultName: 'Other Debt',
@@ -1174,12 +1170,22 @@ const _kSwatchTypes = [
 ];
 
 const _kConfettiColors = [
-  Color(0xFF5A4FE6),
+  AppActionBlue.color,
   Color(0xFF33B07A),
   Color(0xFFE89A14),
   Color(0xFFD94747),
   Color(0xFF7A56C5),
 ];
+
+// Public helper to show the Add Account sheet from any screen.
+void showAddAccountSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => const _AddAccountSheet(),
+  );
+}
 
 // ── Add Account sheet ─────────────────────────────────────────
 class _AddAccountSheet extends ConsumerStatefulWidget {
@@ -1323,11 +1329,12 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
   @override
   Widget build(BuildContext context) {
     final pal = _paletteForAccountType(_swatchColor);
+    final brand = context.brand;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF2F0F4),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1338,7 +1345,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: brand.inkSoft.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1353,21 +1360,21 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                   child: CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: _step == 1 ? _goBack : null,
-                    child: const Icon(CupertinoIcons.chevron_left,
-                        size: 22, color: Color(0xFF1a1410)),
+                    child: Icon(CupertinoIcons.chevron_left,
+                        size: 22, color: brand.ink),
                   ),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: Text(
-                      _step == 0 ? 'Add Account' : 'Account Details',
+                      _step == 0 ? context.t('account.addAccount') : context.t('account.accountDetails'),
                       key: ValueKey(_step),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1a1410),
+                        color: brand.ink,
                       ),
                     ),
                   ),
@@ -1385,7 +1392,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                   child: Container(
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF5A4FE6),
+                      color: AppActionBlue.color,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1397,8 +1404,8 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                     height: 4,
                     decoration: BoxDecoration(
                       color: _step >= 1
-                          ? const Color(0xFF5A4FE6)
-                          : Colors.black.withValues(alpha: 0.08),
+                          ? AppActionBlue.color
+                          : brand.inkSoft.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1461,26 +1468,26 @@ class _Step1 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'What type of account?',
+          Text(
+            context.t('account.whatType'),
             style: TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
-              color: Color(0xFF1a1410),
+              color: brand.ink,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Choose one to get started.',
-            style: TextStyle(
-                fontSize: 13, color: Colors.black.withValues(alpha: 0.45)),
+            context.t('account.chooseOne'),
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
           ),
           const SizedBox(height: 18),
           // 2×2 grid
@@ -1542,15 +1549,8 @@ class _Step1 extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -1558,13 +1558,13 @@ class _Step1 extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF2F0F4),
+                        color: brand.background,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         CupertinoIcons.ellipsis_circle_fill,
                         size: 18,
-                        color: Color(0xFF8E8E93),
+                        color: brand.inkSoft,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1572,19 +1572,19 @@ class _Step1 extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Other Types',
+                          Text(
+                            context.t('account.otherTypes'),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1a1410),
+                              color: brand.ink,
                             ),
                           ),
                           Text(
                             '8 extra categories',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.black.withValues(alpha: 0.45),
+                              color: brand.inkSoft,
                             ),
                           ),
                         ],
@@ -1592,7 +1592,7 @@ class _Step1 extends StatelessWidget {
                     ),
                     Icon(CupertinoIcons.chevron_right,
                         size: 14,
-                        color: Colors.black.withValues(alpha: 0.25)),
+                        color: brand.inkSoft),
                   ],
                 ),
               ),
@@ -1611,10 +1611,11 @@ class _OtherTypesSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF2F0F4),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         top: false,
@@ -1629,7 +1630,7 @@ class _OtherTypesSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: brand.inkSoft.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1643,21 +1644,21 @@ class _OtherTypesSheet extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Other Types',
+                        Text(
+                          context.t('account.otherTypes'),
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.4,
-                            color: Color(0xFF1a1410),
+                            color: brand.ink,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '8 extra categories',
+                          context.t('account.extra8'),
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.black.withValues(alpha: 0.45),
+                            color: brand.inkSoft,
                           ),
                         ),
                       ],
@@ -1669,13 +1670,13 @@ class _OtherTypesSheet extends StatelessWidget {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.07),
+                        color: brand.inkSoft.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         CupertinoIcons.xmark,
                         size: 13,
-                        color: Colors.black.withValues(alpha: 0.55),
+                        color: brand.inkSoft,
                       ),
                     ),
                   ),
@@ -1687,7 +1688,7 @@ class _OtherTypesSheet extends StatelessWidget {
             Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: brand.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -1731,19 +1732,19 @@ class _OtherTypesSheet extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      t.label,
-                                      style: const TextStyle(
+                                      context.t(t.labelKey),
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF1a1410),
+                                        color: brand.ink,
                                       ),
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
-                                      t.sub,
+                                      context.t(t.subKey),
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.black.withValues(alpha: 0.45),
+                                        color: brand.inkSoft,
                                       ),
                                     ),
                                   ],
@@ -1752,7 +1753,7 @@ class _OtherTypesSheet extends StatelessWidget {
                               Icon(
                                 CupertinoIcons.chevron_right,
                                 size: 13,
-                                color: Colors.black.withValues(alpha: 0.25),
+                                color: brand.inkSoft,
                               ),
                             ],
                           ),
@@ -1763,7 +1764,7 @@ class _OtherTypesSheet extends StatelessWidget {
                           height: 1,
                           thickness: 0.5,
                           indent: 70,
-                          color: Colors.black.withValues(alpha: 0.07),
+                          color: brand.divider,
                         ),
                     ],
                   );
@@ -1899,7 +1900,7 @@ class _TileCardState extends State<_TileCard> {
                           size: 26, color: pal.ink),
                       const Spacer(),
                       Text(
-                        widget.aType.label,
+                        context.t(widget.aType.labelKey),
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
@@ -1909,7 +1910,7 @@ class _TileCardState extends State<_TileCard> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        widget.aType.sub,
+                        context.t(widget.aType.subKey),
                         style: TextStyle(
                           fontSize: 11,
                           color: pal.ink.withValues(alpha: 0.65),
@@ -1989,6 +1990,7 @@ class _Step2State extends State<_Step2> {
         ? 'Select Bank'
         : 'Select E-Wallet';
     final allProviders = List<String>.from(_providerList);
+    final brand = context.brand;
 
     showModalBottomSheet<void>(
       context: context,
@@ -2003,9 +2005,9 @@ class _Step2State extends State<_Step2> {
                   .where((p) => p.toLowerCase().contains(query.toLowerCase()))
                   .toList();
           return Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFFF2F0F4),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: SafeArea(
               top: false,
@@ -2019,7 +2021,7 @@ class _Step2State extends State<_Step2> {
                         margin: const EdgeInsets.only(top: 10),
                         width: 36, height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.12),
+                          color: brand.inkSoft.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -2028,9 +2030,9 @@ class _Step2State extends State<_Step2> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                       child: Text(
                         label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w700,
-                          color: Color(0xFF1a1410),
+                          color: brand.ink,
                         ),
                       ),
                     ),
@@ -2039,21 +2041,21 @@ class _Step2State extends State<_Step2> {
                       child: Container(
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: brand.surface,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: TextField(
                           autofocus: false,
                           onChanged: (v) => setSheet(() => query = v),
-                          style: const TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 14, color: brand.ink),
                           decoration: InputDecoration(
                             hintText: 'Search…',
                             hintStyle: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.35),
+                                color: brand.inkSoft,
                                 fontSize: 14),
                             prefixIcon: Icon(CupertinoIcons.search,
                                 size: 16,
-                                color: Colors.black.withValues(alpha: 0.35)),
+                                color: brand.inkSoft),
                             border: InputBorder.none,
                             contentPadding:
                                 const EdgeInsets.symmetric(vertical: 10),
@@ -2066,7 +2068,7 @@ class _Step2State extends State<_Step2> {
                         itemCount: filtered.length,
                         separatorBuilder: (_, _) => Divider(
                           height: 1,
-                          color: Colors.black.withValues(alpha: 0.07),
+                          color: brand.divider,
                         ),
                         itemBuilder: (_, index) {
                           final p = filtered[index];
@@ -2078,25 +2080,25 @@ class _Step2State extends State<_Step2> {
                             leading: isCustom
                                 ? Icon(CupertinoIcons.pencil,
                                     size: 18,
-                                    color: Colors.black.withValues(alpha: 0.45))
+                                    color: brand.inkSoft)
                                 : Icon(
                                     widget.selectedType.icon,
                                     size: 18,
                                     color: widget.pal.accent,
                                   ),
                             title: Text(
-                              p,
+                              isCustom ? context.t('account.typeOtherCustom') : p,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: isSelected
                                     ? FontWeight.w700
                                     : FontWeight.w500,
-                                color: const Color(0xFF1a1410),
+                                color: brand.ink,
                               ),
                             ),
                             trailing: isSelected
-                                ? const Icon(CupertinoIcons.checkmark_alt,
-                                    color: Color(0xFF5A4FE6))
+                                ? Icon(CupertinoIcons.checkmark_alt,
+                                    color: AppActionBlue.color)
                                 : null,
                             onTap: () {
                               setState(() {
@@ -2126,6 +2128,7 @@ class _Step2State extends State<_Step2> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final displayName = widget.nameCtrl.text.isEmpty
         ? widget.selectedType.defaultName
         : widget.nameCtrl.text;
@@ -2214,7 +2217,7 @@ class _Step2State extends State<_Step2> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.pal.label,
+                        context.t(widget.pal.labelKey),
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
@@ -2235,7 +2238,7 @@ class _Step2State extends State<_Step2> {
                       ),
                       const Spacer(),
                       Text(
-                        'BALANCE',
+                        context.t('account.balance'),
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
@@ -2273,7 +2276,7 @@ class _Step2State extends State<_Step2> {
           // ── Form fields ──────────────────────────────────
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: brand.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -2307,7 +2310,7 @@ class _Step2State extends State<_Step2> {
                               style: TextStyle(
                                 fontSize: 11,
                                 letterSpacing: 0.5,
-                                color: Colors.black.withValues(alpha: 0.4),
+                                color: brand.inkSoft,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -2324,14 +2327,14 @@ class _Step2State extends State<_Step2> {
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: _selectedProvider != null
-                                  ? const Color(0xFF1a1410)
-                                  : Colors.black.withValues(alpha: 0.3),
+                                  ? brand.ink
+                                  : brand.inkSoft.withValues(alpha: 0.5),
                             ),
                           ),
                           const SizedBox(width: 4),
                           Icon(CupertinoIcons.chevron_right,
                               size: 13,
-                              color: Colors.black.withValues(alpha: 0.25)),
+                              color: brand.inkSoft),
                         ],
                       ),
                     ),
@@ -2341,7 +2344,7 @@ class _Step2State extends State<_Step2> {
                     Divider(
                         height: 1,
                         thickness: 0.5,
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: brand.divider,
                         indent: 16),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2353,7 +2356,7 @@ class _Step2State extends State<_Step2> {
                             style: TextStyle(
                               fontSize: 11,
                               letterSpacing: 0.5,
-                              color: Colors.black.withValues(alpha: 0.4),
+                              color: brand.inkSoft,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -2361,15 +2364,15 @@ class _Step2State extends State<_Step2> {
                           TextField(
                             controller: widget.nameCtrl,
                             autofocus: true,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1a1410),
+                              color: brand.ink,
                             ),
                             decoration: InputDecoration(
                               hintText: widget.selectedType.defaultName,
                               hintStyle: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.25),
+                                color: brand.inkSoft.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w500,
                               ),
                               border: InputBorder.none,
@@ -2393,22 +2396,22 @@ class _Step2State extends State<_Step2> {
                           style: TextStyle(
                             fontSize: 11,
                             letterSpacing: 0.5,
-                            color: Colors.black.withValues(alpha: 0.4),
+                            color: brand.inkSoft,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 4),
                         TextField(
                           controller: widget.nameCtrl,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1a1410),
+                            color: brand.ink,
                           ),
                           decoration: InputDecoration(
                             hintText: widget.selectedType.defaultName,
                             hintStyle: TextStyle(
-                              color: Colors.black.withValues(alpha: 0.25),
+                              color: brand.inkSoft.withValues(alpha: 0.5),
                               fontWeight: FontWeight.w500,
                             ),
                             border: InputBorder.none,
@@ -2423,7 +2426,7 @@ class _Step2State extends State<_Step2> {
                 Divider(
                     height: 1,
                     thickness: 0.5,
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: brand.divider,
                     indent: 16),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2431,11 +2434,11 @@ class _Step2State extends State<_Step2> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'STARTING BALANCE',
+                        context.t('account.startingBalance'),
                         style: TextStyle(
                           fontSize: 11,
                           letterSpacing: 0.5,
-                          color: Colors.black.withValues(alpha: 0.4),
+                          color: brand.inkSoft,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2447,7 +2450,7 @@ class _Step2State extends State<_Step2> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black.withValues(alpha: 0.55),
+                              color: brand.inkSoft,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -2457,15 +2460,15 @@ class _Step2State extends State<_Step2> {
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                       decimal: true),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1a1410),
+                                color: brand.ink,
                               ),
                               decoration: InputDecoration(
                                 hintText: '0.00',
                                 hintStyle: TextStyle(
-                                  color: Colors.black.withValues(alpha: 0.25),
+                                  color: brand.inkSoft,
                                   fontWeight: FontWeight.w500,
                                 ),
                                 border: InputBorder.none,
@@ -2489,18 +2492,18 @@ class _Step2State extends State<_Step2> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: brand.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'CARD COLOR',
+                  context.t('account.cardColor'),
                   style: TextStyle(
                     fontSize: 11,
                     letterSpacing: 0.5,
-                    color: Colors.black.withValues(alpha: 0.4),
+                    color: brand.inkSoft,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -2629,18 +2632,8 @@ class _Step2State extends State<_Step2> {
                   decoration: BoxDecoration(
                     color: widget.success
                         ? const Color(0xFF1B8A4A)
-                        : const Color(0xFF5A4FE6),
+                        : AppActionBlue.color,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (widget.success
-                                ? const Color(0xFF1B8A4A)
-                                : const Color(0xFF5A4FE6))
-                            .withValues(alpha: 0.35),
-                        blurRadius: 22,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
                   ),
                   child: Center(
                     child: widget.success
@@ -2674,9 +2667,9 @@ class _Step2State extends State<_Step2> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              const Text(
-                                'Account Added',
-                                style: TextStyle(
+                              Text(
+                                context.t('account.addAccount'),
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -2695,9 +2688,9 @@ class _Step2State extends State<_Step2> {
                                       Colors.white),
                                 ),
                               )
-                            : const Text(
-                                'Add Account',
-                                style: TextStyle(
+                            : Text(
+                                context.t('account.addAccount'),
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,

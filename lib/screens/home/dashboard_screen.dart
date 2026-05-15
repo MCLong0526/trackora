@@ -113,7 +113,7 @@ class DashboardScreen extends ConsumerWidget {
                         'Trackora',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: brand.ink,
                         ),
                       ),
@@ -147,7 +147,7 @@ class DashboardScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Activity',
+                    context.t('home.activity'),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -166,11 +166,11 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Calendar',
+                          context.t('stats.calendar'),
                           style: TextStyle(
                             fontSize: 13,
                             color: brand.accentDark,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -201,13 +201,6 @@ class DashboardScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 12,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
@@ -278,7 +271,7 @@ class DashboardScreen extends ConsumerWidget {
                                   if (context.mounted) {
                                     AppToast.show(
                                       context,
-                                      'Record deleted',
+                                      context.t('expense.entryDeleted'),
                                       type: AppToastType.info,
                                       icon: CupertinoIcons.trash,
                                     );
@@ -315,7 +308,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'View all ${monthExpenses.length} entries',
+                        '${context.t('home.allBills')} · ${monthExpenses.length} ${context.t('common.entries')}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -465,32 +458,15 @@ class _HomeOverviewCard extends ConsumerWidget {
     final pct = budgetProgress * 100;
     final overspent = budgetRemaining < 0;
 
-    final topBg = isDark ? const Color(0xFF201E2C) : const Color(0xFFEDE9FF);
-    final topInk = isDark ? brand.ink : const Color(0xFF111028);
-    final topSoft = isDark ? brand.inkSoft : const Color(0xFF827B95);
+    final topBg = isDark ? const Color(0xFF201E2C) : brand.surface;
+    final topInk = brand.ink;
+    final topSoft = brand.inkSoft;
     final statPillBg = isDark
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.white.withValues(alpha: 0.62);
 
-    final firstCardShadow = [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
-        blurRadius: 32,
-        offset: const Offset(0, 12),
-      ),
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
-        blurRadius: 8,
-        offset: const Offset(0, 2),
-      ),
-    ];
-    final cardShadow = [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.055),
-        blurRadius: 24,
-        offset: const Offset(0, 8),
-      ),
-    ];
+    const firstCardShadow = <BoxShadow>[];
+    const cardShadow = <BoxShadow>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -566,6 +542,7 @@ class _SpendingOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Container(
       height: 215,
       clipBehavior: Clip.antiAlias,
@@ -587,7 +564,7 @@ class _SpendingOverviewCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.04)
-                      : const Color(0xFFD8D1F3).withValues(alpha: 0.72),
+                      : brand.inkSoft.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(28),
                 ),
               ),
@@ -628,7 +605,7 @@ class _SpendingOverviewCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   child: Text(
-                    'You spent',
+                    context.t('home.spent'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -701,7 +678,7 @@ class _MonthChip extends StatelessWidget {
             DateFormat('MMM yyyy').format(month),
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: ink,
             ),
           ),
@@ -733,7 +710,7 @@ class _HeroAmount extends StatelessWidget {
         '$symbol ****',
         style: TextStyle(
           fontSize: 42,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           color: ink,
           height: 1,
         ),
@@ -748,7 +725,7 @@ class _HeroAmount extends StatelessWidget {
           symbol,
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: soft,
             height: 1,
           ),
@@ -759,7 +736,7 @@ class _HeroAmount extends StatelessWidget {
             formatMoney('', amount).trim(),
             style: TextStyle(
               fontSize: 48,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: ink,
               height: 0.96,
             ),
@@ -809,7 +786,7 @@ class _TopStatsPill extends StatelessWidget {
           Expanded(
             child: _TopStat(
               dotColor: AppColors.income,
-              label: 'INCOME',
+              label: context.t('home.income').toUpperCase(),
               value: visible ? formatMoney(symbol, income) : '$symbol ****',
               ink: ink,
               soft: soft,
@@ -819,8 +796,8 @@ class _TopStatsPill extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: _TopStat(
-              dotColor: const Color(0xFF5B5CF6),
-              label: 'BALANCE',
+              dotColor: AppActionBlue.color,
+              label: context.t('account.balance'),
               value: visible ? formatMoney(symbol, balance) : '$symbol ****',
               ink: ink,
               soft: soft,
@@ -881,10 +858,10 @@ class _BudgetOverviewCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Month Budget',
+                context.t('home.budget'),
                 style: TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: brand.ink,
                 ),
               ),
@@ -931,14 +908,14 @@ class _BudgetOverviewCard extends StatelessWidget {
                           '${pct.toStringAsFixed(1)}%',
                           style: TextStyle(
                             fontSize: 23,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             color: brand.ink,
                             height: 1,
                           ),
                         ),
                         const SizedBox(height: 1),
                         Text(
-                          'of budget',
+                          '${context.t('home.of')} ${context.t('home.budget')}',
                           style: TextStyle(
                             fontSize: 11,
                             color: brand.inkSoft,
@@ -962,7 +939,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                     value: visible
                         ? formatMoney('', budgetSpent).trim()
                         : '****',
-                    label: 'Spent',
+                    label: context.t('home.budgetSpent'),
                     valueColor: brand.ink,
                   ),
                 ),
@@ -972,7 +949,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                     value: visible
                         ? formatMoney('', budgetRemaining.abs()).trim()
                         : '****',
-                    label: overspent ? 'Overspent' : 'Remaining',
+                    label: overspent ? context.t('home.overBy') : context.t('home.budgetRemaining'),
                     valueColor: overspent
                         ? AppColors.expense
                         : AppColors.income,
@@ -987,7 +964,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               label: 'Averaged daily spending',
               value: visible ? formatMoney('', avgDaily).trim() : '****',
               brand: brand,
-              dotColor: const Color(0xFFF4BE3B),
+              dotColor: const Color(0xFFE89A14),
             ),
             const SizedBox(height: 8),
             _DailyStat(
@@ -998,7 +975,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                         : '—')
                   : '****',
               brand: brand,
-              dotColor: const Color(0xFF5B5CF6),
+              dotColor: AppActionBlue.color,
               valueColor: daysRemaining > 0 && !overspent
                   ? AppColors.income
                   : null,
@@ -1008,7 +985,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               height: 219,
               child: Center(
                 child: Text(
-                  'No budget set',
+                  context.t('home.budgetNoBudget'),
                   style: TextStyle(
                     fontSize: 13,
                     color: brand.inkSoft,
@@ -1060,7 +1037,7 @@ class _TopStat extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: soft,
                 ),
                 maxLines: 1,
@@ -1074,7 +1051,7 @@ class _TopStat extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: ink,
           ),
           maxLines: 1,
@@ -1105,7 +1082,7 @@ class _BudgetAmountMetric extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: valueColor,
             height: 1.05,
           ),
@@ -1167,7 +1144,7 @@ class _DailyStat extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: valueColor ?? brand.ink,
             height: 1.1,
           ),
@@ -1311,7 +1288,7 @@ class _AllBillsSheet extends ConsumerWidget {
     if (context.mounted) {
       AppToast.show(
         context,
-        'Record deleted',
+        context.t('expense.entryDeleted'),
         type: AppToastType.info,
         icon: CupertinoIcons.trash,
       );
@@ -1364,7 +1341,7 @@ class _AllBillsSheet extends ConsumerWidget {
                       'Activity',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1402,7 +1379,7 @@ class _AllBillsSheet extends ConsumerWidget {
                     formatMoney(symbol, total),
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

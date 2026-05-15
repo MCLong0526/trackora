@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'welcome_screen.dart';
 
-const Color _kPrimary = Color(0xFF5B5FEF);
+const Color _kPrimary = Color(0xFF0066CC);
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -136,6 +137,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final password = _passwordController.text;
     final strength = _passwordStrength(password);
 
@@ -169,21 +171,21 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Get started',
-                        style: TextStyle(
+                      Text(
+                        context.t('auth.getStarted'),
+                        style: const TextStyle(
                           fontSize: 15,
                           color: AppColors.inkSoft,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Create\naccount',
+                      Text(
+                        context.t('auth.createAccount'),
                         style: TextStyle(
                           fontSize: 36,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF111111),
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
                           letterSpacing: -0.5,
                           height: 1.15,
                         ),
@@ -197,7 +199,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         hintText: 'Your name',
                         textInputAction: TextInputAction.next,
                         validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Please enter your name'
+                            ? context.t('validation.enterName')
                             : null,
                       ),
                       const SizedBox(height: 20),
@@ -211,10 +213,10 @@ class _SignupScreenState extends State<SignupScreen> {
                         textInputAction: TextInputAction.next,
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
-                            return 'Please enter your email';
+                            return context.t('auth.enterEmail');
                           }
                           if (!v.contains('@')) {
-                            return 'Please enter a valid email';
+                            return context.t('auth.validEmail');
                           }
                           return null;
                         },
@@ -298,12 +300,12 @@ class _SignupScreenState extends State<SignupScreen> {
                               TextSpan(
                                 style: const TextStyle(fontSize: 13),
                                 children: [
-                                  const TextSpan(
-                                    text: "I agree to Trackora's ",
-                                    style: TextStyle(color: AppColors.inkSoft),
+                                  TextSpan(
+                                    text: context.t('auth.agreeTo'),
+                                    style: const TextStyle(color: AppColors.inkSoft),
                                   ),
                                   TextSpan(
-                                    text: 'Terms',
+                                    text: context.t('auth.terms'),
                                     style: const TextStyle(
                                       color: _kPrimary,
                                       fontWeight: FontWeight.w500,
@@ -311,12 +313,12 @@ class _SignupScreenState extends State<SignupScreen> {
                                     recognizer: TapGestureRecognizer()
                                       ..onTap = () {},
                                   ),
-                                  const TextSpan(
-                                    text: ' and ',
-                                    style: TextStyle(color: AppColors.inkSoft),
+                                  TextSpan(
+                                    text: context.t('auth.and'),
+                                    style: const TextStyle(color: AppColors.inkSoft),
                                   ),
                                   TextSpan(
-                                    text: 'Privacy Policy',
+                                    text: context.t('auth.privacyPolicy'),
                                     style: const TextStyle(
                                       color: _kPrimary,
                                       fontWeight: FontWeight.w500,
@@ -360,12 +362,12 @@ class _SignupScreenState extends State<SignupScreen> {
                                     color: Colors.white,
                                   ),
                                 )
-                              : const Row(
+                              : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text('Create account'),
-                                    SizedBox(width: 8),
-                                    Icon(CupertinoIcons.arrow_right, size: 18),
+                                    Text(context.t('auth.createAccountFlat')),
+                                    const SizedBox(width: 8),
+                                    const Icon(CupertinoIcons.arrow_right, size: 18),
                                   ],
                                 ),
                         ),
@@ -374,9 +376,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'Already have an account? ',
-                            style: TextStyle(
+                          Text(
+                            '${context.t('auth.alreadyHaveAccount')} ',
+                            style: const TextStyle(
                               color: AppColors.inkSoft,
                               fontSize: 14,
                             ),
@@ -388,9 +390,9 @@ class _SignupScreenState extends State<SignupScreen> {
                                 builder: (_) => const LoginScreen(),
                               ),
                             ),
-                            child: const Text(
-                              'Log in',
-                              style: TextStyle(
+                            child: Text(
+                              context.t('auth.logIn'),
+                              style: const TextStyle(
                                 color: _kPrimary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -427,18 +429,11 @@ class _BackButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(
+          ),
+        child: Icon(
           CupertinoIcons.chevron_left,
           size: 18,
-          color: Color(0xFF111111),
+          color: context.brand.ink,
         ),
       ),
     );
@@ -486,7 +481,7 @@ class _AuthTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF111111)),
+      style: TextStyle(fontSize: 15, color: context.brand.ink),
       decoration: InputDecoration(
         isDense: true,
         hintText: hintText,
@@ -540,7 +535,7 @@ class _PasswordInputField extends StatelessWidget {
       obscureText: obscure,
       textInputAction: textInputAction,
       onChanged: onChanged,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF111111)),
+      style: TextStyle(fontSize: 15, color: context.brand.ink),
       decoration: InputDecoration(
         isDense: true,
         hintText: hintText,

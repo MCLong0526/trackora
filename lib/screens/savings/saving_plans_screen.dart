@@ -89,7 +89,7 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                       'PLANS',
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: Color(0xFF8E8E93),
                         letterSpacing: 0.8,
                       ),
@@ -99,15 +99,7 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                     decoration: BoxDecoration(
                       color: context.brand.surface,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              const Color(0xFF6366F1).withValues(alpha: 0.05),
-                          blurRadius: 14,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
+                      ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Column(
@@ -182,14 +174,7 @@ class _Summary extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -211,7 +196,7 @@ class _Summary extends StatelessWidget {
                 mainPart,
                 style: TextStyle(
                   fontSize: 34,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: brand.ink,
                   letterSpacing: -1,
                 ),
@@ -242,7 +227,7 @@ class _Summary extends StatelessWidget {
               value: progress,
               minHeight: 5,
               backgroundColor: brand.divider,
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF6366F1)),
+              valueColor: const AlwaysStoppedAnimation(AppActionBlue.color),
             ),
           ),
           const SizedBox(height: 14),
@@ -309,7 +294,7 @@ class _Stat extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: valueColor ?? brand.ink,
               ),
             ),
@@ -355,15 +340,6 @@ class _FilterSegment extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: f == selected ? brand.surface : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: f == selected
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ]
-                        : null,
                   ),
                   child: Text(
                     label,
@@ -456,7 +432,7 @@ class _PlanRow extends StatelessWidget {
                     formatMoney(symbol, plan.currentAmount),
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: brand.ink,
                     ),
                   ),
@@ -513,9 +489,9 @@ class _PlanRow extends StatelessWidget {
 
   static Color _accentForType(SavingPlanType t) => switch (t) {
         SavingPlanType.fixed => AppColors.income,
-        SavingPlanType.flexible => const Color(0xFF6366F1),
+        SavingPlanType.flexible => AppActionBlue.color,
         SavingPlanType.daysChallenge => AppColors.income,
-        SavingPlanType.weeksChallenge => const Color(0xFF6366F1),
+        SavingPlanType.weeksChallenge => AppActionBlue.color,
       };
 
   static Color _tintForType(SavingPlanType t) => switch (t) {
@@ -734,7 +710,7 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
               context.t('sp.addContribution'),
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 16),
@@ -845,7 +821,7 @@ class _SwipeBg extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AppColors.ink,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -897,7 +873,7 @@ class _ProgressRing extends StatelessWidget {
             '${(progress * 100).toStringAsFixed(0)}%',
             style: const TextStyle(
               fontSize: 10,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -931,7 +907,7 @@ class _TypeChip extends StatelessWidget {
         label,
         style: const TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: AppColors.ink,
         ),
       ),

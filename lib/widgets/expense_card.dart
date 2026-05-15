@@ -350,7 +350,7 @@ class _CardContents extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: brand.ink,
                 ),
               ),
@@ -362,7 +362,7 @@ class _CardContents extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   color: brand.inkSoft,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],
@@ -376,7 +376,7 @@ class _CardContents extends StatelessWidget {
                   : formatMoney(currencySymbol, -expense.amount),
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: amountColor,
               ),
             ),
@@ -410,13 +410,6 @@ class _CardContents extends StatelessWidget {
         decoration: BoxDecoration(
           color: brand.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: rowContent,
       ),

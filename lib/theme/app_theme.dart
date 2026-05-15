@@ -182,18 +182,24 @@ class AppColors {
 }
 
 class AppRadius {
-  static const card = 28.0;
-  static const chip = 22.0;
-  static const field = 18.0;
-  static const sm = 12.0;
+  static const card = 20.0;
+  static const chip = 9999.0;
+  static const field = 14.0;
+  static const sm = 10.0;
+}
+
+class AppActionBlue {
+  static const color = Color(0xFF0066CC);
+  static const colorOnDark = Color(0xFF2997FF);
 }
 
 class AppShadows {
+  // Minimal surface-lift shadow. Use only on modal sheets and bottom bar.
   static List<BoxShadow> soft = [
     BoxShadow(
-      color: const Color(0xFF000000).withValues(alpha: 0.04),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
+      color: const Color(0xFF000000).withValues(alpha: 0.03),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
     ),
   ];
 }
@@ -216,41 +222,44 @@ class AppTheme {
   static TextTheme _buildTextTheme(TextTheme base, Color ink, Color inkSoft) {
     return base.copyWith(
       displayLarge: _textStyle(
-        fontSize: 44,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -1.4,
+        fontSize: 40,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.5,
         color: ink,
       ),
       displayMedium: _textStyle(
         fontSize: 34,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -1.0,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.374,
         color: ink,
       ),
       headlineLarge: _textStyle(
         fontSize: 28,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.6,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.3,
         color: ink,
       ),
       headlineMedium: _textStyle(
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
         color: ink,
       ),
       titleLarge: _textStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
         color: ink,
       ),
       titleMedium: _textStyle(
         fontSize: 15,
         fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
         color: ink,
       ),
-      bodyLarge: _textStyle(fontSize: 15, color: ink),
-      bodyMedium: _textStyle(fontSize: 14, color: ink),
-      bodySmall: _textStyle(fontSize: 12, color: inkSoft),
+      bodyLarge: _textStyle(fontSize: 17, letterSpacing: -0.2, color: ink),
+      bodyMedium: _textStyle(fontSize: 15, color: ink),
+      bodySmall: _textStyle(fontSize: 13, color: inkSoft),
       labelLarge: _textStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
@@ -298,19 +307,19 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: brand.accentDark,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-          ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: brand.surface,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+          horizontal: 16,
+          vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),
@@ -372,19 +381,19 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: brand.accent,
           foregroundColor: BrandColors._lightInk,
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-          ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: brand.surface,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+          horizontal: 16,
+          vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),

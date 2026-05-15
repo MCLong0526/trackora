@@ -8,6 +8,7 @@ import '../../models/account.dart';
 import '../../models/precious_metal.dart';
 import '../../repositories/firebase_precious_metal_repository.dart';
 import '../../state/providers.dart';
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
@@ -105,11 +106,11 @@ class _State extends ConsumerState<AddEditMetalScreen> {
     final weight = double.tryParse(_weightCtrl.text);
     final total = double.tryParse(_totalCtrl.text);
     if (weight == null || weight <= 0) {
-      AppToast.show(context, 'Enter a valid weight', type: AppToastType.error);
+      AppToast.show(context, context.t('metal.errorWeight'), type: AppToastType.error);
       return;
     }
     if (total == null || total <= 0) {
-      AppToast.show(context, 'Enter a valid amount', type: AppToastType.error);
+      AppToast.show(context, context.t('metal.errorAmount'), type: AppToastType.error);
       return;
     }
     final user = ref.read(authStateProvider).valueOrNull;
@@ -136,7 +137,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
         await repo.update(user.uid, updated);
         _bgSyncUpdate(user.uid, updated);
         if (mounted) {
-          AppToast.show(context, 'Record updated', type: AppToastType.success);
+          AppToast.show(context, context.t('metal.updatedToast'), type: AppToastType.success);
           Navigator.pop(context, updated);
         }
       } else {
@@ -159,8 +160,8 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           AppToast.show(
             context,
             _action == MetalAction.buy
-                ? '${_metalType.label} purchased'
-                : '${_metalType.label} sold',
+                ? context.t('metal.purchasedToast').replaceAll('{metal}', _metalType.label)
+                : context.t('metal.soldToast').replaceAll('{metal}', _metalType.label),
             type: AppToastType.success,
           );
           Navigator.pop(context, 'saved');
@@ -170,7 +171,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
       if (mounted) {
         AppToast.show(
           context,
-          _isEdit ? 'Update failed' : 'Save failed',
+          _isEdit ? context.t('metal.updateFailed') : context.t('metal.saveFailed'),
           type: AppToastType.error,
         );
         setState(() => _saving = false);
@@ -183,17 +184,17 @@ class _State extends ConsumerState<AddEditMetalScreen> {
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Delete Record'),
-        content: const Text('This record will be permanently deleted.'),
+        title: Text(context.t('metal.deleteTitle')),
+        content: Text(context.t('metal.deleteMessage')),
         actions: [
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(context.t('common.delete')),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(context.t('common.cancel')),
           ),
         ],
       ),
@@ -208,12 +209,12 @@ class _State extends ConsumerState<AddEditMetalScreen> {
       await ref.read(preciousMetalRepositoryProvider).delete(user.uid, id);
       _bgSyncDelete(user.uid, id);
       if (mounted) {
-        AppToast.show(context, 'Record deleted', type: AppToastType.success);
+        AppToast.show(context, context.t('metal.deletedToast'), type: AppToastType.success);
         Navigator.pop(context, 'deleted');
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, 'Delete failed', type: AppToastType.error);
+        AppToast.show(context, context.t('metal.deleteFailed'), type: AppToastType.error);
         setState(() => _saving = false);
       }
     }
@@ -269,7 +270,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
               ),
               CupertinoButton(
                 child: Text(
-                  'Done',
+                  context.t('metal.done'),
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: _metalType.primaryColor,
@@ -314,8 +315,8 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           ),
         ),
         title: Text(
-          _isEdit ? 'Edit Record' : 'New Transaction',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          _isEdit ? context.t('metal.editRecord') : context.t('metal.newTransaction'),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         actions: [
           if (_isEdit)
@@ -361,36 +362,36 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             ],
 
             // ── Amount inputs ────────────────────────────────────────────────
-            _SectionLabel('AMOUNT'),
+            _SectionLabel(context.t('metal.sectionAmount')),
             const SizedBox(height: 10),
             _InputGroup(
               brand: brand,
               children: [
                 _Field(
-                  label: 'Weight (grams)',
+                  label: context.t('metal.weightGramsFull'),
                   controller: _weightCtrl,
                   focusNode: _weightFocus,
-                  hint: 'e.g. 10.50',
+                  hint: context.t('metal.hintWeight'),
                   suffix: 'g',
                   onTap: () => _selectAll(_weightCtrl),
                   nextFocus: _priceFocus,
                 ),
                 _FieldDivider(brand: brand),
                 _Field(
-                  label: 'Price per gram',
+                  label: context.t('metal.pricePerGramFull'),
                   controller: _priceCtrl,
                   focusNode: _priceFocus,
-                  hint: 'Optional',
+                  hint: context.t('metal.hintOptional'),
                   prefix: symbol,
                   onTap: () => _selectAll(_priceCtrl),
                   nextFocus: _totalFocus,
                 ),
                 _FieldDivider(brand: brand),
                 _Field(
-                  label: 'Total amount',
+                  label: context.t('metal.totalAmount'),
                   controller: _totalCtrl,
                   focusNode: _totalFocus,
-                  hint: 'e.g. 892.50',
+                  hint: context.t('metal.hintAmount'),
                   prefix: symbol,
                   accent: metalColor,
                   onTap: () {
@@ -406,7 +407,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             const SizedBox(height: 20),
 
             // ── Details ──────────────────────────────────────────────────────
-            _SectionLabel('DETAILS'),
+            _SectionLabel(context.t('metal.sectionDetails')),
             const SizedBox(height: 10),
             _InputGroup(
               brand: brand,
@@ -456,7 +457,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
                         ),
                       )
                     : Text(
-                        _isEdit ? 'Save Changes' : (_action == MetalAction.buy ? 'Record Purchase' : 'Record Sale'),
+                        _isEdit ? context.t('metal.saveChanges') : (_action == MetalAction.buy ? context.t('metal.recordPurchase') : context.t('metal.recordSale')),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -619,8 +620,7 @@ class _EditBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.field),
-        boxShadow: AppShadows.soft,
-      ),
+        ),
       child: Row(
         children: [
           Container(
@@ -668,7 +668,7 @@ class _EditBadge extends StatelessWidget {
               border: Border.all(color: actionColor.withValues(alpha: 0.25)),
             ),
             child: Text(
-              isBuy ? 'Buy' : 'Sell',
+              isBuy ? context.t('metal.buy') : context.t('metal.sell'),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -696,7 +696,7 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: const TextStyle(
         fontSize: 12,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: Color(0xFF8E8E93),
         letterSpacing: 0.8,
       ),
@@ -716,8 +716,7 @@ class _InputGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: AppShadows.soft,
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: Column(children: children),
@@ -864,7 +863,7 @@ class _DateRow extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Date',
+                context.t('metal.date'),
                 style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
               ),
             ),
@@ -918,12 +917,12 @@ class _AccountRow extends StatelessWidget {
                   color: brand.ink,
                 ),
                 hint: Text(
-                  'Account',
+                  context.t('metal.account'),
                   style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
                 ),
                 selectedItemBuilder: (_) => [
                   Text(
-                    'None',
+                    context.t('metal.metalNone'),
                     style: TextStyle(
                       fontSize: 15,
                       color: brand.inkSoft.withValues(alpha: 0.55),
@@ -939,7 +938,7 @@ class _AccountRow extends StatelessWidget {
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('None', style: TextStyle(color: brand.inkSoft)),
+                    child: Text(context.t('metal.metalNone'), style: TextStyle(color: brand.inkSoft)),
                   ),
                   ...accounts.map(
                     (a) => DropdownMenuItem<String?>(
@@ -953,7 +952,7 @@ class _AccountRow extends StatelessWidget {
             ),
           ),
           Text(
-            selected?.name ?? 'None',
+            selected?.name ?? context.t('metal.metalNone'),
             style: TextStyle(color: brand.inkSoft, fontSize: 15),
           ),
           const SizedBox(width: 4),
@@ -990,7 +989,7 @@ class _NotesRow extends StatelessWidget {
               textInputAction: TextInputAction.newline,
               style: TextStyle(fontSize: 15, color: brand.ink),
               decoration: InputDecoration(
-                hintText: 'Add a note (optional)',
+                hintText: context.t('metal.notesHint'),
                 hintStyle: TextStyle(fontSize: 15, color: brand.inkSoft.withValues(alpha: 0.45)),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,

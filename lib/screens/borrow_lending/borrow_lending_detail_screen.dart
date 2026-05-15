@@ -71,7 +71,7 @@ class BorrowLendingDetailScreen extends ConsumerWidget {
                         Text(
                           context.t('bl.proofImage'),
                           style: const TextStyle(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             fontSize: 12,
                             letterSpacing: 0.5,
                           ),
@@ -128,7 +128,7 @@ class _Header extends StatelessWidget {
             isBorrow ? context.t('bl.borrowedFrom') : context.t('bl.lentTo'),
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: brand.inkSoft,
               letterSpacing: 0.6,
             ),
@@ -138,7 +138,7 @@ class _Header extends StatelessWidget {
             record.person.isEmpty ? context.t('bl.unknownPerson') : record.person,
             style: const TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 14),
@@ -161,7 +161,7 @@ class _Header extends StatelessWidget {
                       formatMoney(symbol, record.amount),
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: accent,
                       ),
                     ),
@@ -188,7 +188,7 @@ class _Header extends StatelessWidget {
                         formatMoney(symbol, record.remaining),
                         style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -293,7 +293,7 @@ class _RepaymentHistory extends ConsumerWidget {
                 child: Text(
                   context.t('bl.history'),
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                     letterSpacing: 0.5,
                   ),
@@ -427,7 +427,7 @@ class _RepaymentHistory extends ConsumerWidget {
                 context.t('bl.addRepayment'),
                 style: const TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),

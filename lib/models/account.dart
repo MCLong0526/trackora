@@ -73,6 +73,23 @@ extension AccountTypeLabel on AccountType {
     }
   }
 
+  String get labelKey {
+    switch (this) {
+      case AccountType.bank: return 'account.typeBank';
+      case AccountType.eWallet: return 'account.typeEWallet';
+      case AccountType.cash: return 'account.typeCash';
+      case AccountType.creditCard: return 'account.typeCreditCard';
+      case AccountType.investment: return 'account.typeInvestment';
+      case AccountType.savings: return 'account.typeSavings';
+      case AccountType.crypto: return 'account.typeCrypto';
+      case AccountType.forex: return 'account.typeForex';
+      case AccountType.loan: return 'account.typeLoan';
+      case AccountType.mortgage: return 'account.typeMortgage';
+      case AccountType.bnpl: return 'account.typeBnpl';
+      case AccountType.otherLiability: return 'account.typeOtherDebt';
+    }
+  }
+
   String get encode {
     switch (this) {
       case AccountType.bank:
