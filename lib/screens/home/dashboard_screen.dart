@@ -147,7 +147,7 @@ class DashboardScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Activity',
+                    context.t('home.activity'),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -166,7 +166,7 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Calendar',
+                          context.t('stats.calendar'),
                           style: TextStyle(
                             fontSize: 13,
                             color: brand.accentDark,
@@ -458,9 +458,9 @@ class _HomeOverviewCard extends ConsumerWidget {
     final pct = budgetProgress * 100;
     final overspent = budgetRemaining < 0;
 
-    final topBg = isDark ? const Color(0xFF201E2C) : const Color(0xFFEDE9FF);
-    final topInk = isDark ? brand.ink : const Color(0xFF111028);
-    final topSoft = isDark ? brand.inkSoft : const Color(0xFF827B95);
+    final topBg = isDark ? const Color(0xFF201E2C) : brand.surface;
+    final topInk = brand.ink;
+    final topSoft = brand.inkSoft;
     final statPillBg = isDark
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.white.withValues(alpha: 0.62);
@@ -542,6 +542,7 @@ class _SpendingOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Container(
       height: 215,
       clipBehavior: Clip.antiAlias,
@@ -563,7 +564,7 @@ class _SpendingOverviewCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.04)
-                      : const Color(0xFFD8D1F3).withValues(alpha: 0.72),
+                      : brand.inkSoft.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(28),
                 ),
               ),
@@ -795,7 +796,7 @@ class _TopStatsPill extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: _TopStat(
-              dotColor: const Color(0xFF5B5CF6),
+              dotColor: AppActionBlue.color,
               label: 'BALANCE',
               value: visible ? formatMoney(symbol, balance) : '$symbol ****',
               ink: ink,
@@ -963,7 +964,7 @@ class _BudgetOverviewCard extends StatelessWidget {
               label: 'Averaged daily spending',
               value: visible ? formatMoney('', avgDaily).trim() : '****',
               brand: brand,
-              dotColor: const Color(0xFFF4BE3B),
+              dotColor: const Color(0xFFE89A14),
             ),
             const SizedBox(height: 8),
             _DailyStat(
@@ -974,7 +975,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                         : '—')
                   : '****',
               brand: brand,
-              dotColor: const Color(0xFF5B5CF6),
+              dotColor: AppActionBlue.color,
               valueColor: daysRemaining > 0 && !overspent
                   ? AppColors.income
                   : null,

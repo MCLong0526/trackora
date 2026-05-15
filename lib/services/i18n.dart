@@ -603,6 +603,24 @@ class AppStrings {
     'account.tapToTrack': 'Tap to track gold & silver',
     'account.preciousMetals': 'Precious Metals',
     'account.editAccount': 'Edit Account',
+    // Auth — extra login/signup strings.
+    'auth.signedInSuccess': 'Signed in successfully',
+    'auth.rememberMe': 'Remember me',
+    'auth.forgotPassword': 'Forgot password?',
+    'auth.newToApp': "New to Trackora?",
+    'auth.continueWith': 'OR CONTINUE WITH',
+    'auth.resetPassword': 'Reset Password',
+    'auth.resetEmailSent': 'Password reset email sent. Check your inbox.',
+    'auth.resetEmailFailed': 'Could not send reset email.',
+    'auth.send': 'Send',
+    'auth.getStarted': 'Get started',
+    'auth.agreeTo': "I agree to Trackora's ",
+    'auth.terms': 'Terms',
+    'auth.and': ' and ',
+    'auth.privacyPolicy': 'Privacy Policy',
+    'auth.welcomeBackTitle': 'Welcome\nback',
+    // Dashboard extras.
+    'home.activity': 'Activity',
   };
 
   static const _zh = <String, String>{
@@ -1093,6 +1111,22 @@ class AppStrings {
     'account.tapToTrack': '点击追踪黄金和白银',
     'account.preciousMetals': '贵金属',
     'account.editAccount': '编辑账户',
+    'auth.signedInSuccess': '登录成功',
+    'auth.rememberMe': '记住我',
+    'auth.forgotPassword': '忘记密码？',
+    'auth.newToApp': '第一次使用 Trackora？',
+    'auth.continueWith': '或通过以下方式继续',
+    'auth.resetPassword': '重置密码',
+    'auth.resetEmailSent': '密码重置邮件已发送，请查看收件箱。',
+    'auth.resetEmailFailed': '无法发送重置邮件。',
+    'auth.send': '发送',
+    'auth.getStarted': '开始使用',
+    'auth.agreeTo': '我同意 Trackora 的',
+    'auth.terms': '服务条款',
+    'auth.and': '和',
+    'auth.privacyPolicy': '隐私政策',
+    'auth.welcomeBackTitle': '欢迎\n回来',
+    'home.activity': '动态',
   };
 
   static const _ms = <String, String>{
@@ -1606,6 +1640,22 @@ class AppStrings {
     'account.tapToTrack': 'Ketik untuk jejak emas & perak',
     'account.preciousMetals': 'Logam Berharga',
     'account.editAccount': 'Edit Akaun',
+    'auth.signedInSuccess': 'Berjaya log masuk',
+    'auth.rememberMe': 'Ingat saya',
+    'auth.forgotPassword': 'Lupa kata laluan?',
+    'auth.newToApp': 'Baru di Trackora?',
+    'auth.continueWith': 'ATAU TERUSKAN DENGAN',
+    'auth.resetPassword': 'Tetapkan Semula Kata Laluan',
+    'auth.resetEmailSent': 'E-mel tetapan semula dihantar. Semak peti masuk anda.',
+    'auth.resetEmailFailed': 'Gagal hantar e-mel tetapan semula.',
+    'auth.send': 'Hantar',
+    'auth.getStarted': 'Mulakan',
+    'auth.agreeTo': "Saya bersetuju dengan Trackora's ",
+    'auth.terms': 'Terma',
+    'auth.and': ' dan ',
+    'auth.privacyPolicy': 'Polisi Privasi',
+    'auth.welcomeBackTitle': 'Selamat\nkembali',
+    'home.activity': 'Aktiviti',
   };
 
   String t(String key) {
