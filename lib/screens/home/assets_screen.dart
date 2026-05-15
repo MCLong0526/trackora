@@ -16,6 +16,7 @@ import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
+import '../travel/travel_groups_screen.dart';
 
 class AssetsScreen extends ConsumerStatefulWidget {
   const AssetsScreen({super.key});
@@ -123,11 +124,98 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                       visible: visible,
                     ),
                   ],
+                  const SizedBox(height: 20),
+                  _SectionLabel(context.t('travel.title').toUpperCase()),
+                  const SizedBox(height: 8),
+                  _TravelGroupsEntryCard(),
                 ],
               ]),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Travel Groups Entry Card ──────────────────────────────────────────────────
+
+class _TravelGroupsEntryCard extends ConsumerWidget {
+  const _TravelGroupsEntryCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final groupsAsync = ref.watch(travelGroupsProvider);
+    final count = groupsAsync.valueOrNull?.length ?? 0;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        CupertinoPageRoute(builder: (_) => const TravelGroupsScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : brand.divider,
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: brand.sky,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                CupertinoIcons.airplane,
+                color: Color(0xFF3478F6),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t('travel.title'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    count == 0
+                        ? context.t('travel.empty')
+                        : '$count ${count == 1 ? 'trip' : 'trips'}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              color: brand.inkSoft,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }

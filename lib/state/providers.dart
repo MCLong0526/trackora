@@ -42,8 +42,14 @@ import '../services/prefs_service.dart';
 import '../services/saving_plan_service.dart';
 import '../services/storage_service.dart';
 import '../services/sync_service.dart';
+import '../services/travel_group_service.dart';
 import '../services/watch_service.dart';
 import '../services/widget_sync_service.dart';
+import '../repositories/travel_group_repository.dart';
+import '../repositories/local_travel_group_repository.dart';
+import '../repositories/firebase_travel_group_repository.dart';
+import '../models/travel_group.dart';
+import '../models/travel_expense.dart';
 
 // ── Network connectivity ──────────────────────────────────────────────────────
 
@@ -498,4 +504,40 @@ final autoSyncProvider = Provider<void>((ref) {
     );
   });
 });
+
+// ── Travel Groups ─────────────────────────────────────────────────────────────
+
+final travelGroupRepositoryProvider = Provider<TravelGroupRepository>((_) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalTravelGroupRepository();
+    case StorageMode.firebase:
+      return FirebaseTravelGroupRepository();
+  }
+});
+
+final travelGroupServiceProvider = Provider<TravelGroupService>((ref) {
+  return TravelGroupService(ref.read(travelGroupRepositoryProvider));
+});
+
+final travelGroupsProvider =
+    StreamProvider.autoDispose<List<TravelGroup>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.read(travelGroupRepositoryProvider).getGroups(user.uid);
+});
+
+final travelGroupMembersProvider =
+    StreamProvider.autoDispose.family<List<TravelGroupMember>, String>(
+  (ref, groupId) {
+    return ref.read(travelGroupRepositoryProvider).getMembers(groupId);
+  },
+);
+
+final travelGroupExpensesProvider =
+    StreamProvider.autoDispose.family<List<TravelExpense>, String>(
+  (ref, groupId) {
+    return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
+  },
+);
 

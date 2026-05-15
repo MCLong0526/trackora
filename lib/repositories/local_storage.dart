@@ -11,6 +11,9 @@ class LocalStorage {
   static const pendingSyncBoxName = 'trackora_pending_sync_v1';
   static const pendingDeletesBoxName = 'trackora_pending_deletes_v1';
   static const preciousMetalsBoxName = 'trackora_precious_metals_v1';
+  static const travelGroupsBoxName = 'trackora_travel_groups_v1';
+  static const travelExpensesBoxName = 'trackora_travel_expenses_v1';
+  static const travelMembersBoxName = 'trackora_travel_members_v1';
 
   static bool _initialized = false;
 
@@ -28,6 +31,9 @@ class LocalStorage {
     await _openBox(pendingSyncBoxName);
     await _openBox(pendingDeletesBoxName);
     await _openBox(preciousMetalsBoxName);
+    await _openBox(travelGroupsBoxName);
+    await _openBox(travelExpensesBoxName);
+    await _openBox(travelMembersBoxName);
     _initialized = true;
   }
 
@@ -50,6 +56,12 @@ class LocalStorage {
   static Box<dynamic> get pendingDeletes => Hive.box(pendingDeletesBoxName);
 
   static Box<dynamic> get preciousMetals => Hive.box(preciousMetalsBoxName);
+
+  static Box<dynamic> get travelGroups => Hive.box(travelGroupsBoxName);
+
+  static Box<dynamic> get travelExpenses => Hive.box(travelExpensesBoxName);
+
+  static Box<dynamic> get travelMembers => Hive.box(travelMembersBoxName);
 
   static Future<void> _openBox(String name) async {
     if (!Hive.isBoxOpen(name)) {
