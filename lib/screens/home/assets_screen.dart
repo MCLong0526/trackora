@@ -11,6 +11,7 @@ import '../../models/saving_plan.dart';
 import '../../services/currency_converter.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
@@ -1702,6 +1703,10 @@ class _BreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final hasForeign = item.originalCurrencyCode != null && item.estAmount != null;
+    final displaySym = hasForeign
+        ? (kSupportedCurrencies[item.originalCurrencyCode!] ?? item.originalCurrencyCode!)
+        : symbol;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
       child: Row(
@@ -1733,17 +1738,31 @@ class _BreakdownRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          MaskedAmount(
-            visibleText: formatMoney(symbol, item.amount),
-            visible: visible,
-            currencyPrefix: symbol,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              MaskedAmount(
+                visibleText: formatMoney(displaySym, item.amount),
+                visible: visible,
+                currencyPrefix: displaySym,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              if (hasForeign)
+                Text(
+                  'est. $symbol ${item.estAmount!.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: brand.inkSoft,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

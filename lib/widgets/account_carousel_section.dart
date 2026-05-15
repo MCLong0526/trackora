@@ -731,6 +731,7 @@ class _AccountBalanceDisplay extends ConsumerWidget {
   final bool visible;
   final _Pal pal;
   final bool isNeg;
+  final double fontSize;
 
   const _AccountBalanceDisplay({
     required this.account,
@@ -739,6 +740,7 @@ class _AccountBalanceDisplay extends ConsumerWidget {
     required this.visible,
     required this.pal,
     required this.isNeg,
+    this.fontSize = 19,
   });
 
   @override
@@ -763,7 +765,7 @@ class _AccountBalanceDisplay extends ConsumerWidget {
           visible: visible,
           currencyPrefix: acctSymbol,
           style: TextStyle(
-            fontSize: 19,
+            fontSize: fontSize,
             fontWeight: FontWeight.w700,
             color: isNeg ? AppColors.expense : pal.ink,
             letterSpacing: -0.2,
@@ -810,6 +812,10 @@ class _CardBack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isNeg = balance < 0;
+    final acctCode = account.currencyCode;
+    final acctSymbol = acctCode != null
+        ? (kSupportedCurrencies[acctCode] ?? acctCode)
+        : symbol;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -898,16 +904,14 @@ class _CardBack extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            MaskedAmount(
-              visibleText: formatMoney(symbol, balance),
+            _AccountBalanceDisplay(
+              account: account,
+              balance: balance,
+              mainSymbol: symbol,
               visible: visible,
-              currencyPrefix: symbol,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: isNeg ? AppColors.expense : pal.ink,
-                letterSpacing: -0.3,
-              ),
+              pal: pal,
+              isNeg: isNeg,
+              fontSize: 24,
             ),
             const SizedBox(height: 14),
             _EditPill(ink: pal.ink, onTap: onEdit),
@@ -944,6 +948,9 @@ class _CardBack extends StatelessWidget {
                     final idx = entry.key;
                     final e = entry.value;
                     final isLast = idx == recentTxns.length - 1;
+                    final txnSym = e.originalCurrency != null
+                        ? (kSupportedCurrencies[e.originalCurrency!] ?? e.originalCurrency!)
+                        : acctSymbol;
                     return Column(
                       children: [
                         Padding(
@@ -982,8 +989,8 @@ class _CardBack extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text(
                                 e.type.isInflow
-                                    ? '+${formatMoney(symbol, e.amount)}'
-                                    : '−${formatMoney(symbol, e.amount)}',
+                                    ? '+${formatMoney(txnSym, e.amount)}'
+                                    : '−${formatMoney(txnSym, e.amount)}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
