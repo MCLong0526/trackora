@@ -11,6 +11,7 @@ import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/money_format.dart';
 import '../state/providers.dart';
+import '../services/i18n.dart';
 import '../theme/app_theme.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
@@ -1367,7 +1368,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: Text(
-                      _step == 0 ? 'Add Account' : 'Account Details',
+                      _step == 0 ? context.t('account.addAccount') : context.t('account.accountDetails'),
                       key: ValueKey(_step),
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -1475,7 +1476,7 @@ class _Step1 extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'What type of account?',
+            context.t('account.whatType'),
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
@@ -1485,7 +1486,7 @@ class _Step1 extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Choose one to get started.',
+            context.t('account.chooseOne'),
             style: TextStyle(fontSize: 13, color: brand.inkSoft),
           ),
           const SizedBox(height: 18),
@@ -1572,7 +1573,7 @@ class _Step1 extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Other Types',
+                            context.t('account.otherTypes'),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -1644,7 +1645,7 @@ class _OtherTypesSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Other Types',
+                          context.t('account.otherTypes'),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -1654,7 +1655,7 @@ class _OtherTypesSheet extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '8 extra categories',
+                          context.t('account.extra8'),
                           style: TextStyle(
                             fontSize: 13,
                             color: brand.inkSoft,
@@ -2666,9 +2667,9 @@ class _Step2State extends State<_Step2> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              const Text(
-                                'Account Added',
-                                style: TextStyle(
+                              Text(
+                                context.t('account.addAccount'),
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,

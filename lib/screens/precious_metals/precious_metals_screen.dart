@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/account.dart';
 import '../../models/precious_metal.dart';
+import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -2830,8 +2831,8 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                   ),
                                   Text(
                                     _action == MetalAction.buy
-                                        ? 'Record a purchase'
-                                        : 'Record a sale',
+                                        ? context.t('metal.recordAPurchase')
+                                        : context.t('metal.recordASale'),
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: metalColor.withValues(
@@ -2856,7 +2857,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                             color: isDark
                                 ? Colors.white.withValues(alpha: 0.07)
                                 : Colors.white.withValues(alpha: 0.60),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                           child: Row(
                           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -2915,7 +2916,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                         const SizedBox(height: 16),
 
                         Text(
-                          'WEIGHT & PRICE',
+                          context.t('metal.weightAndPrice'),
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -2934,7 +2935,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                             color: metalColor.withValues(
                               alpha: isDark ? 0.20 : 0.16,
                             ),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                           child: IntrinsicHeight(
                             child: Row(
@@ -2946,7 +2947,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Weight',
+                                        context.t('metal.weight'),
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
@@ -2991,17 +2992,17 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                           ),
                                           border: OutlineInputBorder(
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(AppRadius.field),
                                             borderSide: BorderSide.none,
                                           ),
                                           enabledBorder: OutlineInputBorder(
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(AppRadius.field),
                                             borderSide: BorderSide.none,
                                           ),
                                           focusedBorder: OutlineInputBorder(
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(AppRadius.field),
                                             borderSide: BorderSide.none,
                                           ),
                                           contentPadding:
@@ -3030,7 +3031,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Price / g',
+                                        context.t('metal.pricePerG'),
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,

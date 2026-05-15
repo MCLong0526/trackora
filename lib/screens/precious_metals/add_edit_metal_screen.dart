@@ -8,6 +8,7 @@ import '../../models/account.dart';
 import '../../models/precious_metal.dart';
 import '../../repositories/firebase_precious_metal_repository.dart';
 import '../../state/providers.dart';
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
@@ -208,12 +209,12 @@ class _State extends ConsumerState<AddEditMetalScreen> {
       await ref.read(preciousMetalRepositoryProvider).delete(user.uid, id);
       _bgSyncDelete(user.uid, id);
       if (mounted) {
-        AppToast.show(context, 'Record deleted', type: AppToastType.success);
+        AppToast.show(context, context.t('metal.deletedToast'), type: AppToastType.success);
         Navigator.pop(context, 'deleted');
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, 'Delete failed', type: AppToastType.error);
+        AppToast.show(context, context.t('metal.deleteFailed'), type: AppToastType.error);
         setState(() => _saving = false);
       }
     }
@@ -314,7 +315,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           ),
         ),
         title: Text(
-          _isEdit ? 'Edit Record' : 'New Transaction',
+          _isEdit ? context.t('metal.editRecord') : context.t('metal.newTransaction'),
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         actions: [
@@ -361,13 +362,13 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             ],
 
             // ── Amount inputs ────────────────────────────────────────────────
-            _SectionLabel('AMOUNT'),
+            _SectionLabel(context.t('metal.sectionAmount')),
             const SizedBox(height: 10),
             _InputGroup(
               brand: brand,
               children: [
                 _Field(
-                  label: 'Weight (grams)',
+                  label: context.t('metal.weightGramsFull'),
                   controller: _weightCtrl,
                   focusNode: _weightFocus,
                   hint: 'e.g. 10.50',
@@ -377,7 +378,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
                 ),
                 _FieldDivider(brand: brand),
                 _Field(
-                  label: 'Price per gram',
+                  label: context.t('metal.pricePerGramFull'),
                   controller: _priceCtrl,
                   focusNode: _priceFocus,
                   hint: 'Optional',
@@ -387,7 +388,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
                 ),
                 _FieldDivider(brand: brand),
                 _Field(
-                  label: 'Total amount',
+                  label: context.t('metal.totalAmount'),
                   controller: _totalCtrl,
                   focusNode: _totalFocus,
                   hint: 'e.g. 892.50',
@@ -406,7 +407,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             const SizedBox(height: 20),
 
             // ── Details ──────────────────────────────────────────────────────
-            _SectionLabel('DETAILS'),
+            _SectionLabel(context.t('metal.sectionDetails')),
             const SizedBox(height: 10),
             _InputGroup(
               brand: brand,
@@ -456,7 +457,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
                         ),
                       )
                     : Text(
-                        _isEdit ? 'Save Changes' : (_action == MetalAction.buy ? 'Record Purchase' : 'Record Sale'),
+                        _isEdit ? context.t('metal.saveChanges') : (_action == MetalAction.buy ? context.t('metal.recordPurchase') : context.t('metal.recordSale')),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -667,7 +668,7 @@ class _EditBadge extends StatelessWidget {
               border: Border.all(color: actionColor.withValues(alpha: 0.25)),
             ),
             child: Text(
-              isBuy ? 'Buy' : 'Sell',
+              isBuy ? context.t('metal.buy') : context.t('metal.sell'),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,

@@ -2,13 +2,16 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/i18n.dart';
+import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
-const Color _kPrimary = Color(0xFF5B5FEF);
+const Color _kPrimary = Color(0xFF0066CC);
 const String _kHasSeenWelcome = 'has_seen_welcome';
 
 Future<void> markWelcomeSeen() async {
@@ -21,14 +24,14 @@ Future<bool> hasSeenWelcome() async {
   return prefs.getBool(_kHasSeenWelcome) ?? false;
 }
 
-class WelcomeScreen extends StatefulWidget {
+class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
   @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen>
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
     with TickerProviderStateMixin {
   late AnimationController _entranceController;
   late AnimationController _floatController;
@@ -93,61 +96,173 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
+  void _showLanguagePicker() {
+    final current = ref.read(localeProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final brand = ctx.brand;
+        return Container(
+          decoration: BoxDecoration(
+            color: brand.background,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: brand.inkSoft.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Text(
+                    context.t('welcome.changeLanguage'),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                    ),
+                  ),
+                ),
+                ...AppLocale.values
+                    .where((l) => l != AppLocale.system)
+                    .map((locale) {
+                  final isSelected = current == locale;
+                  return ListTile(
+                    title: Text(
+                      locale.label,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        color: brand.ink,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? Icon(CupertinoIcons.checkmark_alt,
+                            color: AppActionBlue.color)
+                        : null,
+                    onTap: () {
+                      ref
+                          .read(localeProvider.notifier)
+                          .set(locale);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: SlideTransition(
-            position: _slideAnim,
-            child: Column(
-              children: [
-                const Spacer(flex: 2),
-                _IllustrationCards(floatAnim: _floatAnim),
-                const Spacer(flex: 3),
-                _AppBranding(),
-                const Spacer(flex: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: Column(
+        child: Stack(
+          children: [
+            // Language switcher — top right
+            Positioned(
+              top: 8,
+              right: 12,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _showLanguagePicker,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.inkSoft.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _PrimaryButton(
-                        label: 'Create an account',
-                        onPressed: () => _toSignup(context),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Already have an account? ',
-                            style: TextStyle(
-                              color: AppColors.inkSoft,
-                              fontSize: 15,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => _toLogin(context),
-                            child: const Text(
-                              'Log in',
-                              style: TextStyle(
-                                color: _kPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const Icon(CupertinoIcons.globe,
+                          size: 15, color: AppColors.inkSoft),
+                      const SizedBox(width: 5),
+                      Text(
+                        context.t('welcome.changeLanguage'),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.inkSoft,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 36),
-              ],
+              ),
             ),
-          ),
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _slideAnim,
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    _IllustrationCards(floatAnim: _floatAnim),
+                    const Spacer(flex: 3),
+                    _AppBranding(),
+                    const Spacer(flex: 4),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        children: [
+                          _PrimaryButton(
+                            label: context.t('auth.createAccountBtn'),
+                            onPressed: () => _toSignup(context),
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${context.t('auth.alreadyHaveAccount')} ',
+                                style: const TextStyle(
+                                  color: AppColors.inkSoft,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => _toLogin(context),
+                                child: Text(
+                                  context.t('auth.logIn'),
+                                  style: const TextStyle(
+                                    color: _kPrimary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -241,7 +356,7 @@ class _AppBranding extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(22),
-            ),
+          ),
           child: const Padding(
             padding: EdgeInsets.all(14),
             child: _StackedCardsIcon(),
@@ -258,12 +373,12 @@ class _AppBranding extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 44),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 44),
           child: Text(
-            'A calmer way to see where every ringgit goes — across all your accounts.',
+            context.t('auth.tagline'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 15,
               color: AppColors.inkSoft,
               height: 1.55,
