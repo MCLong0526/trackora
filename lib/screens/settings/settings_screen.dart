@@ -22,7 +22,7 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
-import '../accounts/add_edit_account_screen.dart';
+import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
 import '../../main.dart' show rootNavKey;
 
@@ -934,10 +934,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(builder: (_) => const AddEditAccountScreen()),
-        ),
+        onTap: () => showAddAccountSheet(context),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1164,10 +1161,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
           child: GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => const AddEditAccountScreen()),
-            ),
+            onTap: () => showAddAccountSheet(context),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

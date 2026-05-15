@@ -15,7 +15,6 @@ import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
-import '../accounts/add_edit_account_screen.dart';
 
 class AssetsScreen extends ConsumerStatefulWidget {
   const AssetsScreen({super.key});
@@ -62,8 +61,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 _Header(
-                  onAddAccount: () =>
-                      _push(context, const AddEditAccountScreen()),
+                  onAddAccount: () => showAddAccountSheet(context),
                 ),
                 const SizedBox(height: 18),
                 if (isLoading && accounts.isEmpty)
@@ -77,7 +75,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                   const SizedBox(height: 20),
                   if (accounts.isEmpty)
                     _EmptyAccounts(
-                      onTap: () => _push(context, const AddEditAccountScreen()),
+                      onTap: () => showAddAccountSheet(context),
                     )
                   else ...[
                     _SectionLabel('Accounts'),
@@ -1288,11 +1286,6 @@ Map<String, double> _computeBalances(
     }
   }
   return balances;
-}
-
-void _push(BuildContext context, Widget screen) {
-  HapticFeedback.selectionClick();
-  Navigator.push(context, CupertinoPageRoute(builder: (_) => screen));
 }
 
 // ── Breakdown sheet helpers ───────────────────────────────────────────────────

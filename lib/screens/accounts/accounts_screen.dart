@@ -11,7 +11,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../precious_metals/precious_metals_screen.dart';
-import 'add_edit_account_screen.dart';
 
 // ── AccountsScreen ────────────────────────────────────────────
 class AccountsScreen extends ConsumerWidget {
@@ -46,12 +45,7 @@ class AccountsScreen extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(CupertinoIcons.add, size: 22),
-            onPressed: () => Navigator.push(
-              context,
-              CupertinoPageRoute(
-                builder: (_) => const AddEditAccountScreen(),
-              ),
-            ),
+            onPressed: () => showAddAccountSheet(context),
           ),
         ],
       ),
@@ -165,12 +159,7 @@ class AccountsScreen extends ConsumerWidget {
             FilledButton.icon(
               icon: const Icon(CupertinoIcons.add, size: 18),
               label: const Text('Add Account'),
-              onPressed: () => Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => const AddEditAccountScreen(),
-                ),
-              ),
+              onPressed: () => showAddAccountSheet(context),
             ),
           ],
         ),

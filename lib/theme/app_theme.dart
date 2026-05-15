@@ -193,6 +193,11 @@ class AppActionBlue {
   static const colorOnDark = Color(0xFF2997FF);
 }
 
+class AppActionBlue {
+  static const color = Color(0xFF0066CC);
+  static const colorOnDark = Color(0xFF2997FF);
+}
+
 class AppShadows {
   // Minimal surface-lift shadow. Use only on modal sheets and bottom bar.
   static List<BoxShadow> soft = [

@@ -11,6 +11,7 @@ import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/money_format.dart';
 import '../state/providers.dart';
+import '../theme/app_theme.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
 
@@ -256,6 +257,7 @@ class _AccountCarouselState extends State<_AccountCarousel>
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final centerX = (widget.availableWidth - _cardW) / 2;
 
     return GestureDetector(
@@ -315,8 +317,8 @@ class _AccountCarouselState extends State<_AccountCarousel>
                               height: 6,
                               decoration: BoxDecoration(
                                 color: active
-                                    ? const Color(0xFF1a1410)
-                                    : Colors.black.withValues(alpha: 0.2),
+                                    ? brand.ink
+                                    : brand.inkSoft.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
@@ -1025,22 +1027,15 @@ class _AddAccountButtonState extends State<_AddAccountButton> {
         child: Container(
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFF5A4FE6),
+            color: AppActionBlue.color,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5A4FE6).withValues(alpha: 0.32),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
           ),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(CupertinoIcons.add, color: Colors.white, size: 17),
-              const SizedBox(width: 7),
-              const Text(
+              Icon(CupertinoIcons.add, color: Colors.white, size: 17),
+              SizedBox(width: 7),
+              Text(
                 'Add Account',
                 style: TextStyle(
                   color: Colors.white,
@@ -1180,6 +1175,16 @@ const _kConfettiColors = [
   Color(0xFFD94747),
   Color(0xFF7A56C5),
 ];
+
+// Public helper to show the Add Account sheet from any screen.
+void showAddAccountSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => const _AddAccountSheet(),
+  );
+}
 
 // ── Add Account sheet ─────────────────────────────────────────
 class _AddAccountSheet extends ConsumerStatefulWidget {
@@ -1323,11 +1328,12 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
   @override
   Widget build(BuildContext context) {
     final pal = _paletteForAccountType(_swatchColor);
+    final brand = context.brand;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF2F0F4),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1338,7 +1344,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: brand.inkSoft.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1353,8 +1359,8 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                   child: CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: _step == 1 ? _goBack : null,
-                    child: const Icon(CupertinoIcons.chevron_left,
-                        size: 22, color: Color(0xFF1a1410)),
+                    child: Icon(CupertinoIcons.chevron_left,
+                        size: 22, color: brand.ink),
                   ),
                 ),
                 Expanded(
@@ -1364,10 +1370,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                       _step == 0 ? 'Add Account' : 'Account Details',
                       key: ValueKey(_step),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1a1410),
+                        color: brand.ink,
                       ),
                     ),
                   ),
@@ -1385,7 +1391,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                   child: Container(
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF5A4FE6),
+                      color: AppActionBlue.color,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1397,8 +1403,8 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                     height: 4,
                     decoration: BoxDecoration(
                       color: _step >= 1
-                          ? const Color(0xFF5A4FE6)
-                          : Colors.black.withValues(alpha: 0.08),
+                          ? AppActionBlue.color
+                          : brand.inkSoft.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1461,26 +1467,26 @@ class _Step1 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'What type of account?',
             style: TextStyle(
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
-              color: Color(0xFF1a1410),
+              color: brand.ink,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Choose one to get started.',
-            style: TextStyle(
-                fontSize: 13, color: Colors.black.withValues(alpha: 0.45)),
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
           ),
           const SizedBox(height: 18),
           // 2×2 grid
@@ -1542,15 +1548,8 @@ class _Step1 extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -1558,13 +1557,13 @@ class _Step1 extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF2F0F4),
+                        color: brand.background,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         CupertinoIcons.ellipsis_circle_fill,
                         size: 18,
-                        color: Color(0xFF8E8E93),
+                        color: brand.inkSoft,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -1572,19 +1571,19 @@ class _Step1 extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Other Types',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1a1410),
+                              color: brand.ink,
                             ),
                           ),
                           Text(
                             '8 extra categories',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.black.withValues(alpha: 0.45),
+                              color: brand.inkSoft,
                             ),
                           ),
                         ],
@@ -1592,7 +1591,7 @@ class _Step1 extends StatelessWidget {
                     ),
                     Icon(CupertinoIcons.chevron_right,
                         size: 14,
-                        color: Colors.black.withValues(alpha: 0.25)),
+                        color: brand.inkSoft),
                   ],
                 ),
               ),
@@ -1611,10 +1610,11 @@ class _OtherTypesSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF2F0F4),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         top: false,
@@ -1629,7 +1629,7 @@ class _OtherTypesSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: brand.inkSoft.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1643,13 +1643,13 @@ class _OtherTypesSheet extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Other Types',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.4,
-                            color: Color(0xFF1a1410),
+                            color: brand.ink,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -1657,7 +1657,7 @@ class _OtherTypesSheet extends StatelessWidget {
                           '8 extra categories',
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.black.withValues(alpha: 0.45),
+                            color: brand.inkSoft,
                           ),
                         ),
                       ],
@@ -1669,13 +1669,13 @@ class _OtherTypesSheet extends StatelessWidget {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.07),
+                        color: brand.inkSoft.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         CupertinoIcons.xmark,
                         size: 13,
-                        color: Colors.black.withValues(alpha: 0.55),
+                        color: brand.inkSoft,
                       ),
                     ),
                   ),
@@ -1687,7 +1687,7 @@ class _OtherTypesSheet extends StatelessWidget {
             Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: brand.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -1732,10 +1732,10 @@ class _OtherTypesSheet extends StatelessWidget {
                                   children: [
                                     Text(
                                       t.label,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF1a1410),
+                                        color: brand.ink,
                                       ),
                                     ),
                                     const SizedBox(height: 1),
@@ -1743,7 +1743,7 @@ class _OtherTypesSheet extends StatelessWidget {
                                       t.sub,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.black.withValues(alpha: 0.45),
+                                        color: brand.inkSoft,
                                       ),
                                     ),
                                   ],
@@ -1752,7 +1752,7 @@ class _OtherTypesSheet extends StatelessWidget {
                               Icon(
                                 CupertinoIcons.chevron_right,
                                 size: 13,
-                                color: Colors.black.withValues(alpha: 0.25),
+                                color: brand.inkSoft,
                               ),
                             ],
                           ),
@@ -1763,7 +1763,7 @@ class _OtherTypesSheet extends StatelessWidget {
                           height: 1,
                           thickness: 0.5,
                           indent: 70,
-                          color: Colors.black.withValues(alpha: 0.07),
+                          color: brand.divider,
                         ),
                     ],
                   );
@@ -1989,6 +1989,7 @@ class _Step2State extends State<_Step2> {
         ? 'Select Bank'
         : 'Select E-Wallet';
     final allProviders = List<String>.from(_providerList);
+    final brand = context.brand;
 
     showModalBottomSheet<void>(
       context: context,
@@ -2003,9 +2004,9 @@ class _Step2State extends State<_Step2> {
                   .where((p) => p.toLowerCase().contains(query.toLowerCase()))
                   .toList();
           return Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFFF2F0F4),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: SafeArea(
               top: false,
@@ -2019,7 +2020,7 @@ class _Step2State extends State<_Step2> {
                         margin: const EdgeInsets.only(top: 10),
                         width: 36, height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.12),
+                          color: brand.inkSoft.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -2028,9 +2029,9 @@ class _Step2State extends State<_Step2> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                       child: Text(
                         label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w700,
-                          color: Color(0xFF1a1410),
+                          color: brand.ink,
                         ),
                       ),
                     ),
@@ -2039,21 +2040,21 @@ class _Step2State extends State<_Step2> {
                       child: Container(
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: brand.surface,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: TextField(
                           autofocus: false,
                           onChanged: (v) => setSheet(() => query = v),
-                          style: const TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 14, color: brand.ink),
                           decoration: InputDecoration(
                             hintText: 'Search…',
                             hintStyle: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.35),
+                                color: brand.inkSoft,
                                 fontSize: 14),
                             prefixIcon: Icon(CupertinoIcons.search,
                                 size: 16,
-                                color: Colors.black.withValues(alpha: 0.35)),
+                                color: brand.inkSoft),
                             border: InputBorder.none,
                             contentPadding:
                                 const EdgeInsets.symmetric(vertical: 10),
@@ -2066,7 +2067,7 @@ class _Step2State extends State<_Step2> {
                         itemCount: filtered.length,
                         separatorBuilder: (_, _) => Divider(
                           height: 1,
-                          color: Colors.black.withValues(alpha: 0.07),
+                          color: brand.divider,
                         ),
                         itemBuilder: (_, index) {
                           final p = filtered[index];
@@ -2078,7 +2079,7 @@ class _Step2State extends State<_Step2> {
                             leading: isCustom
                                 ? Icon(CupertinoIcons.pencil,
                                     size: 18,
-                                    color: Colors.black.withValues(alpha: 0.45))
+                                    color: brand.inkSoft)
                                 : Icon(
                                     widget.selectedType.icon,
                                     size: 18,
@@ -2091,12 +2092,12 @@ class _Step2State extends State<_Step2> {
                                 fontWeight: isSelected
                                     ? FontWeight.w700
                                     : FontWeight.w500,
-                                color: const Color(0xFF1a1410),
+                                color: brand.ink,
                               ),
                             ),
                             trailing: isSelected
-                                ? const Icon(CupertinoIcons.checkmark_alt,
-                                    color: Color(0xFF5A4FE6))
+                                ? Icon(CupertinoIcons.checkmark_alt,
+                                    color: AppActionBlue.color)
                                 : null,
                             onTap: () {
                               setState(() {
@@ -2126,6 +2127,7 @@ class _Step2State extends State<_Step2> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final displayName = widget.nameCtrl.text.isEmpty
         ? widget.selectedType.defaultName
         : widget.nameCtrl.text;
@@ -2273,7 +2275,7 @@ class _Step2State extends State<_Step2> {
           // ── Form fields ──────────────────────────────────
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: brand.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -2307,7 +2309,7 @@ class _Step2State extends State<_Step2> {
                               style: TextStyle(
                                 fontSize: 11,
                                 letterSpacing: 0.5,
-                                color: Colors.black.withValues(alpha: 0.4),
+                                color: brand.inkSoft,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -2324,14 +2326,14 @@ class _Step2State extends State<_Step2> {
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: _selectedProvider != null
-                                  ? const Color(0xFF1a1410)
-                                  : Colors.black.withValues(alpha: 0.3),
+                                  ? brand.ink
+                                  : brand.inkSoft.withValues(alpha: 0.5),
                             ),
                           ),
                           const SizedBox(width: 4),
                           Icon(CupertinoIcons.chevron_right,
                               size: 13,
-                              color: Colors.black.withValues(alpha: 0.25)),
+                              color: brand.inkSoft),
                         ],
                       ),
                     ),
@@ -2341,7 +2343,7 @@ class _Step2State extends State<_Step2> {
                     Divider(
                         height: 1,
                         thickness: 0.5,
-                        color: Colors.black.withValues(alpha: 0.08),
+                        color: brand.divider,
                         indent: 16),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2353,7 +2355,7 @@ class _Step2State extends State<_Step2> {
                             style: TextStyle(
                               fontSize: 11,
                               letterSpacing: 0.5,
-                              color: Colors.black.withValues(alpha: 0.4),
+                              color: brand.inkSoft,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -2361,15 +2363,15 @@ class _Step2State extends State<_Step2> {
                           TextField(
                             controller: widget.nameCtrl,
                             autofocus: true,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1a1410),
+                              color: brand.ink,
                             ),
                             decoration: InputDecoration(
                               hintText: widget.selectedType.defaultName,
                               hintStyle: TextStyle(
-                                color: Colors.black.withValues(alpha: 0.25),
+                                color: brand.inkSoft.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w500,
                               ),
                               border: InputBorder.none,
@@ -2400,15 +2402,15 @@ class _Step2State extends State<_Step2> {
                         const SizedBox(height: 4),
                         TextField(
                           controller: widget.nameCtrl,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1a1410),
+                            color: brand.ink,
                           ),
                           decoration: InputDecoration(
                             hintText: widget.selectedType.defaultName,
                             hintStyle: TextStyle(
-                              color: Colors.black.withValues(alpha: 0.25),
+                              color: brand.inkSoft.withValues(alpha: 0.5),
                               fontWeight: FontWeight.w500,
                             ),
                             border: InputBorder.none,
@@ -2423,7 +2425,7 @@ class _Step2State extends State<_Step2> {
                 Divider(
                     height: 1,
                     thickness: 0.5,
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: brand.divider,
                     indent: 16),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2435,7 +2437,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 11,
                           letterSpacing: 0.5,
-                          color: Colors.black.withValues(alpha: 0.4),
+                          color: brand.inkSoft,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2447,7 +2449,7 @@ class _Step2State extends State<_Step2> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black.withValues(alpha: 0.55),
+                              color: brand.inkSoft,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -2457,10 +2459,10 @@ class _Step2State extends State<_Step2> {
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                       decimal: true),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1a1410),
+                                color: brand.ink,
                               ),
                               decoration: InputDecoration(
                                 hintText: '0.00',
@@ -2489,7 +2491,7 @@ class _Step2State extends State<_Step2> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: brand.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -2629,18 +2631,8 @@ class _Step2State extends State<_Step2> {
                   decoration: BoxDecoration(
                     color: widget.success
                         ? const Color(0xFF1B8A4A)
-                        : const Color(0xFF5A4FE6),
+                        : AppActionBlue.color,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (widget.success
-                                ? const Color(0xFF1B8A4A)
-                                : const Color(0xFF5A4FE6))
-                            .withValues(alpha: 0.35),
-                        blurRadius: 22,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
                   ),
                   child: Center(
                     child: widget.success
