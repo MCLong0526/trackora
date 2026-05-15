@@ -432,19 +432,19 @@ class BudgetScreen extends ConsumerWidget {
                       width: cardWidth,
                       height: 186,
                       child: _PremiumManagementCard(
-                        badgeLabel: 'BUDGET',
+                        badgeLabel: context.t('budget.badgeBudget'),
                         badgeColor: AppColors.lilac,
-                        badgeTextColor: const Color(0xFF6B40A8),
+                        badgeTextColor: kCategoryStyles['Shopping']!.accent,
                         icon: CupertinoIcons.chart_pie_fill,
-                        iconBgColor: const Color(0xFF6B40A8),
+                        iconBgColor: kCategoryStyles['Shopping']!.accent,
                         mainValue: budget <= 0
                             ? context.t('budget.monthlyNotSet')
                             : formatMoney(symbol, budgetLeft.abs()),
                         mainValueSub: budget <= 0
                             ? null
                             : budgetOverspent
-                            ? 'over budget'
-                            : 'left this month',
+                            ? context.t('budget.overBudget')
+                            : context.t('budget.leftThisMonth'),
                         progress: budgetProgress,
                         progressLabel: budget <= 0
                             ? context.t('budget.setAction')
@@ -468,11 +468,11 @@ class BudgetScreen extends ConsumerWidget {
                       width: cardWidth,
                       height: 186,
                       child: _PremiumManagementCard(
-                        badgeLabel: 'SAVINGS',
+                        badgeLabel: context.t('budget.badgeSavings'),
                         badgeColor: AppColors.mint,
-                        badgeTextColor: const Color(0xFF1F7A60),
+                        badgeTextColor: kCategoryStyles['Groceries']!.accent,
                         icon: CupertinoIcons.flag_fill,
-                        iconBgColor: const Color(0xFF1F7A60),
+                        iconBgColor: kCategoryStyles['Groceries']!.accent,
                         mainValue: formatMoney(symbol, saved),
                         mainValueSub: savingTarget > 0
                             ? 'of ${formatMoney(symbol, savingTarget)} goal'
@@ -489,15 +489,15 @@ class BudgetScreen extends ConsumerWidget {
                       width: cardWidth,
                       height: 186,
                       child: _PremiumManagementCard(
-                        badgeLabel: 'LENDING',
+                        badgeLabel: context.t('budget.badgeLending'),
                         badgeColor: AppColors.sky,
-                        badgeTextColor: const Color(0xFF2A6FB5),
+                        badgeTextColor: kCategoryStyles['Transport']!.accent,
                         icon: CupertinoIcons.arrow_up_arrow_down,
-                        iconBgColor: const Color(0xFF2A6FB5),
+                        iconBgColor: kCategoryStyles['Transport']!.accent,
                         mainValue: net == 0
                             ? formatMoney(symbol, 0)
                             : '${net > 0 ? '+' : '-'}${formatMoney(symbol, net.abs())}',
-                        mainValueSub: 'net position',
+                        mainValueSub: context.t('budget.netPosition'),
                         mainValueColor: net < 0
                             ? AppColors.expense
                             : net > 0
@@ -514,20 +514,20 @@ class BudgetScreen extends ConsumerWidget {
                       width: cardWidth,
                       height: 186,
                       child: _PremiumManagementCard(
-                        badgeLabel: 'INSTALLMENTS',
+                        badgeLabel: context.t('budget.badgeInstallments'),
                         badgeColor: AppColors.peach,
-                        badgeTextColor: const Color(0xFFB36A1F),
+                        badgeTextColor: kCategoryStyles['Food']!.accent,
                         icon: CupertinoIcons.calendar_today,
-                        iconBgColor: const Color(0xFFB36A1F),
+                        iconBgColor: kCategoryStyles['Food']!.accent,
                         mainValue: activeInstallments.isEmpty
                             ? '—'
                             : formatMoney(symbol, installmentsMonthly),
                         mainValueSub: activeInstallments.isEmpty
                             ? null
-                            : 'due this month',
+                            : context.t('budget.dueThisMonth'),
                         footer: activeInstallments.isEmpty
                             ? context.t('budget.noneActive')
-                            : '${activeInstallments.length} active plans',
+                            : context.t('budget.activePlans').replaceAll('{count}', '${activeInstallments.length}'),
                         onTap: () => _push(context, const InstallmentsScreen()),
                       ),
                     ),
@@ -536,20 +536,20 @@ class BudgetScreen extends ConsumerWidget {
                       width: cardWidth,
                       height: 186,
                       child: _PremiumManagementCard(
-                        badgeLabel: 'PEOPLE',
+                        badgeLabel: context.t('budget.badgePeople'),
                         badgeColor: AppColors.lilac,
-                        badgeTextColor: const Color(0xFF6B3EC4),
+                        badgeTextColor: kCategoryStyles['Shopping']!.accent,
                         icon: CupertinoIcons.person_2_fill,
-                        iconBgColor: const Color(0xFF6B3EC4),
+                        iconBgColor: kCategoryStyles['Shopping']!.accent,
                         mainValue: people.isEmpty ? '—' : '${people.length}',
                         mainValueSub: people.isEmpty
                             ? null
                             : people.length == 1
-                            ? 'person saved'
-                            : 'people saved',
+                            ? context.t('budget.personSaved')
+                            : context.t('budget.peopleSaved'),
                         footer: people.isEmpty
-                            ? 'Tap to add people'
-                            : 'friends · family · coworkers',
+                            ? context.t('budget.tapToAddPeople')
+                            : context.t('budget.peopleSubtitle'),
                         onTap: () => _push(context, const PeopleScreen()),
                       ),
                     ),
