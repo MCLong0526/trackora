@@ -78,6 +78,8 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                     snapshot: snapshot,
                     symbol: symbol,
                     visible: visible,
+                    converter: converter,
+                    mainCode: mainCode,
                   ),
                   const SizedBox(height: 20),
                   if (accounts.isEmpty)
@@ -307,11 +309,15 @@ class _NetWorthCard extends StatefulWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
+  final CurrencyConverter? converter;
+  final String? mainCode;
 
   const _NetWorthCard({
     required this.snapshot,
     required this.symbol,
     required this.visible,
+    this.converter,
+    this.mainCode,
   });
 
   @override
@@ -500,7 +506,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                         title: context.t('asset.assets'),
                         color: AppColors.income,
                         icon: CupertinoIcons.arrow_up_right,
-                        items: _buildAssetItems(widget.snapshot, context),
+                        items: _buildAssetItems(widget.snapshot, context, widget.converter, widget.mainCode),
                         total: widget.snapshot.totalAssets,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -522,7 +528,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                         title: context.t('asset.liabilities'),
                         color: AppColors.expense,
                         icon: CupertinoIcons.arrow_down_right,
-                        items: _buildLiabilityItems(widget.snapshot, context),
+                        items: _buildLiabilityItems(widget.snapshot, context, widget.converter, widget.mainCode),
                         total: widget.snapshot.totalLiabilities,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -1421,32 +1427,53 @@ class _BreakdownItem {
   final String name;
   final String type;
   final double amount;
+  final String? originalCurrencyCode;
+  final double? estAmount;
 
   const _BreakdownItem({
     required this.name,
     required this.type,
     required this.amount,
+    this.originalCurrencyCode,
+    this.estAmount,
   });
 }
 
-List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot, BuildContext context) {
+_BreakdownItem _accountItem(
+  _AccountAsset a,
+  String type,
+  CurrencyConverter? converter,
+  String? mainCode, {
+  bool abs = false,
+}) {
+  final bal = abs ? a.balance.abs() : a.balance;
+  final code = a.account.currencyCode;
+  final isForeign = code != null && code != mainCode;
+  final est = (isForeign && converter != null) ? converter.toBase(bal, code) : null;
+  return _BreakdownItem(
+    name: a.account.name,
+    type: type,
+    amount: bal,
+    originalCurrencyCode: isForeign ? code : null,
+    estAmount: est,
+  );
+}
+
+List<_BreakdownItem> _buildAssetItems(
+  _AssetSnapshot snapshot,
+  BuildContext context,
+  CurrencyConverter? converter,
+  String? mainCode,
+) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (!a.account.type.isLiability && a.balance > 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: a.account.type.label,
-        amount: a.balance,
-      ));
+      items.add(_accountItem(a, a.account.type.label, converter, mainCode));
     }
   }
   for (final a in snapshot.accounts) {
     if (a.account.type.isLiability && a.balance > 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: '${a.account.type.label} (overpaid)',
-        amount: a.balance,
-      ));
+      items.add(_accountItem(a, '${a.account.type.label} (overpaid)', converter, mainCode));
     }
   }
   if (snapshot.totalLent > 0) {
@@ -1459,24 +1486,21 @@ List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot, BuildContext cont
   return items;
 }
 
-List<_BreakdownItem> _buildLiabilityItems(_AssetSnapshot snapshot, BuildContext context) {
+List<_BreakdownItem> _buildLiabilityItems(
+  _AssetSnapshot snapshot,
+  BuildContext context,
+  CurrencyConverter? converter,
+  String? mainCode,
+) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (a.account.type.isLiability && a.balance < 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: a.account.type.label,
-        amount: a.balance.abs(),
-      ));
+      items.add(_accountItem(a, a.account.type.label, converter, mainCode, abs: true));
     }
   }
   for (final a in snapshot.accounts) {
     if (!a.account.type.isLiability && a.balance < 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: '${a.account.type.label} (negative)',
-        amount: a.balance.abs(),
-      ));
+      items.add(_accountItem(a, '${a.account.type.label} (negative)', converter, mainCode, abs: true));
     }
   }
   if (snapshot.totalBorrowed > 0) {

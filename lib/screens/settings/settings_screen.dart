@@ -1159,15 +1159,29 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                     ],
                                   ),
                                 ),
-                                MaskedAmount(
-                                  visibleText: formatMoney(acctSym, bal),
-                                  visible: widget.visible,
-                                  currencyPrefix: acctSym,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isActive ? brand.ink : brand.inkSoft,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    MaskedAmount(
+                                      visibleText: formatMoney(acctSym, bal),
+                                      visible: widget.visible,
+                                      currencyPrefix: acctSym,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: isActive ? brand.ink : brand.inkSoft,
+                                      ),
+                                    ),
+                                    if (a.currencyCode != null && a.currencyCode != widget.mainCode && widget.converter != null)
+                                      Text(
+                                        'est. ${kSupportedCurrencies[widget.mainCode] ?? widget.mainCode} ${convertedBal.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w500,
+                                          color: brand.inkSoft.withValues(alpha: 0.7),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
