@@ -41,6 +41,7 @@ dependencies:
   file_picker: ^8.1.7
   image_picker: ^1.1.2
   share_plus: ^10.0.2
+  url_launcher: ^6.3.0
   path_provider: ^2.1.4
   csv: ^6.0.0
   home_widget: ^0.7.0

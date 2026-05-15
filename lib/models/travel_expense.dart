@@ -14,6 +14,8 @@ class TravelExpense {
   final String? addedByUserId;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final Map<String, double>? splitAmounts;
+  final String? splitMode;
 
   const TravelExpense({
     required this.id,
@@ -29,6 +31,8 @@ class TravelExpense {
     this.addedByUserId,
     required this.createdAt,
     required this.updatedAt,
+    this.splitAmounts,
+    this.splitMode,
   });
 
   factory TravelExpense.fromMap(
@@ -50,6 +54,12 @@ class TravelExpense {
       addedByUserId: data['addedByUserId'] as String?,
       createdAt: TravelGroup.readDate(data['createdAt']),
       updatedAt: TravelGroup.readDate(data['updatedAt']),
+      splitAmounts: data['splitAmounts'] != null
+          ? Map<String, double>.from(
+              (data['splitAmounts'] as Map)
+                  .map((k, v) => MapEntry(k as String, (v as num).toDouble())))
+          : null,
+      splitMode: data['splitMode'] as String?,
     );
   }
 
@@ -68,6 +78,8 @@ class TravelExpense {
       'addedByUserId': addedByUserId,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      if (splitAmounts != null) 'splitAmounts': splitAmounts,
+      if (splitMode != null) 'splitMode': splitMode,
     };
   }
 
@@ -83,6 +95,8 @@ class TravelExpense {
     Object? notes = _sentinel,
     Object? receiptUrl = _sentinel,
     DateTime? updatedAt,
+    Map<String, double>? splitAmounts,
+    String? splitMode,
   }) {
     return TravelExpense(
       id: id,
@@ -100,6 +114,8 @@ class TravelExpense {
       addedByUserId: addedByUserId,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      splitAmounts: splitAmounts ?? this.splitAmounts,
+      splitMode: splitMode ?? this.splitMode,
     );
   }
 }

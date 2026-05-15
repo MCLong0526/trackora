@@ -65,6 +65,7 @@ class TravelGroupService {
     DateTime? endDate,
   }) async {
     final now = DateTime.now();
+    final inviteCode = _generateInviteCode();
     final group = TravelGroup(
       id: '',
       name: name,
@@ -73,10 +74,17 @@ class TravelGroupService {
       endDate: endDate,
       ownerId: userId,
       memberIds: [userId],
+      inviteCode: inviteCode,
       createdAt: now,
       updatedAt: now,
     );
     return _repo.addGroup(userId, group);
+  }
+
+  String _generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   Future<void> updateGroup(TravelGroup group) =>
@@ -152,6 +160,8 @@ class TravelGroupService {
     required List<String> splitAmong,
     String? notes,
     String? receiptUrl,
+    Map<String, double>? splitAmounts,
+    String? splitMode,
   }) async {
     final now = DateTime.now();
     final expense = TravelExpense(
@@ -168,6 +178,8 @@ class TravelGroupService {
       addedByUserId: addedByUserId,
       createdAt: now,
       updatedAt: now,
+      splitAmounts: splitAmounts,
+      splitMode: splitMode,
     );
     return _repo.addExpense(groupId, expense);
   }
@@ -177,6 +189,51 @@ class TravelGroupService {
 
   Future<void> deleteExpense(String groupId, String expenseId) =>
       _repo.deleteExpense(groupId, expenseId);
+
+  Future<String> joinByCode({
+    required String code,
+    required String userId,
+    required String userName,
+    String? userEmail,
+  }) async {
+    return _repo.joinByCode(
+      code: code,
+      userId: userId,
+      userName: userName,
+      userEmail: userEmail,
+    );
+  }
+
+  Future<void> storeEmailInvite({
+    required String email,
+    required String groupId,
+    required String ownerId,
+  }) => _repo.storeEmailInvite(email: email, groupId: groupId, ownerId: ownerId);
+
+  /// Called on sign-in: auto-join any groups the user was invited to by email.
+  /// Returns list of groupIds joined.
+  Future<List<String>> processEmailInvites({
+    required String userEmail,
+    required String userId,
+    required String userName,
+  }) async {
+    final invites = await _repo.fetchEmailInvites(userEmail);
+    final joined = <String>[];
+    for (final invite in invites) {
+      try {
+        final groupId = invite['groupId']!;
+        // Find the member doc that has this email and update it with userId
+        final members = await _repo.getMembers(groupId).first;
+        final match = members.where((m) => m.email == userEmail && m.userId == null).toList();
+        if (match.isNotEmpty) {
+          await _repo.updateMember(groupId, match.first.copyWith(userId: userId));
+        }
+        await _repo.deleteEmailInvite(userEmail, groupId);
+        joined.add(groupId);
+      } catch (_) {}
+    }
+    return joined;
+  }
 
   // ── Settlement Calculation ────────────────────────────────────────────────────
 
@@ -200,12 +257,14 @@ class TravelGroupService {
     }
 
     for (final expense in expenses) {
-      // Credit payer
       paidMap[expense.paidByMemberId] =
           (paidMap[expense.paidByMemberId] ?? 0) + expense.amount;
 
-      // Calculate share per involved member
-      if (expense.splitAmong.isNotEmpty) {
+      if (expense.splitAmounts != null && expense.splitAmounts!.isNotEmpty) {
+        for (final entry in expense.splitAmounts!.entries) {
+          shareMap[entry.key] = (shareMap[entry.key] ?? 0) + entry.value;
+        }
+      } else if (expense.splitAmong.isNotEmpty) {
         final share = expense.amount / expense.splitAmong.length;
         for (final memberId in expense.splitAmong) {
           shareMap[memberId] = (shareMap[memberId] ?? 0) + share;

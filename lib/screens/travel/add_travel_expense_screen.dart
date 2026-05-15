@@ -16,29 +16,18 @@ const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
 const _ink48 = Color(0xFF7A7A7A);
 
-TextStyle _display(double size,
-        {double tracking = -0.374, double lh = 1.10, Color? color}) =>
-    TextStyle(
-        fontSize: size,
-        fontWeight: FontWeight.w600,
-        letterSpacing: tracking,
-        height: lh,
-        color: color ?? _inkColor);
+TextStyle _display(double sz, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
+    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
 
-TextStyle _body(double size,
-        {FontWeight weight = FontWeight.w400, Color? color}) =>
-    TextStyle(
-        fontSize: size,
-        fontWeight: weight,
-        color: color ?? _inkColor,
-        height: 1.4);
+TextStyle _body(double sz, {FontWeight weight = FontWeight.w400, Color? color}) =>
+    TextStyle(fontSize: sz, fontWeight: weight, color: color ?? _inkColor, height: 1.4);
 
-TextStyle _eyebrow({Color? color}) => TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.6,
-      color: color ?? _ink48,
-    );
+TextStyle _eyebrow({Color? color}) =>
+    TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: color ?? _ink48);
+
+// ── Split mode ────────────────────────────────────────────────────────────────
+
+enum _SplitMode { equally, amount, percent, shares }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -63,10 +52,11 @@ class _AddTravelExpenseScreenState
     extends ConsumerState<AddTravelExpenseScreen> {
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
 
   late String _paidByMemberId;
   late Set<String> _splitAmong;
+  _SplitMode _splitMode = _SplitMode.equally;
+  final Map<String, TextEditingController> _customCtrls = {};
   late DateTime _date;
   String _category = 'food';
   bool _saving = false;
@@ -77,7 +67,7 @@ class _AddTravelExpenseScreenState
     'food', 'transport', 'accommodation', 'activities', 'shopping', 'general',
   ];
 
-  static const _categoryIcons = <String, IconData>{
+  static const _catIcons = <String, IconData>{
     'food': CupertinoIcons.cart_fill,
     'transport': CupertinoIcons.car_fill,
     'accommodation': CupertinoIcons.house_fill,
@@ -86,7 +76,7 @@ class _AddTravelExpenseScreenState
     'general': CupertinoIcons.square_grid_2x2_fill,
   };
 
-  static const _categoryColors = <String, Color>{
+  static const _catColors = <String, Color>{
     'food': Color(0xFFFF9500),
     'transport': Color(0xFF3478F6),
     'accommodation': Color(0xFF5856D6),
@@ -99,16 +89,43 @@ class _AddTravelExpenseScreenState
   void initState() {
     super.initState();
     final memberIds = widget.members.map((m) => m.id).toList();
+    // Init custom controllers
+    for (final m in widget.members) {
+      _customCtrls[m.id] = TextEditingController();
+    }
 
     if (_isEdit) {
       final e = widget.expense!;
       _amountCtrl.text = e.amount.toStringAsFixed(2);
       _descCtrl.text = e.description;
-      _notesCtrl.text = e.notes ?? '';
       _paidByMemberId = e.paidByMemberId;
       _splitAmong = Set<String>.from(e.splitAmong);
       _date = e.date;
       _category = e.category;
+      // Restore split mode + custom field values from saved data
+      if (e.splitAmounts != null && e.splitAmounts!.isNotEmpty) {
+        final mode = _SplitMode.values.firstWhere(
+          (m) => m.name == (e.splitMode ?? 'amount'),
+          orElse: () => _SplitMode.amount,
+        );
+        _splitMode = mode;
+        for (final entry in e.splitAmounts!.entries) {
+          final ctrl = _customCtrls[entry.key];
+          if (ctrl == null) continue;
+          switch (mode) {
+            case _SplitMode.percent:
+              final pct = e.amount > 0 ? (entry.value / e.amount * 100) : 0.0;
+              ctrl.text = pct.toStringAsFixed(1);
+            case _SplitMode.shares:
+              // Use raw amounts as share units (proportional, not absolute)
+              ctrl.text = entry.value.toStringAsFixed(2);
+            case _SplitMode.amount:
+              ctrl.text = entry.value.toStringAsFixed(2);
+            case _SplitMode.equally:
+              break;
+          }
+        }
+      }
     } else {
       _paidByMemberId = memberIds.isNotEmpty ? memberIds.first : '';
       _splitAmong = Set<String>.from(memberIds);
@@ -120,8 +137,51 @@ class _AddTravelExpenseScreenState
   void dispose() {
     _amountCtrl.dispose();
     _descCtrl.dispose();
-    _notesCtrl.dispose();
+    for (final c in _customCtrls.values) { c.dispose(); }
     super.dispose();
+  }
+
+  double get _parsedAmount =>
+      double.tryParse(_amountCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+
+  void _onCustomFieldChanged(String memberId, String value) {
+    setState(() {});
+    if (_splitAmong.length != 2) return;
+
+    final other = _splitAmong.firstWhere((id) => id != memberId, orElse: () => '');
+    if (other.isEmpty) return;
+
+    switch (_splitMode) {
+      case _SplitMode.percent:
+        final entered = double.tryParse(value) ?? 0;
+        final remainder = (100.0 - entered).clamp(0.0, 100.0);
+        _customCtrls[other]?.text = remainder.toStringAsFixed(1);
+      case _SplitMode.amount:
+        final entered = double.tryParse(value) ?? 0;
+        final remainder = (_parsedAmount - entered).clamp(0.0, _parsedAmount);
+        _customCtrls[other]?.text = remainder.toStringAsFixed(2);
+      case _SplitMode.shares:
+      case _SplitMode.equally:
+        break;
+    }
+  }
+
+  double _shareFor(String memberId) {
+    if (_splitAmong.isEmpty) return 0;
+    switch (_splitMode) {
+      case _SplitMode.equally:
+        return _parsedAmount / _splitAmong.length;
+      case _SplitMode.amount:
+        return double.tryParse(_customCtrls[memberId]?.text.trim() ?? '') ?? 0;
+      case _SplitMode.percent:
+        final pct = double.tryParse(_customCtrls[memberId]?.text.trim() ?? '') ?? 0;
+        return _parsedAmount * pct / 100;
+      case _SplitMode.shares:
+        final myShares = double.tryParse(_customCtrls[memberId]?.text.trim() ?? '') ?? 0;
+        final totalShares = _splitAmong.fold(0.0, (sum, id) =>
+            sum + (double.tryParse(_customCtrls[id]?.text.trim() ?? '') ?? 0));
+        return totalShares > 0 ? _parsedAmount * myShares / totalShares : 0;
+    }
   }
 
   Future<void> _pickDate() async {
@@ -132,24 +192,102 @@ class _AddTravelExpenseScreenState
     if (picked != null) setState(() => _date = picked);
   }
 
+  void _showCategoryPicker() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Material(
+        type: MaterialType.transparency,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF2C2C2E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0E0E0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text('Category', style: _display(18, tracking: -0.3)),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 3,
+                    shrinkWrap: true,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.4,
+                    children: _categories.map((cat) {
+                      final selected = cat == _category;
+                      final color = _catColors[cat] ?? const Color(0xFF8E8E93);
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() => _category = cat);
+                          Navigator.pop(ctx);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: selected ? _blue : color.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _catIcons[cat] ?? CupertinoIcons.square_grid_2x2_fill,
+                                color: selected ? Colors.white : color,
+                                size: 22,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                cat[0].toUpperCase() + cat.substring(1),
+                                style: TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w600,
+                                  color: selected ? Colors.white : color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
-    final amountStr = _amountCtrl.text.trim().replaceAll(',', '.');
-    final amount = double.tryParse(amountStr);
+    final amount = _parsedAmount;
     final desc = _descCtrl.text.trim();
 
-    if (amount == null || amount <= 0) {
+    if (amount <= 0) {
       AppToast.show(context, context.t('validation.enterAmount'),
           type: AppToastType.error);
       return;
     }
     if (_paidByMemberId.isEmpty) {
-      AppToast.show(context, context.t('travel.saveFailed'),
-          type: AppToastType.error);
+      AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
       return;
     }
     if (_splitAmong.isEmpty) {
-      AppToast.show(context, context.t('travel.selectMembers'),
-          type: AppToastType.error);
+      AppToast.show(context, context.t('travel.selectMembers'), type: AppToastType.error);
       return;
     }
 
@@ -157,6 +295,14 @@ class _AddTravelExpenseScreenState
     try {
       final user = ref.read(authStateProvider).valueOrNull;
       final svc = ref.read(travelGroupServiceProvider);
+
+      // Build per-member amounts for non-equal splits
+      final Map<String, double>? splitAmountsMap = _splitMode != _SplitMode.equally
+          ? {for (final id in _splitAmong) id: _shareFor(id)}
+          : null;
+      final String? splitModeStr = _splitMode != _SplitMode.equally
+          ? _splitMode.name
+          : null;
 
       if (_isEdit) {
         final updated = widget.expense!.copyWith(
@@ -166,16 +312,14 @@ class _AddTravelExpenseScreenState
           date: _date,
           paidByMemberId: _paidByMemberId,
           splitAmong: _splitAmong.toList(),
-          notes: _notesCtrl.text.trim().isEmpty
-              ? null
-              : _notesCtrl.text.trim(),
+          splitAmounts: splitAmountsMap,
+          splitMode: splitModeStr,
           updatedAt: DateTime.now(),
         );
         await svc.updateExpense(widget.group.id, updated);
         if (mounted) {
           AppToast.show(context, context.t('travel.expenseUpdated'),
-              type: AppToastType.success,
-              icon: CupertinoIcons.checkmark_circle_fill);
+              type: AppToastType.success, icon: CupertinoIcons.checkmark_circle_fill);
           Navigator.pop(context);
         }
       } else {
@@ -188,22 +332,17 @@ class _AddTravelExpenseScreenState
           date: _date,
           paidByMemberId: _paidByMemberId,
           splitAmong: _splitAmong.toList(),
-          notes: _notesCtrl.text.trim().isEmpty
-              ? null
-              : _notesCtrl.text.trim(),
+          splitAmounts: splitAmountsMap,
+          splitMode: splitModeStr,
         );
         if (mounted) {
           AppToast.show(context, context.t('travel.expenseAdded'),
-              type: AppToastType.success,
-              icon: CupertinoIcons.checkmark_circle_fill);
+              type: AppToastType.success, icon: CupertinoIcons.checkmark_circle_fill);
           Navigator.pop(context);
         }
       }
     } catch (e) {
-      if (mounted) {
-        AppToast.show(context, context.t('travel.saveFailed'),
-            type: AppToastType.error);
-      }
+      if (mounted) AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -215,529 +354,564 @@ class _AddTravelExpenseScreenState
     final bg = isDark ? const Color(0xFF1C1C1E) : _parchment;
     final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
     final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
-    final dateFormat = DateFormat('MMM d, yyyy');
+    final dateLabelFmt = DateFormat('MMM d');
+    final now = DateTime.now();
+    final isToday = DateFormat('yyyy-MM-dd').format(_date) == DateFormat('yyyy-MM-dd').format(now);
+    final dateLabel = isToday ? 'Today, ${dateLabelFmt.format(_date)}' : dateLabelFmt.format(_date);
+    final catDisplay = _category[0].toUpperCase() + _category.substring(1);
+    final catColor = _catColors[_category] ?? const Color(0xFF8E8E93);
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Header ────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Text(
-                      context.t('common.cancel'),
-                      style: _body(17, color: _ink48),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: bg,
+        resizeToAvoidBottomInset: true,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ────────────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Text(context.t('common.cancel'),
+                          style: _body(17, color: _blue)),
                     ),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        _isEdit
-                            ? context.t('travel.editExpense')
-                            : context.t('travel.addExpense'),
-                        style: _body(17, weight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _saving ? null : _save,
-                    child: _saving
-                        ? const CupertinoActivityIndicator()
-                        : Text(
-                            context.t('common.save'),
-                            style: _body(17,
-                                weight: FontWeight.w600,
-                                color: _blue),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // ── Amount hero ───────────────────────────────────────────────
-            Container(
-              color: surface,
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        widget.group.currency,
-                        style: _display(22,
-                            tracking: -0.4, color: _ink48),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _amountCtrl,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                                  decimal: true),
-                          autofocus: !_isEdit,
-                          decoration: InputDecoration(
-                            hintText: '0.00',
-                            border: InputBorder.none,
-                            hintStyle:
-                                _display(40, tracking: -1.0, color: _ink48),
-                          ),
-                          style: _display(40, tracking: -1.0),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-                  Divider(color: border, height: 1),
-                  const SizedBox(height: 12),
-
-                  // Description row
-                  TextField(
-                    controller: _descCtrl,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: context.t('travel.fieldDescription'),
-                      border: InputBorder.none,
-                      hintStyle: _body(17, color: _ink48),
-                    ),
-                    style: _body(17),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Form sections ─────────────────────────────────────────────
-            Expanded(
-              child: ListView(
-                padding:
-                    const EdgeInsets.fromLTRB(20, 16, 20, 40),
-                children: [
-                  // Category
-                  _EyebrowLabel(context.t('travel.fieldCategory')),
-                  SizedBox(
-                    height: 68,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _categories.length,
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(width: 8),
-                      itemBuilder: (ctx, i) {
-                        final cat = _categories[i];
-                        final selected = _category == cat;
-                        final catColor = _categoryColors[cat] ??
-                            const Color(0xFF8E8E93);
-                        return GestureDetector(
-                          onTap: () =>
-                              setState(() => _category = cat),
-                          child: AnimatedContainer(
-                            duration:
-                                const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? _blue
-                                  : surface,
-                              borderRadius:
-                                  BorderRadius.circular(13),
-                              border: Border.all(
-                                color: selected
-                                    ? _blue
-                                    : border,
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  _categoryIcons[cat] ??
-                                      CupertinoIcons
-                                          .square_grid_2x2_fill,
-                                  size: 18,
-                                  color: selected
-                                      ? Colors.white
-                                      : catColor,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  cat,
-                                  style: _eyebrow(
-                                      color: selected
-                                          ? Colors.white
-                                          : _ink48),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Date
-                  _EyebrowLabel(context.t('travel.fieldDate')),
-                  _FormCard(
-                    isDark: isDark,
-                    child: _FormRow(
-                      label: context.t('travel.fieldDate'),
-                      value: dateFormat.format(_date),
-                      valueColor: _blue,
-                      onTap: _pickDate,
-                      border: border,
-                      isLast: true,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Paid By
-                  _EyebrowLabel(context.t('travel.fieldPaidBy')),
-                  _FormCard(
-                    isDark: isDark,
-                    child: Column(
-                      children: widget.members.asMap().entries.map((e) {
-                        final idx = e.key;
-                        final m = e.value;
-                        final selected = m.id == _paidByMemberId;
-                        final isLast =
-                            idx == widget.members.length - 1;
-                        return _SelectRow(
-                          label: m.name,
-                          selected: selected,
-                          isLast: isLast,
-                          border: border,
-                          onTap: () =>
-                              setState(() => _paidByMemberId = m.id),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Split Among
-                  _EyebrowLabel(context.t('travel.fieldSplitAmong')),
-                  _FormCard(
-                    isDark: isDark,
-                    child: Column(
-                      children: widget.members.asMap().entries.map((e) {
-                        final idx = e.key;
-                        final m = e.value;
-                        final checked = _splitAmong.contains(m.id);
-                        final isLast =
-                            idx == widget.members.length - 1;
-
-                        double? share;
-                        if (checked && _splitAmong.isNotEmpty) {
-                          final amt = double.tryParse(_amountCtrl.text
-                                  .trim()
-                                  .replaceAll(',', '.')) ??
-                              0;
-                          share = amt / _splitAmong.length;
-                        }
-
-                        return _CheckRow(
-                          label: m.name,
-                          sublabel: share != null && share > 0
-                              ? '${widget.group.currency} ${share.toStringAsFixed(2)} ${context.t('travel.perPerson')}'
-                              : null,
-                          checked: checked,
-                          isLast: isLast,
-                          border: border,
-                          onToggle: () {
-                            setState(() {
-                              if (checked) {
-                                _splitAmong.remove(m.id);
-                              } else {
-                                _splitAmong.add(m.id);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Notes (optional)
-                  _EyebrowLabel(context.t('travel.fieldNotes')),
-                  _FormCard(
-                    isDark: isDark,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      child: TextField(
-                        controller: _notesCtrl,
-                        textCapitalization:
-                            TextCapitalization.sentences,
-                        maxLines: 3,
-                        minLines: 2,
-                        decoration: InputDecoration(
-                          hintText: context.t('travel.fieldNotes'),
-                          border: InputBorder.none,
-                          hintStyle: _body(15, color: _ink48),
-                        ),
-                        style: _body(15),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Save pill
-                  GestureDetector(
-                    onTap: _saving ? null : _save,
-                    child: Container(
-                      width: double.infinity,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: _saving
-                            ? _blue.withValues(alpha: 0.5)
-                            : _blue,
-                        borderRadius:
-                            BorderRadius.circular(9999),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    Expanded(
+                      child: Column(
                         children: [
-                          const Icon(
-                            CupertinoIcons.checkmark_circle_fill,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
                           Text(
                             _isEdit
-                                ? context.t('common.save')
+                                ? context.t('travel.editExpense')
                                 : context.t('travel.addExpense'),
-                            style: _body(16,
-                                weight: FontWeight.w600,
-                                color: Colors.white),
+                            style: _body(17, weight: FontWeight.w600),
+                          ),
+                          Text(
+                            widget.group.name,
+                            style: _body(12, color: _blue),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    GestureDetector(
+                      onTap: _saving ? null : _save,
+                      child: _saving
+                          ? const CupertinoActivityIndicator()
+                          : Text(context.t('common.save'),
+                              style: _body(17, weight: FontWeight.w600, color: _blue)),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // ── Scrollable form ───────────────────────────────────────────
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(18, 0, 18,
+                      40 + MediaQuery.viewInsetsOf(context).bottom),
+                  children: [
+                    // AMOUNT section
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text('AMOUNT', style: _eyebrow()),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: border, width: 0.5),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(widget.group.currency,
+                              style: _display(22, tracking: -0.4, color: _ink48)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _amountCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              autofocus: !_isEdit,
+                              cursorHeight: 36,
+                              decoration: InputDecoration(
+                                hintText: '0.00',
+                                border: InputBorder.none,
+                                hintStyle: _display(36, tracking: -1.0, color: _ink48),
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              style: _display(36, tracking: -1.0),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // DESCRIPTION section
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text('DESCRIPTION', style: _eyebrow()),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: border, width: 0.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _descCtrl,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: InputDecoration(
+                              hintText: context.t('travel.fieldDescription'),
+                              border: InputBorder.none,
+                              hintStyle: _body(16, color: _ink48),
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            style: _body(16, weight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 8),
+                          Divider(height: 1, color: border),
+                          // Category + date info row
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: _showCategoryPicker,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 20, height: 20,
+                                        decoration: BoxDecoration(
+                                          color: catColor.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                        child: Icon(
+                                          _catIcons[_category] ?? CupertinoIcons.square_grid_2x2_fill,
+                                          color: catColor, size: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(catDisplay, style: _body(13, color: _ink48)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('·', style: _body(13, color: _ink48)),
+                              ),
+                              GestureDetector(
+                                onTap: _pickDate,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Text(dateLabel, style: _body(13, color: _ink48)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // PAID BY section
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 10),
+                      child: Text('PAID BY', style: _eyebrow()),
+                    ),
+                    SizedBox(
+                      height: 82,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.members.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (_, i) {
+                          final m = widget.members[i];
+                          final selected = m.id == _paidByMemberId;
+                          final avatarBg = _memberBgs[i % _memberBgs.length];
+                          final initial = m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+                          return _Pressable(
+                            onTap: () => setState(() => _paidByMemberId = m.id),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeOutBack,
+                                  width: 50, height: 50,
+                                  decoration: BoxDecoration(
+                                    color: selected ? _blue : avatarBg,
+                                    shape: BoxShape.circle,
+                                    border: selected
+                                        ? Border.all(color: _blue, width: 2)
+                                        : Border.all(color: border, width: 1),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      initial,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: selected ? Colors.white : _inkColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 200),
+                                  style: _body(12,
+                                      weight: selected ? FontWeight.w600 : FontWeight.w400,
+                                      color: selected ? _blue : _inkColor),
+                                  child: Text(
+                                    m.name.split(' ').first,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // SPLIT BETWEEN section
+                    Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Text('SPLIT BETWEEN', style: _eyebrow()),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () {
+                            // Toggle: if all selected, deselect all (except payer), else select all
+                            setState(() {
+                              if (_splitAmong.length == widget.members.length) {
+                                _splitAmong = {_paidByMemberId};
+                              } else {
+                                _splitAmong = widget.members.map((m) => m.id).toSet();
+                              }
+                            });
+                          },
+                          child: Text('Custom',
+                              style: _body(13, color: _blue)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Split mode tabs
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8E8EA),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: _SplitMode.values.map((mode) {
+                          final selected = mode == _splitMode;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                _splitMode = mode;
+                                // Reset custom fields when switching modes
+                                if (mode != _SplitMode.equally) {
+                                  final amt = _parsedAmount;
+                                  final share = _splitAmong.isNotEmpty
+                                      ? amt / _splitAmong.length : 0.0;
+                                  for (final m in widget.members) {
+                                    if (_splitAmong.contains(m.id)) {
+                                      switch (mode) {
+                                        case _SplitMode.amount:
+                                          _customCtrls[m.id]?.text = share.toStringAsFixed(2);
+                                        case _SplitMode.percent:
+                                          _customCtrls[m.id]?.text = _splitAmong.isNotEmpty
+                                              ? (100 / _splitAmong.length).toStringAsFixed(1) : '0';
+                                        case _SplitMode.shares:
+                                          _customCtrls[m.id]?.text = '1';
+                                        case _SplitMode.equally:
+                                          break;
+                                      }
+                                    } else {
+                                      _customCtrls[m.id]?.clear();
+                                    }
+                                  }
+                                }
+                              }),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                padding: const EdgeInsets.symmetric(vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? (isDark ? const Color(0xFF3A3A3C) : Colors.white)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: selected
+                                      ? [BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.07),
+                                          blurRadius: 3, offset: const Offset(0, 1))]
+                                      : null,
+                                ),
+                                child: Text(
+                                  _splitModeLabel(mode),
+                                  textAlign: TextAlign.center,
+                                  style: _body(12,
+                                      weight: selected ? FontWeight.w600 : FontWeight.w400,
+                                      color: selected ? _inkColor : _ink48),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Split member list
+                    Container(
+                      decoration: BoxDecoration(
+                        color: surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: border, width: 0.5),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Column(
+                          children: widget.members.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final m = entry.value;
+                            final checked = _splitAmong.contains(m.id);
+                            final isLast = idx == widget.members.length - 1;
+                            final initial = m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+                            final avatarBg = _memberBgs[idx % _memberBgs.length];
+                            final share = checked ? _shareFor(m.id) : 0.0;
+                            final shareLabel = checked && _parsedAmount > 0
+                                ? '${widget.group.currency} ${share.toStringAsFixed(2)}'
+                                : null;
+
+                            return Column(
+                              children: [
+                                GestureDetector(
+                                  onTap: _splitMode == _SplitMode.equally
+                                      ? () => setState(() {
+                                            if (checked) {
+                                              _splitAmong.remove(m.id);
+                                            } else {
+                                              _splitAmong.add(m.id);
+                                            }
+                                          })
+                                      : null,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                                    child: Row(
+                                      children: [
+                                        // Avatar
+                                        Container(
+                                          width: 36, height: 36,
+                                          decoration: BoxDecoration(
+                                            color: avatarBg, shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(initial,
+                                                style: _body(14, weight: FontWeight.w700)),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        // Name + YOU badge
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Text(m.name,
+                                                  style: _body(15, weight: FontWeight.w400)),
+                                              // YOU badge if needed (check via name "You" or isMe flag)
+                                            ],
+                                          ),
+                                        ),
+                                        // Custom amount field or share label
+                                        if (_splitMode == _SplitMode.equally) ...[
+                                          if (shareLabel != null)
+                                            Text(shareLabel,
+                                                style: _body(14,
+                                                    weight: FontWeight.w500,
+                                                    color: _ink48)),
+                                          const SizedBox(width: 10),
+                                          SizedBox(
+                                            width: 24, height: 24,
+                                            child: Checkbox(
+                                              value: checked,
+                                              onChanged: (_) => setState(() {
+                                                if (checked) {
+                                                  _splitAmong.remove(m.id);
+                                                } else {
+                                                  _splitAmong.add(m.id);
+                                                }
+                                              }),
+                                              activeColor: _blue,
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(6)),
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                        ] else ...[
+                                          // Custom amount/percent/shares text field
+                                          SizedBox(
+                                            width: 80,
+                                            child: TextField(
+                                              controller: _customCtrls[m.id],
+                                              keyboardType: const TextInputType.numberWithOptions(
+                                                  decimal: true),
+                                              textAlign: TextAlign.right,
+                                              decoration: InputDecoration(
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: BorderSide(color: border),
+                                                ),
+                                                contentPadding: const EdgeInsets.symmetric(
+                                                    horizontal: 10, vertical: 8),
+                                                hintText: _splitMode == _SplitMode.percent
+                                                    ? '%' : _splitMode == _SplitMode.shares
+                                                        ? 'shares' : '0.00',
+                                                hintStyle: _body(13, color: _ink48),
+                                                isDense: true,
+                                              ),
+                                              style: _body(13),
+                                              onChanged: (v) => _onCustomFieldChanged(m.id, v),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (!isLast)
+                                  Divider(height: 1, color: border, indent: 62, endIndent: 16),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Save button
+                    _Pressable(
+                      onTap: _saving ? null : _save,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _saving ? _blue.withValues(alpha: 0.5) : _blue,
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_saving)
+                              const CupertinoActivityIndicator(color: Colors.white)
+                            else ...[
+                              const Icon(CupertinoIcons.checkmark_circle_fill,
+                                  color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                _isEdit ? context.t('common.save') : context.t('travel.addExpense'),
+                                style: _body(16, weight: FontWeight.w600, color: Colors.white),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-// ── Form helpers ──────────────────────────────────────────────────────────────
-
-class _EyebrowLabel extends StatelessWidget {
-  final String text;
-  const _EyebrowLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(text.toUpperCase(), style: _eyebrow()),
-    );
+  String _splitModeLabel(_SplitMode mode) {
+    switch (mode) {
+      case _SplitMode.equally: return 'Equally';
+      case _SplitMode.amount: return 'Amount';
+      case _SplitMode.percent: return 'Percent';
+      case _SplitMode.shares: return 'Shares';
+    }
   }
 }
 
-class _FormCard extends StatelessWidget {
+// ── Press animation wrapper ───────────────────────────────────────────────────
+
+class _Pressable extends StatefulWidget {
   final Widget child;
-  final bool isDark;
-  const _FormCard({required this.child, required this.isDark});
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, this.onTap});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.95).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
-    final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
-    return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: border, width: 0.5),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: child,
-      ),
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) { if (widget.onTap != null) _ctrl.forward(); },
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }
 
-class _FormRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  final VoidCallback onTap;
-  final Color border;
-  final bool isLast;
+// ── Reusable constants ────────────────────────────────────────────────────────
 
-  const _FormRow({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-    required this.onTap,
-    required this.border,
-    required this.isLast,
-  });
+const _memberBgs = [
+  Color(0xFFE8E8EA), Color(0xFFDCDCE0), Color(0xFFD0D0D5),
+  Color(0xFFC4C4CA), Color(0xFFB8B8BF),
+];
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            color: Colors.transparent,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Expanded(child: Text(label, style: _body(16))),
-                Text(value,
-                    style: _body(16,
-                        weight: FontWeight.w500,
-                        color: valueColor)),
-                const SizedBox(width: 4),
-                const Icon(CupertinoIcons.chevron_forward,
-                    size: 14, color: _ink48),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast) Divider(height: 1, color: border, indent: 16),
-      ],
-    );
-  }
-}
-
-class _SelectRow extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final bool isLast;
-  final Color border;
-  final VoidCallback onTap;
-
-  const _SelectRow({
-    required this.label,
-    required this.selected,
-    required this.isLast,
-    required this.border,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            color: Colors.transparent,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: _body(16,
-                        weight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w400),
-                  ),
-                ),
-                if (selected)
-                  const Icon(CupertinoIcons.checkmark_circle_fill,
-                      color: _blue, size: 22)
-                else
-                  const Icon(CupertinoIcons.circle,
-                      color: _ink48, size: 22),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: border, indent: 16, endIndent: 16),
-      ],
-    );
-  }
-}
-
-class _CheckRow extends StatelessWidget {
-  final String label;
-  final String? sublabel;
-  final bool checked;
-  final bool isLast;
-  final Color border;
-  final VoidCallback onToggle;
-
-  const _CheckRow({
-    required this.label,
-    this.sublabel,
-    required this.checked,
-    required this.isLast,
-    required this.border,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onToggle,
-          child: Container(
-            color: Colors.transparent,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label, style: _body(16)),
-                      if (sublabel != null)
-                        Text(sublabel!,
-                            style: _body(12, color: _ink48)),
-                    ],
-                  ),
-                ),
-                Checkbox(
-                  value: checked,
-                  onChanged: (_) => onToggle(),
-                  activeColor: _blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  materialTapTargetSize:
-                      MaterialTapTargetSize.shrinkWrap,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: border, indent: 16, endIndent: 16),
-      ],
-    );
-  }
-}
-
-// ── Date picker ───────────────────────────────────────────────────────────────
+// ── Date picker sheet ─────────────────────────────────────────────────────────
 
 class _DatePickerSheet extends StatefulWidget {
   final DateTime initial;
@@ -782,8 +956,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 ),
                 CupertinoButton(
                   child: Text(context.t('common.done'),
-                      style: _body(17,
-                          weight: FontWeight.w600, color: _blue)),
+                      style: _body(17, weight: FontWeight.w600, color: _blue)),
                   onPressed: () => Navigator.pop(context, _picked),
                 ),
               ],

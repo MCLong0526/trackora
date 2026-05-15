@@ -138,17 +138,26 @@ class _AddEditTravelGroupScreenState
           startDate: _startDate,
           endDate: _endDate,
         );
-        // Add extra travelers (skip "You")
+        final createdGroup = TravelGroup(
+          id: groupId, name: name,
+          currency: currency.isEmpty ? 'MYR' : currency,
+          startDate: _startDate, endDate: _endDate,
+          ownerId: user.uid, memberIds: [user.uid],
+          createdAt: DateTime.now(), updatedAt: DateTime.now(),
+        );
+        // Add creator as first member (avoid duplicate if already added)
+        await svc.addMember(
+          groupId: groupId,
+          group: createdGroup,
+          name: user.email?.split('@').first ?? 'Me',
+          userId: user.uid,
+          email: user.email,
+        );
+        // Add extra travelers
         for (final t in _travelers.where((t) => !t.isYou)) {
           await svc.addMember(
             groupId: groupId,
-            group: TravelGroup(
-              id: groupId, name: name,
-              currency: currency.isEmpty ? 'MYR' : currency,
-              startDate: _startDate, endDate: _endDate,
-              ownerId: user.uid, memberIds: [user.uid],
-              createdAt: DateTime.now(), updatedAt: DateTime.now(),
-            ),
+            group: createdGroup,
             name: t.name,
             email: t.email,
           );
@@ -189,8 +198,12 @@ class _AddEditTravelGroupScreenState
     final dateFormat = DateFormat('MMM d, yyyy');
     final dayFormat = DateFormat('EEEE');
 
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
       backgroundColor: bg,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
@@ -398,7 +411,7 @@ class _AddEditTravelGroupScreenState
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 48),
                     child: Center(
-                      child: GestureDetector(
+                      child: _Pressable(
                         onTap: _saving ? null : _save,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -440,6 +453,7 @@ class _AddEditTravelGroupScreenState
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -656,13 +670,16 @@ class _AddTravelerSheetState extends State<_AddTravelerSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
 
-    return Container(
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: BoxDecoration(
         color: surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
+        top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
           child: Column(
@@ -713,6 +730,50 @@ class _AddTravelerSheetState extends State<_AddTravelerSheet> {
           ),
         ),
       ),
+    ),
+    );
+  }
+}
+
+// ── Press animation wrapper ───────────────────────────────────────────────────
+
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, this.onTap});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.95).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) { if (widget.onTap != null) _ctrl.forward(); },
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }

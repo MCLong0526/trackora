@@ -6,6 +6,7 @@ class TravelGroup {
   final DateTime? endDate;
   final String ownerId;
   final List<String> memberIds;
+  final String? inviteCode;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -17,6 +18,7 @@ class TravelGroup {
     this.endDate,
     required this.ownerId,
     required this.memberIds,
+    this.inviteCode,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -30,6 +32,7 @@ class TravelGroup {
       endDate: data['endDate'] != null ? readDate(data['endDate']) : null,
       ownerId: data['ownerId'] as String,
       memberIds: List<String>.from(data['memberIds'] as List? ?? []),
+      inviteCode: data['inviteCode'] as String?,
       createdAt: readDate(data['createdAt']),
       updatedAt: readDate(data['updatedAt']),
     );
@@ -44,6 +47,7 @@ class TravelGroup {
       'endDate': endDate?.toIso8601String(),
       'ownerId': ownerId,
       'memberIds': memberIds,
+      if (inviteCode != null) 'inviteCode': inviteCode,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -57,6 +61,7 @@ class TravelGroup {
     Object? endDate = _sentinel,
     String? ownerId,
     List<String>? memberIds,
+    Object? inviteCode = _sentinel,
     DateTime? updatedAt,
   }) {
     return TravelGroup(
@@ -67,6 +72,7 @@ class TravelGroup {
       endDate: identical(endDate, _sentinel) ? this.endDate : endDate as DateTime?,
       ownerId: ownerId ?? this.ownerId,
       memberIds: memberIds ?? this.memberIds,
+      inviteCode: identical(inviteCode, _sentinel) ? this.inviteCode : inviteCode as String?,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -1,11 +1,15 @@
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/travel_expense.dart';
 import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
+import '../../services/travel_group_service.dart';
 import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
 import 'add_edit_travel_group_screen.dart';
@@ -19,26 +23,23 @@ const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
 const _ink48 = Color(0xFF7A7A7A);
 const _red = Color(0xFFFF3B30);
+const _green = Color(0xFF28A968);
 
 const _memberBgs = [
   Color(0xFFE8E8EA), Color(0xFFDCDCE0), Color(0xFFD0D0D5),
   Color(0xFFC4C4CA), Color(0xFFB8B8BF),
 ];
 
-TextStyle _display(double size, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
+TextStyle _display(double sz, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
+    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
 
-TextStyle _body(double size, {FontWeight weight = FontWeight.w400, Color? color}) =>
-    TextStyle(fontSize: size, fontWeight: weight, color: color ?? _inkColor, height: 1.4);
+TextStyle _body(double sz, {FontWeight weight = FontWeight.w400, Color? color}) =>
+    TextStyle(fontSize: sz, fontWeight: weight, color: color ?? _inkColor, height: 1.4);
 
-TextStyle _eyebrow({Color? color}) => TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.6,
-      color: color ?? _ink48,
-    );
+TextStyle _eyebrow({Color? color}) =>
+    TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: color ?? _ink48);
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+// ── Main screen ───────────────────────────────────────────────────────────────
 
 class TravelGroupDetailScreen extends ConsumerStatefulWidget {
   final TravelGroup group;
@@ -50,22 +51,7 @@ class TravelGroupDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TravelGroupDetailScreenState
-    extends ConsumerState<TravelGroupDetailScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
-    _tabCtrl.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
+    extends ConsumerState<TravelGroupDetailScreen> {
 
   Future<void> _deleteGroup() async {
     final confirmed = await showCupertinoDialog<bool>(
@@ -87,90 +73,220 @@ class _TravelGroupDetailScreenState
       ),
     );
     if (confirmed != true) return;
-
     try {
       await ref.read(travelGroupServiceProvider).deleteGroup(widget.group.id);
       if (mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.deleted'),
-          type: AppToastType.success,
-          icon: CupertinoIcons.checkmark_circle_fill,
-        );
+        AppToast.show(context, context.t('travel.deleted'),
+            type: AppToastType.success, icon: CupertinoIcons.checkmark_circle_fill);
         Navigator.pop(context);
       }
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.saveFailed'),
-          type: AppToastType.error,
-        );
-      }
+    } catch (_) {
+      if (mounted) AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
     }
   }
 
-  void _showMore() {
+  void _showMore(List<TravelGroupMember> members) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final cardBg = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7);
+    final border = isDark ? const Color(0xFF48484A) : _hairline;
+
     showCupertinoModalPopup(
       context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) =>
-                      AddEditTravelGroupScreen(group: widget.group),
-                ),
-              );
-            },
-            child: Text(context.t('common.edit')),
+      builder: (ctx) => Material(
+        type: MaterialType.transparency,
+        child: Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteGroup();
-            },
-            child: Text(context.t('travel.delete')),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      margin: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(
+                        color: border, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  // Actions card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      children: [
+                        _Pressable(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(context, CupertinoPageRoute(
+                              builder: (_) => AddEditTravelGroupScreen(group: widget.group),
+                            ));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                            child: Row(
+                              children: [
+                                Icon(CupertinoIcons.pencil, color: _inkColor, size: 20),
+                                const SizedBox(width: 12),
+                                Text(context.t('common.edit'),
+                                    style: _body(17)),
+                                const Spacer(),
+                                Icon(CupertinoIcons.chevron_right,
+                                    color: _ink48, size: 14),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Divider(height: 0.5, thickness: 0.5, color: border, indent: 16),
+                        _Pressable(
+                          onTap: () { Navigator.pop(ctx); _deleteGroup(); },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                            child: Row(
+                              children: [
+                                Icon(CupertinoIcons.trash, color: _red, size: 20),
+                                const SizedBox(width: 12),
+                                Text(context.t('travel.delete'),
+                                    style: _body(17, color: _red)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Cancel button
+                  _Pressable(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(context.t('common.cancel'),
+                            style: _body(17, weight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.t('common.cancel')),
         ),
       ),
     );
+  }
+
+  void _showMembersSheet(List<TravelGroupMember> members, bool isDark) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => _MembersSheet(
+        group: widget.group,
+        members: members,
+        isDark: isDark,
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(TravelExpense expense) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(context.t('travel.deleteExpense')),
+        content: Text(context.t('travel.deleteExpenseConfirm')),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('common.delete')),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.cancel')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(travelGroupServiceProvider).deleteExpense(widget.group.id, expense.id);
+      if (mounted) AppToast.show(context, context.t('travel.expenseDeleted'), type: AppToastType.success);
+    } catch (_) {
+      if (mounted) AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF1C1C1E) : _parchment;
+
     final membersAsync = ref.watch(travelGroupMembersProvider(widget.group.id));
     final expensesAsync = ref.watch(travelGroupExpensesProvider(widget.group.id));
+    final user = ref.watch(authStateProvider).valueOrNull;
+
     final members = membersAsync.valueOrNull ?? [];
     final expenses = expensesAsync.valueOrNull ?? [];
     final svc = ref.read(travelGroupServiceProvider);
     final settlement = svc.calculateSettlement(members, expenses);
-    final dateFmt = DateFormat('MMM d');
 
-    String dateRange = '';
-    if (widget.group.startDate != DateTime(0)) {
-      final s = dateFmt.format(widget.group.startDate);
-      final e = widget.group.endDate != null
-          ? dateFmt.format(widget.group.endDate!)
-          : null;
-      dateRange = e != null ? '$s – $e' : s;
+    // Find current user's member record and balance
+    TravelGroupMember? myMember;
+    for (final m in members) {
+      if (m.userId == user?.uid) { myMember = m; break; }
     }
+    final myMemberId = myMember?.id ?? '';
+
+    MemberBalance? myBalance;
+    for (final b in settlement.balances) {
+      if (b.memberId == myMemberId) { myBalance = b; break; }
+    }
+
+    final fmt = NumberFormat('#,##0.00');
+    final totalSpent = expenses.fold<double>(0.0, (s, e) => s + e.amount);
+    final memberMap = {for (final m in members) m.id: m};
+
+    // Day info
+    final now = DateTime.now();
+    final dayNum = now.difference(widget.group.startDate).inDays + 1;
+    final totalDays = widget.group.endDate != null
+        ? widget.group.endDate!.difference(widget.group.startDate).inDays + 1
+        : null;
+    final dayLabel = totalDays != null ? 'DAY $dayNum OF $totalDays' : 'DAY $dayNum';
+
+    // Date range display
+    final dateFmt = DateFormat('MMM d');
+    final fullDateFmt = DateFormat('MMM d, yyyy');
+    final s = dateFmt.format(widget.group.startDate);
+    final e = widget.group.endDate != null ? fullDateFmt.format(widget.group.endDate!) : null;
+    final dateRange = e != null ? '$s – $e' : s;
+
+    // Group expenses by date (newest first)
+    final grouped = <String, List<TravelExpense>>{};
+    for (final ex in expenses) {
+      final key = DateFormat('yyyy-MM-dd').format(ex.date);
+      grouped.putIfAbsent(key, () => []).add(ex);
+    }
+    final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
       backgroundColor: bg,
       body: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────
+          // ── Nav bar ────────────────────────────────────────────────────────
           SafeArea(
             bottom: false,
             child: Padding(
@@ -179,67 +295,231 @@ class _TravelGroupDetailScreenState
                 children: [
                   _CircleBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(CupertinoIcons.back,
-                        size: 18, color: _inkColor),
+                    child: const Icon(CupertinoIcons.back, size: 18, color: _inkColor),
                   ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          widget.group.name,
-                          style: _display(17, tracking: -0.4),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (dateRange.isNotEmpty)
-                          Text(dateRange,
-                              style: _body(12, color: _ink48)),
-                      ],
-                    ),
-                  ),
+                  const Spacer(),
                   _CircleBtn(
-                    onTap: _showMore,
-                    child: const Icon(CupertinoIcons.ellipsis,
-                        size: 16, color: _inkColor),
+                    onTap: () => _showMore(members),
+                    child: const Icon(CupertinoIcons.ellipsis, size: 16, color: _inkColor),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
 
-          // ── Segment control ──────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _SegmentControl(
-              labels: [
-                context.t('travel.expenses'),
-                context.t('travel.members'),
-              ],
-              selected: _tabCtrl.index,
-              onSelect: (i) => _tabCtrl.animateTo(i),
-              isDark: isDark,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // ── Body ─────────────────────────────────────────────────────────
+          // ── Scrollable body ────────────────────────────────────────────────
           Expanded(
-            child: TabBarView(
-              controller: _tabCtrl,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
               children: [
-                _ExpensesTab(
-                  group: widget.group,
-                  membersAsync: membersAsync,
-                  expensesAsync: expensesAsync,
-                  settlement: settlement,
-                  isDark: isDark,
+                // ── Trip header ──────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 6, height: 6,
+                          decoration: const BoxDecoration(color: _blue, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 6),
+                        Text('ACTIVE · $dayLabel', style: _eyebrow(color: _blue)),
+                      ]),
+                      const SizedBox(height: 8),
+                      Text(widget.group.name,
+                          style: _display(34, tracking: -0.8)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$dateRange · ${members.length} travelers',
+                        style: _body(14, color: _ink48),
+                      ),
+                    ],
+                  ),
                 ),
-                _MembersTab(
-                  group: widget.group,
-                  membersAsync: membersAsync,
-                  isDark: isDark,
+                const SizedBox(height: 18),
+
+                // ── Stats row: Trip Total | You're Owed ──────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _StatsCard(
+                          label: 'TRIP TOTAL',
+                          value: '${widget.group.currency} ${fmt.format(totalSpent)}',
+                          valueColor: null,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatsCard(
+                          label: myBalance == null
+                              ? 'BALANCE'
+                              : myBalance.net >= 0
+                                  ? "YOU'RE OWED"
+                                  : 'YOU OWE',
+                          value: myBalance == null
+                              ? '—'
+                              : '${myBalance.net >= 0 ? '+' : ''}${widget.group.currency} ${fmt.format(myBalance.net.abs())}',
+                          valueColor: myBalance == null
+                              ? null
+                              : myBalance.net >= 0 ? _green : _red,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 24),
+
+                // ── WHO PAID section ─────────────────────────────────────────
+                if (members.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(26, 0, 22, 10),
+                    child: Row(
+                      children: [
+                        Text(
+                          'WHO PAID · ${members.length} TRAVELERS',
+                          style: _eyebrow(),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => _showMembersSheet(members, isDark),
+                          child: Text('See all',
+                              style: _body(13, color: _blue)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _Card(
+                      isDark: isDark,
+                      child: Column(
+                        children: members.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final m = entry.value;
+                          final paid = settlement.balances
+                              .where((b) => b.memberId == m.id)
+                              .fold(0.0, (_, b) => b.totalPaid);
+                          final ratio = totalSpent > 0 ? (paid / totalSpent).clamp(0.0, 1.0) : 0.0;
+                          return _WhoPaidRow(
+                            member: m,
+                            paid: paid,
+                            ratio: ratio,
+                            currency: widget.group.currency,
+                            fmt: fmt,
+                            isLast: idx == members.length - 1,
+                            isDark: isDark,
+                            isMe: m.id == myMemberId,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // ── Expense list grouped by date ─────────────────────────────
+                if (expensesAsync.isLoading)
+                  const Center(child: CupertinoActivityIndicator())
+                else if (expenses.isEmpty)
+                  _EmptyExpenses(group: widget.group, members: members, isDark: isDark)
+                else
+                  ...sortedKeys.map((dateKey) {
+                    final dayExpenses = grouped[dateKey]!;
+                    final dt = DateFormat('yyyy-MM-dd').parse(dateKey);
+                    final isToday = dateKey == DateFormat('yyyy-MM-dd').format(now);
+                    final isYesterday = dateKey == DateFormat('yyyy-MM-dd').format(
+                        now.subtract(const Duration(days: 1)));
+                    final dayHeader = isToday
+                        ? 'TODAY · ${DateFormat('EEE MMM d').format(dt).toUpperCase()}'
+                        : isYesterday
+                            ? 'YESTERDAY · ${DateFormat('EEE MMM d').format(dt).toUpperCase()}'
+                            : DateFormat('EEE MMM d, yyyy').format(dt).toUpperCase();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(26, 0, 22, 10),
+                          child: Row(
+                            children: [
+                              Text(dayHeader, style: _eyebrow()),
+                              const Spacer(),
+                              Text('Filter',
+                                  style: _body(13, color: _blue)),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                          child: _Card(
+                            isDark: isDark,
+                            child: Column(
+                              children: dayExpenses.asMap().entries.map((e) {
+                                final idx = e.key;
+                                final expense = e.value;
+                                final paidBy = memberMap[expense.paidByMemberId];
+
+                                // Per-expense balance line
+                                String balanceText = '';
+                                Color balanceColor = _green;
+                                if (myMemberId.isNotEmpty) {
+                                  final splitCnt = expense.splitAmong.length;
+                                  // Use saved per-member amount when available, else equal share
+                                  final myShare = expense.splitAmounts?[myMemberId]
+                                      ?? (splitCnt > 0 ? expense.amount / splitCnt : 0.0);
+                                  if (expense.paidByMemberId == myMemberId) {
+                                    final lent = expense.amount -
+                                        (expense.splitAmong.contains(myMemberId) ? myShare : 0.0);
+                                    if (lent > 0.005) {
+                                      balanceText = 'you lent +${widget.group.currency} ${fmt.format(lent)}';
+                                    }
+                                  } else if (expense.splitAmong.contains(myMemberId)) {
+                                    balanceText = 'you owe ${widget.group.currency} ${fmt.format(myShare)}';
+                                    balanceColor = _red;
+                                  }
+                                }
+
+                                final paidByIsMe = expense.paidByMemberId == myMemberId;
+                                final payerName = paidByIsMe ? 'You' : (paidBy?.name ?? '—');
+                                final splitCnt = expense.splitAmong.length;
+                                final splitLabel = splitCnt > 0
+                                    ? '$payerName paid · split $splitCnt ways'
+                                    : '$payerName paid';
+
+                                return _ExpenseRow(
+                                  expense: expense,
+                                  currency: widget.group.currency,
+                                  fmt: fmt,
+                                  splitLabel: splitLabel,
+                                  balanceText: balanceText,
+                                  balanceColor: balanceColor,
+                                  isLast: idx == dayExpenses.length - 1,
+                                  isDark: isDark,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    CupertinoPageRoute(
+                                      fullscreenDialog: true,
+                                      builder: (_) => AddTravelExpenseScreen(
+                                        group: widget.group,
+                                        members: members,
+                                        expense: expense,
+                                      ),
+                                    ),
+                                  ),
+                                  onDelete: () => _confirmDelete(expense),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
               ],
             ),
           ),
@@ -247,83 +527,269 @@ class _TravelGroupDetailScreenState
       ),
 
       // ── Bottom bar ────────────────────────────────────────────────────────
-      bottomNavigationBar: _tabCtrl.index == 0
-          ? _BottomBar(
-              group: widget.group,
-              members: members,
-              expenses: expenses,
-              settlement: settlement,
-              isDark: isDark,
-            )
-          : null,
+      bottomNavigationBar: _BottomBar(
+        group: widget.group,
+        members: members,
+        expenses: expenses,
+        settlement: settlement,
+        isDark: isDark,
+      ),
     );
   }
 }
 
-// ── Segment control ───────────────────────────────────────────────────────────
+// ── Stats card ─────────────────────────────────────────────────────────────────
 
-class _SegmentControl extends StatelessWidget {
-  final List<String> labels;
-  final int selected;
-  final void Function(int) onSelect;
+class _StatsCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
   final bool isDark;
 
-  const _SegmentControl({
-    required this.labels,
-    required this.selected,
-    required this.onSelect,
+  const _StatsCard({
+    required this.label,
+    required this.value,
+    required this.valueColor,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    final trackColor =
-        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE0E0E0);
-
+    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: trackColor,
-        borderRadius: BorderRadius.circular(11),
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 0.5),
       ),
-      child: Row(
-        children: labels.asMap().entries.map((e) {
-          final isSelected = e.key == selected;
-          final surfaceColor =
-              isDark ? const Color(0xFF3A3A3C) : Colors.white;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onSelect(e.key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: _eyebrow()),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: _display(20, tracking: -0.4, color: valueColor ?? _inkColor),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Who Paid row ──────────────────────────────────────────────────────────────
+
+class _WhoPaidRow extends StatelessWidget {
+  final TravelGroupMember member;
+  final double paid;
+  final double ratio;
+  final String currency;
+  final NumberFormat fmt;
+  final bool isLast;
+  final bool isDark;
+  final bool isMe;
+
+  const _WhoPaidRow({
+    required this.member,
+    required this.paid,
+    required this.ratio,
+    required this.currency,
+    required this.fmt,
+    required this.isLast,
+    required this.isDark,
+    required this.isMe,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final initial = member.name.isNotEmpty ? member.name[0].toUpperCase() : '?';
+    final avatarBg = _memberBgs[member.name.hashCode.abs() % _memberBgs.length];
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+          child: Row(
+            children: [
+              // Avatar
+              Container(
+                width: 32, height: 32,
                 decoration: BoxDecoration(
-                  color: isSelected ? surfaceColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 4,
-                            offset: const Offset(0, 1),
-                          )
-                        ]
-                      : null,
+                  color: avatarBg,
+                  shape: BoxShape.circle,
+                  border: isMe ? Border.all(color: _blue, width: 1.5) : null,
                 ),
-                child: Text(
-                  e.value,
-                  textAlign: TextAlign.center,
-                  style: _body(
-                    13,
-                    weight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    color: isSelected ? _inkColor : _ink48,
-                  ),
+                child: Center(child: Text(initial,
+                    style: _body(13, weight: FontWeight.w700))),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text(isMe ? 'You' : member.name,
+                          style: _body(14, weight: FontWeight.w500)),
+                      if (isMe) ...[
+                        const SizedBox(width: 5),
+                        Text('YOU',
+                            style: TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.w600,
+                              color: _blue, letterSpacing: 0.4,
+                            )),
+                      ],
+                    ]),
+                    const SizedBox(height: 5),
+                    _AnimatedProgressBar(
+                      value: ratio,
+                      foreground: _blue,
+                      background: _blue.withValues(alpha: 0.10),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 12),
+              Text('$currency ${fmt.format(paid)}',
+                  style: _body(14, weight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Divider(height: 1, color: divider, indent: 18, endIndent: 18),
+      ],
+    );
+  }
+}
+
+// ── Expense row ───────────────────────────────────────────────────────────────
+
+class _ExpenseRow extends StatelessWidget {
+  final TravelExpense expense;
+  final String currency;
+  final NumberFormat fmt;
+  final String splitLabel;
+  final String balanceText;
+  final Color balanceColor;
+  final bool isLast;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _ExpenseRow({
+    required this.expense,
+    required this.currency,
+    required this.fmt,
+    required this.splitLabel,
+    required this.balanceText,
+    required this.balanceColor,
+    required this.isLast,
+    required this.isDark,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  static const _catIcons = <String, IconData>{
+    'food': CupertinoIcons.cart_fill,
+    'transport': CupertinoIcons.car_fill,
+    'accommodation': CupertinoIcons.house_fill,
+    'activities': CupertinoIcons.star_fill,
+    'shopping': CupertinoIcons.bag_fill,
+    'general': CupertinoIcons.square_grid_2x2_fill,
+  };
+
+  static const _catColors = <String, Color>{
+    'food': Color(0xFFFF9500),
+    'transport': Color(0xFF3478F6),
+    'accommodation': Color(0xFF5856D6),
+    'activities': Color(0xFFFF2D55),
+    'shopping': Color(0xFF34C759),
+    'general': Color(0xFF8E8E93),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final catColor = _catColors[expense.category] ?? const Color(0xFF8E8E93);
+
+    return Column(
+      children: [
+        Dismissible(
+          key: Key(expense.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: _red.withValues(alpha: 0.08),
+            child: const Icon(CupertinoIcons.delete, color: _red, size: 20),
+          ),
+          confirmDismiss: (_) async { onDelete(); return false; },
+          child: GestureDetector(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Category icon
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: catColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(
+                      _catIcons[expense.category] ?? CupertinoIcons.square_grid_2x2_fill,
+                      color: catColor, size: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Description + split label
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          expense.description.isNotEmpty
+                              ? expense.description
+                              : expense.category,
+                          style: _body(15, weight: FontWeight.w500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(splitLabel,
+                            style: _body(12, color: _ink48),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Amount + balance
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('$currency ${fmt.format(expense.amount)}',
+                          style: _body(15, weight: FontWeight.w600)),
+                      if (balanceText.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(balanceText,
+                            style: _body(12, color: balanceColor)),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        ),
+        if (!isLast)
+          Divider(height: 1, color: divider, indent: 68, endIndent: 18),
+      ],
     );
   }
 }
@@ -348,398 +814,145 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    final surface = isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, 10 + safeBottom),
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: border, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: members.isEmpty
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(
-                          fullscreenDialog: true,
-                          builder: (_) => AddTravelExpenseScreen(
-                            group: group,
-                            members: members,
-                          ),
-                        ),
-                      ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: members.isEmpty
-                      ? _blue.withValues(alpha: 0.4)
-                      : _blue,
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(CupertinoIcons.add,
-                        color: Colors.white, size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      context.t('travel.addExpense'),
-                      style: _body(15,
-                          weight: FontWeight.w600, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(18, 10, 18, 10 + safeBottom),
+          decoration: BoxDecoration(
+            color: (isDark ? const Color(0xFF1C1C1E) : Colors.white).withValues(alpha: 0.85),
+            border: Border(top: BorderSide(color: border, width: 0.5)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => SettlementScreen(
-                    group: group,
-                    settlement: settlement,
-                  ),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: _blue, width: 1.5),
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(CupertinoIcons.checkmark_seal,
-                        color: _blue, size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      context.t('travel.settle'),
-                      style: _body(15,
-                          weight: FontWeight.w600, color: _blue),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Expenses Tab ──────────────────────────────────────────────────────────────
-
-class _ExpensesTab extends ConsumerWidget {
-  final TravelGroup group;
-  final AsyncValue<List<TravelGroupMember>> membersAsync;
-  final AsyncValue<List<TravelExpense>> expensesAsync;
-  final dynamic settlement;
-  final bool isDark;
-
-  const _ExpensesTab({
-    required this.group,
-    required this.membersAsync,
-    required this.expensesAsync,
-    required this.settlement,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return expensesAsync.when(
-      loading: () => const Center(child: CupertinoActivityIndicator()),
-      error: (e, _) => Center(child: Text('${context.t('common.error')}: $e')),
-      data: (expenses) {
-        final members = membersAsync.valueOrNull ?? [];
-        final memberMap = {for (final m in members) m.id: m};
-        final fmt = NumberFormat('#,##0.00');
-        final totalSpent =
-            expenses.fold<double>(0, (sum, e) => sum + e.amount);
-
-        if (expenses.isEmpty) {
-          return _EmptyExpenses(
-              group: group, members: members, isDark: isDark);
-        }
-
-        final grouped = <String, List<TravelExpense>>{};
-        final dateFmt = DateFormat('MMM d, yyyy');
-        for (final e in expenses) {
-          grouped.putIfAbsent(dateFmt.format(e.date), () => []).add(e);
-        }
-
-        final paidMap = <String, double>{};
-        for (final e in expenses) {
-          paidMap[e.paidByMemberId] =
-              (paidMap[e.paidByMemberId] ?? 0) + e.amount;
-        }
-
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-          children: [
-            // Total card
-            _TotalCard(
-              currency: group.currency,
-              totalSpent: totalSpent,
-              memberCount: members.length,
-              fmt: fmt,
-              isDark: isDark,
-            ),
-            const SizedBox(height: 20),
-
-            // WHO PAID
-            if (members.isNotEmpty && totalSpent > 0) ...[
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 10),
-                child: Text(
-                  context.t('travel.whoPaid').toUpperCase(),
-                  style: _eyebrow(),
-                ),
-              ),
-              _Card(
-                isDark: isDark,
-                child: Column(
-                  children: members.asMap().entries.map((entry) {
-                    final m = entry.value;
-                    final paid = paidMap[m.id] ?? 0;
-                    final ratio = totalSpent > 0 ? paid / totalSpent : 0.0;
-                    final isLast = entry.key == members.length - 1;
-                    return _WhoPaidRow(
-                      member: m,
-                      paid: paid,
-                      ratio: ratio,
-                      currency: group.currency,
-                      fmt: fmt,
-                      isLast: isLast,
-                      isDark: isDark,
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // EXPENSES grouped by date
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 10),
-              child: Text(
-                context.t('travel.expenses').toUpperCase(),
-                style: _eyebrow(),
-              ),
-            ),
-            ...grouped.entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 8),
-                        child: Text(entry.key,
-                            style: _body(12,
-                                weight: FontWeight.w500, color: _ink48)),
-                      ),
-                      _Card(
-                        isDark: isDark,
-                        child: Column(
-                          children: entry.value.asMap().entries.map((e) {
-                            final idx = e.key;
-                            final expense = e.value;
-                            final paidBy =
-                                memberMap[expense.paidByMemberId];
-                            final isLast =
-                                idx == entry.value.length - 1;
-                            return _ExpenseRow(
-                              expense: expense,
-                              paidByName: paidBy?.name ?? '—',
-                              currency: group.currency,
-                              fmt: fmt,
-                              isLast: isLast,
-                              isDark: isDark,
-                              onTap: () => Navigator.push(
-                                context,
-                                CupertinoPageRoute(
-                                  fullscreenDialog: true,
-                                  builder: (_) => AddTravelExpenseScreen(
-                                    group: group,
-                                    members:
-                                        membersAsync.valueOrNull ?? [],
-                                    expense: expense,
-                                  ),
-                                ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _Pressable(
+                  onTap: members.isEmpty
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              fullscreenDialog: true,
+                              builder: (_) => AddTravelExpenseScreen(
+                                group: group,
+                                members: members,
                               ),
-                              onDelete: () =>
-                                  _confirmDelete(context, ref, expense),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    TravelExpense expense,
-  ) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text(context.t('travel.deleteExpense')),
-        content: Text(context.t('travel.deleteExpenseConfirm')),
-        actions: [
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.t('common.delete')),
-          ),
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.t('common.cancel')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await ref
-          .read(travelGroupServiceProvider)
-          .deleteExpense(group.id, expense.id);
-      if (context.mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.expenseDeleted'),
-          type: AppToastType.success,
-        );
-      }
-    } catch (_) {
-      if (context.mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.saveFailed'),
-          type: AppToastType.error,
-        );
-      }
-    }
-  }
-}
-
-// ── Members Tab ───────────────────────────────────────────────────────────────
-
-class _MembersTab extends ConsumerWidget {
-  final TravelGroup group;
-  final AsyncValue<List<TravelGroupMember>> membersAsync;
-  final bool isDark;
-
-  const _MembersTab({
-    required this.group,
-    required this.membersAsync,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return membersAsync.when(
-      loading: () => const Center(child: CupertinoActivityIndicator()),
-      error: (e, _) => Center(child: Text('${context.t('common.error')}: $e')),
-      data: (members) => ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-        children: [
-          _Card(
-            isDark: isDark,
-            child: Column(
-              children: [
-                ...members.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final m = entry.value;
-                  final isOwner =
-                      m.userId != null && m.userId == group.ownerId;
-                  final isLast = idx == members.length - 1 && !true;
-                  return Column(
-                    children: [
-                      _MemberRow(
-                        member: m,
-                        isOwner: isOwner,
-                        index: idx,
-                        isDark: isDark,
-                        onDelete: isOwner
-                            ? null
-                            : () => _confirmRemove(context, ref, m),
-                      ),
-                      if (!isLast)
-                        Divider(
-                          height: 1,
-                          color: isDark
-                              ? const Color(0xFF3A3A3C)
-                              : _hairline,
-                          indent: 20,
-                          endIndent: 20,
-                        ),
-                    ],
-                  );
-                }),
-                // Divider before Add member
-                Divider(
-                  height: 1,
-                  color: isDark ? const Color(0xFF3A3A3C) : _hairline,
-                  indent: 20,
-                  endIndent: 20,
-                ),
-                // Add member row
-                GestureDetector(
-                  onTap: () => _showAddMember(context, ref, members),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: _blue.withValues(alpha: 0.10),
-                            shape: BoxShape.circle,
+                            ),
                           ),
-                          child: const Icon(CupertinoIcons.add,
-                              color: _blue, size: 16),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          context.t('travel.addMember'),
-                          style: _body(15,
-                              weight: FontWeight.w500, color: _blue),
-                        ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: members.isEmpty ? _blue.withValues(alpha: 0.4) : _blue,
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(CupertinoIcons.add, color: Colors.white, size: 15),
+                        const SizedBox(width: 6),
+                        Text(context.t('travel.addExpense'),
+                            style: _body(15, weight: FontWeight.w600, color: Colors.white)),
                       ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Pressable(
+                  onTap: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => SettlementScreen(
+                        group: group,
+                        settlement: settlement,
+                        members: members,
+                        expenses: expenses,
+                      ),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _blue, width: 1.5),
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(CupertinoIcons.checkmark_seal, color: _blue, size: 15),
+                        const SizedBox(width: 6),
+                        Text(context.t('travel.settle'),
+                            style: _body(15, weight: FontWeight.w600, color: _blue)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Future<void> _confirmRemove(
-    BuildContext context,
-    WidgetRef ref,
-    TravelGroupMember m,
-  ) async {
+// ── Members sheet ─────────────────────────────────────────────────────────────
+
+class _MembersSheet extends ConsumerStatefulWidget {
+  final TravelGroup group;
+  final List<TravelGroupMember> members;
+  final bool isDark;
+
+  const _MembersSheet({
+    required this.group,
+    required this.members,
+    required this.isDark,
+  });
+
+  @override
+  ConsumerState<_MembersSheet> createState() => _MembersSheetState();
+}
+
+class _MembersSheetState extends ConsumerState<_MembersSheet> {
+  final _nameCtrl  = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  bool _adding = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addMember() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _adding = true);
+    try {
+      await ref.read(travelGroupServiceProvider).addMember(
+        groupId: widget.group.id,
+        group: widget.group,
+        name: name,
+        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      );
+      _nameCtrl.clear();
+      _emailCtrl.clear();
+      if (mounted) {
+        AppToast.show(context, context.t('travel.memberAdded'),
+            type: AppToastType.success, icon: CupertinoIcons.checkmark_circle_fill);
+      }
+    } catch (_) {
+      if (mounted) AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  Future<void> _removeMember(TravelGroupMember m) async {
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
@@ -760,64 +973,256 @@ class _MembersTab extends ConsumerWidget {
     );
     if (confirmed != true) return;
     try {
-      await ref
-          .read(travelGroupServiceProvider)
-          .removeMember(group.id, group, m.id, m.userId);
-      if (context.mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.memberRemoved'),
-          type: AppToastType.success,
-        );
-      }
+      await ref.read(travelGroupServiceProvider)
+          .removeMember(widget.group.id, widget.group, m.id, m.userId);
+      if (mounted) AppToast.show(context, context.t('travel.memberRemoved'), type: AppToastType.success);
     } catch (_) {
-      if (context.mounted) {
-        AppToast.show(
-          context,
-          context.t('travel.saveFailed'),
-          type: AppToastType.error,
-        );
-      }
+      if (mounted) AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
     }
   }
 
-  void _showAddMember(
-    BuildContext context,
-    WidgetRef ref,
-    List<TravelGroupMember> existing,
-  ) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => _AddMemberSheet(
-        group: group,
-        isDark: isDark,
-        onAdd: (name, email) async {
-          try {
-            await ref.read(travelGroupServiceProvider).addMember(
-              groupId: group.id,
-              group: group,
-              name: name,
-              email: email?.isEmpty == true ? null : email,
-            );
-            if (ctx.mounted) {
-              Navigator.pop(ctx);
-              AppToast.show(
-                context,
-                context.t('travel.memberAdded'),
-                type: AppToastType.success,
-                icon: CupertinoIcons.checkmark_circle_fill,
-              );
-            }
-          } catch (_) {
-            if (ctx.mounted) {
-              AppToast.show(
-                context,
-                context.t('travel.saveFailed'),
-                type: AppToastType.error,
-              );
-            }
-          }
-        },
+  @override
+  Widget build(BuildContext context) {
+    final surface = widget.isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final bg = widget.isDark ? const Color(0xFF1C1C1E) : _parchment;
+    final border = widget.isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final membersLive = ref.watch(travelGroupMembersProvider(widget.group.id)).valueOrNull
+        ?? widget.members;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.80,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: 20, right: 20, top: 12,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                        color: border, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Text(context.t('travel.members'),
+                        style: _display(20, tracking: -0.4)),
+                    const Spacer(),
+                    Text('${membersLive.length} members', style: _body(13, color: _ink48)),
+                  ],
+                ),
+                if (widget.group.inviteCode != null && widget.group.inviteCode!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () {
+                      final code = widget.group.inviteCode!;
+                      final msg = 'Join "${widget.group.name}" on Trackora! Use code: $code';
+                      Share.share(msg);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _blue.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.link, size: 14, color: _blue),
+                          const SizedBox(width: 6),
+                          Text('Code: ${widget.group.inviteCode}',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.5, color: _blue)),
+                          const SizedBox(width: 8),
+                          const Icon(CupertinoIcons.share, size: 14, color: _blue),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                // Member list (scrollable)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: membersLive.length,
+                    separatorBuilder: (_, _) =>
+                        Divider(height: 1, color: border, indent: 18, endIndent: 18),
+                    itemBuilder: (_, i) {
+                      final m = membersLive[i];
+                      final isOwner = m.userId != null && m.userId == widget.group.ownerId;
+                      final initial = m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+                      final avatarBg = _memberBgs[i % _memberBgs.length];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(color: avatarBg, shape: BoxShape.circle),
+                              child: Center(child: Text(initial,
+                                  style: _body(14, weight: FontWeight.w700))),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(children: [
+                                    Text(m.name, style: _body(15, weight: FontWeight.w500)),
+                                    if (isOwner) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: _blue.withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text('Owner',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _blue)),
+                                      ),
+                                    ],
+                                  ]),
+                                  if (m.email != null && m.email!.isNotEmpty)
+                                    Text(m.email!, style: _body(12, color: _ink48)),
+                                ],
+                              ),
+                            ),
+                            if (!isOwner)
+                              GestureDetector(
+                                onTap: () => _removeMember(m),
+                                child: const Icon(CupertinoIcons.minus_circle,
+                                    color: _ink48, size: 22),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Add member fields
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: border, width: 0.5),
+                  ),
+                  child: TextField(
+                    controller: _nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      hintText: context.t('travel.memberName'),
+                      border: InputBorder.none,
+                      hintStyle: _body(15, color: _ink48),
+                    ),
+                    style: _body(15),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: border, width: 0.5),
+                  ),
+                  child: TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: context.t('travel.memberEmail'),
+                      border: InputBorder.none,
+                      hintStyle: _body(15, color: _ink48),
+                    ),
+                    style: _body(15),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: _adding ? null : _addMember,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _adding ? _blue.withValues(alpha: 0.5) : _blue,
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Center(
+                        child: _adding
+                            ? const CupertinoActivityIndicator(color: Colors.white)
+                            : Text(context.t('common.add'),
+                                style: _body(16, weight: FontWeight.w600, color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Empty expenses ────────────────────────────────────────────────────────────
+
+class _EmptyExpenses extends StatelessWidget {
+  final TravelGroup group;
+  final List<TravelGroupMember> members;
+  final bool isDark;
+
+  const _EmptyExpenses({
+    required this.group,
+    required this.members,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                color: _blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(CupertinoIcons.doc_text, color: _blue, size: 34),
+            ),
+            const SizedBox(height: 18),
+            Text(context.t('travel.noExpenses'),
+                style: _display(20, tracking: -0.4), textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(context.t('travel.noExpensesHint'),
+                style: _body(15, color: _ink48), textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }
@@ -841,10 +1246,7 @@ class _Card extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border, width: 0.5),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: child,
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(20), child: child),
     );
   }
 }
@@ -857,11 +1259,10 @@ class _CircleBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
       child: Container(
-        width: 36,
-        height: 36,
+        width: 36, height: 36,
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withValues(alpha: 0.10)
@@ -874,547 +1275,112 @@ class _CircleBtn extends StatelessWidget {
   }
 }
 
-class _TotalCard extends StatelessWidget {
-  final String currency;
-  final double totalSpent;
-  final int memberCount;
-  final NumberFormat fmt;
-  final bool isDark;
+// ── Press animation wrapper ───────────────────────────────────────────────────
 
-  const _TotalCard({
-    required this.currency,
-    required this.totalSpent,
-    required this.memberCount,
-    required this.fmt,
-    required this.isDark,
-  });
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
-    final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
-    final perPerson =
-        memberCount > 0 ? totalSpent / memberCount : totalSpent;
+  State<_Pressable> createState() => _PressableState();
+}
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t('travel.totalSpent').toUpperCase(),
-            style: _eyebrow(color: _ink48),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '$currency ${fmt.format(totalSpent)}',
-            style: _display(34, tracking: -1.0),
-          ),
-          if (memberCount > 1) ...[
-            const SizedBox(height: 10),
-            Divider(color: border, height: 1),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text(
-                  '$currency ${fmt.format(perPerson)}',
-                  style: _body(14,
-                      weight: FontWeight.w500, color: _ink48),
-                ),
-                Text(
-                  ' · ${context.t('travel.perPerson')}',
-                  style: _body(14, color: _ink48),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
+class _PressableState extends State<_Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.95).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
-}
-
-class _WhoPaidRow extends StatelessWidget {
-  final TravelGroupMember member;
-  final double paid;
-  final double ratio;
-  final String currency;
-  final NumberFormat fmt;
-  final bool isLast;
-  final bool isDark;
-
-  const _WhoPaidRow({
-    required this.member,
-    required this.paid,
-    required this.ratio,
-    required this.currency,
-    required this.fmt,
-    required this.isLast,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final divider =
-        isDark ? const Color(0xFF3A3A3C) : _hairline;
-    final initial =
-        member.name.isNotEmpty ? member.name[0].toUpperCase() : '?';
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE8E8EA),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(initial,
-                          style: _body(13,
-                              weight: FontWeight.w700,
-                              color: _inkColor)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(member.name,
-                        style: _body(14, weight: FontWeight.w500)),
-                  ),
-                  Text(
-                    '$currency ${fmt.format(paid)}',
-                    style: _body(14, weight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: ratio.clamp(0.0, 1.0),
-                  minHeight: 5,
-                  backgroundColor: _blue.withValues(alpha: 0.10),
-                  valueColor: const AlwaysStoppedAnimation(_blue),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: divider, indent: 20, endIndent: 20),
-      ],
-    );
-  }
-}
-
-class _ExpenseRow extends StatelessWidget {
-  final TravelExpense expense;
-  final String paidByName;
-  final String currency;
-  final NumberFormat fmt;
-  final bool isLast;
-  final bool isDark;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  const _ExpenseRow({
-    required this.expense,
-    required this.paidByName,
-    required this.currency,
-    required this.fmt,
-    required this.isLast,
-    required this.isDark,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  static const _categoryIcons = <String, IconData>{
-    'food': CupertinoIcons.cart_fill,
-    'transport': CupertinoIcons.car_fill,
-    'accommodation': CupertinoIcons.house_fill,
-    'activities': CupertinoIcons.star_fill,
-    'shopping': CupertinoIcons.bag_fill,
-    'general': CupertinoIcons.square_grid_2x2_fill,
-  };
-
-  static const _categoryColors = <String, Color>{
-    'food': Color(0xFFFF9500),
-    'transport': Color(0xFF3478F6),
-    'accommodation': Color(0xFF5856D6),
-    'activities': Color(0xFFFF2D55),
-    'shopping': Color(0xFF34C759),
-    'general': Color(0xFF8E8E93),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final divider =
-        isDark ? const Color(0xFF3A3A3C) : _hairline;
-    final catColor =
-        _categoryColors[expense.category] ?? const Color(0xFF8E8E93);
-    final dateFmt = DateFormat('MMM d');
-
-    return Column(
-      children: [
-        Dismissible(
-          key: Key(expense.id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            color: _red.withValues(alpha: 0.08),
-            child: const Icon(CupertinoIcons.delete, color: _red, size: 20),
-          ),
-          confirmDismiss: (_) async {
-            onDelete();
-            return false;
-          },
-          child: GestureDetector(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(
-                      _categoryIcons[expense.category] ??
-                          CupertinoIcons.square_grid_2x2_fill,
-                      color: catColor,
-                      size: 17,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          expense.description.isNotEmpty
-                              ? expense.description
-                              : expense.category,
-                          style: _body(15, weight: FontWeight.w500),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${context.t('travel.paid')} by $paidByName · ${dateFmt.format(expense.date)}',
-                          style: _body(12, color: _ink48),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$currency ${fmt.format(expense.amount)}',
-                    style: _body(15, weight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (!isLast)
-          Divider(height: 1, color: divider, indent: 70, endIndent: 20),
-      ],
-    );
-  }
-}
-
-class _MemberRow extends StatelessWidget {
-  final TravelGroupMember member;
-  final bool isOwner;
-  final int index;
-  final bool isDark;
-  final VoidCallback? onDelete;
-
-  const _MemberRow({
-    required this.member,
-    required this.isOwner,
-    required this.index,
-    required this.isDark,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = _memberBgs[index % _memberBgs.length];
-    final initial =
-        member.name.isNotEmpty ? member.name[0].toUpperCase() : '?';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Center(
-              child: Text(initial,
-                  style: _body(16,
-                      weight: FontWeight.w700, color: _inkColor)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(member.name,
-                        style: _body(15, weight: FontWeight.w500)),
-                    if (isOwner) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _blue.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text('Owner',
-                            style: _eyebrow(color: _blue)),
-                      ),
-                    ],
-                  ],
-                ),
-                if (member.email != null && member.email!.isNotEmpty)
-                  Text(member.email!,
-                      style: _body(12, color: _ink48)),
-              ],
-            ),
-          ),
-          if (onDelete != null)
-            GestureDetector(
-              onTap: onDelete,
-              child: const Icon(CupertinoIcons.minus_circle,
-                  color: _ink48, size: 22),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyExpenses extends StatelessWidget {
-  final TravelGroup group;
-  final List<TravelGroupMember> members;
-  final bool isDark;
-
-  const _EmptyExpenses({
-    required this.group,
-    required this.members,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: _blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(CupertinoIcons.doc_text,
-                  color: _blue, size: 34),
-            ),
-            const SizedBox(height: 18),
-            Text(context.t('travel.noExpenses'),
-                style: _display(20, tracking: -0.4),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            Text(context.t('travel.noExpensesHint'),
-                style: _body(15, color: _ink48),
-                textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Add member sheet ──────────────────────────────────────────────────────────
-
-class _AddMemberSheet extends StatefulWidget {
-  final TravelGroup group;
-  final bool isDark;
-  final Future<void> Function(String name, String? email) onAdd;
-
-  const _AddMemberSheet({
-    required this.group,
-    required this.isDark,
-    required this.onAdd,
-  });
-
-  @override
-  State<_AddMemberSheet> createState() => _AddMemberSheetState();
-}
-
-class _AddMemberSheetState extends State<_AddMemberSheet> {
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  bool _saving = false;
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final surface =
-        widget.isDark ? const Color(0xFF2C2C2E) : Colors.white;
-    final bg =
-        widget.isDark ? const Color(0xFF1C1C1E) : _parchment;
-    final border =
-        widget.isDark ? const Color(0xFF3A3A3C) : _hairline;
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) { if (widget.onTap != null) _ctrl.forward(); },
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    );
+  }
+}
 
-    return Container(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 10, 22, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Pull indicator
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Text(context.t('travel.addMember'),
-                  style: _display(22, tracking: -0.4)),
-              const SizedBox(height: 20),
+// ── Animated progress bar ─────────────────────────────────────────────────────
 
-              // Name field
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: border, width: 0.5),
-                ),
-                child: TextField(
-                  controller: _nameCtrl,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    hintText: context.t('travel.memberName'),
-                    border: InputBorder.none,
-                    hintStyle: _body(16, color: _ink48),
-                  ),
-                  style: _body(16),
-                ),
-              ),
-              const SizedBox(height: 10),
+class _AnimatedProgressBar extends StatefulWidget {
+  final double value;
+  final Color foreground;
+  final Color background;
+  const _AnimatedProgressBar({
+    required this.value,
+    required this.foreground,
+    required this.background,
+  });
 
-              // Email field
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: border, width: 0.5),
-                ),
-                child: TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    hintText: context.t('travel.memberEmail'),
-                    border: InputBorder.none,
-                    hintStyle: _body(16, color: _ink48),
-                  ),
-                  style: _body(16),
-                ),
-              ),
-              const SizedBox(height: 20),
+  @override
+  State<_AnimatedProgressBar> createState() => _AnimatedProgressBarState();
+}
 
-              // Add button
-              GestureDetector(
-                onTap: _saving
-                    ? null
-                    : () async {
-                        final name = _nameCtrl.text.trim();
-                        if (name.isEmpty) return;
-                        setState(() => _saving = true);
-                        await widget.onAdd(
-                            name, _emailCtrl.text.trim());
-                        if (mounted) setState(() => _saving = false);
-                      },
-                child: Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 15),
-                  decoration: BoxDecoration(
-                    color: _saving
-                        ? _blue.withValues(alpha: 0.5)
-                        : _blue,
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: Center(
-                    child: _saving
-                        ? const CupertinoActivityIndicator(
-                            color: Colors.white)
-                        : Text(
-                            context.t('common.add'),
-                            style: _body(16,
-                                weight: FontWeight.w600,
-                                color: Colors.white),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+class _AnimatedProgressBarState extends State<_AnimatedProgressBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 700));
+    _anim = Tween(begin: 0.0, end: widget.value).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedProgressBar old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      _anim = Tween(begin: _anim.value, end: widget.value).animate(
+          CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+      _ctrl
+        ..reset()
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _) => ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: LinearProgressIndicator(
+          value: _anim.value,
+          minHeight: 4,
+          backgroundColor: widget.background,
+          valueColor: AlwaysStoppedAnimation(widget.foreground),
         ),
       ),
     );
   }
 }
+

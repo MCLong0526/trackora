@@ -1,11 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
+import '../../models/travel_expense.dart';
 import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
 import '../../services/travel_group_service.dart';
+import '../../widgets/app_toast.dart';
+import 'receipt_screen.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -50,37 +52,186 @@ TextStyle _eyebrow({Color? color}) => TextStyle(
 class SettlementScreen extends StatelessWidget {
   final TravelGroup group;
   final TravelSettlement settlement;
+  final List<TravelGroupMember> members;
+  final List<TravelExpense> expenses;
 
   const SettlementScreen({
     super.key,
     required this.group,
     required this.settlement,
+    this.members = const [],
+    this.expenses = const [],
   });
 
-  String _buildShareText(BuildContext context) {
-    final fmt = NumberFormat('#,##0.00');
-    final sb = StringBuffer();
-    sb.writeln('${group.name} — ${context.t('travel.settlement')}');
-    sb.writeln('');
-    sb.writeln(
-        '${context.t('travel.totalSpent')}: ${group.currency} ${fmt.format(settlement.totalSpent)}');
-    sb.writeln('');
-    for (final b in settlement.balances) {
-      final sign = b.net >= 0 ? '+' : '';
-      sb.writeln(
-          '${b.memberName}: $sign${fmt.format(b.net)}');
+  void _showReceiptPicker(BuildContext context) {
+    if (members.isEmpty) {
+      AppToast.show(context, 'No travelers found', type: AppToastType.error);
+      return;
     }
-    sb.writeln('');
-    if (settlement.transactions.isEmpty) {
-      sb.writeln(context.t('travel.settled'));
-    } else {
-      sb.writeln('${context.t('travel.settlement')}:');
-      for (final tx in settlement.transactions) {
-        sb.writeln(
-            '  ${tx.fromMemberName} → ${tx.toMemberName}: ${group.currency} ${fmt.format(tx.amount)}');
-      }
-    }
-    return sb.toString();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final cardBg = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7);
+    final border = isDark ? const Color(0xFF48484A) : _hairline;
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => Material(
+        type: MaterialType.transparency,
+        child: Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(
+                        color: border, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 14),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Generate Receipt For',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: _inkColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      children: members.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final m = entry.value;
+                        final isLast = idx == members.length - 1;
+                        final balance = settlement.balances.firstWhere(
+                          (b) => b.memberId == m.id,
+                          orElse: () => MemberBalance(
+                              memberId: m.id,
+                              memberName: m.name,
+                              totalPaid: 0,
+                              totalShare: 0),
+                        );
+                        final isPositive = balance.net >= 0;
+                        final fmt = NumberFormat('#,##0.00');
+                        final initial =
+                            m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+
+                        return Column(
+                          children: [
+                            _Pressable(
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    fullscreenDialog: true,
+                                    builder: (_) => ReceiptScreen(
+                                      group: group,
+                                      member: m,
+                                      balance: balance,
+                                      allTransactions: settlement.transactions,
+                                      expenses: expenses,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 13),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36, height: 36,
+                                      decoration: BoxDecoration(
+                                        color: _blue.withValues(alpha: 0.10),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(initial,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: _blue,
+                                            )),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(m.name,
+                                          style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: _inkColor)),
+                                    ),
+                                    Text(
+                                      '${isPositive ? '+' : '−'}${group.currency} ${fmt.format(balance.net.abs())}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: isPositive
+                                            ? _positiveColor
+                                            : _negativeColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(CupertinoIcons.chevron_right,
+                                        color: _ink48, size: 14),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (!isLast)
+                              Divider(height: 0.5, thickness: 0.5, color: border, indent: 64),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _Pressable(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(context.t('common.cancel'),
+                            style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: _inkColor)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,11 +266,7 @@ class SettlementScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _CircleBtn(
-                    onTap: () => Share.share(_buildShareText(context)),
-                    child: const Icon(CupertinoIcons.share,
-                        size: 16, color: _inkColor),
-                  ),
+                  const SizedBox(width: 36),
                 ],
               ),
             ),
@@ -417,26 +564,29 @@ class SettlementScreen extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                // Share pill
-                GestureDetector(
-                  onTap: () => Share.share(_buildShareText(context)),
+                // Generate Receipt pill
+                _Pressable(
+                  onTap: () => _showReceiptPicker(context),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     decoration: BoxDecoration(
-                      border: Border.all(color: _blue, width: 1.5),
+                      color: _blue,
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(CupertinoIcons.share,
-                            color: _blue, size: 16),
+                        const Icon(CupertinoIcons.doc_text,
+                            color: Colors.white, size: 16),
                         const SizedBox(width: 8),
-                        Text(
-                          context.t('travel.shareSettlement'),
-                          style: _body(16,
-                              weight: FontWeight.w600, color: _blue),
+                        const Text(
+                          'Generate Receipt',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
                     ),
@@ -451,6 +601,49 @@ class SettlementScreen extends StatelessWidget {
   }
 }
 
+// ── Press animation wrapper ───────────────────────────────────────────────────
+
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, this.onTap});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.95).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) { if (widget.onTap != null) _ctrl.forward(); },
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    );
+  }
+}
+
 // ── Circle button ─────────────────────────────────────────────────────────────
 
 class _CircleBtn extends StatelessWidget {
@@ -461,7 +654,7 @@ class _CircleBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
       child: Container(
         width: 36,

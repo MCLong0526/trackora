@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
+import '../../widgets/app_toast.dart';
 import 'add_edit_travel_group_screen.dart';
 import 'travel_group_detail_screen.dart';
 
@@ -34,14 +37,34 @@ TextStyle _eyebrow({Color color = _ink48}) =>
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-class TravelGroupsScreen extends ConsumerWidget {
+class TravelGroupsScreen extends ConsumerStatefulWidget {
   const TravelGroupsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TravelGroupsScreen> createState() => _TravelGroupsScreenState();
+}
+
+class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
+  String? _lastProcessedUid;
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF1C1C1E) : _parchment;
     final async = ref.watch(travelGroupsProvider);
+
+    // Auto-join email-invited groups whenever a new user signs in.
+    ref.listen(authStateProvider, (previous, next) {
+      final user = next.valueOrNull;
+      if (user == null || user.uid == _lastProcessedUid) return;
+      _lastProcessedUid = user.uid;
+      if ((user.email ?? '').isEmpty) return;
+      ref.read(travelGroupServiceProvider).processEmailInvites(
+        userEmail: user.email!,
+        userId: user.uid,
+        userName: user.email!.split('@').first,
+      );
+    });
 
     return Scaffold(
       backgroundColor: bg,
@@ -80,13 +103,20 @@ class _ErrorBody extends StatelessWidget {
   }
 }
 
-class _Body extends StatelessWidget {
+class _Body extends ConsumerWidget {
   final List<TravelGroup> groups;
   final bool isDark;
   const _Body({required this.groups, required this.isDark});
 
+  void _showJoinWithCodeSheet(BuildContext context, WidgetRef ref) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => _JoinWithCodeSheet(ref: ref),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final active = groups.where((g) => g.endDate == null || g.endDate!.isAfter(now)).toList();
     final past = groups.where((g) => g.endDate != null && !g.endDate!.isAfter(now)).toList();
@@ -154,7 +184,10 @@ class _Body extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _PillGhost(label: 'Join with code', onTap: () {}),
+                  _PillGhost(
+                    label: 'Join with code',
+                    onTap: () => _showJoinWithCodeSheet(context, ref),
+                  ),
                 ],
               ),
             ],
@@ -212,7 +245,7 @@ class _Body extends StatelessWidget {
 
 // ── Active trip card ──────────────────────────────────────────────────────────
 
-class _TripCardActive extends StatelessWidget {
+class _TripCardActive extends ConsumerWidget {
   final TravelGroup group;
   final bool isDark;
   final VoidCallback onOpen;
@@ -223,10 +256,19 @@ class _TripCardActive extends StatelessWidget {
     required this.onOpen,
   });
 
+  void _showMembersPopup(BuildContext context, List<TravelGroupMember> members,
+      TravelGroup group, bool isDark) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => _MembersPopup(members: members, group: group, isDark: isDark),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fmt = DateFormat('MMM d');
     final fmtFull = DateFormat('MMM d, yyyy');
+    final amtFmt = NumberFormat('#,##0.00');
     final now = DateTime.now();
     final startedDaysAgo = now.difference(group.startDate).inDays;
     final totalDays = group.endDate != null
@@ -235,6 +277,48 @@ class _TripCardActive extends StatelessWidget {
     final dayLabel = totalDays != null
         ? 'day ${startedDaysAgo + 1} of $totalDays'
         : 'day ${startedDaysAgo + 1}';
+
+    // Live data
+    final membersAsync = ref.watch(travelGroupMembersProvider(group.id));
+    final expensesAsync = ref.watch(travelGroupExpensesProvider(group.id));
+    final user = ref.watch(authStateProvider).valueOrNull;
+
+    final members = membersAsync.valueOrNull ?? [];
+    final expenses = expensesAsync.valueOrNull ?? [];
+    final memberCount = members.isNotEmpty ? members.length : group.memberIds.length;
+    final totalSpent = expenses.fold(0.0, (s, e) => s + e.amount);
+
+    // Current user's balance
+    final svc = ref.read(travelGroupServiceProvider);
+    final settlement = svc.calculateSettlement(members, expenses);
+
+    String? myMemberId;
+    for (final m in members) {
+      if (m.userId == user?.uid) { myMemberId = m.id; break; }
+    }
+
+    double? myNet;
+    if (myMemberId != null) {
+      for (final b in settlement.balances) {
+        if (b.memberId == myMemberId) { myNet = b.net; break; }
+      }
+    }
+
+    final balanceText = myNet == null
+        ? 'Tap to see balance'
+        : myNet > 0.005
+            ? 'Others owe you: ${group.currency} ${amtFmt.format(myNet)}'
+            : myNet < -0.005
+                ? 'You owe: ${group.currency} ${amtFmt.format(myNet.abs())}'
+                : 'All settled up!';
+    final balanceColor = myNet == null
+        ? _ink80
+        : myNet > 0.005
+            ? const Color(0xFF28A968)
+            : myNet < -0.005
+                ? const Color(0xFFFF3B30)
+                : _ink48;
+
     return _Card(
       isDark: isDark,
       child: Padding(
@@ -263,7 +347,7 @@ class _TripCardActive extends StatelessWidget {
             Text(
               '${fmt.format(group.startDate)}'
               '${group.endDate != null ? ' – ${fmtFull.format(group.endDate!)}' : ''}'
-              ' · ${group.memberIds.length} travelers',
+              ' · $memberCount travelers',
               style: _body(15, color: _ink80),
             ),
 
@@ -279,37 +363,43 @@ class _TripCardActive extends StatelessWidget {
                     children: [
                       Text('TRIP TOTAL', style: _eyebrow()),
                       const SizedBox(height: 4),
-                      RichText(
-                        text: TextSpan(
-                          style: _display(32, tracking: -0.6, lh: 1.05),
-                          children: [
-                            TextSpan(
-                              text: '${group.currency} ',
-                              style: _body(17, color: _ink80),
+                      expensesAsync.isLoading
+                          ? const CupertinoActivityIndicator()
+                          : Text(
+                              '${group.currency} ${amtFmt.format(totalSpent)}',
+                              style: _display(28, tracking: -0.6, lh: 1.05),
                             ),
-                            const TextSpan(text: '—'),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                _MemberStack(memberIds: group.memberIds, size: 32),
+                _Pressable(
+                  onTap: members.isNotEmpty
+                      ? () => _showMembersPopup(context, members, group, isDark)
+                      : onOpen,
+                  child: members.isNotEmpty
+                      ? _LiveMemberStack(members: members, size: 32)
+                      : _MemberStack(memberIds: group.memberIds, size: 32),
+                ),
               ],
             ),
 
             // Hairline divider
             const SizedBox(height: 22),
-            Divider(height: 1, thickness: 1, color: isDark ? const Color(0xFF3A3A3C) : _hairline),
+            Divider(height: 1, thickness: 1,
+                color: isDark ? const Color(0xFF3A3A3C) : _hairline),
             const SizedBox(height: 18),
 
             // Balance line
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Open to see balance', style: _body(15, color: _ink80)),
-                const Icon(CupertinoIcons.chevron_right, size: 14, color: _ink24),
-              ],
+            GestureDetector(
+              onTap: onOpen,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(balanceText,
+                      style: _body(15, color: balanceColor)),
+                  const Icon(CupertinoIcons.chevron_right, size: 14, color: _ink24),
+                ],
+              ),
             ),
 
             const SizedBox(height: 22),
@@ -322,6 +412,14 @@ class _TripCardActive extends StatelessWidget {
                 _PillGhost(label: 'Settle up', onTap: onOpen),
               ],
             ),
+
+            // Invite code row
+            if (group.inviteCode != null && group.inviteCode!.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Divider(height: 1, color: isDark ? const Color(0xFF3A3A3C) : _hairline),
+              const SizedBox(height: 12),
+              _InviteCodeRow(group: group, isDark: isDark),
+            ],
           ],
         ),
       ),
@@ -362,6 +460,76 @@ class _TripListCard extends StatelessWidget {
   }
 }
 
+// ── Invite code row (handles share + clipboard with feedback) ─────────────────
+
+class _InviteCodeRow extends StatefulWidget {
+  final TravelGroup group;
+  final bool isDark;
+  const _InviteCodeRow({required this.group, required this.isDark});
+
+  @override
+  State<_InviteCodeRow> createState() => _InviteCodeRowState();
+}
+
+class _InviteCodeRowState extends State<_InviteCodeRow> {
+  Future<void> _share() async {
+    final code = widget.group.inviteCode!;
+    final msg = 'Join "${widget.group.name}" on Trackora! Use invite code: $code';
+    try {
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.share(
+        msg,
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _copy() async {
+    final code = widget.group.inviteCode!;
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    AppToast.show(context, 'Code copied!',
+        type: AppToastType.success,
+        icon: CupertinoIcons.doc_on_clipboard_fill);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _share,
+      onLongPress: _copy,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _blue.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(CupertinoIcons.link, size: 11, color: _blue),
+                const SizedBox(width: 4),
+                Text(widget.group.inviteCode!,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.8,
+                        color: _blue)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('Tap to share · hold to copy', style: _eyebrow(color: _ink48)),
+        ],
+      ),
+    );
+  }
+}
+
 class _TripListRow extends StatelessWidget {
   final TravelGroup group;
   final bool last;
@@ -380,9 +548,8 @@ class _TripListRow extends StatelessWidget {
     final fmt = DateFormat('MMM d');
     final dividerColor = isDark ? const Color(0xFF3A3A3C) : _hairline;
 
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
           Padding(
@@ -510,7 +677,7 @@ class _CircleBtn extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
     final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
       child: Container(
         width: 40, height: 40,
@@ -531,7 +698,7 @@ class _PillPrimary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
@@ -556,7 +723,7 @@ class _PillGhost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(21, 10, 21, 10),
@@ -571,6 +738,446 @@ class _PillGhost extends StatelessWidget {
               letterSpacing: -0.2, color: _blue,
             )),
       ),
+    );
+  }
+}
+
+// ── Live member avatar stack (shows initials) ─────────────────────────────────
+
+class _LiveMemberStack extends StatelessWidget {
+  final List<TravelGroupMember> members;
+  final double size;
+  const _LiveMemberStack({required this.members, this.size = 28});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = members.take(4).toList();
+    final more = members.length - shown.length;
+    final totalWidth = shown.length * (size - 8) + 8.0 + (more > 0 ? (size - 8) : 0);
+    return SizedBox(
+      width: totalWidth,
+      height: size,
+      child: Stack(
+        children: [
+          ...shown.asMap().entries.map((e) {
+            final m = e.value;
+            final bg = _memberBgs[e.key % _memberBgs.length];
+            final initial = m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+            return Positioned(
+              left: e.key * (size - 8),
+              child: Container(
+                width: size, height: size,
+                decoration: BoxDecoration(
+                  color: bg, shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Center(
+                  child: Text(initial,
+                      style: TextStyle(
+                        fontSize: size * 0.36, fontWeight: FontWeight.w700, color: _inkColor)),
+                ),
+              ),
+            );
+          }),
+          if (more > 0)
+            Positioned(
+              left: shown.length * (size - 8),
+              child: Container(
+                width: size, height: size,
+                decoration: BoxDecoration(
+                  color: _memberBgs.last, shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Center(
+                  child: Text('+$more',
+                      style: TextStyle(
+                        fontSize: size * 0.34, fontWeight: FontWeight.w600, color: _inkColor)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Members popup (from trip list card avatar tap) ────────────────────────────
+
+class _MembersPopup extends StatelessWidget {
+  final List<TravelGroupMember> members;
+  final TravelGroup group;
+  final bool isDark;
+
+  const _MembersPopup({
+    required this.members,
+    required this.group,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final bg = isDark ? const Color(0xFF1C1C1E) : _parchment;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    decoration: BoxDecoration(
+                        color: border, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                // Header
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(group.name, style: _display(20, tracking: -0.4)),
+                          const SizedBox(height: 2),
+                          Text('${members.length} travelers',
+                              style: _eyebrow(color: _ink48)),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: bg, shape: BoxShape.circle,
+                        ),
+                        child: const Icon(CupertinoIcons.xmark, size: 14, color: _ink48),
+                      ),
+                    ),
+                  ],
+                ),
+                if (group.inviteCode != null && group.inviteCode!.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Re-open join sheet via parent handled elsewhere; just show code
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _blue.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(CupertinoIcons.link, size: 14, color: _blue),
+                          const SizedBox(width: 8),
+                          Text('Invite code: ',
+                              style: _body(13, color: _ink48)),
+                          Text(group.inviteCode!,
+                              style: _body(13, weight: 700,
+                                  color: _blue).copyWith(letterSpacing: 2)),
+                          const Spacer(),
+                          const Icon(CupertinoIcons.doc_on_clipboard, size: 14, color: _blue),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                // Member list
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: members.length,
+                    separatorBuilder: (_, _) =>
+                        Divider(height: 1, color: border, indent: 52),
+                    itemBuilder: (_, i) {
+                      final m = members[i];
+                      final initial = m.name.isNotEmpty ? m.name[0].toUpperCase() : '?';
+                      final avatarBg = _memberBgs[i % _memberBgs.length];
+                      final isOwner = m.userId != null && m.userId == group.ownerId;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: avatarBg, shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(initial,
+                                    style: _body(16, weight: 700)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(children: [
+                                    Text(m.name,
+                                        style: _body(15, weight: 500)),
+                                    if (isOwner) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: _blue.withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text('Owner',
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: _blue)),
+                                      ),
+                                    ],
+                                  ]),
+                                  if (m.email != null && m.email!.isNotEmpty)
+                                    Text(m.email!,
+                                        style: _body(12, color: _ink48)),
+                                ],
+                              ),
+                            ),
+                            if (m.userId != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF28A968).withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6, height: 6,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF28A968),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Text('Live',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF28A968))),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Join with code sheet ──────────────────────────────────────────────────────
+
+class _JoinWithCodeSheet extends ConsumerStatefulWidget {
+  final WidgetRef ref;
+  const _JoinWithCodeSheet({required this.ref});
+
+  @override
+  ConsumerState<_JoinWithCodeSheet> createState() => _JoinWithCodeSheetState();
+}
+
+class _JoinWithCodeSheetState extends ConsumerState<_JoinWithCodeSheet> {
+  final _codeCtrl = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _join() async {
+    final code = _codeCtrl.text.trim().toUpperCase();
+    if (code.length < 4) return;
+    setState(() => _loading = true);
+    try {
+      final user = ref.read(authStateProvider).valueOrNull;
+      if (user == null) throw Exception('Not signed in');
+      final svc = ref.read(travelGroupServiceProvider);
+      final userName = user.email?.split('@').first ?? 'Me';
+      await svc.joinByCode(
+        code: code,
+        userId: user.uid,
+        userName: userName,
+        userEmail: user.email,
+      );
+      if (mounted) {
+        AppToast.show(context, 'Joined trip!',
+            type: AppToastType.success, icon: CupertinoIcons.checkmark_circle_fill);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context,
+            e.toString().contains('Invalid') ? 'Invalid code. Please check and try again.' : 'Failed to join trip.',
+            type: AppToastType.error);
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final bg = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7);
+    final border = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final codeVal = _codeCtrl.text.trim();
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 5,
+                    decoration: BoxDecoration(
+                      color: border, borderRadius: BorderRadius.circular(100)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Join a Trip', style: _body(18, weight: 700, color: _inkColor)),
+                const SizedBox(height: 6),
+                Text('Enter the 6-character invite code shared by the trip organiser.',
+                    style: _body(14, color: _ink48)),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bg, borderRadius: BorderRadius.circular(14)),
+                  child: TextField(
+                    controller: _codeCtrl,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.characters,
+                    maxLength: 8,
+                    style: _body(20, weight: 600, color: _inkColor),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. AB12CD',
+                      hintStyle: _body(20, weight: 600, color: _ink48),
+                      border: InputBorder.none,
+                      counterText: '',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => _join(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _Pressable(
+                  onTap: (codeVal.length >= 4 && !_loading) ? _join : null,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: (codeVal.length >= 4 && !_loading) ? _blue : _blue.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Center(
+                      child: _loading
+                          ? const CupertinoActivityIndicator(color: Colors.white)
+                          : Text('Join trip',
+                              style: _body(16, weight: 600, color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Press animation wrapper ───────────────────────────────────────────────────
+
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, this.onTap});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.95).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) { if (widget.onTap != null) _ctrl.forward(); },
+      onTapUp: (_) => _ctrl.reverse(),
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }

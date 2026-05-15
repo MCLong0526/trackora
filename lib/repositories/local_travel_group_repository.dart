@@ -170,4 +170,34 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
     await LocalStorage.init();
     await _expenses.delete('${groupId}_$expenseId');
   }
+
+  // ── Invite Codes (not supported in local mode) ────────────────────────────────
+
+  @override
+  Future<void> storeInviteCode(
+      String code, String ownerId, String groupId) async {}
+
+  @override
+  Future<String?> resolveInviteCode(String code) async => null;
+
+  @override
+  Future<String> joinByCode({
+    required String code,
+    required String userId,
+    required String userName,
+    String? userEmail,
+  }) async {
+    throw UnimplementedError('Join by code not supported in local mode');
+  }
+
+  // ── Email Invites (not supported in local mode) ───────────────────────────────
+
+  @override
+  Future<void> storeEmailInvite({required String email, required String groupId, required String ownerId}) async {}
+
+  @override
+  Future<List<Map<String, String>>> fetchEmailInvites(String email) async => [];
+
+  @override
+  Future<void> deleteEmailInvite(String email, String groupId) async {}
 }

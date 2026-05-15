@@ -19,4 +19,19 @@ abstract class TravelGroupRepository {
   Future<String> addExpense(String groupId, TravelExpense expense);
   Future<void> updateExpense(String groupId, TravelExpense expense);
   Future<void> deleteExpense(String groupId, String expenseId);
+
+  // Invite codes
+  Future<void> storeInviteCode(String code, String ownerId, String groupId);
+  Future<String> joinByCode({
+    required String code,
+    required String userId,
+    required String userName,
+    String? userEmail,
+  });
+  Future<String?> resolveInviteCode(String code); // returns groupId or null
+
+  // Email invites (for auto-join when invitee signs in)
+  Future<void> storeEmailInvite({required String email, required String groupId, required String ownerId});
+  Future<List<Map<String, String>>> fetchEmailInvites(String email);
+  Future<void> deleteEmailInvite(String email, String groupId);
 }
