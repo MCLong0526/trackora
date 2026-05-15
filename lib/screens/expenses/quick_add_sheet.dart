@@ -331,14 +331,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.20),
-                        blurRadius: 32,
-                        offset: const Offset(0, 14),
-                      ),
-                    ],
-                  ),
+                    ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,7 +346,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 context.t('quickAdd.title'),
                                 style: TextStyle(
                                   fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                   color: brand.ink,
                                 ),
                               ),
@@ -655,7 +648,7 @@ class _AmountDisplay extends StatelessWidget {
           style: TextStyle(
             color: muted ? brand.inkSoft : brand.ink,
             fontSize: 36,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             letterSpacing: -0.5,
           ),
         ),

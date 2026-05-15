@@ -227,14 +227,7 @@ class _PreciousMetalsCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: brand.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD4AF37).withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+          ),
         child: Row(
           children: [
             Container(
@@ -300,7 +293,7 @@ class _PreciousMetalsCard extends StatelessWidget {
                     currencyPrefix: symbol,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: brand.ink,
                     ),
                   ),

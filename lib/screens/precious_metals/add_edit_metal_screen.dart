@@ -315,7 +315,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
         ),
         title: Text(
           _isEdit ? 'Edit Record' : 'New Transaction',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         actions: [
           if (_isEdit)
@@ -619,8 +619,7 @@ class _EditBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.field),
-        boxShadow: AppShadows.soft,
-      ),
+        ),
       child: Row(
         children: [
           Container(
@@ -696,7 +695,7 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: const TextStyle(
         fontSize: 12,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: Color(0xFF8E8E93),
         letterSpacing: 0.8,
       ),
@@ -716,8 +715,7 @@ class _InputGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: AppShadows.soft,
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: Column(children: children),

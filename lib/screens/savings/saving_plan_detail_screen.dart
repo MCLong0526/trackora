@@ -56,7 +56,7 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                   'PLAN',
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFF8E8E93),
                     letterSpacing: 0.8,
                   ),
@@ -149,7 +149,7 @@ Future<void> _showAddContributionSheet(
               context.t('sp.addContribution'),
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 12),
@@ -217,14 +217,7 @@ class _Hero extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -249,7 +242,7 @@ class _Hero extends StatelessWidget {
                   _typeLabel(context, plan.type),
                   style: const TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AppColors.ink,
                   ),
                 ),
@@ -265,7 +258,7 @@ class _Hero extends StatelessWidget {
                 mainPart,
                 style: TextStyle(
                   fontSize: 36,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: brand.ink,
                   letterSpacing: -1,
                 ),
@@ -366,14 +359,7 @@ class _DetailsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         children: [
           for (int i = 0; i < rows.length; i++) ...[
@@ -444,7 +430,7 @@ class _SlotGrid extends ConsumerWidget {
             Text(
               context.t('sp.depositGrid').toUpperCase(),
               style: const TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontSize: 12,
                 color: Color(0xFF8E8E93),
                 letterSpacing: 0.8,
@@ -456,7 +442,7 @@ class _SlotGrid extends ConsumerWidget {
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF6366F1),
+                color: AppActionBlue.color,
               ),
             ),
           ],
@@ -467,14 +453,7 @@ class _SlotGrid extends ConsumerWidget {
           decoration: BoxDecoration(
             color: brand.surface,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+            ),
           child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -539,11 +518,11 @@ class _SlotCell extends ConsumerWidget {
     } else if (isCurrent) {
       bgColor = brand.surface;
       border = Border.all(
-        color: const Color(0xFF6366F1),
+        color: AppActionBlue.color,
         width: 1.5,
         strokeAlign: BorderSide.strokeAlignInside,
       );
-      numColor = const Color(0xFF6366F1);
+      numColor = AppActionBlue.color;
     } else {
       bgColor = brand.background;
       numColor = brand.inkSoft;
@@ -564,7 +543,7 @@ class _SlotCell extends ConsumerWidget {
               '$slot',
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: numColor,
               ),
             ),
@@ -576,7 +555,7 @@ class _SlotCell extends ConsumerWidget {
                 'NOW',
                 style: TextStyle(
                   fontSize: 9,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: numColor,
                 ),
               )
@@ -676,7 +655,7 @@ class _ContributionHistory extends ConsumerWidget {
           Text(
             context.t('sp.history'),
             style: const TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 12,
               letterSpacing: 0.5,
             ),
@@ -797,7 +776,7 @@ class _ActionRow extends ConsumerWidget {
                     : isCancelled
                     ? context.t('inst.reactivate')
                     : 'Completed',
-                color: const Color(0xFF6366F1),
+                color: AppActionBlue.color,
                 textColor: Colors.white,
                 onTap: isActive
                     ? () async {

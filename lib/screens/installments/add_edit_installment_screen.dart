@@ -748,7 +748,7 @@ class _StatusSummary extends ConsumerWidget {
               },
               style: const TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: AppColors.ink,
                 letterSpacing: 0.5,
               ),

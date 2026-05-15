@@ -280,7 +280,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         ),
         title: Text(
           _isEdit ? 'Edit Account' : 'New Account',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
         ),
         actions: const [],
       ),
@@ -446,19 +446,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: gradient[1].withValues(alpha: 0.55),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 32,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
+        ),
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
@@ -481,7 +469,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               _type.label.toUpperCase().substring(0, 1),
               style: TextStyle(
                 fontSize: 160,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: accent.withValues(alpha: 0.10),
                 height: 1,
               ),
@@ -577,14 +565,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               color: AppColors.expense.withValues(alpha: 0.18),
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.expense.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+            ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.card),
             child: InkWell(
@@ -672,14 +653,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Column(
@@ -829,14 +803,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Padding(
@@ -936,7 +903,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         text,
         style: TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
           color: brand.inkSoft,
         ),

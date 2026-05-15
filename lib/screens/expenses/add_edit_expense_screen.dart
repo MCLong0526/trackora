@@ -637,7 +637,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                                 Expanded(
                                   child: Text(
                                     _isEdit ? context.t('expense.edit') : context.t('expense.new'),
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
                                   ),
                                 ),
                                 if (_isEdit)
@@ -784,17 +784,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         decoration: BoxDecoration(
           color: _typeMenuOpen ? _typeColor : brand.surface,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: _typeMenuOpen
-                  ? _typeColor.withValues(alpha: 0.30)
-                  : Colors.black.withValues(alpha: 0.07),
-              blurRadius: _typeMenuOpen ? 16 : 8,
-              offset: const Offset(0, 4),
-              spreadRadius: -2,
-            ),
-          ],
-        ),
+          ),
         child: AnimatedRotation(
           turns: _typeMenuOpen ? 0.125 : 0,
           duration: const Duration(milliseconds: 280),
@@ -842,17 +832,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         decoration: BoxDecoration(
                           color: isSelected ? _kTypeAccents[i] : brand.surface,
                           borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isSelected
-                                  ? _kTypeAccents[i].withValues(alpha: 0.28)
-                                  : Colors.black.withValues(alpha: 0.06),
-                              blurRadius: isSelected ? 14 : 6,
-                              offset: const Offset(0, 4),
-                              spreadRadius: -2,
-                            ),
-                          ],
-                        ),
+                          ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -949,16 +929,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.18),
-                  blurRadius: 22,
-                  offset: const Offset(0, 10),
-                  spreadRadius: -4,
-                ),
-              ]
-            : [],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
@@ -1043,7 +1013,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       label,
                       style: TextStyle(
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: accent,
                         letterSpacing: -0.5,
                       ),
@@ -1085,7 +1055,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(
                     fontSize: 46,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: -2,
                     color: Colors.black,
                   ),
@@ -1094,7 +1064,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     hintText: '0.00',
                     hintStyle: TextStyle(
                       color: Colors.black.withValues(alpha: 0.22),
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 46,
                       letterSpacing: -2,
                     ),
@@ -1227,7 +1197,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       label,
                       style: TextStyle(
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: accent,
                         letterSpacing: -0.5,
                       ),
@@ -1252,7 +1222,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               _amountController.text.isEmpty ? '0.00' : _amountController.text,
               style: TextStyle(
                 fontSize: 40,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: -2,
                 color: Colors.black.withValues(alpha: 0.35),
               ),
@@ -1294,22 +1264,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 decoration: BoxDecoration(
                   color: selected ? s.accent : brand.surface,
                   shape: BoxShape.circle,
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: s.accent.withValues(alpha: 0.30),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                            spreadRadius: -3,
-                          ),
-                        ]
-                      : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                 ),
                 child: Icon(
                   s.icon,
@@ -1359,22 +1313,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(28),
-            boxShadow: (_saving || _hasValidAmount || _saveSuccess)
-                ? [
-                    BoxShadow(
-                      color: bgColor.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 7),
-                      spreadRadius: -3,
-                    ),
-                  ]
-                : [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
           ),
           child: Center(
             child: AnimatedSwitcher(

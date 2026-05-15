@@ -146,7 +146,7 @@ class _SectionLabel extends StatelessWidget {
       text.toUpperCase(),
       style: TextStyle(
         fontSize: 11,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: 0.6,
         color: context.brand.inkSoft,
       ),
@@ -194,13 +194,6 @@ class _Header extends ConsumerWidget {
             decoration: BoxDecoration(
               color: brand.surface,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Icon(
               visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
@@ -292,7 +285,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                     'NET WORTH',
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: 0.7,
                       color: soft,
                     ),
@@ -322,7 +315,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 36,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: netColor,
                     height: 1.0,
                     letterSpacing: -1,
@@ -544,7 +537,7 @@ class _WorthTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: brand.ink,
               ),
             ),
@@ -643,7 +636,7 @@ class _FlowTile extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: color,
               ),
             ),
@@ -658,7 +651,7 @@ class _FlowTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 17,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: brand.ink,
           ),
         ),
@@ -720,7 +713,7 @@ class _SavingPlansCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: Color(0xFF1F7A60),
                 ),
               ),
@@ -778,7 +771,7 @@ class _SavingPlanRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: brand.ink,
                 ),
               ),
@@ -874,7 +867,7 @@ class _InstallmentsCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.expense,
                   ),
                 ),
@@ -939,7 +932,7 @@ class _InstallmentRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: brand.ink,
                 ),
               ),
@@ -956,7 +949,7 @@ class _InstallmentRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: brand.ink,
                   ),
                 ),
@@ -1081,7 +1074,7 @@ class _EmptyAccounts extends StatelessWidget {
             'No accounts yet',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: brand.ink,
             ),
           ),
@@ -1479,7 +1472,7 @@ class _BreakdownSheet extends StatelessWidget {
                               title,
                               style: const TextStyle(
                                 fontSize: 20,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             Text(
@@ -1499,7 +1492,7 @@ class _BreakdownSheet extends StatelessWidget {
                         currencyPrefix: symbol,
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: color,
                         ),
                       ),
@@ -1604,7 +1597,7 @@ class _BreakdownRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: color,
             ),
           ),

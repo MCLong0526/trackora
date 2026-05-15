@@ -219,8 +219,7 @@ class _PersonCard extends ConsumerWidget {
           decoration: BoxDecoration(
             color: brand.surface,
             borderRadius: BorderRadius.circular(AppRadius.card),
-            boxShadow: AppShadows.soft,
-          ),
+            ),
           child: Row(
             children: [
               // Avatar
@@ -236,7 +235,7 @@ class _PersonCard extends ConsumerWidget {
                   person.initials,
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: brand.ink,
                   ),
                 ),
@@ -624,7 +623,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                                 p.initials,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                   color: brand.ink,
                                 ),
                               ),

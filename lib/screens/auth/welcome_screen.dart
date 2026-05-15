@@ -209,19 +209,7 @@ class _PrimaryButtonState extends State<_PrimaryButton>
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(AppRadius.chip),
-            boxShadow: [
-              BoxShadow(
-                color: _kPrimary.withValues(alpha: 0.40),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: _kPrimary.withValues(alpha: 0.15),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+            ),
           alignment: Alignment.center,
           child: const Text(
             'Create an account',
@@ -253,19 +241,7 @@ class _AppBranding extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: _kPrimary.withValues(alpha: 0.45),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-              BoxShadow(
-                color: _kPrimary.withValues(alpha: 0.20),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
+            ),
           child: const Padding(
             padding: EdgeInsets.all(14),
             child: _StackedCardsIcon(),
@@ -276,7 +252,7 @@ class _AppBranding extends StatelessWidget {
           'Trackora',
           style: TextStyle(
             fontSize: 40,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             letterSpacing: -1.0,
             color: Color(0xFF111111),
           ),
@@ -394,19 +370,7 @@ class _BalanceCard extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.9),
           width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -425,7 +389,7 @@ class _BalanceCard extends StatelessWidget {
             'RM 12,480',
             style: TextStyle(
               fontSize: 30,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: Color(0xFF111111),
               letterSpacing: -1.0,
             ),
@@ -515,19 +479,7 @@ class _ChartCard extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.9),
           width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -561,19 +513,7 @@ class _ExpenseTransactionCard extends StatelessWidget {
           color: Colors.white.withValues(alpha: 0.9),
           width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+        ),
       child: Row(
         children: [
           Container(
@@ -586,14 +526,7 @@ class _ExpenseTransactionCard extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFF5A623).withValues(alpha: 0.30),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+              ),
             child: const Icon(
               CupertinoIcons.cart_fill,
               size: 18,

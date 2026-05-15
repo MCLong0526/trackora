@@ -182,7 +182,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         'Create\naccount',
                         style: TextStyle(
                           fontSize: 36,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: Color(0xFF111111),
                           letterSpacing: -0.5,
                           height: 1.15,
@@ -427,14 +427,7 @@ class _BackButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+          ),
         child: const Icon(
           CupertinoIcons.chevron_left,
           size: 18,

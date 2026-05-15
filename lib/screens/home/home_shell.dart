@@ -33,7 +33,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     AssetsScreen(),
   ];
 
-  static const _navPurple = Color(0xFF6366F1);
+  static const _navPurple = AppActionBlue.color;
 
   void _openManualEntry() {
     Navigator.push(
@@ -137,7 +137,7 @@ class _AddFab extends StatefulWidget {
 class _AddFabState extends State<_AddFab> {
   bool _open = false;
 
-  static const _navPurple = Color(0xFF6366F1);
+  static const _navPurple = AppActionBlue.color;
   static const double _stackH = 80;
 
   void _toggle() {
@@ -400,7 +400,7 @@ class _HorizDialPillState extends State<_HorizDialPill>
     super.dispose();
   }
 
-  static const _purple = Color(0xFF6366F1);
+  static const _purple = AppActionBlue.color;
 
   @override
   Widget build(BuildContext context) {
@@ -508,7 +508,7 @@ class _BottomBarState extends State<_BottomBar>
   double _toX = 0;
   Curve _curve = Curves.easeOutBack;
 
-  static const _navPurple = Color(0xFF6366F1);
+  static const _navPurple = AppActionBlue.color;
   // Matches the original NavItem pill: icon(20) + 14px H-pad each side
   static const _indicatorW = 48.0;
   // Height reduced to 28 so the pill clears the label below the icon

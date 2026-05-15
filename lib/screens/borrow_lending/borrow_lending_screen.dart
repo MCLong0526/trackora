@@ -173,14 +173,7 @@ class _SummaryRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+        ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,7 +255,7 @@ class _SumStat extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: color ?? brand.ink,
               ),
               maxLines: 1,
@@ -386,14 +379,7 @@ class _RecordTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+        ),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -470,7 +456,7 @@ class _RecordTile extends StatelessWidget {
                           formatMoney(symbol, record.amount),
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: accent,
                           ),
                         ),
@@ -681,7 +667,7 @@ class _SwipeActionBackground extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AppColors.ink,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -726,7 +712,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }

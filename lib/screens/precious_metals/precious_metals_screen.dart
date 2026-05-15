@@ -685,15 +685,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
         decoration: BoxDecoration(
           color: _cardBg,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color:
-                  Colors.black.withValues(alpha: widget.isDark ? 0.30 : 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
+          ),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
@@ -741,7 +733,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                               '${formatMoney(symbol, displayPrice)}/g',
                               style: TextStyle(
                                 fontSize: 20,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                                 color: _ink,
                                 height: 1.0,
                               ),
@@ -758,7 +750,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                               : Text('—',
                                   style: TextStyle(
                                       fontSize: 20,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w700,
                                       color: _soft)),
                     ],
                   ),
@@ -790,7 +782,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                             _grams(metrics.holdGrams),
                             style: TextStyle(
                               fontSize: 38,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               color: _ink,
                               height: 1.0,
                             ),
@@ -837,7 +829,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                                 '${gainPositive ? '+' : ''}${gainPct.toStringAsFixed(2)}%',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                   color: gainColor,
                                 ),
                               ),
@@ -851,7 +843,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                             : '—',
                         style: TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: _ink,
                         ),
                       ),
@@ -1034,7 +1026,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight:
-                              active ? FontWeight.w800 : FontWeight.w500,
+                              active ? FontWeight.w600 : FontWeight.w500,
                           color: active ? metalColor : _soft,
                         ),
                       ),
@@ -1160,14 +1152,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  metalColor.withValues(alpha: 0.18),
-                  metalColor.withValues(alpha: 0.0),
-                ],
-              ),
+              color: metalColor.withValues(alpha: 0.08),
             ),
           ),
           // Buy markers (green dots)
@@ -1263,7 +1248,7 @@ class _HeroCardState extends ConsumerState<_HeroCard> {
                           style: TextStyle(
                             color: metalColor,
                             fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const TextSpan(
@@ -1458,20 +1443,16 @@ class _MetalBadge extends StatelessWidget {
             height: 22,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: metalType == MetalType.gold
-                    ? [const Color(0xFFFFE97A), const Color(0xFFD4AF37)]
-                    : [const Color(0xFFECF2F8), const Color(0xFF9BA5B0)],
-              ),
+              color: metalType == MetalType.gold
+                  ? const Color(0xFFD4AF37)
+                  : const Color(0xFFECF2F8),
             ),
             child: Center(
               child: Text(
                 _symbol,
                 style: TextStyle(
                   fontSize: 8,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: metalType == MetalType.gold
                       ? const Color(0xFF6A4E10)
                       : const Color(0xFF2A3A4A),
@@ -1484,7 +1465,7 @@ class _MetalBadge extends StatelessWidget {
             metalType.label,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: c,
             ),
           ),
@@ -1613,7 +1594,7 @@ class _StatCol extends StatelessWidget {
             value,
             style: TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: valueColor,
             ),
             maxLines: 1,
@@ -1655,7 +1636,7 @@ class _CalcResult extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: color,
           ),
         ),
@@ -1689,8 +1670,7 @@ class _IconActionBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: brand.surface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: AppShadows.soft,
-        ),
+          ),
         child: Icon(icon, size: 20, color: brand.ink),
       ),
     );
@@ -1754,8 +1734,7 @@ class _OutlineBtnState extends State<_OutlineBtn>
           decoration: BoxDecoration(
             color: widget.brand.surface,
             borderRadius: BorderRadius.circular(AppRadius.field),
-            boxShadow: AppShadows.soft,
-          ),
+            ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1830,14 +1809,7 @@ class _FilledBtnState extends State<_FilledBtn>
           decoration: BoxDecoration(
             color: const Color(0xFF1D6AE5),
             borderRadius: BorderRadius.circular(AppRadius.field),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1D6AE5).withValues(alpha: 0.32),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
+            ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -2325,7 +2297,7 @@ class _HistorySheet extends StatelessWidget {
                   'History',
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: brand.ink,
                   ),
                 ),
@@ -2343,7 +2315,7 @@ class _HistorySheet extends StatelessWidget {
                     '${items.length}',
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: c,
                     ),
                   ),
@@ -2761,7 +2733,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                   _isEdit ? 'Edit Record' : 'New Transaction',
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: brand.ink,
                   ),
                 ),
@@ -2852,7 +2824,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                         : 'Sell ${_metalType.label}',
                                     style: TextStyle(
                                       fontSize: 20,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       color: textInk,
                                     ),
                                   ),
@@ -2916,7 +2888,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                     setState(() => _manualTotal = true),
                                 style: TextStyle(
                                   fontSize: 44,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   color: textInk.withValues(alpha: 0.80),
                                   height: 1.0,
                                 ),
@@ -2924,7 +2896,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                   hintText: '0.00',
                                   hintStyle: TextStyle(
                                     fontSize: 44,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                     color: textInk.withValues(alpha: 0.22),
                                     height: 1.0,
                                   ),
@@ -2946,7 +2918,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                           'WEIGHT & PRICE',
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: metalColor.withValues(alpha: 0.65),
                             letterSpacing: 0.7,
                           ),
@@ -3164,8 +3136,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                     decoration: BoxDecoration(
                       color: brand.surface,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: AppShadows.soft,
-                    ),
+                      ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Column(
@@ -3287,15 +3258,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                               ? metalColor.withValues(alpha: 0.6)
                               : metalColor),
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (_saveSuccess ? AppColors.income : metalColor)
-                              .withValues(alpha: 0.30),
-                          blurRadius: 14,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
+                      ),
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
@@ -3653,7 +3616,7 @@ class _Design2PreviewBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Center(
-                child: Text('2', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF555F6B))),
+                child: Text('2', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF555F6B))),
               ),
             ),
             const SizedBox(width: 12),

@@ -76,7 +76,7 @@ class SettingsScreen extends ConsumerWidget {
                     'Profile',
                     style: TextStyle(
                       fontSize: 28,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -232,7 +232,7 @@ class SettingsScreen extends ConsumerWidget {
                 'Trackora',
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: brand.inkSoft,
                   letterSpacing: 0.5,
                 ),
@@ -290,7 +290,7 @@ class SettingsScreen extends ConsumerWidget {
                     context.t('settings.language'),
                     style: const TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -533,7 +533,7 @@ class SettingsScreen extends ConsumerWidget {
                       context.t('settings.exportRangeTitle'),
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -759,7 +759,7 @@ class _ExportRangeOption extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: brand.ink,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -820,7 +820,7 @@ class _ExportMonthChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             color: selected ? foregroundOn(selectedBg) : brand.ink,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -831,7 +831,7 @@ class _ExportMonthChip extends StatelessWidget {
 // ── My Accounts section — donut chart card ───────────────────────────────────
 
 const _kAccountChartColors = [
-  Color(0xFF6366F1),
+  AppActionBlue.color,
   Color(0xFF34D399),
   Color(0xFFFBBF24),
   Color(0xFF60A5FA),
@@ -915,14 +915,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
           decoration: BoxDecoration(
             color: brand.surface,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+            ),
           child: widget.accounts.isEmpty
               ? _buildEmpty(context, brand)
               : _buildChart(
@@ -1037,7 +1030,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                       '${((balanceMap[positiveAccounts[_touched!].id]! / positiveTotal) * 100).toStringAsFixed(0)}%',
                                       style: TextStyle(
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w600,
                                         color: brand.ink,
                                       ),
                                     ),
@@ -1075,7 +1068,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                       currencyPrefix: widget.symbol,
                                       style: TextStyle(
                                         fontSize: 11,
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w600,
                                         color: brand.ink,
                                       ),
                                     ),
@@ -1214,7 +1207,7 @@ class _GroupHeader extends StatelessWidget {
         label.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: brand.inkSoft,
           letterSpacing: 0.8,
         ),
@@ -1234,14 +1227,7 @@ class _GroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Column(children: children),
@@ -1679,14 +1665,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+        ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Column(
@@ -1969,7 +1948,7 @@ class _SyncSheetState extends State<_SyncSheet> {
                             'Sign In & Sync',
                             style: TextStyle(
                               fontSize: 17,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
@@ -2208,7 +2187,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
             'Change Email',
             style: TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: brand.ink,
             ),
           ),

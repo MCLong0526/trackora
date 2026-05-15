@@ -497,13 +497,7 @@ class _FloatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF000000).withValues(alpha: 0.055),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        
       ),
       child: child,
     );
@@ -564,13 +558,7 @@ class _ActionBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: brand.surface,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF000000).withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          
         ),
         child: Icon(icon, size: 18, color: brand.ink),
       ),
@@ -653,33 +641,14 @@ class _PeriodPill extends StatelessWidget {
                     : Colors.white.withValues(alpha: 0.85)),
             width: 0.8,
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: brand.accentDark.withValues(alpha: 0.32),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFF000000).withValues(alpha: 0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF000000).withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+          
         ),
         child: Center(
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 180),
             style: TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: selected ? foregroundOn(brand.accentDark) : brand.inkSoft,
             ),
             child: Text(label),
@@ -726,26 +695,7 @@ class _GlassTab extends StatelessWidget {
                   : Colors.white.withValues(alpha: 0.85)),
           width: 0.8,
         ),
-        boxShadow: selected
-            ? [
-                BoxShadow(
-                  color: accentDark.withValues(alpha: 0.30),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: const Color(0xFF000000).withValues(alpha: 0.07),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: const Color(0xFF000000).withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+        
       ),
       child: Center(
         child: AnimatedDefaultTextStyle(
@@ -840,7 +790,7 @@ class _SpendingHeader extends StatelessWidget {
                     formatMoney(symbol, currentTotal),
                     style: TextStyle(
                       fontSize: 40,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -1.5,
                       color: brand.ink,
                     ),
@@ -867,7 +817,7 @@ class _SpendingHeader extends StatelessWidget {
                       '${isIncrease ? '↑' : '↓'}${pctChange.abs().toStringAsFixed(0)}%',
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: isIncrease ? AppColors.expense : AppColors.income,
                       ),
                     ),
@@ -1056,7 +1006,7 @@ class _LineChartCardState extends State<_LineChartCard>
             formatMoney(widget.symbol, total),
             style: TextStyle(
               fontSize: 30,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: -1,
               color: brand.ink,
             ),
@@ -1279,7 +1229,7 @@ class _LineChartCardState extends State<_LineChartCard>
                     text: formatMoney(widget.symbol, spot.y),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
@@ -1583,7 +1533,7 @@ class _ReportHeader extends StatelessWidget {
                       context.t('stats.report.title'),
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.3,
                       ),
                     ),
@@ -1645,7 +1595,7 @@ class _ReportTag extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: brand.ink,
             ),
           ),
@@ -1743,13 +1693,7 @@ class _CategoryCardState extends State<_CategoryCard> {
             decoration: BoxDecoration(
               color: brand.surface,
               borderRadius: BorderRadius.circular(AppRadius.card),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF000000).withValues(alpha: 0.055),
-                  blurRadius: 24,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1873,7 +1817,7 @@ class _CenterTotalLabel extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               formatMoney(symbol, total),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1944,7 +1888,7 @@ class _LegendRow extends StatelessWidget {
                   formatMoney(symbol, entry.value),
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: brand.ink,
                   ),
                 ),
@@ -2025,7 +1969,7 @@ class _CategoryRecordsSheet extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
@@ -2064,7 +2008,7 @@ class _CategoryRecordsSheet extends StatelessWidget {
                     formatMoney(symbol, total),
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -2120,7 +2064,7 @@ class _RecordRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 color: brand.ink,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -2138,7 +2082,7 @@ class _RecordRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.expense,
                   ),
                 ),
@@ -2199,7 +2143,7 @@ class _VisibilitySheet extends StatelessWidget {
             ),
             Text(
               title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             SectionCard(

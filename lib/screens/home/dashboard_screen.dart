@@ -113,7 +113,7 @@ class DashboardScreen extends ConsumerWidget {
                         'Trackora',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: brand.ink,
                         ),
                       ),
@@ -170,7 +170,7 @@ class DashboardScreen extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 13,
                             color: brand.accentDark,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -201,13 +201,6 @@ class DashboardScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 12,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
@@ -472,25 +465,8 @@ class _HomeOverviewCard extends ConsumerWidget {
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.white.withValues(alpha: 0.62);
 
-    final firstCardShadow = [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
-        blurRadius: 32,
-        offset: const Offset(0, 12),
-      ),
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04),
-        blurRadius: 8,
-        offset: const Offset(0, 2),
-      ),
-    ];
-    final cardShadow = [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.055),
-        blurRadius: 24,
-        offset: const Offset(0, 8),
-      ),
-    ];
+    const firstCardShadow = <BoxShadow>[];
+    const cardShadow = <BoxShadow>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -701,7 +677,7 @@ class _MonthChip extends StatelessWidget {
             DateFormat('MMM yyyy').format(month),
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: ink,
             ),
           ),
@@ -733,7 +709,7 @@ class _HeroAmount extends StatelessWidget {
         '$symbol ****',
         style: TextStyle(
           fontSize: 42,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           color: ink,
           height: 1,
         ),
@@ -748,7 +724,7 @@ class _HeroAmount extends StatelessWidget {
           symbol,
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: soft,
             height: 1,
           ),
@@ -759,7 +735,7 @@ class _HeroAmount extends StatelessWidget {
             formatMoney('', amount).trim(),
             style: TextStyle(
               fontSize: 48,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: ink,
               height: 0.96,
             ),
@@ -884,7 +860,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                 'Month Budget',
                 style: TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: brand.ink,
                 ),
               ),
@@ -931,7 +907,7 @@ class _BudgetOverviewCard extends StatelessWidget {
                           '${pct.toStringAsFixed(1)}%',
                           style: TextStyle(
                             fontSize: 23,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             color: brand.ink,
                             height: 1,
                           ),
@@ -1060,7 +1036,7 @@ class _TopStat extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: soft,
                 ),
                 maxLines: 1,
@@ -1074,7 +1050,7 @@ class _TopStat extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: ink,
           ),
           maxLines: 1,
@@ -1105,7 +1081,7 @@ class _BudgetAmountMetric extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: valueColor,
             height: 1.05,
           ),
@@ -1167,7 +1143,7 @@ class _DailyStat extends StatelessWidget {
           value,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: valueColor ?? brand.ink,
             height: 1.1,
           ),
@@ -1364,7 +1340,7 @@ class _AllBillsSheet extends ConsumerWidget {
                       'Activity',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1402,7 +1378,7 @@ class _AllBillsSheet extends ConsumerWidget {
                     formatMoney(symbol, total),
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

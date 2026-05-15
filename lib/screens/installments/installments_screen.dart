@@ -71,7 +71,7 @@ class InstallmentsScreen extends ConsumerWidget {
                       context.t('inst.all').toUpperCase(),
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: Color(0xFF8E8E93),
                         letterSpacing: 0.8,
                       ),
@@ -84,7 +84,7 @@ class InstallmentsScreen extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF6366F1),
+                          color: AppActionBlue.color,
                         ),
                       ),
                     ),
@@ -96,14 +96,7 @@ class InstallmentsScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-                        blurRadius: 14,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
+                    ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: Column(
@@ -198,14 +191,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -227,7 +213,7 @@ class _SummaryCard extends StatelessWidget {
                 mainPart,
                 style: TextStyle(
                   fontSize: 34,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: brand.ink,
                   letterSpacing: -1,
                 ),
@@ -309,7 +295,7 @@ class _SummaryStat extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 color: brand.ink,
               ),
             ),
@@ -464,7 +450,7 @@ class _InstallmentRow extends StatelessWidget {
                         formatMoney(symbol, i.amount),
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: brand.ink,
                         ),
                       ),
@@ -739,7 +725,7 @@ class _SwipeBg extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AppColors.ink,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -786,7 +772,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }
