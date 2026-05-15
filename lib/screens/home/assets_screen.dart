@@ -8,6 +8,7 @@ import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
 import '../../models/saving_plan.dart';
+import '../../services/currency_converter.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
@@ -45,12 +46,16 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
     final installments =
         installmentsAsync.valueOrNull ?? const <Installment>[];
 
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
     final snapshot = _AssetSnapshot.build(
       accounts: accounts,
       expenses: expenses,
       savingPlans: savingPlans,
       borrowLending: borrowLending,
       installments: installments,
+      converter: converter,
+      mainCode: mainCode,
     );
     final isLoading =
         accountsAsync.maybeWhen(loading: () => true, orElse: () => false);
@@ -377,6 +382,18 @@ class _NetWorthCardState extends State<_NetWorthCard>
                       color: soft,
                     ),
                   ),
+                  if (widget.snapshot.hasMultiCurrency) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '(est.)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: soft,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   Text(
                     '${widget.snapshot.accounts.length} account${widget.snapshot.accounts.length == 1 ? '' : 's'}',
@@ -1218,6 +1235,9 @@ class _AssetSnapshot {
   /// Net income - expense change over the past 7 days.
   final double weeklyChange;
 
+  /// Whether any account uses a different currency (for "(est.)" label).
+  final bool hasMultiCurrency;
+
   const _AssetSnapshot({
     required this.accounts,
     required this.netWorth,
@@ -1230,6 +1250,7 @@ class _AssetSnapshot {
     required this.activeInstallments,
     required this.installmentLiability,
     required this.weeklyChange,
+    this.hasMultiCurrency = false,
   });
 
   factory _AssetSnapshot.build({
@@ -1238,8 +1259,19 @@ class _AssetSnapshot {
     required List<SavingPlan> savingPlans,
     required List<BorrowLending> borrowLending,
     required List<Installment> installments,
+    CurrencyConverter? converter,
+    String? mainCode,
   }) {
     final balances = _computeBalances(accounts, expenses);
+
+    // Convert a per-account balance to base currency for totals
+    double toBase(Account a, double bal) {
+      final code = a.currencyCode ?? mainCode;
+      if (converter != null && code != null && code != mainCode) {
+        return converter.toBase(bal, code);
+      }
+      return bal;
+    }
 
     // Split account balances into assets vs liabilities:
     // - Asset accounts (bank/eWallet/cash): positive = asset, negative = liability
@@ -1248,15 +1280,16 @@ class _AssetSnapshot {
     double accountLiabilitiesSum = 0;
     for (final account in accounts) {
       final bal = balances[account.id] ?? 0;
+      final baseBal = toBase(account, bal);
       if (account.type.isLiability) {
-        if (bal < 0) accountLiabilitiesSum += bal.abs();
+        if (baseBal < 0) accountLiabilitiesSum += baseBal.abs();
         // Positive balance on liability account (overpaid) counts as asset credit
-        if (bal > 0) accountAssetsSum += bal;
+        if (baseBal > 0) accountAssetsSum += baseBal;
       } else {
-        if (bal >= 0) {
-          accountAssetsSum += bal;
+        if (baseBal >= 0) {
+          accountAssetsSum += baseBal;
         } else {
-          accountLiabilitiesSum += bal.abs();
+          accountLiabilitiesSum += baseBal.abs();
         }
       }
     }
@@ -1321,6 +1354,10 @@ class _AssetSnapshot {
       }
     }
 
+    final hasMultiCurrency = accounts.any(
+      (a) => a.currencyCode != null && a.currencyCode != mainCode,
+    );
+
     return _AssetSnapshot(
       accounts: accountAssets,
       netWorth: netWorth,
@@ -1333,6 +1370,7 @@ class _AssetSnapshot {
       activeInstallments: activeInstallments,
       installmentLiability: installmentLiability,
       weeklyChange: weeklyChange,
+      hasMultiCurrency: hasMultiCurrency,
     );
   }
 

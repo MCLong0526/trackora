@@ -162,6 +162,8 @@ class TravelGroupService {
     String? receiptUrl,
     Map<String, double>? splitAmounts,
     String? splitMode,
+    String? currencyCode,
+    double? exchangeRate,
   }) async {
     final now = DateTime.now();
     final expense = TravelExpense(
@@ -180,6 +182,8 @@ class TravelGroupService {
       updatedAt: now,
       splitAmounts: splitAmounts,
       splitMode: splitMode,
+      currencyCode: currencyCode,
+      exchangeRate: exchangeRate,
     );
     return _repo.addExpense(groupId, expense);
   }

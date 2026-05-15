@@ -10,6 +10,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/money_format.dart';
+import '../services/prefs_service.dart';
 import '../state/providers.dart';
 import '../services/i18n.dart';
 import '../theme/app_theme.dart';
@@ -677,18 +678,13 @@ class _CardFront extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        MaskedAmount(
-                          visibleText: formatMoney(symbol, balance),
+                        _AccountBalanceDisplay(
+                          account: account,
+                          balance: balance,
+                          mainSymbol: symbol,
                           visible: visible,
-                          currencyPrefix: symbol,
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
-                            color: isNeg
-                                ? AppColors.expense
-                                : pal.ink,
-                            letterSpacing: -0.2,
-                          ),
+                          pal: pal,
+                          isNeg: isNeg,
                         ),
                       ],
                     ),
@@ -722,6 +718,68 @@ class _CardFront extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Account Balance Display (handles multi-currency) ──────────
+class _AccountBalanceDisplay extends ConsumerWidget {
+  final Account account;
+  final double balance;
+  final String mainSymbol;
+  final bool visible;
+  final _Pal pal;
+  final bool isNeg;
+
+  const _AccountBalanceDisplay({
+    required this.account,
+    required this.balance,
+    required this.mainSymbol,
+    required this.visible,
+    required this.pal,
+    required this.isNeg,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
+    final acctCode = account.currencyCode;
+    final acctSymbol = acctCode != null
+        ? (kSupportedCurrencies[acctCode] ?? acctCode)
+        : mainSymbol;
+    final isForeign = acctCode != null && acctCode != mainCode;
+
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final estimatedBase = isForeign && converter != null
+        ? converter.toBase(balance, acctCode)
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        MaskedAmount(
+          visibleText: formatMoney(acctSymbol, balance),
+          visible: visible,
+          currencyPrefix: acctSymbol,
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            color: isNeg ? AppColors.expense : pal.ink,
+            letterSpacing: -0.2,
+          ),
+        ),
+        if (isForeign && estimatedBase != null)
+          MaskedAmount(
+            visibleText: '≈ ${formatMoney(mainSymbol, estimatedBase)}',
+            visible: visible,
+            currencyPrefix: mainSymbol,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: pal.ink.withValues(alpha: 0.55),
+            ),
+          ),
+      ],
     );
   }
 }

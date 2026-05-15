@@ -6,9 +6,11 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../models/account.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/currency_picker.dart';
 import '../../widgets/section_card.dart';
 
 const _kCustomLabel = 'Other / Custom';
@@ -102,6 +104,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   bool _useCustomName = false;
   bool _saving = false;
   double _animatedBalance = 0;
+  String _currencyCode = 'MYR'; // will be loaded from prefs in initState
 
   bool get _isEdit => widget.account != null;
 
@@ -119,9 +122,14 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   @override
   void initState() {
     super.initState();
+    // Load main currency as default, then override with account's currency
+    PrefsService().currencyCode().then((code) {
+      if (mounted) setState(() => _currencyCode = code);
+    });
     if (_isEdit) {
       final a = widget.account!;
       _type = a.type;
+      if (a.currencyCode != null) _currencyCode = a.currencyCode!;
 
       final displayBalance =
           _type.isLiability ? a.openingBalance.abs() : a.openingBalance;
@@ -190,6 +198,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           name: _resolvedName,
           type: _type,
           openingBalance: openingBalance,
+          currencyCode: _currencyCode,
         );
         await repo.update(user.uid, updated);
       } else {
@@ -199,6 +208,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           type: _type,
           openingBalance: openingBalance,
           createdAt: now,
+          currencyCode: _currencyCode,
         );
         await repo.add(user.uid, account);
       }
@@ -326,6 +336,31 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                   _type.isLiability
                       ? 'Enter how much you currently owe on this account.'
                       : 'Opening balance is the amount already in this account before tracking starts.',
+                  style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                ),
+              ),
+              const SizedBox(height: 22),
+              _sectionLabel('Account Currency', brand),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  child: CurrencyPickerTile(
+                    value: _currencyCode,
+                    label: 'Currency',
+                    onChanged: (code) => setState(() => _currencyCode = code),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  'Balances will be converted to your main currency for totals.',
                   style: TextStyle(fontSize: 12, color: brand.inkSoft),
                 ),
               ),
@@ -531,16 +566,19 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                   tween: Tween(begin: 0, end: _animatedBalance),
                   duration: const Duration(milliseconds: 360),
                   curve: Curves.easeOutCubic,
-                  builder: (ctx, v, _) => Text(
-                    NumberFormat.currency(symbol: 'RM ', decimalDigits: 2)
-                        .format(v),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: ink,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
+                  builder: (ctx, v, _) {
+                    final sym = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
+                    final sep = sym.length > 1 ? ' ' : '';
+                    return Text(
+                      '$sym$sep${NumberFormat('#,##0.00').format(v)}',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: ink,
+                        letterSpacing: -0.3,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

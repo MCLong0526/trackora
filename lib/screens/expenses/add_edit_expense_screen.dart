@@ -18,10 +18,12 @@ import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
 import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/currency_picker.dart';
 import '../../widgets/receipt_preview.dart';
 import '../../widgets/section_card.dart';
 
@@ -88,6 +90,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   bool _isAccountTransfer = false;
   bool _saving = false;
   bool _hasValidAmount = false;
+  String _currencyCode = 'MYR';
   File? _newReceipt;
   String? _existingReceiptUrl;
 
@@ -181,6 +184,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
     _hasValidAmount = _checkAmountValid();
     _amountController.addListener(_onAmountChanged);
+    _loadInitialCurrency();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceCtrl.forward();
@@ -406,6 +410,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       final amount = double.parse(_amountController.text);
       final now = DateTime.now();
 
+      final mainCode = await ref.read(currencyCodeProvider.future);
+      final fxService = ref.read(exchangeRateServiceProvider);
+      final String? originalCurrencyField =
+          _currencyCode != mainCode ? _currencyCode : null;
+      double? fxRate;
+      double? baseCurrencyAmount;
+      if (_currencyCode != mainCode) {
+        fxRate = await fxService.getRate(
+          from: _currencyCode,
+          to: mainCode,
+          base: mainCode,
+        );
+        if (fxRate != null) baseCurrencyAmount = amount * fxRate;
+      }
+
       String category;
       String? counterpart;
       String? toAccountId;
@@ -436,6 +455,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           accountId: _accountId,
           toAccountId: toAccountId,
           counterpart: counterpart,
+          originalCurrency: originalCurrencyField,
+          exchangeRate: fxRate,
+          baseCurrencyAmount: baseCurrencyAmount,
           updatedAt: now,
         );
         dev.log(
@@ -465,6 +487,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           accountId: _accountId,
           toAccountId: toAccountId,
           counterpart: counterpart,
+          originalCurrency: originalCurrencyField,
+          exchangeRate: fxRate,
+          baseCurrencyAmount: baseCurrencyAmount,
           createdAt: now,
           updatedAt: now,
         );
@@ -521,6 +546,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       type: AppToastType.info,
       icon: CupertinoIcons.cloud,
     );
+  }
+
+  Future<void> _loadInitialCurrency() async {
+    final mainCode = await ref.read(currencyCodeProvider.future);
+    if (!mounted) return;
+    final template = widget.expense ?? widget.copyFrom;
+    setState(() => _currencyCode = template?.originalCurrency ?? mainCode);
   }
 
   Future<void> _delete() async {
@@ -1042,60 +1074,93 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ),
           const SizedBox(height: 20),
           // Amount field
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  symbol,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: TextFormField(
-                  controller: _amountController,
-                  focusNode: _amountFocus,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: TextStyle(
-                    fontSize: 46,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -2,
-                    color: brand.ink,
-                  ),
-                  decoration: InputDecoration(
-                    filled: false,
-                    hintText: '0.00',
-                    hintStyle: TextStyle(
-                      color: brand.inkSoft.withValues(alpha: 0.5),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 46,
-                      letterSpacing: -2,
+          Builder(builder: (context) {
+            final entrySymbol = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
+            final converter = ref.watch(currencyConverterProvider).valueOrNull;
+            final mainCode = converter?.base ?? ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
+            final mainSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
+            final isForeign = _currencyCode != mainCode;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        entrySymbol,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: brand.inkSoft,
+                        ),
+                      ),
                     ),
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) {
-                      return context.t('validation.enterAmount');
-                    }
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) {
-                      return context.t('validation.invalidAmount');
-                    }
-                    return null;
-                  },
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _amountController,
+                        focusNode: _amountFocus,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: TextStyle(
+                          fontSize: 46,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -2,
+                          color: brand.ink,
+                        ),
+                        decoration: InputDecoration(
+                          filled: false,
+                          hintText: '0.00',
+                          hintStyle: TextStyle(
+                            color: brand.inkSoft.withValues(alpha: 0.5),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 46,
+                            letterSpacing: -2,
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return context.t('validation.enterAmount');
+                          }
+                          final n = double.tryParse(v);
+                          if (n == null || n <= 0) {
+                            return context.t('validation.invalidAmount');
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+                if (isForeign && converter != null)
+                  ListenableBuilder(
+                    listenable: _amountController,
+                    builder: (ctx, _) {
+                      final amt = double.tryParse(_amountController.text) ?? 0;
+                      if (amt <= 0) return const SizedBox.shrink();
+                      final converted = converter.toBase(amt, _currencyCode);
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 2, left: 2, bottom: 4),
+                        child: Text(
+                          'est. $mainSymbol ${converted.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: brand.inkSoft,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            );
+          }),
           const SizedBox(height: 20),
           // Category section (expense / income)
           if (type == EntryType.expense || type == EntryType.income) ...[
@@ -1516,6 +1581,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ],
                 ),
               ),
+            ),
+            divider,
+            // Currency row
+            CurrencyPickerTile(
+              value: _currencyCode,
+              onChanged: (code) => setState(() => _currencyCode = code),
+              label: 'Currency',
             ),
             divider,
             // Note row

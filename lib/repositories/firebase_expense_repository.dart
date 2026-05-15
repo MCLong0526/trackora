@@ -126,6 +126,9 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       'counterpart': expense.counterpart,
       'createdAt': Timestamp.fromDate(expense.createdAt),
       'updatedAt': Timestamp.fromDate(expense.updatedAt),
+      if (expense.originalCurrency != null) 'originalCurrency': expense.originalCurrency,
+      if (expense.exchangeRate != null) 'exchangeRate': expense.exchangeRate,
+      if (expense.baseCurrencyAmount != null) 'baseCurrencyAmount': expense.baseCurrencyAmount,
     };
   }
 
