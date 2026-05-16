@@ -13,6 +13,13 @@ import '../../theme/app_theme.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import '../stocks/stocks_screen.dart';
 
+final _investQuoteProvider = FutureProvider.autoDispose.family<StockQuote?, String>(
+  (ref, symbol) async {
+    final svc = ref.read(stockServiceProvider);
+    return svc.getQuote(symbol, range: '1M');
+  },
+);
+
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
 const _blue = Color(0xFF0066CC);
@@ -44,13 +51,29 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
     final usdToLocal = fxAsync.valueOrNull ?? 4.48;
 
     // ── Compute totals ────────────────────────────────────────────────────
-    // Stocks: sum of cost basis (conservative — no live prices pre-loaded)
     double stocksCost = 0;
     for (final s in stocks) {
       if (!s.watchOnly) {
         stocksCost += s.currency == 'MYR' ? s.totalCost : s.totalCost * usdToLocal;
       }
     }
+
+    // Live values from quotes
+    double stocksLive = 0;
+    bool anyQuoteLoaded = false;
+    for (final s in stocks) {
+      if (!s.watchOnly) {
+        final q = ref.watch(_investQuoteProvider(s.symbol)).valueOrNull;
+        if (q != null) {
+          anyQuoteLoaded = true;
+          final fx = s.currency == 'MYR' ? 1.0 : usdToLocal;
+          stocksLive += q.price * s.quantity * fx;
+        } else {
+          stocksLive += s.currency == 'MYR' ? s.totalCost : s.totalCost * usdToLocal;
+        }
+      }
+    }
+    if (!anyQuoteLoaded) stocksLive = stocksCost;
 
     // Metals: sum of purchase amounts
     double metalsCost = 0;
@@ -60,8 +83,12 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
     if (metalsCost < 0) metalsCost = 0;
 
     final total = stocksCost + metalsCost;
-    final stocksPct = total > 0 ? (stocksCost / total) : 0.0;
-    final metalsPct = total > 0 ? (metalsCost / total) : 0.0;
+    final liveTotal = stocksLive + metalsCost;
+    final allTimeGain = liveTotal - total;
+    final allTimeGainPct = total > 0 ? (allTimeGain / total) * 100 : 0.0;
+
+    final stocksPct = liveTotal > 0 ? (stocksLive / liveTotal) : 0.0;
+    final metalsPct = liveTotal > 0 ? (metalsCost / liveTotal) : 0.0;
 
     // Holdings breakdown
     final metalHoldings = _computeMetalHoldings(metals);
@@ -130,7 +157,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Total value
+                    // Total value (live when quotes available, else cost basis)
                     RichText(
                       text: TextSpan(
                         children: [
@@ -143,7 +170,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                             ),
                           ),
                           TextSpan(
-                            text: NumberFormat('#,##0.00').format(total),
+                            text: NumberFormat('#,##0.00').format(liveTotal),
                             style: TextStyle(
                               fontSize: 40,
                               fontWeight: FontWeight.w800,
@@ -155,11 +182,21 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // All-time note (cost basis)
-                    Text(
-                      'Est. total cost basis · all-time',
-                      style: TextStyle(fontSize: 13, color: brand.inkSoft),
-                    ),
+                    // All-time gain/loss
+                    if (anyQuoteLoaded && allTimeGain != 0)
+                      Text(
+                        '${allTimeGain >= 0 ? '+' : '-'}$symbol ${NumberFormat('#,##0').format(allTimeGain.abs())} (${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}%) · all-time',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: allTimeGain >= 0 ? _green : const Color(0xFFFF3B30),
+                        ),
+                      )
+                    else
+                      Text(
+                        'Est. total cost basis · all-time',
+                        style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                      ),
                   ],
                 ),
               ),
@@ -263,7 +300,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       title: 'Stocks',
                       subtitle: '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
                       valueLabel: 'VALUE',
-                      value: '$symbol ${NumberFormat('#,##0').format(stocksCost)}',
+                      value: '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
                       brand: brand,
                       isDark: isDark,
                     ),

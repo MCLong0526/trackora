@@ -246,28 +246,28 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) {
-                      final stock = filtered[i];
-                      final quoteAsync = ref.watch(_stockQuoteProvider(stock.symbol));
-                      final quote = quoteAsync.valueOrNull;
-                      final currentUsd = quote?.price;
-                      final localPrice = currentUsd != null
-                          ? (stock.currency == 'MYR' ? currentUsd : currentUsd * usdToLocal)
-                          : null;
-
-                      return _StockListTile(
-                        stock: stock,
-                        quote: quote,
-                        currentLocalPrice: localPrice,
-                        localSymbol: symbol,
-                        isDark: isDark,
-                        onTap: () => _openDetail(context, stock),
-                        onLongPress: () => _showStockActions(context, stock),
-                      );
-                    },
-                    childCount: filtered.length,
+                sliver: SliverToBoxAdapter(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      color: brand.surface,
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < filtered.length; i++) ...[
+                            if (i > 0)
+                              Divider(height: 1, color: brand.divider, indent: 70, endIndent: 16),
+                            _StockTileWithQuote(
+                              stock: filtered[i],
+                              usdToLocal: usdToLocal,
+                              localSymbol: symbol,
+                              isDark: isDark,
+                              onTap: () => _openDetail(context, filtered[i]),
+                              onLongPress: () => _showStockActions(context, filtered[i]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -468,14 +468,32 @@ class _PortfolioHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
-    // Aggregate cost basis from stored data (no live price needed for cost basis)
+
     double totalCost = 0;
+    double liveTotal = 0;
+    double todayGain = 0;
+    bool anyLoaded = false;
+
     for (final s in stocks) {
       if (!s.watchOnly) {
-        final inLocal = s.currency == 'MYR' ? s.totalCost : s.totalCost * usdToLocal;
-        totalCost += inLocal;
+        final fx = s.currency == 'MYR' ? 1.0 : usdToLocal;
+        final cost = s.currency == 'MYR' ? s.totalCost : s.totalCost * usdToLocal;
+        totalCost += cost;
+
+        final q = ref.watch(_stockQuoteProvider(s.symbol)).valueOrNull;
+        if (q != null) {
+          anyLoaded = true;
+          liveTotal += q.price * s.quantity * fx;
+          todayGain += q.change * s.quantity * fx;
+        } else {
+          liveTotal += cost;
+        }
       }
     }
+    if (!anyLoaded) liveTotal = totalCost;
+
+    final allTimeGain = liveTotal - totalCost;
+    final allTimeGainPct = totalCost > 0 ? (allTimeGain / totalCost) * 100 : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,7 +519,7 @@ class _PortfolioHeader extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 10),
-        // Total value (cost basis since we don't have all live prices pre-loaded)
+        // Total live value
         RichText(
           text: TextSpan(
             children: [
@@ -515,7 +533,7 @@ class _PortfolioHeader extends ConsumerWidget {
                 ),
               ),
               TextSpan(
-                text: NumberFormat('#,##0.00').format(totalCost),
+                text: NumberFormat('#,##0.00').format(liveTotal),
                 style: TextStyle(
                   fontSize: 42,
                   fontWeight: FontWeight.w800,
@@ -527,10 +545,34 @@ class _PortfolioHeader extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          'Est. total cost basis',
-          style: TextStyle(fontSize: 13, color: brand.inkSoft),
-        ),
+        // Today gain + all-time %
+        if (anyLoaded)
+          Row(
+            children: [
+              Text(
+                '${todayGain >= 0 ? '+' : ''}$localSymbol ${NumberFormat('#,##0.00').format(todayGain)} today',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: todayGain >= 0 ? _green : _red,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}% all-time',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: allTimeGain >= 0 ? _green : _red,
+                ),
+              ),
+            ],
+          )
+        else
+          Text(
+            'Est. total cost basis',
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
+          ),
       ],
     );
   }
@@ -684,6 +726,45 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
+// ── Stock tile with quote fetching ─────────────────────────────────────────────
+
+class _StockTileWithQuote extends ConsumerWidget {
+  final StockInvestment stock;
+  final double usdToLocal;
+  final String localSymbol;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const _StockTileWithQuote({
+    required this.stock,
+    required this.usdToLocal,
+    required this.localSymbol,
+    required this.isDark,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quote = ref.watch(_stockQuoteProvider(stock.symbol)).valueOrNull;
+    final currentUsd = quote?.price;
+    final localPrice = currentUsd != null
+        ? (stock.currency == 'MYR' ? currentUsd : currentUsd * usdToLocal)
+        : null;
+
+    return _StockListTile(
+      stock: stock,
+      quote: quote,
+      currentLocalPrice: localPrice,
+      localSymbol: localSymbol,
+      isDark: isDark,
+      onTap: onTap,
+      onLongPress: onLongPress,
+    );
+  }
+}
+
 // ── Stock list tile ────────────────────────────────────────────────────────────
 
 class _StockListTile extends StatelessWidget {
@@ -732,14 +813,7 @@ class _StockListTile extends StatelessWidget {
         onLongPress!();
       } : null,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 1),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: brand.surface,
-          border: Border(
-            bottom: BorderSide(color: brand.divider, width: 0.5),
-          ),
-        ),
         child: Row(
           children: [
             // Avatar circle
