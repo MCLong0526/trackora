@@ -127,6 +127,17 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                     ),
                     const Spacer(),
                     _CircleBtn(
+                      icon: CupertinoIcons.arrow_clockwise,
+                      onTap: () {
+                        for (final s in stocks) {
+                          ref.invalidate(_stockQuoteProvider(s.symbol));
+                        }
+                        HapticFeedback.selectionClick();
+                      },
+                      brand: brand,
+                    ),
+                    const SizedBox(width: 8),
+                    _CircleBtn(
                       icon: CupertinoIcons.search,
                       onTap: () => _showAddStock(context),
                       brand: brand,
@@ -280,6 +291,9 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                                 isDark: isDark,
                                 onTap: () => _openDetail(context, filtered[i]),
                                 onLongPress: () => _showStockActions(context, filtered[i]),
+                                onBuyWatchlist: filtered[i].watchOnly
+                                    ? () => _showBuyFromWatchlist(context, filtered[i])
+                                    : null,
                               ),
                             ),
                           ],
@@ -360,6 +374,10 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
   }
 
   void _showBuySheet(BuildContext context, StockSearchResult result, StockQuote? quote) {
+    _showBuySheetForStock(context, result, quote);
+  }
+
+  void _showBuySheetForStock(BuildContext context, StockSearchResult result, StockQuote? quote, {String? existingId}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -372,8 +390,23 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
           final user = ref.read(authStateProvider).valueOrNull;
           if (user == null) return;
           try {
-            await ref.read(stockInvestmentRepositoryProvider).add(user.uid, investment);
-            if (mounted) AppToast.show(context, '${investment.symbol} purchase recorded');
+            final allStocks = ref.read(stockInvestmentsProvider).valueOrNull ?? [];
+            final existing = _findExisting(allStocks, investment.symbol, id: existingId);
+            if (existing != null) {
+              final merged = existing.copyWith(
+                quantity: existing.watchOnly ? investment.quantity : existing.quantity + investment.quantity,
+                buyPrice: investment.buyPrice,
+                currency: investment.currency,
+                watchOnly: false,
+                notes: investment.notes ?? existing.notes,
+                updatedAt: DateTime.now(),
+              );
+              await ref.read(stockInvestmentRepositoryProvider).update(user.uid, merged);
+              if (mounted) AppToast.show(context, '${investment.symbol} updated');
+            } else {
+              await ref.read(stockInvestmentRepositoryProvider).add(user.uid, investment);
+              if (mounted) AppToast.show(context, '${investment.symbol} purchase recorded');
+            }
           } catch (_) {
             if (mounted) AppToast.show(context, 'Failed to save', type: AppToastType.error);
           }
@@ -382,21 +415,33 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     );
   }
 
+  StockInvestment? _findExisting(List<StockInvestment> all, String symbol, {String? id}) {
+    if (id != null) {
+      for (final s in all) { if (s.id == id) return s; }
+      return null;
+    }
+    for (final s in all) {
+      if (s.symbol.toUpperCase() == symbol.toUpperCase()) return s;
+    }
+    return null;
+  }
+
   void _showSellStock(BuildContext context, List<StockInvestment> stocks) {
-    if (stocks.isEmpty) {
-      AppToast.show(context, 'No stocks to sell');
+    final holdings = stocks.where((s) => !s.watchOnly && s.quantity > 0).toList();
+    if (holdings.isEmpty) {
+      AppToast.show(context, 'No holdings to sell');
       return;
     }
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
         title: const Text('Select stock to sell'),
-        actions: stocks.map((s) => CupertinoActionSheetAction(
+        actions: holdings.map((s) => CupertinoActionSheetAction(
           onPressed: () {
             Navigator.pop(ctx);
-            // Open sell form
+            _openSellSheet(context, s);
           },
-          child: Text('${s.symbol} – ${s.quantity.toStringAsFixed(0)} sh'),
+          child: Text('${s.symbol} · ${_fmtQty(s.quantity)} sh'),
         )).toList(),
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
@@ -404,6 +449,54 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
         ),
       ),
     );
+  }
+
+  void _openSellSheet(BuildContext context, StockInvestment stock) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (_) => _SellStockSheet(
+        stock: stock,
+        quote: ref.read(_stockQuoteProvider(stock.symbol)).valueOrNull,
+        onSell: (qty, price) async {
+          final user = ref.read(authStateProvider).valueOrNull;
+          if (user == null) return;
+          try {
+            if (qty >= stock.quantity) {
+              await ref.read(stockInvestmentRepositoryProvider).delete(user.uid, stock.id);
+              if (mounted) AppToast.show(context, '${stock.symbol} position closed');
+            } else {
+              final updated = stock.copyWith(
+                quantity: stock.quantity - qty,
+                updatedAt: DateTime.now(),
+              );
+              await ref.read(stockInvestmentRepositoryProvider).update(user.uid, updated);
+              if (mounted) AppToast.show(context, 'Sold ${_fmtQty(qty)} sh of ${stock.symbol}');
+            }
+          } catch (_) {
+            if (mounted) AppToast.show(context, 'Failed to sell', type: AppToastType.error);
+          }
+        },
+      ),
+    );
+  }
+
+  void _showBuyFromWatchlist(BuildContext context, StockInvestment watchlistStock) {
+    final result = StockSearchResult(
+      symbol: watchlistStock.symbol,
+      name: watchlistStock.name ?? watchlistStock.symbol,
+      exchange: watchlistStock.exchange ?? '',
+      currency: watchlistStock.currency ?? 'USD',
+    );
+    _showBuySheetForStock(context, result, null, existingId: watchlistStock.id);
+  }
+
+  String _fmtQty(double qty) {
+    return qty == qty.floorToDouble()
+        ? NumberFormat('#,##0').format(qty)
+        : qty.toStringAsFixed(2);
   }
 
   void _showStockActions(BuildContext context, StockInvestment stock) {
@@ -778,6 +871,7 @@ class _StockTileWithQuote extends ConsumerWidget {
   final bool isDark;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onBuyWatchlist;
 
   const _StockTileWithQuote({
     required this.stock,
@@ -786,6 +880,7 @@ class _StockTileWithQuote extends ConsumerWidget {
     required this.isDark,
     required this.onTap,
     required this.onLongPress,
+    this.onBuyWatchlist,
   });
 
   @override
@@ -804,6 +899,7 @@ class _StockTileWithQuote extends ConsumerWidget {
       isDark: isDark,
       onTap: onTap,
       onLongPress: onLongPress,
+      onBuyWatchlist: onBuyWatchlist,
     );
   }
 }
@@ -818,6 +914,7 @@ class _StockListTile extends StatelessWidget {
   final bool isDark;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onBuyWatchlist;
 
   const _StockListTile({
     required this.stock,
@@ -827,6 +924,7 @@ class _StockListTile extends StatelessWidget {
     required this.isDark,
     required this.onTap,
     required this.onLongPress,
+    this.onBuyWatchlist,
   });
 
   @override
@@ -910,8 +1008,11 @@ class _StockListTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${_fmtQty(stock.quantity)} sh · ${_fmtPrice(stock.buyPrice, stock.currency)} avg',
-                    style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    stock.watchOnly
+                        ? 'Watchlist · ${stock.name ?? stock.symbol}'
+                        : '${_fmtQty(stock.quantity)} sh · ${_fmtPrice(stock.buyPrice, stock.currency)} avg',
+                    style: TextStyle(fontSize: 12, color: stock.watchOnly ? _blue.withValues(alpha: 0.7) : brand.inkSoft),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -930,34 +1031,61 @@ class _StockListTile extends StatelessWidget {
               const SizedBox(width: 12),
             ],
 
-            // Value + gain%
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  localValue != null
-                      ? '$localSymbol ${NumberFormat('#,##0').format(localValue)}'
-                      : '–',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
-                    letterSpacing: -0.3,
+            // Value + gain% (or BUY button for watchOnly)
+            if (stock.watchOnly && onBuyWatchlist != null) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (currentLocalPrice != null)
+                    Text(
+                      '$localSymbol ${NumberFormat('#,##0.00').format(currentLocalPrice!)}',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.ink, letterSpacing: -0.2),
+                    ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      onBuyWatchlist!();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _blue,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('BUY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.3)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  gainPct != null
-                      ? '${gainPct >= 0 ? '+' : ''}${gainPct.toStringAsFixed(2)}%'
-                      : '–',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: trendColor,
+                ],
+              ),
+            ] else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    localValue != null
+                        ? '$localSymbol ${NumberFormat('#,##0').format(localValue)}'
+                        : '–',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 2),
+                  Text(
+                    gainPct != null
+                        ? '${gainPct >= 0 ? '+' : ''}${gainPct.toStringAsFixed(2)}%'
+                        : '–',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: trendColor,
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1726,34 +1854,47 @@ class _BuyStockSheet extends ConsumerStatefulWidget {
 }
 
 class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
-  int _units = 5;
+  double _units = 5;
+  late final TextEditingController _unitsCtrl;
   double? _overridePrice;
   DateTime _date = DateTime.now();
   bool _saving = false;
   Account? _selectedAccount;
+  late String _selectedCurrency;
   final _notesCtrl = TextEditingController();
 
   double get _unitPrice => _overridePrice ?? widget.quote?.price ?? 0;
 
+  String _fmtUnits(double v) =>
+      v == v.floorToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  @override
+  void initState() {
+    super.initState();
+    _unitsCtrl = TextEditingController(text: '5');
+    _selectedCurrency = widget.result.currency.isNotEmpty ? widget.result.currency : 'USD';
+  }
+
   @override
   void dispose() {
+    _unitsCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final localIso = widget.result.currency == 'MYR' ? 'MYR' : 'USD';
+    if (_units <= 0) return;
     setState(() => _saving = true);
     final now = DateTime.now();
     final investment = StockInvestment(
       id: '',
       symbol: widget.result.symbol,
       name: widget.quote?.name ?? widget.result.name,
-      quantity: _units.toDouble(),
+      quantity: _units,
       buyPrice: _unitPrice,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       exchange: widget.result.exchange,
-      currency: localIso,
+      currency: _selectedCurrency,
       watchOnly: false,
       createdAt: now,
       updatedAt: now,
@@ -1773,7 +1914,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
     final accounts = ref.watch(accountsProvider).valueOrNull ?? <Account>[];
     final displayAccount = _selectedAccount ?? (accounts.isNotEmpty ? accounts.first : null);
 
-    final isUsd = widget.result.currency == 'USD';
+    final isUsd = _selectedCurrency == 'USD';
     final unitLocalValue = _unitPrice * (isUsd ? usdToLocal : 1.0) * _units;
 
     return Padding(
@@ -1867,22 +2008,69 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                     ),
                     const SizedBox(height: 4),
 
-                    // Big units display
+                    // Units stepper + custom input
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Text(
-                          '$_units',
-                          style: TextStyle(
-                            fontSize: 64, fontWeight: FontWeight.w800,
-                            color: brand.ink, letterSpacing: -2,
+                        GestureDetector(
+                          onTap: () {
+                            if (_units > 0) {
+                              final v = _units - 1;
+                              setState(() { _units = v; _unitsCtrl.text = _fmtUnits(v); });
+                              HapticFeedback.selectionClick();
+                            }
+                          },
+                          child: Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                            child: Icon(CupertinoIcons.minus, size: 16, color: brand.ink),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Text('sh',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: brand.inkSoft)),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            controller: _unitsCtrl,
+                            textAlign: TextAlign.center,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: TextStyle(
+                              fontSize: 52, fontWeight: FontWeight.w800,
+                              color: brand.ink, letterSpacing: -2,
+                            ),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                              hintText: '0',
+                              hintStyle: TextStyle(
+                                fontSize: 52, fontWeight: FontWeight.w800,
+                                color: brand.divider, letterSpacing: -2,
+                              ),
+                            ),
+                            onChanged: (v) {
+                              final d = double.tryParse(v);
+                              if (d != null && d >= 0) setState(() => _units = d);
+                            },
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('sh',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: brand.inkSoft)),
+                        ),
+                        const SizedBox(width: 16),
+                        GestureDetector(
+                          onTap: () {
+                            final v = _units + 1;
+                            setState(() { _units = v; _unitsCtrl.text = _fmtUnits(v); });
+                            HapticFeedback.selectionClick();
+                          },
+                          child: Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                            child: Icon(CupertinoIcons.plus, size: 16, color: brand.ink),
+                          ),
+                        ),
                       ],
                     ),
 
@@ -1898,12 +2086,12 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                     // Quick select chips
                     Row(
                       children: [1, 5, 10, 25].map((qty) {
-                        final sel = qty == _units;
+                        final sel = qty.toDouble() == _units;
                         return Expanded(
                           child: GestureDetector(
                             onTap: () {
                               HapticFeedback.selectionClick();
-                              setState(() => _units = qty);
+                              setState(() { _units = qty.toDouble(); _unitsCtrl.text = qty.toString(); });
                             },
                             child: Container(
                               margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -1938,7 +2126,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                         children: [
                           _DetailRow(
                             label: 'Unit price',
-                            value: '\$${_unitPrice.toStringAsFixed(2)}',
+                            value: '${_selectedCurrency == 'MYR' ? 'RM' : _selectedCurrency == 'USD' ? '\$' : _selectedCurrency} ${_unitPrice.toStringAsFixed(2)}',
                             subtitle: 'Tap to override',
                             onTap: () => _overrideUnitPrice(context, brand),
                           ),
@@ -1952,6 +2140,12 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                             onTap: accounts.isNotEmpty
                                 ? () => _pickAccount(context, accounts, displayAccount)
                                 : null,
+                          ),
+                          Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
+                          _DetailRow(
+                            label: 'Currency',
+                            value: _selectedCurrency,
+                            onTap: () => _pickCurrency(context),
                           ),
                           Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
                           _DetailRow(
@@ -2057,7 +2251,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
               controller: ctrl,
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(prefixText: '\$  ', hintText: '0.00'),
+              decoration: InputDecoration(prefixText: '${_selectedCurrency == 'MYR' ? 'RM' : '\$'}  ', hintText: '0.00'),
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -2091,6 +2285,26 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
               fontWeight: a.id == current?.id ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
+        )).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+
+  void _pickCurrency(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Select currency'),
+        actions: ['MYR', 'USD', 'SGD', 'EUR', 'GBP'].map((c) => CupertinoActionSheetAction(
+          onPressed: () {
+            Navigator.pop(ctx);
+            setState(() { _selectedCurrency = c; _overridePrice = null; });
+          },
+          child: Text(c, style: TextStyle(fontWeight: c == _selectedCurrency ? FontWeight.w700 : FontWeight.w400)),
         )).toList(),
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
@@ -2399,6 +2613,263 @@ class _EditRow extends StatelessWidget {
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sell stock sheet ──────────────────────────────────────────────────────────
+
+class _SellStockSheet extends ConsumerStatefulWidget {
+  final StockInvestment stock;
+  final StockQuote? quote;
+  final Future<void> Function(double qty, double price) onSell;
+
+  const _SellStockSheet({
+    required this.stock,
+    required this.quote,
+    required this.onSell,
+  });
+
+  @override
+  ConsumerState<_SellStockSheet> createState() => _SellStockSheetState();
+}
+
+class _SellStockSheetState extends ConsumerState<_SellStockSheet> {
+  late final TextEditingController _qtyCtrl;
+  late final TextEditingController _priceCtrl;
+  bool _saving = false;
+
+  double get _sellQty => double.tryParse(_qtyCtrl.text.trim()) ?? 0;
+  double get _sellPrice => double.tryParse(_priceCtrl.text.trim()) ?? 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final qtyFmt = widget.stock.quantity == widget.stock.quantity.floorToDouble()
+        ? widget.stock.quantity.toInt().toString()
+        : widget.stock.quantity.toStringAsFixed(2);
+    _qtyCtrl = TextEditingController(text: qtyFmt);
+    final price = widget.quote?.price ?? widget.stock.buyPrice;
+    _priceCtrl = TextEditingController(text: price.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final qty = _sellQty;
+    final price = _sellPrice;
+    if (qty <= 0 || price < 0) return;
+    setState(() => _saving = true);
+    await widget.onSell(qty, price);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final qty = _sellQty;
+    final price = _sellPrice;
+    final isUsd = widget.stock.currency == 'USD' || widget.stock.currency == null;
+    final currSym = isUsd ? '\$' : 'RM';
+
+    final proceeds = qty * price;
+    final costBasis = qty * widget.stock.buyPrice;
+    final pnl = proceeds - costBasis;
+    final pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 4),
+                decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Sell ${widget.stock.symbol}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _saving ? null : _save,
+                    child: Text('Confirm',
+                      style: TextStyle(fontSize: 16, color: _blue, fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _SellRow(
+                          label: 'Sell quantity',
+                          controller: _qtyCtrl,
+                          suffix: 'sh',
+                          hint: '0',
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
+                        _SellRow(
+                          label: 'Sell price',
+                          controller: _priceCtrl,
+                          prefix: currSym,
+                          hint: '0.00',
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          child: Row(
+                            children: [
+                              Text('Holding', style: TextStyle(fontSize: 15, color: brand.inkSoft)),
+                              const Spacer(),
+                              Text(
+                                '${widget.stock.quantity == widget.stock.quantity.floorToDouble() ? widget.stock.quantity.toInt() : widget.stock.quantity.toStringAsFixed(2)} sh',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (qty > 0 && price > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: pnl >= 0
+                            ? _green.withValues(alpha: 0.08)
+                            : _red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('P&L', style: TextStyle(fontSize: 14, color: brand.inkSoft)),
+                          const Spacer(),
+                          Text(
+                            '${pnl >= 0 ? '+' : ''}$currSym${pnl.abs().toStringAsFixed(2)} '
+                            '(${pnlPct >= 0 ? '+' : ''}${pnlPct.toStringAsFixed(2)}%)',
+                            style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700,
+                              color: pnl >= 0 ? _green : _red,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: _saving ? null : _save,
+                    child: Container(
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: _red,
+                        borderRadius: BorderRadius.circular(27),
+                      ),
+                      alignment: Alignment.center,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Confirm sale',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SellRow extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final String? prefix;
+  final String? suffix;
+  final ValueChanged<String>? onChanged;
+
+  const _SellRow({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    this.prefix,
+    this.suffix,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: TextStyle(fontSize: 15, color: brand.inkSoft)),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: TextStyle(color: brand.inkSoft),
+                prefixText: prefix != null ? '$prefix ' : null,
+                prefixStyle: TextStyle(fontSize: 15, color: brand.inkSoft),
+                suffixText: suffix != null ? ' $suffix' : null,
+                suffixStyle: TextStyle(fontSize: 15, color: brand.inkSoft),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: onChanged,
             ),
           ),
         ],
