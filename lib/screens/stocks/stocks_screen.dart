@@ -257,13 +257,26 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                           for (var i = 0; i < filtered.length; i++) ...[
                             if (i > 0)
                               Divider(height: 1, color: brand.divider, indent: 70, endIndent: 16),
-                            _StockTileWithQuote(
-                              stock: filtered[i],
-                              usdToLocal: usdToLocal,
-                              localSymbol: symbol,
-                              isDark: isDark,
-                              onTap: () => _openDetail(context, filtered[i]),
-                              onLongPress: () => _showStockActions(context, filtered[i]),
+                            TweenAnimationBuilder<double>(
+                              key: ValueKey(filtered[i].id),
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              duration: Duration(milliseconds: 250 + i * 60),
+                              curve: Curves.easeOut,
+                              builder: (ctx, v, child) => Opacity(
+                                opacity: v,
+                                child: Transform.translate(
+                                  offset: Offset(0, 12 * (1 - v)),
+                                  child: child,
+                                ),
+                              ),
+                              child: _StockTileWithQuote(
+                                stock: filtered[i],
+                                usdToLocal: usdToLocal,
+                                localSymbol: symbol,
+                                isDark: isDark,
+                                onTap: () => _openDetail(context, filtered[i]),
+                                onLongPress: () => _showStockActions(context, filtered[i]),
+                              ),
                             ),
                           ],
                         ],
@@ -1050,7 +1063,7 @@ class _EmptyPortfolio extends StatelessWidget {
 
 // ── Shared pill button ─────────────────────────────────────────────────────────
 
-class _PillBtn extends StatelessWidget {
+class _PillBtn extends StatefulWidget {
   final String label;
   final bool filled;
   final VoidCallback onTap;
@@ -1058,26 +1071,55 @@ class _PillBtn extends StatelessWidget {
   const _PillBtn({required this.label, required this.filled, required this.onTap});
 
   @override
+  State<_PillBtn> createState() => _PillBtnState();
+}
+
+class _PillBtnState extends State<_PillBtn> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 80));
+    _scale = Tween<double>(begin: 1.0, end: 0.95)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
         HapticFeedback.selectionClick();
-        onTap();
+        widget.onTap();
       },
-      child: Container(
-        height: 46,
-        decoration: BoxDecoration(
-          color: filled ? _blue : Colors.transparent,
-          borderRadius: BorderRadius.circular(23),
-          border: filled ? null : Border.all(color: _blue, width: 1.5),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: filled ? Colors.white : _blue,
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: widget.filled ? _blue : Colors.transparent,
+            borderRadius: BorderRadius.circular(23),
+            border: widget.filled ? null : Border.all(color: _blue, width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
+              color: widget.filled ? Colors.white : _blue,
+            ),
           ),
         ),
       ),
@@ -1087,7 +1129,7 @@ class _PillBtn extends StatelessWidget {
 
 // ── Filter chip ────────────────────────────────────────────────────────────────
 
-class _FilterChip extends StatelessWidget {
+class _FilterChip extends StatefulWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -1095,29 +1137,57 @@ class _FilterChip extends StatelessWidget {
   const _FilterChip({required this.label, required this.selected, required this.onTap});
 
   @override
+  State<_FilterChip> createState() => _FilterChipState();
+}
+
+class _FilterChipState extends State<_FilterChip> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 80));
+    _scale = Tween<double>(begin: 1.0, end: 0.95)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     return GestureDetector(
-      onTap: () {
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
         HapticFeedback.selectionClick();
-        onTap();
+        widget.onTap();
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: selected ? brand.ink : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: selected ? null : Border.all(color: brand.divider, width: 1),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected ? brand.background : brand.inkSoft,
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: widget.selected ? brand.ink : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: widget.selected ? null : Border.all(color: brand.divider, width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: widget.selected ? brand.background : brand.inkSoft,
+            ),
           ),
         ),
       ),
@@ -1293,7 +1363,7 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
                           Expanded(
                             child: TextField(
                               controller: _ctrl,
-                              autofocus: true,
+                              autofocus: false,
                               textCapitalization: TextCapitalization.characters,
                               style: TextStyle(
                                 fontSize: 16,
@@ -1662,7 +1732,6 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? 'RM';
     const symToIso = {'RM': 'MYR', '\$': 'USD', 'S\$': 'SGD', '€': 'EUR'};
     final localIso = symToIso[symbol] ?? 'MYR';
@@ -1723,37 +1792,6 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 8),
-
-                    // Stock / Gold / Silver tabs
-                    Container(
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.all(3),
-                      child: Row(
-                        children: ['Stock', 'Gold', 'Silver'].map((tab) {
-                          final sel = tab == 'Stock';
-                          return Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: sel ? (isDark ? const Color(0xFF3A3A3C) : Colors.white) : Colors.transparent,
-                                borderRadius: BorderRadius.circular(7),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(tab,
-                                style: TextStyle(
-                                  fontSize: 14, fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                                  color: sel ? brand.ink : brand.inkSoft,
-                                )),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
 
                     // Selected stock row
                     Container(

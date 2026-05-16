@@ -244,29 +244,15 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                         children: StockService.rangeOptions.map((r) {
                           final sel = r == _range;
                           return Expanded(
-                            child: GestureDetector(
+                            child: _RangeBtn(
+                              label: r,
+                              selected: sel,
                               onTap: () async {
+                                HapticFeedback.selectionClick();
                                 setState(() => _range = r);
                                 await _loadQuote();
                               },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                height: 30,
-                                margin: const EdgeInsets.symmetric(horizontal: 2),
-                                decoration: BoxDecoration(
-                                  color: sel ? brand.ink : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  r,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                                    color: sel ? brand.background : brand.inkSoft,
-                                  ),
-                                ),
-                              ),
+                              brand: brand,
                             ),
                           );
                         }).toList(),
@@ -470,6 +456,72 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     return qty == qty.floorToDouble()
         ? NumberFormat('#,##0').format(qty)
         : qty.toStringAsFixed(2);
+  }
+}
+
+// ── Range button with press animation ─────────────────────────────────────────
+
+class _RangeBtn extends StatefulWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final BrandColors brand;
+
+  const _RangeBtn({required this.label, required this.selected, required this.onTap, required this.brand});
+
+  @override
+  State<_RangeBtn> createState() => _RangeBtnState();
+}
+
+class _RangeBtnState extends State<_RangeBtn> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 80));
+    _scale = Tween<double>(begin: 1.0, end: 0.88)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 30,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: widget.selected ? widget.brand.ink : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500,
+              color: widget.selected ? widget.brand.background : widget.brand.inkSoft,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

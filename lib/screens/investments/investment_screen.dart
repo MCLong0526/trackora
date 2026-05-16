@@ -371,7 +371,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
 
 // ── Asset card ─────────────────────────────────────────────────────────────────
 
-class _AssetCard extends StatelessWidget {
+class _AssetCard extends StatefulWidget {
   final VoidCallback onTap;
   final Widget leading;
   final String title;
@@ -393,13 +393,42 @@ class _AssetCard extends StatelessWidget {
   });
 
   @override
+  State<_AssetCard> createState() => _AssetCardState();
+}
+
+class _AssetCardState extends State<_AssetCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween<double>(begin: 1.0, end: 0.96)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final brand = widget.brand;
+    final isDark = widget.isDark;
     return GestureDetector(
-      onTap: () {
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
         HapticFeedback.selectionClick();
-        onTap();
+        widget.onTap();
       },
-      child: Container(
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
         decoration: BoxDecoration(
           color: brand.surface,
           borderRadius: BorderRadius.circular(16),
@@ -410,20 +439,21 @@ class _AssetCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Row(
                 children: [
-                  leading,
+                  widget.leading,
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title,
+                        Text(widget.title,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: brand.ink,
+                            letterSpacing: -0.3,
                           )),
                         const SizedBox(height: 2),
-                        Text(subtitle,
+                        Text(widget.subtitle,
                           style: TextStyle(fontSize: 12, color: brand.inkSoft),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
@@ -443,7 +473,7 @@ class _AssetCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(valueLabel,
+                        Text(widget.valueLabel,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -451,7 +481,7 @@ class _AssetCard extends StatelessWidget {
                             letterSpacing: 0.5,
                           )),
                         const SizedBox(height: 4),
-                        Text(value,
+                        Text(widget.value,
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -472,6 +502,7 @@ class _AssetCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
