@@ -1764,8 +1764,24 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               value: _splitBillEnabled,
               activeTrackColor: const Color(0xFF6B40A8),
               onChanged: (v) {
+                HapticFeedback.selectionClick();
                 if (v) {
-                  _openSplitBillSheet(context);
+                  // Just enable — user taps Edit to configure
+                  final amount = double.tryParse(_amountController.text) ?? 0;
+                  setState(() {
+                    _splitBillEnabled = true;
+                    if (_splitMembers.isEmpty) {
+                      _splitMembers = [
+                        SplitMember(
+                          id: DateTime.now().microsecondsSinceEpoch.toString(),
+                          name: 'You',
+                          colorIndex: 0,
+                          amount: amount,
+                          isPayer: true,
+                        ),
+                      ];
+                    }
+                  });
                 } else {
                   setState(() => _splitBillEnabled = false);
                 }

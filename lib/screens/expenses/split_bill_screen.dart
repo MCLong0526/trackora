@@ -5,8 +5,17 @@ import 'package:flutter/services.dart';
 import '../../models/split_bill.dart';
 import '../../theme/app_theme.dart';
 
+// ── Design tokens (DESIGN.md aligned) ─────────────────────────────────────────
 const _kPurple = Color(0xFF6B40A8);
-const _kPurpleLight = Color(0xFFF0EAFA);
+const _kPurpleSoft = Color(0xFFF0EAFA);   // parchment-equivalent for purple
+const _kInk = Color(0xFF1D1D1F);          // near-black ink
+const _kInkMuted = Color(0xFF6E6E73);     // muted / secondary text
+const _kCanvas = Color(0xFFFFFFFF);       // pure white canvas
+const _kParchment = Color(0xFFF5F5F7);    // apple parchment surface
+const _kHairline = Color(0xFFE0E0E0);     // hairline border
+const _kRoundedLg = 18.0;                // {rounded.lg} card radius
+const _kRoundedSm = 8.0;                 // {rounded.sm} utility radius
+const _kRoundedPill = 999.0;             // {rounded.pill}
 
 const _kAvatarColors = [
   Color(0xFF6B40A8),
@@ -18,15 +27,19 @@ const _kAvatarColors = [
   Color(0xFF5C6ABE),
 ];
 
-Color _avatarColor(int colorIndex) =>
-    _kAvatarColors[colorIndex % _kAvatarColors.length];
+Color _avatarColor(int i) => _kAvatarColors[i % _kAvatarColors.length];
 
 /// Result returned when user taps "Save & generate bill".
 class SplitBillResult {
   final List<SplitMember> members;
   final SplitMode splitMode;
+  final double totalAmount;
 
-  const SplitBillResult({required this.members, required this.splitMode});
+  const SplitBillResult({
+    required this.members,
+    required this.splitMode,
+    required this.totalAmount,
+  });
 }
 
 /// Full-screen sheet for configuring a split bill.
@@ -51,47 +64,46 @@ class SplitBillScreen extends StatefulWidget {
 class _SplitBillScreenState extends State<SplitBillScreen> {
   late List<SplitMember> _members;
   SplitMode _mode = SplitMode.equally;
+  late double _totalAmount;
+  final _scrollCtrl = ScrollController();
 
-  // Controllers for Amount mode — keyed by member id
+  // Per-member controllers
   final Map<String, TextEditingController> _amountCtrls = {};
-  // Controllers for Percent mode — keyed by member id
   final Map<String, TextEditingController> _percentCtrls = {};
-  // Controllers for Shares mode — keyed by member id (stores share count as string)
   final Map<String, TextEditingController> _sharesCtrls = {};
-  // Raw percent values per member (0-100)
-  final Map<String, double> _percents = {};
-  // Raw shares per member (integer-like)
-  final Map<String, double> _shares = {};
+  final Map<String, double> _percents = {};   // raw percent values 0-100
+  final Map<String, double> _shares = {};     // raw share counts
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialMembers.isEmpty) {
-      _members = [
-        SplitMember(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          name: 'You',
-          colorIndex: 0,
-          amount: widget.totalAmount,
-          isPayer: true,
-        ),
-      ];
-    } else {
-      _members = List.from(widget.initialMembers);
-    }
-    _initControllers();
+    _totalAmount = widget.totalAmount;
+    _members = widget.initialMembers.isNotEmpty
+        ? List.from(widget.initialMembers)
+        : [
+            SplitMember(
+              id: DateTime.now().microsecondsSinceEpoch.toString(),
+              name: 'You',
+              colorIndex: 0,
+              amount: _totalAmount,
+              isPayer: true,
+            ),
+          ];
+    _initRawValues();
     _recalculate();
   }
 
-  void _initControllers() {
+  void _initRawValues() {
+    final n = _members.length;
     for (final m in _members) {
-      _percents[m.id] = _members.isNotEmpty ? 100.0 / _members.length : 100.0;
-      _shares[m.id] = 1.0;
+      _percents.putIfAbsent(m.id, () => n > 0 ? 100.0 / n : 100.0);
+      _shares.putIfAbsent(m.id, () => 1.0);
     }
   }
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
     for (final c in _amountCtrls.values) c.dispose();
     for (final c in _percentCtrls.values) c.dispose();
     for (final c in _sharesCtrls.values) c.dispose();
@@ -106,7 +118,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
 
     switch (_mode) {
       case SplitMode.equally:
-        final each = widget.totalAmount / n;
+        final each = _totalAmount / n;
         for (final m in _members) {
           m.amount = each;
           _percents[m.id] = 100.0 / n;
@@ -114,49 +126,71 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         }
 
       case SplitMode.amount:
-        // Amounts are user-driven; don't overwrite on recalculate unless new member
         for (final m in _members) {
           if (!_amountCtrls.containsKey(m.id)) {
-            final init = (widget.totalAmount / n).toStringAsFixed(2);
-            _amountCtrls[m.id] = TextEditingController(text: init);
-            m.amount = double.tryParse(init) ?? 0;
+            final val = (_totalAmount / n).toStringAsFixed(2);
+            _amountCtrls[m.id] = TextEditingController(text: val);
+            m.amount = double.tryParse(val) ?? 0;
           }
         }
 
       case SplitMode.percent:
-        // Init percent controllers for new members
         for (final m in _members) {
           _percents.putIfAbsent(m.id, () => 100.0 / n);
+          final p = _percents[m.id]!;
           if (!_percentCtrls.containsKey(m.id)) {
-            final pct = _percents[m.id]!;
             _percentCtrls[m.id] =
-                TextEditingController(text: pct.toStringAsFixed(1));
+                TextEditingController(text: p.toStringAsFixed(1));
           }
-        }
-        // Compute amounts from percents
-        for (final m in _members) {
-          final pct = _percents[m.id] ?? 0;
-          m.amount = widget.totalAmount * (pct / 100.0);
+          m.amount = _totalAmount * (p / 100.0);
         }
 
       case SplitMode.shares:
-        // Init shares controllers for new members
         for (final m in _members) {
           _shares.putIfAbsent(m.id, () => 1.0);
           if (!_sharesCtrls.containsKey(m.id)) {
             _sharesCtrls[m.id] =
-                TextEditingController(text: _shares[m.id]!.toStringAsFixed(0));
+                TextEditingController(text: (_shares[m.id]!).toStringAsFixed(0));
           }
         }
-        final totalShares =
-            _shares.values.fold<double>(0, (s, v) => s + v);
+        final totalShares = _shares.values.fold<double>(0, (s, v) => s + v);
         for (final m in _members) {
-          final memberShares = _shares[m.id] ?? 1.0;
-          m.amount = totalShares > 0
-              ? widget.totalAmount * (memberShares / totalShares)
-              : 0;
+          final ms = _shares[m.id] ?? 1.0;
+          m.amount = totalShares > 0 ? _totalAmount * (ms / totalShares) : 0;
         }
     }
+  }
+
+  /// When user edits one member's percent, distribute the remainder equally
+  /// among all other members and refresh their controllers.
+  void _onPercentChanged(SplitMember edited, double newPct) {
+    setState(() {
+      _percents[edited.id] = newPct;
+      edited.amount = _totalAmount * (newPct / 100.0);
+
+      final others = _members.where((m) => m.id != edited.id).toList();
+      if (others.isEmpty) return;
+      final remaining = (100.0 - newPct).clamp(0.0, 100.0);
+      final each = remaining / others.length;
+      for (final m in others) {
+        _percents[m.id] = each;
+        m.amount = _totalAmount * (each / 100.0);
+        // Refresh controller text
+        _percentCtrls[m.id]?.text = each.toStringAsFixed(1);
+      }
+    });
+  }
+
+  /// When user edits shares, recompute all amounts from ratio.
+  void _onSharesChanged(SplitMember edited, double newShares) {
+    setState(() {
+      _shares[edited.id] = newShares;
+      final total = _shares.values.fold<double>(0, (s, v) => s + v);
+      for (final m in _members) {
+        final ms = _shares[m.id] ?? 1.0;
+        m.amount = total > 0 ? _totalAmount * (ms / total) : 0;
+      }
+    });
   }
 
   // ─── Member management ────────────────────────────────────────────────────────
@@ -165,48 +199,43 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     String name = '';
     await showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) {
-        return CupertinoAlertDialog(
-          title: const Text('Add person'),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: CupertinoTextField(
-              placeholder: 'Name',
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              onChanged: (v) => name = v,
-            ),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Add person'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            placeholder: 'Name',
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (v) => name = v,
           ),
-          actions: [
-            CupertinoDialogAction(
+        ),
+        actions: [
+          CupertinoDialogAction(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            CupertinoDialogAction(
+              child: const Text('Cancel')),
+          CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
+              child: const Text('Add')),
+        ],
+      ),
     );
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
-    final newId = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
+      final newId = DateTime.now().microsecondsSinceEpoch.toString();
       _members.add(SplitMember(
         id: newId,
         name: trimmed,
         colorIndex: _members.length % _kAvatarColors.length,
         amount: 0,
       ));
-      // Reset percents/shares equally for new member
+      // Re-equalise for new member
       final n = _members.length;
       for (final m in _members) {
         _percents[m.id] = 100.0 / n;
         _shares[m.id] = 1.0;
-        // Reset controllers so they reflect new equal split
         _percentCtrls[m.id]?.text = (100.0 / n).toStringAsFixed(1);
         _sharesCtrls[m.id]?.text = '1';
       }
@@ -223,7 +252,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       _percents.remove(m.id);
       _shares.remove(m.id);
       _members.remove(m);
-      // Re-equalise percents/shares
+      // Re-equalise after removal
       final n = _members.length;
       if (n > 0) {
         for (final member in _members) {
@@ -245,42 +274,106 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     });
   }
 
-  // ─── Computed values ──────────────────────────────────────────────────────────
+  // ─── Edit total amount ────────────────────────────────────────────────────────
 
-  double get _payerShare {
-    return _members.where((m) => m.isPayer).firstOrNull?.amount ?? 0;
+  void _editTotalAmount() async {
+    final ctrl =
+        TextEditingController(text: _totalAmount.toStringAsFixed(2));
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Edit total amount'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: ctrl,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            prefix: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(widget.currencySymbol,
+                  style: const TextStyle(color: _kInkMuted)),
+            ),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              final v = double.tryParse(ctrl.text);
+              if (v != null && v > 0) {
+                setState(() {
+                  _totalAmount = v;
+                  // Clear all controllers so recalculate seeds fresh values
+                  for (final c in _amountCtrls.values) c.dispose();
+                  _amountCtrls.clear();
+                  for (final c in _percentCtrls.values) c.dispose();
+                  _percentCtrls.clear();
+                  for (final c in _sharesCtrls.values) c.dispose();
+                  _sharesCtrls.clear();
+                  _recalculate();
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
   }
 
-  double get _owedAmount => widget.totalAmount - _payerShare;
+  // ─── Computed values ──────────────────────────────────────────────────────────
+
+  double get _payerShare =>
+      _members.where((m) => m.isPayer).firstOrNull?.amount ?? 0;
+
+  double get _owedAmount => _totalAmount - _payerShare;
 
   // ─── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final canvasColor = isDark ? brand.surface : _kCanvas;
+    final parchmentColor = isDark ? brand.background : _kParchment;
 
     return Scaffold(
-      backgroundColor: brand.background,
+      backgroundColor: parchmentColor,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(brand),
+            _buildHeader(brand, canvasColor),
             Expanded(
               child: GestureDetector(
                 onTap: () => FocusScope.of(context).unfocus(),
                 behavior: HitTestBehavior.translucent,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  controller: _scrollCtrl,
+                  // Add keyboard height so nothing hides behind keyboard
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, keyboardH + 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 16),
-                      _heroCard(),
-                      const SizedBox(height: 24),
-                      _paidBySection(brand),
-                      const SizedBox(height: 24),
-                      _splitBetweenSection(brand),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+                      _heroCard(isDark),
+                      const SizedBox(height: 28),
+                      _sectionLabel('PAID BY'),
+                      const SizedBox(height: 12),
+                      _paidByCard(canvasColor),
+                      const SizedBox(height: 28),
+                      _splitBetweenHeader(),
+                      const SizedBox(height: 12),
+                      _modeTabBar(parchmentColor, canvasColor),
+                      const SizedBox(height: 12),
+                      _memberList(canvasColor, brand),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),
@@ -289,15 +382,16 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _saveButton(),
+      bottomNavigationBar: _saveButton(keyboardH),
     );
   }
 
   // ─── Header ───────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(BrandColors brand) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+  Widget _buildHeader(BrandColors brand, Color canvasColor) {
+    return Container(
+      color: canvasColor,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
           GestureDetector(
@@ -306,24 +400,35 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: brand.surface,
+                color: _kParchment,
                 shape: BoxShape.circle,
               ),
-              child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+              child: const Icon(CupertinoIcons.xmark,
+                  size: 16, color: _kInk),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Split bill',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: _kInk,
+                    letterSpacing: -0.374,
+                  ),
                 ),
                 Text(
-                  '${widget.expenseTitle.isEmpty ? "Expense" : widget.expenseTitle} · ${widget.currencySymbol} ${widget.totalAmount.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                  '${widget.expenseTitle.isEmpty ? "Expense" : widget.expenseTitle} · '
+                  '${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: _kInkMuted,
+                    letterSpacing: -0.12,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -336,18 +441,18 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
 
   // ─── Hero card ────────────────────────────────────────────────────────────────
 
-  Widget _heroCard() {
+  Widget _heroCard(bool isDark) {
     final debtors = _members.where((m) => !m.isPayer).toList();
     final countOwing = debtors.length;
-    final amountEach =
-        countOwing > 0 ? _owedAmount / countOwing : 0.0;
+    final amountEach = countOwing > 0 ? _owedAmount / countOwing : 0.0;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _kPurpleLight,
-        borderRadius: BorderRadius.circular(20),
+        color: _kPurpleSoft,
+        borderRadius: BorderRadius.circular(_kRoundedLg),
+        border: Border.all(color: _kPurple.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,107 +466,137 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                widget.currencySymbol,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: _kPurple,
+          const SizedBox(height: 8),
+          // Tappable amount to edit
+          GestureDetector(
+            onTap: _editTotalAmount,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  widget.currencySymbol,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: _kPurple,
+                    letterSpacing: -0.374,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _owedAmount.toStringAsFixed(2),
-                style: const TextStyle(
-                  fontSize: 42,
-                  fontWeight: FontWeight.w700,
-                  color: _kPurple,
-                  letterSpacing: -1.5,
+                const SizedBox(width: 4),
+                Text(
+                  _owedAmount.toStringAsFixed(2),
+                  style: const TextStyle(
+                    fontSize: 44,
+                    fontWeight: FontWeight.w600,
+                    color: _kPurple,
+                    letterSpacing: -1.5,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _kPurple.withValues(alpha: 0.12),
+                      borderRadius:
+                          BorderRadius.circular(_kRoundedSm),
+                    ),
+                    child: const Text(
+                      'edit',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _kPurple,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             countOwing > 0
-                ? 'You paid ${widget.currencySymbol} ${widget.totalAmount.toStringAsFixed(2)} · '
+                ? 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · '
                     '$countOwing ${countOwing == 1 ? "mate owes" : "mates owe"} you '
                     '${widget.currencySymbol} ${amountEach.toStringAsFixed(2)} each'
-                : 'You paid ${widget.currencySymbol} ${widget.totalAmount.toStringAsFixed(2)} · add mates to split',
-            style: const TextStyle(fontSize: 13, color: _kPurple),
+                : 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · add mates to split',
+            style: const TextStyle(
+              fontSize: 14,
+              color: _kPurple,
+              letterSpacing: -0.224,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ─── Paid by section ─────────────────────────────────────────────────────────
+  // ─── Section label ────────────────────────────────────────────────────────────
 
-  Widget _paidBySection(BrandColors brand) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'PAID BY',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF8E8E93),
-            letterSpacing: 1,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _members.map((m) {
-                final isPayer = m.isPayer;
-                return GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    _setPayer(m);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: isPayer
-                        ? _payerCard(m, brand)
-                        : _nonPayerAvatar(m, brand),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ),
-      ],
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: _kInkMuted,
+        letterSpacing: 1,
+      ),
     );
   }
 
-  Widget _payerCard(SplitMember m, BrandColors brand) {
+  // ─── Paid by card ─────────────────────────────────────────────────────────────
+
+  Widget _paidByCard(Color canvasColor) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: canvasColor,
+        borderRadius: BorderRadius.circular(_kRoundedLg),
+        border: Border.all(color: _kHairline),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _members.map((m) {
+            final isPayer = m.isPayer;
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _setPayer(m);
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(right: 20),
+                child: isPayer
+                    ? _payerCard(m)
+                    : _nonPayerAvatar(m),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _payerCard(SplitMember m) {
     return Column(
       children: [
         Container(
-          width: 76,
-          height: 76,
+          width: 80,
+          height: 80,
           decoration: BoxDecoration(
-            color: _kPurpleLight,
+            color: _kPurpleSoft,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _kPurple, width: 2),
           ),
           child: Center(
             child: Container(
-              width: 48,
-              height: 48,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
                 color: _avatarColor(m.colorIndex),
                 shape: BoxShape.circle,
@@ -480,24 +615,25 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
+        const Text(
           'You',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: _kPurple,
+            letterSpacing: -0.12,
           ),
         ),
       ],
     );
   }
 
-  Widget _nonPayerAvatar(SplitMember m, BrandColors brand) {
+  Widget _nonPayerAvatar(SplitMember m) {
     return Column(
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 50,
+          height: 50,
           decoration: BoxDecoration(
             color: _avatarColor(m.colorIndex),
             shape: BoxShape.circle,
@@ -508,7 +644,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 17,
+                fontSize: 18,
               ),
             ),
           ),
@@ -516,80 +652,65 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         const SizedBox(height: 6),
         Text(
           m.name.split(' ').first,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: brand.inkSoft,
+            color: _kInkMuted,
+            letterSpacing: -0.12,
           ),
         ),
       ],
     );
   }
 
-  // ─── Split between section ────────────────────────────────────────────────────
+  // ─── Split between header ─────────────────────────────────────────────────────
 
-  Widget _splitBetweenSection(BrandColors brand) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _splitBetweenHeader() {
+    return Row(
       children: [
-        Row(
-          children: [
-            Text(
-              'SPLIT BETWEEN · ${_members.length}',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF8E8E93),
-                letterSpacing: 1,
-              ),
-            ),
-            const Spacer(),
-            GestureDetector(
-              onTap: _addPerson,
-              child: const Row(
-                children: [
-                  Icon(CupertinoIcons.plus, size: 14, color: _kPurple),
-                  SizedBox(width: 4),
-                  Text(
-                    'Add person',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _kPurple,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _modeTabBar(brand),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(AppRadius.card),
+        Text(
+          'SPLIT BETWEEN · ${_members.length}',
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: _kInkMuted,
+            letterSpacing: 1,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            child: Column(
-              children: _buildMemberRows(brand),
-            ),
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: _addPerson,
+          child: const Row(
+            children: [
+              Icon(CupertinoIcons.plus, size: 14, color: _kPurple),
+              SizedBox(width: 4),
+              Text(
+                'Add person',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _kPurple,
+                  letterSpacing: -0.224,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _modeTabBar(BrandColors brand) {
+  // ─── Mode tab bar ─────────────────────────────────────────────────────────────
+
+  Widget _modeTabBar(Color parchmentColor, Color canvasColor) {
     final modes = SplitMode.values;
     final labels = ['Equally', 'Amount', 'Percent', 'Shares'];
     return Container(
-      height: 40,
+      height: 44,
       decoration: BoxDecoration(
-        color: brand.surface,
+        color: parchmentColor,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kHairline),
       ),
       child: Row(
         children: List.generate(modes.length, (i) {
@@ -601,21 +722,20 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 FocusScope.of(context).unfocus();
                 setState(() {
                   _mode = modes[i];
-                  // Don't clear controllers — preserve user input across tab switches
                   _recalculate();
                 });
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 180),
                 margin: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
+                  color: isSelected ? canvasColor : Colors.transparent,
                   borderRadius: BorderRadius.circular(9),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 4,
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 6,
                             offset: const Offset(0, 1),
                           )
                         ]
@@ -626,9 +746,11 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                     labels[i],
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected ? _kPurple : brand.inkSoft,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: isSelected ? _kPurple : _kInkMuted,
+                      letterSpacing: -0.12,
                     ),
                   ),
                 ),
@@ -640,18 +762,32 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     );
   }
 
-  List<Widget> _buildMemberRows(BrandColors brand) {
-    final divider = Container(
+  // ─── Member list ──────────────────────────────────────────────────────────────
+
+  Widget _memberList(Color canvasColor, BrandColors brand) {
+    final hairline = Container(
       height: 0.5,
       margin: const EdgeInsets.only(left: 62),
-      color: brand.divider,
+      color: _kHairline,
     );
-    final rows = <Widget>[];
-    for (int i = 0; i < _members.length; i++) {
-      if (i > 0) rows.add(divider);
-      rows.add(_memberRow(_members[i], brand));
-    }
-    return rows;
+    return Container(
+      decoration: BoxDecoration(
+        color: canvasColor,
+        borderRadius: BorderRadius.circular(_kRoundedLg),
+        border: Border.all(color: _kHairline),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_kRoundedLg),
+        child: Column(
+          children: [
+            for (int i = 0; i < _members.length; i++) ...[
+              if (i > 0) hairline,
+              _memberRow(_members[i], brand),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _memberRow(SplitMember m, BrandColors brand) {
@@ -664,12 +800,12 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.red.withValues(alpha: 0.1),
-        child: const Icon(CupertinoIcons.trash, color: Colors.red, size: 20),
+        color: Colors.red.withValues(alpha: 0.08),
+        child: const Icon(CupertinoIcons.trash, color: Colors.red, size: 18),
       ),
       onDismissed: (_) => _removeMember(m),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
             // Avatar
@@ -685,7 +821,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                   m.initials,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
                 ),
@@ -704,6 +840,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
+                          color: _kInk,
+                          letterSpacing: -0.374,
                         ),
                       ),
                       if (isYou) ...[
@@ -712,14 +850,15 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _kPurpleLight,
-                            borderRadius: BorderRadius.circular(6),
+                            color: _kPurpleSoft,
+                            borderRadius:
+                                BorderRadius.circular(_kRoundedSm),
                           ),
                           child: const Text(
                             'YOU',
                             style: TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: _kPurple,
                               letterSpacing: 0.5,
                             ),
@@ -731,30 +870,33 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                   const SizedBox(height: 2),
                   Text(
                     _subtitleFor(m),
-                    style:
-                        TextStyle(fontSize: 12, color: brand.inkSoft),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _kInkMuted,
+                      letterSpacing: -0.12,
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            // Checkmark circle
+            // Purple filled checkmark
             Container(
-              width: 24,
-              height: 24,
+              width: 22,
+              height: 22,
               decoration: const BoxDecoration(
                 color: _kPurple,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 CupertinoIcons.checkmark,
-                size: 13,
+                size: 12,
                 color: Colors.white,
               ),
             ),
             const SizedBox(width: 10),
             // Amount / editable field
-            _amountWidget(m, brand),
+            _amountWidget(m),
           ],
         ),
       ),
@@ -773,56 +915,38 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         return '${pct.toStringAsFixed(1)}% of total';
       case SplitMode.shares:
         final myShares = _shares[m.id] ?? 1;
-        final total =
-            _shares.values.fold<double>(0, (s, v) => s + v);
+        final total = _shares.values.fold<double>(0, (s, v) => s + v);
         final pct = total > 0 ? (myShares / total * 100) : 0.0;
         return '${myShares.toStringAsFixed(0)} share${myShares != 1 ? 's' : ''} · ${pct.toStringAsFixed(0)}%';
     }
   }
 
-  Widget _amountWidget(SplitMember m, BrandColors brand) {
+  Widget _amountWidget(SplitMember m) {
     switch (_mode) {
       case SplitMode.equally:
         return Text(
           '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
           style: const TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w600),
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: _kInk,
+            letterSpacing: -0.374,
+          ),
         );
 
       case SplitMode.amount:
         final ctrl = _amountCtrls.putIfAbsent(
           m.id,
-          () => TextEditingController(
-              text: m.amount.toStringAsFixed(2)),
+          () => TextEditingController(text: m.amount.toStringAsFixed(2)),
         );
-        return SizedBox(
-          width: 90,
-          child: CupertinoTextField(
-            controller: ctrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            textAlign: TextAlign.right,
-            placeholder: '0.00',
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w600),
-            decoration: BoxDecoration(
-              color: _kPurpleLight,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            prefix: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                widget.currencySymbol,
-                style: TextStyle(fontSize: 13, color: brand.inkSoft),
-              ),
-            ),
-            onChanged: (v) {
-              final val = double.tryParse(v) ?? 0;
-              setState(() => m.amount = val);
-            },
-          ),
+        return _inputField(
+          ctrl: ctrl,
+          width: 96,
+          prefix: widget.currencySymbol,
+          onChanged: (v) {
+            final val = double.tryParse(v) ?? 0;
+            setState(() => m.amount = val);
+          },
         );
 
       case SplitMode.percent:
@@ -834,42 +958,23 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            SizedBox(
+            _inputField(
+              ctrl: ctrl,
               width: 72,
-              child: CupertinoTextField(
-                controller: ctrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                textAlign: TextAlign.right,
-                placeholder: '0',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600),
-                decoration: BoxDecoration(
-                  color: _kPurpleLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 5),
-                suffix: const Padding(
-                  padding: EdgeInsets.only(right: 6),
-                  child: Text('%',
-                      style: TextStyle(
-                          fontSize: 13, color: _kPurple)),
-                ),
-                onChanged: (v) {
-                  final val = double.tryParse(v) ?? 0;
-                  setState(() {
-                    _percents[m.id] = val;
-                    m.amount =
-                        widget.totalAmount * (val / 100.0);
-                  });
-                },
-              ),
+              suffix: '%',
+              onChanged: (v) {
+                final val = double.tryParse(v) ?? 0;
+                _onPercentChanged(m, val.clamp(0, 100));
+              },
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 12, color: brand.inkSoft),
+              style: const TextStyle(
+                fontSize: 11,
+                color: _kInkMuted,
+                letterSpacing: -0.12,
+              ),
             ),
           ],
         );
@@ -883,77 +988,110 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            SizedBox(
-              width: 72,
-              child: CupertinoTextField(
-                controller: ctrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                textAlign: TextAlign.right,
-                placeholder: '1',
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600),
-                decoration: BoxDecoration(
-                  color: _kPurpleLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 5),
-                suffix: Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Text('sh',
-                      style: TextStyle(
-                          fontSize: 12, color: brand.inkSoft)),
-                ),
-                onChanged: (v) {
-                  final val = double.tryParse(v) ?? 1;
-                  setState(() {
-                    _shares[m.id] = val;
-                    // Recompute all amounts from shares
-                    final total = _shares.values
-                        .fold<double>(0, (s, v) => s + v);
-                    for (final member in _members) {
-                      final memberShares =
-                          _shares[member.id] ?? 1.0;
-                      member.amount = total > 0
-                          ? widget.totalAmount *
-                              (memberShares / total)
-                          : 0;
-                    }
-                  });
-                },
-              ),
+            _inputField(
+              ctrl: ctrl,
+              width: 68,
+              suffix: 'sh',
+              onChanged: (v) {
+                final val = double.tryParse(v) ?? 1;
+                _onSharesChanged(m, val.clamp(0.01, 9999));
+              },
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 12, color: brand.inkSoft),
+              style: const TextStyle(
+                fontSize: 11,
+                color: _kInkMuted,
+                letterSpacing: -0.12,
+              ),
             ),
           ],
         );
     }
   }
 
+  Widget _inputField({
+    required TextEditingController ctrl,
+    required double width,
+    String? prefix,
+    String? suffix,
+    required ValueChanged<String> onChanged,
+  }) {
+    return SizedBox(
+      width: width,
+      height: 36,
+      child: CupertinoTextField(
+        controller: ctrl,
+        keyboardType:
+            const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: _kInk,
+          letterSpacing: -0.224,
+        ),
+        decoration: BoxDecoration(
+          color: _kParchment,
+          borderRadius: BorderRadius.circular(_kRoundedSm),
+          border: Border.all(color: _kHairline),
+        ),
+        padding: EdgeInsets.only(
+          left: prefix != null ? 2 : 8,
+          right: suffix != null ? 2 : 8,
+          top: 8,
+          bottom: 8,
+        ),
+        prefix: prefix != null
+            ? Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  prefix,
+                  style: const TextStyle(
+                      fontSize: 12, color: _kInkMuted),
+                ),
+              )
+            : null,
+        suffix: suffix != null
+            ? Padding(
+                padding: const EdgeInsets.only(right: 7),
+                child: Text(
+                  suffix,
+                  style: const TextStyle(
+                      fontSize: 12, color: _kInkMuted),
+                ),
+              )
+            : null,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
   // ─── Save button ──────────────────────────────────────────────────────────────
 
-  Widget _saveButton() {
+  Widget _saveButton(double keyboardH) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        padding: EdgeInsets.fromLTRB(20, 8, 20, keyboardH > 0 ? keyboardH + 8 : 20),
         child: GestureDetector(
           onTap: () {
             HapticFeedback.mediumImpact();
             FocusScope.of(context).unfocus();
             Navigator.pop(
               context,
-              SplitBillResult(members: _members, splitMode: _mode),
+              SplitBillResult(
+                members: _members,
+                splitMode: _mode,
+                totalAmount: _totalAmount,
+              ),
             );
           },
           child: Container(
             height: 56,
             decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(28),
+              color: _kInk,
+              borderRadius: BorderRadius.circular(_kRoundedPill),
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -965,9 +1103,9 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                   'Save & generate bill',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: Colors.white,
-                    letterSpacing: 0.1,
+                    letterSpacing: -0.374,
                   ),
                 ),
               ],
