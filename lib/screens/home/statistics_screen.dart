@@ -13,10 +13,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/expense.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 
@@ -197,7 +199,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               : <Expense>[];
           final prevTotal = prevExpenses.fold<double>(
             0,
-            (s, e) => s + e.amount,
+            (s, e) => s + e.convertedAmount,
           );
           final prevLabel = prevRange?.label ?? '';
 
@@ -244,7 +246,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   period: _period,
                   anchor: _anchor,
                   rangeLabel: range.label,
-                  currentTotal: rangedExpenses.fold(0, (s, e) => s + e.amount),
+                  currentTotal: rangedExpenses.fold(0, (s, e) => s + e.convertedAmount),
                   prevTotal: prevTotal,
                   prevLabel: prevLabel,
                   symbol: symbol,
@@ -361,8 +363,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final prevExpenses = prevRange != null
         ? allExpenses.where((e) => _inRange(e, prevRange)).toList()
         : <Expense>[];
-    final prevTotal = prevExpenses.fold<double>(0, (s, e) => s + e.amount);
-    final currentTotal = rangedExpenses.fold<double>(0, (s, e) => s + e.amount);
+    final prevTotal = prevExpenses.fold<double>(0, (s, e) => s + e.convertedAmount);
+    final currentTotal = rangedExpenses.fold<double>(0, (s, e) => s + e.convertedAmount);
     final prevLabel = prevRange?.label ?? '';
 
     final report = Column(
@@ -527,13 +529,7 @@ class _TopActionBar extends StatelessWidget {
           onTap: onManage,
         ),
         const SizedBox(width: 8),
-        Opacity(
-          opacity: onShare == null ? 0.5 : 1,
-          child: _ActionBtn(
-            icon: CupertinoIcons.share,
-            onTap: onShare ?? () {},
-          ),
-        ),
+        const FxRateButton(),
         const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],
@@ -1080,7 +1076,7 @@ class _LineChartCardState extends State<_LineChartCard>
         for (final e in expenses) {
           final d = DateTime(e.date.year, e.date.month, e.date.day);
           if (!d.isBefore(range.start!) && d.isBefore(range.endExclusive!)) {
-            values[d.difference(start).inDays] += e.amount;
+            values[d.difference(start).inDays] += e.convertedAmount;
           }
         }
         final labels = [
@@ -1094,7 +1090,7 @@ class _LineChartCardState extends State<_LineChartCard>
         final values = List<double>.filled(daysInMonth, 0);
         for (final e in expenses) {
           if (e.date.year == start.year && e.date.month == start.month) {
-            values[e.date.day - 1] += e.amount;
+            values[e.date.day - 1] += e.convertedAmount;
           }
         }
         final labels = [for (int i = 0; i < daysInMonth; i++) '${i + 1}'];
@@ -1107,7 +1103,7 @@ class _LineChartCardState extends State<_LineChartCard>
               e.date.isBefore(range.endExclusive!)) {
             final monthDiff =
                 (e.date.year - start.year) * 12 + (e.date.month - start.month);
-            if (monthDiff >= 0 && monthDiff < 6) values[monthDiff] += e.amount;
+            if (monthDiff >= 0 && monthDiff < 6) values[monthDiff] += e.convertedAmount;
           }
         }
         final labels = [
@@ -1119,7 +1115,7 @@ class _LineChartCardState extends State<_LineChartCard>
         final values = List<double>.filled(12, 0);
         for (final e in expenses) {
           if (e.date.year == range.start!.year) {
-            values[e.date.month - 1] += e.amount;
+            values[e.date.month - 1] += e.convertedAmount;
           }
         }
         final labels = [
@@ -1140,7 +1136,7 @@ class _LineChartCardState extends State<_LineChartCard>
         final n = maxYear - minYear + 1;
         final values = List<double>.filled(n, 0);
         for (final e in expenses) {
-          values[e.date.year - minYear] += e.amount;
+          values[e.date.year - minYear] += e.convertedAmount;
         }
         final labels = [for (int i = 0; i < n; i++) '${minYear + i}'];
         return _LineSeries(values: values, labels: labels, denseLabels: n <= 8);
@@ -1629,11 +1625,11 @@ class _CategoryCardState extends State<_CategoryCard> {
   Widget build(BuildContext context) {
     final Map<String, double> totals = {};
     for (final e in widget.expenses) {
-      totals[e.category] = (totals[e.category] ?? 0) + e.amount;
+      totals[e.category] = (totals[e.category] ?? 0) + e.convertedAmount;
     }
     final sorted = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final total = widget.expenses.fold<double>(0, (s, e) => s + e.amount);
+    final total = widget.expenses.fold<double>(0, (s, e) => s + e.convertedAmount);
     final brand = context.brand;
 
     if (widget.expenses.isEmpty) {
@@ -2077,7 +2073,12 @@ class _RecordRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  formatMoney(symbol, expense.amount),
+                  formatMoney(
+                    expense.originalCurrency != null
+                        ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+                        : symbol,
+                    expense.amount,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

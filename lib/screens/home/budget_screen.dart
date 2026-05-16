@@ -14,6 +14,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
@@ -284,7 +285,6 @@ class BudgetScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
     final expenses =
         ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
@@ -304,7 +304,7 @@ class BudgetScreen extends ConsumerWidget {
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final activeInstallments = installments
         .where((i) => i.isActiveIn(month))
@@ -358,39 +358,7 @@ class BudgetScreen extends ConsumerWidget {
                     onTap: () => _showMoneyHubSheet(context, ref),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {},
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: brand.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            DateFormat('MMM').format(month),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: brand.ink,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            CupertinoIcons.chevron_down,
-                            size: 12,
-                            color: brand.inkSoft,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const FxRateButton(),
                   const SizedBox(width: 8),
                   const ProfileAvatarButton(),
                 ],

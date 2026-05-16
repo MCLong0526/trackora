@@ -256,7 +256,7 @@ class _TravelGroupDetailScreenState
     }
 
     final fmt = NumberFormat('#,##0.00');
-    final totalSpent = expenses.fold<double>(0.0, (s, e) => s + e.amount);
+    final totalSpent = expenses.fold<double>(0.0, (s, e) => s + e.amountInGroupCurrency);
     final memberMap = {for (final m in members) m.id: m};
 
     // Day info
@@ -464,22 +464,25 @@ class _TravelGroupDetailScreenState
                                 final expense = e.value;
                                 final paidBy = memberMap[expense.paidByMemberId];
 
-                                // Per-expense balance line
+                                // Per-expense balance line (always in group currency)
                                 String balanceText = '';
                                 Color balanceColor = _green;
                                 if (myMemberId.isNotEmpty) {
                                   final splitCnt = expense.splitAmong.length;
-                                  // Use saved per-member amount when available, else equal share
-                                  final myShare = expense.splitAmounts?[myMemberId]
-                                      ?? (splitCnt > 0 ? expense.amount / splitCnt : 0.0);
+                                  final rate = expense.exchangeRate ?? 1.0;
+                                  final convertedTotal = expense.amountInGroupCurrency;
+                                  // Convert per-member split to group currency
+                                  final myShareConverted = expense.splitAmounts?[myMemberId] != null
+                                      ? expense.splitAmounts![myMemberId]! * rate
+                                      : (splitCnt > 0 ? convertedTotal / splitCnt : 0.0);
                                   if (expense.paidByMemberId == myMemberId) {
-                                    final lent = expense.amount -
-                                        (expense.splitAmong.contains(myMemberId) ? myShare : 0.0);
+                                    final lent = convertedTotal -
+                                        (expense.splitAmong.contains(myMemberId) ? myShareConverted : 0.0);
                                     if (lent > 0.005) {
                                       balanceText = 'you lent +${widget.group.currency} ${fmt.format(lent)}';
                                     }
                                   } else if (expense.splitAmong.contains(myMemberId)) {
-                                    balanceText = 'you owe ${widget.group.currency} ${fmt.format(myShare)}';
+                                    balanceText = 'you owe ${widget.group.currency} ${fmt.format(myShareConverted)}';
                                     balanceColor = _red;
                                   }
                                 }
@@ -773,7 +776,7 @@ class _ExpenseRow extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('$currency ${fmt.format(expense.amount)}',
+                      Text('${expense.currencyCode ?? currency} ${fmt.format(expense.amount)}',
                           style: _body(15, weight: FontWeight.w600)),
                       if (balanceText.isNotEmpty) ...[
                         const SizedBox(height: 2),

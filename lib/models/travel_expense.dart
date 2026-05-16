@@ -16,6 +16,16 @@ class TravelExpense {
   final DateTime updatedAt;
   final Map<String, double>? splitAmounts;
   final String? splitMode;
+  /// Currency code for this expense (e.g. 'JPY').
+  /// Null → uses the parent group's currency.
+  final String? currencyCode;
+  /// Exchange rate from [currencyCode] → group's currency at entry time.
+  /// Null → 1.0 (same currency or unknown).
+  final double? exchangeRate;
+
+  /// Amount expressed in the group's base currency.
+  /// For same-currency expenses this equals [amount].
+  double get amountInGroupCurrency => amount * (exchangeRate ?? 1.0);
 
   const TravelExpense({
     required this.id,
@@ -33,6 +43,8 @@ class TravelExpense {
     required this.updatedAt,
     this.splitAmounts,
     this.splitMode,
+    this.currencyCode,
+    this.exchangeRate,
   });
 
   factory TravelExpense.fromMap(
@@ -60,6 +72,8 @@ class TravelExpense {
                   .map((k, v) => MapEntry(k as String, (v as num).toDouble())))
           : null,
       splitMode: data['splitMode'] as String?,
+      currencyCode: data['currencyCode'] as String?,
+      exchangeRate: (data['exchangeRate'] as num?)?.toDouble(),
     );
   }
 
@@ -80,6 +94,8 @@ class TravelExpense {
       'updatedAt': updatedAt.toIso8601String(),
       if (splitAmounts != null) 'splitAmounts': splitAmounts,
       if (splitMode != null) 'splitMode': splitMode,
+      if (currencyCode != null) 'currencyCode': currencyCode,
+      if (exchangeRate != null) 'exchangeRate': exchangeRate,
     };
   }
 
@@ -97,6 +113,8 @@ class TravelExpense {
     DateTime? updatedAt,
     Map<String, double>? splitAmounts,
     String? splitMode,
+    Object? currencyCode = _sentinel,
+    Object? exchangeRate = _sentinel,
   }) {
     return TravelExpense(
       id: id,
@@ -116,6 +134,12 @@ class TravelExpense {
       updatedAt: updatedAt ?? this.updatedAt,
       splitAmounts: splitAmounts ?? this.splitAmounts,
       splitMode: splitMode ?? this.splitMode,
+      currencyCode: identical(currencyCode, _sentinel)
+          ? this.currencyCode
+          : currencyCode as String?,
+      exchangeRate: identical(exchangeRate, _sentinel)
+          ? this.exchangeRate
+          : exchangeRate as double?,
     );
   }
 }

@@ -18,6 +18,15 @@ class Expense {
   final String? counterpart;
   final DateTime createdAt;
   final DateTime updatedAt;
+  /// ISO 4217 code for this transaction's original currency.
+  /// Null → treated as the user's main/base currency.
+  final String? originalCurrency;
+  /// Rate used to convert [originalCurrency] → main currency at entry time.
+  /// Null → 1.0 (same currency or unknown).
+  final double? exchangeRate;
+  /// Pre-computed amount in user's main/base currency (amount × exchangeRate).
+  /// Null → use [amount] as-is.
+  final double? baseCurrencyAmount;
 
   const Expense({
     required this.id,
@@ -32,7 +41,13 @@ class Expense {
     this.counterpart,
     required this.createdAt,
     required this.updatedAt,
+    this.originalCurrency,
+    this.exchangeRate,
+    this.baseCurrencyAmount,
   });
+
+  /// Returns the amount converted to main/base currency.
+  double get convertedAmount => baseCurrencyAmount ?? amount;
 
   factory Expense.fromMap(Map<String, dynamic> data, {required String id}) {
     return Expense(
@@ -48,6 +63,9 @@ class Expense {
       counterpart: data['counterpart'] as String?,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      originalCurrency: data['originalCurrency'] as String?,
+      exchangeRate: (data['exchangeRate'] as num?)?.toDouble(),
+      baseCurrencyAmount: (data['baseCurrencyAmount'] as num?)?.toDouble(),
     );
   }
 
@@ -65,6 +83,9 @@ class Expense {
       'counterpart': counterpart,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      if (originalCurrency != null) 'originalCurrency': originalCurrency,
+      if (exchangeRate != null) 'exchangeRate': exchangeRate,
+      if (baseCurrencyAmount != null) 'baseCurrencyAmount': baseCurrencyAmount,
     };
   }
 
@@ -82,6 +103,9 @@ class Expense {
     Object? toAccountId = _sentinel,
     Object? counterpart = _sentinel,
     DateTime? updatedAt,
+    Object? originalCurrency = _sentinel,
+    Object? exchangeRate = _sentinel,
+    Object? baseCurrencyAmount = _sentinel,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -104,6 +128,15 @@ class Expense {
           : counterpart as String?,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      originalCurrency: identical(originalCurrency, _sentinel)
+          ? this.originalCurrency
+          : originalCurrency as String?,
+      exchangeRate: identical(exchangeRate, _sentinel)
+          ? this.exchangeRate
+          : exchangeRate as double?,
+      baseCurrencyAmount: identical(baseCurrencyAmount, _sentinel)
+          ? this.baseCurrencyAmount
+          : baseCurrencyAmount as double?,
     );
   }
 

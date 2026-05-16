@@ -59,5 +59,6 @@ class FirebaseAccountRepository implements AccountRepository {
     'type': account.type.encode,
     'openingBalance': account.openingBalance,
     'createdAt': Timestamp.fromDate(account.createdAt),
+    if (account.currencyCode != null) 'currencyCode': account.currencyCode,
   };
 }

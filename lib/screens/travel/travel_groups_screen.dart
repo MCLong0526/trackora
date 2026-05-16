@@ -286,7 +286,8 @@ class _TripCardActive extends ConsumerWidget {
     final members = membersAsync.valueOrNull ?? [];
     final expenses = expensesAsync.valueOrNull ?? [];
     final memberCount = members.isNotEmpty ? members.length : group.memberIds.length;
-    final totalSpent = expenses.fold(0.0, (s, e) => s + e.amount);
+    final totalSpent = expenses.fold(0.0, (s, e) => s + e.amountInGroupCurrency);
+    final hasForeign = expenses.any((e) => e.currencyCode != null && e.currencyCode != group.currency);
 
     // Current user's balance
     final svc = ref.read(travelGroupServiceProvider);
@@ -365,9 +366,26 @@ class _TripCardActive extends ConsumerWidget {
                       const SizedBox(height: 4),
                       expensesAsync.isLoading
                           ? const CupertinoActivityIndicator()
-                          : Text(
-                              '${group.currency} ${amtFmt.format(totalSpent)}',
-                              style: _display(28, tracking: -0.6, lh: 1.05),
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (hasForeign)
+                                  Text(
+                                    'Est.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0.2,
+                                      color: isDark
+                                          ? const Color(0xFF8E8E93)
+                                          : const Color(0xFF8E8E93),
+                                    ),
+                                  ),
+                                Text(
+                                  '${group.currency} ${amtFmt.format(totalSpent)}',
+                                  style: _display(28, tracking: -0.6, lh: 1.05),
+                                ),
+                              ],
                             ),
                     ],
                   ),

@@ -157,6 +157,9 @@ class Account {
   final AccountType type;
   final double openingBalance;
   final DateTime createdAt;
+  /// ISO 4217 currency code for this account (e.g. 'USD', 'MYR').
+  /// Null means the account uses the user's main/base currency.
+  final String? currencyCode;
 
   const Account({
     required this.id,
@@ -164,6 +167,7 @@ class Account {
     required this.type,
     required this.openingBalance,
     required this.createdAt,
+    this.currencyCode,
   });
 
   factory Account.fromMap(Map<String, dynamic> data, {required String id}) {
@@ -173,6 +177,7 @@ class Account {
       type: AccountTypeLabel.decode(data['type'] as String?),
       openingBalance: (data['openingBalance'] as num?)?.toDouble() ?? 0.0,
       createdAt: _readDate(data['createdAt']),
+      currencyCode: data['currencyCode'] as String?,
     );
   }
 
@@ -183,8 +188,11 @@ class Account {
       'type': type.encode,
       'openingBalance': openingBalance,
       'createdAt': createdAt.toIso8601String(),
+      if (currencyCode != null) 'currencyCode': currencyCode,
     };
   }
+
+  static const _sentinel = Object();
 
   Account copyWith({
     String? id,
@@ -192,6 +200,7 @@ class Account {
     AccountType? type,
     double? openingBalance,
     DateTime? createdAt,
+    Object? currencyCode = _sentinel,
   }) {
     return Account(
       id: id ?? this.id,
@@ -199,6 +208,9 @@ class Account {
       type: type ?? this.type,
       openingBalance: openingBalance ?? this.openingBalance,
       createdAt: createdAt ?? this.createdAt,
+      currencyCode: identical(currencyCode, _sentinel)
+          ? this.currencyCode
+          : currencyCode as String?,
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +35,9 @@ import '../repositories/precious_metal_repository.dart';
 import '../repositories/saving_plan_repository.dart';
 import '../services/auth_service.dart';
 import '../services/borrow_lending_service.dart';
+import '../services/currency_converter.dart';
+import '../services/exchange_rate_service.dart';
+import '../services/fx_preferences_service.dart';
 import '../services/expense_service.dart';
 import '../services/i18n.dart';
 import '../services/installment_service.dart';
@@ -234,30 +238,40 @@ final openingSavingsProvider = StreamProvider.autoDispose<double>((ref) {
 });
 
 /// Current savings = opening balance + (lifetime inflows − lifetime outflows).
-/// Inflows: income + receive. Outflows: expense + transfer.
+/// Uses baseCurrencyAmount for multi-currency entries; falls back to amount.
 final savingsProvider = Provider.autoDispose<double>((ref) {
   final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
   final opening = ref.watch(openingSavingsProvider).valueOrNull ?? 0.0;
   double inflow = 0;
   double outflow = 0;
   for (final e in all) {
+    final amt = e.convertedAmount;
     if (e.type.isInflow) {
-      inflow += e.amount;
+      inflow += amt;
     } else {
-      outflow += e.amount;
+      outflow += amt;
     }
   }
   return opening + inflow - outflow;
 });
 
-/// Total balance = sum of all account opening balances adjusted by transactions.
-/// Account-to-account transfers credit the destination account without
-/// double-counting as income/expense.
-final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
-  final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
-  final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
-  if (accounts.isEmpty) return ref.watch(savingsProvider);
+/// Returns the amount to apply to an account's balance for a given expense.
+/// If the expense currency matches the account currency, use the raw amount.
+/// If they differ, use convertedAmount (base-currency equivalent) so RM
+/// accounts aren't credited/debited at the wrong exchange rate.
+double _effectiveAmount(Expense expense, String? accountCurrencyCode) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
+}
 
+/// Per-account raw balance map (in each account's own currency).
+Map<String, double> computeAccountBalanceMap(
+  List<Account> accounts,
+  List<Expense> all,
+) {
+  final currencyCodes = <String, String?>{
+    for (final a in accounts) a.id: a.currencyCode,
+  };
   final balances = <String, double>{};
   for (final a in accounts) {
     balances[a.id] = a.openingBalance;
@@ -265,18 +279,44 @@ final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
   for (final e in all) {
     final aid = e.accountId;
     if (aid != null && balances.containsKey(aid)) {
+      final amt = _effectiveAmount(e, currencyCodes[aid]);
       if (e.type.isInflow) {
-        balances[aid] = (balances[aid] ?? 0) + e.amount;
+        balances[aid] = (balances[aid] ?? 0) + amt;
       } else {
-        balances[aid] = (balances[aid] ?? 0) - e.amount;
+        balances[aid] = (balances[aid] ?? 0) - amt;
       }
     }
     final toId = e.toAccountId;
     if (toId != null && balances.containsKey(toId)) {
-      balances[toId] = (balances[toId] ?? 0) + e.amount;
+      balances[toId] = (balances[toId] ?? 0) + _effectiveAmount(e, currencyCodes[toId]);
     }
   }
-  return balances.values.fold<double>(0, (s, v) => s + v);
+  return balances;
+}
+
+/// Total balance = sum of all account balances converted to user's main currency.
+/// Uses frozen baseCurrencyAmount on expenses where available; falls back to
+/// live converter for account opening-balance differences.
+final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
+  final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+  final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
+  if (accounts.isEmpty) return ref.watch(savingsProvider);
+
+  final converter = ref.watch(currencyConverterProvider).valueOrNull;
+  final mainCode = converter?.base;
+  final balances = computeAccountBalanceMap(accounts, all);
+
+  double total = 0;
+  for (final a in accounts) {
+    final bal = balances[a.id] ?? 0;
+    final acctCurrency = a.currencyCode ?? mainCode;
+    if (converter != null && acctCurrency != null && acctCurrency != mainCode) {
+      total += converter.toBase(bal, acctCurrency);
+    } else {
+      total += bal;
+    }
+  }
+  return total;
 });
 
 final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
@@ -306,6 +346,28 @@ final currencySymbolProvider = FutureProvider<String>(
 final currencyCodeProvider = FutureProvider<String>(
   (ref) => ref.read(prefsServiceProvider).currencyCode(),
 );
+
+final exchangeRateServiceProvider = Provider((_) => ExchangeRateService());
+
+/// FX preferences (starred / hidden currencies) — synced to Firestore.
+final fxPreferencesProvider = StreamProvider<FxPreferences>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const FxPreferences());
+  return FxPreferencesService(FirebaseFirestore.instance, user.uid).stream();
+});
+
+/// Live FX rates keyed by currency code (relative to user's main currency).
+final ratesProvider = FutureProvider.autoDispose<Map<String, double>>((ref) async {
+  final base = await ref.watch(currencyCodeProvider.future);
+  return ref.read(exchangeRateServiceProvider).getRates(base);
+});
+
+/// Synchronous converter backed by currently loaded rates.
+final currencyConverterProvider = FutureProvider.autoDispose<CurrencyConverter>((ref) async {
+  final base = await ref.watch(currencyCodeProvider.future);
+  final rates = await ref.watch(ratesProvider.future);
+  return CurrencyConverter(base, rates);
+});
 
 /// Persisted theme-mode selection (system / light / dark). Reads on app
 /// start and writes whenever the user changes the picker in Settings.

@@ -9,6 +9,7 @@ import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../services/auth_service.dart';
+import '../../services/currency_converter.dart';
 import '../../services/export_service.dart';
 import '../../services/i18n.dart';
 import '../../services/live_activity_service.dart';
@@ -52,6 +53,7 @@ class SettingsScreen extends ConsumerWidget {
         ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
     final totalBalance = ref.watch(totalAccountBalanceProvider);
     final visible = ref.watch(balanceVisibleProvider);
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
     final canPop = Navigator.canPop(context);
 
     return Scaffold(
@@ -95,8 +97,10 @@ class SettingsScreen extends ConsumerWidget {
               accounts: accounts,
               allExpenses: allExpenses,
               symbol: symbol,
+              mainCode: code,
               totalBalance: totalBalance,
               visible: visible,
+              converter: converter,
             ),
 
             const SizedBox(height: 22),
@@ -845,15 +849,19 @@ class _AccountsSection extends StatefulWidget {
   final List<Account> accounts;
   final List<Expense> allExpenses;
   final String symbol;
+  final String mainCode;
   final double totalBalance;
   final bool visible;
+  final CurrencyConverter? converter;
 
   const _AccountsSection({
     required this.accounts,
     required this.allExpenses,
     required this.symbol,
+    required this.mainCode,
     required this.totalBalance,
     required this.visible,
+    this.converter,
   });
 
   @override
@@ -874,10 +882,6 @@ class _AccountsSectionState extends State<_AccountsSection> {
     final positiveAccounts = widget.accounts
         .where((a) => (balanceMap[a.id] ?? 0) > 0)
         .toList();
-    final positiveTotal = positiveAccounts.fold<double>(
-      0,
-      (s, a) => s + balanceMap[a.id]!,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -922,7 +926,6 @@ class _AccountsSectionState extends State<_AccountsSection> {
                   context,
                   brand,
                   positiveAccounts,
-                  positiveTotal,
                   balanceMap,
                 ),
         ),
@@ -967,13 +970,33 @@ class _AccountsSectionState extends State<_AccountsSection> {
     );
   }
 
+  // Returns balance converted to base currency for chart proportions.
+  double _toBase(double bal, Account a) {
+    final code = a.currencyCode;
+    if (code != null && code != widget.mainCode && widget.converter != null) {
+      return widget.converter!.toBase(bal, code);
+    }
+    return bal;
+  }
+
+  // Returns the currency symbol for the account (own currency, or main).
+  String _acctSymbol(Account a) {
+    final code = a.currencyCode;
+    if (code != null) return kSupportedCurrencies[code] ?? code;
+    return widget.symbol;
+  }
+
   Widget _buildChart(
     BuildContext context,
     BrandColors brand,
     List<Account> positiveAccounts,
-    double positiveTotal,
     Map<String, double> balanceMap,
   ) {
+    // Converted totals (base currency) for proportions and the donut.
+    final convertedPositiveTotal = positiveAccounts.fold<double>(
+      0,
+      (s, a) => s + _toBase(balanceMap[a.id] ?? 0, a),
+    );
     return Column(
       children: [
         Padding(
@@ -1004,7 +1027,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                               i,
                             ) {
                               final a = positiveAccounts[i];
-                              final bal = balanceMap[a.id]!;
+                              final bal = _toBase(balanceMap[a.id] ?? 0, a);
                               final color =
                                   _kAccountChartColors[i %
                                       _kAccountChartColors.length];
@@ -1024,7 +1047,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      '${((balanceMap[positiveAccounts[_touched!].id]! / positiveTotal) * 100).toStringAsFixed(0)}%',
+                                      '${(convertedPositiveTotal > 0 ? (_toBase(balanceMap[positiveAccounts[_touched!].id] ?? 0, positiveAccounts[_touched!]) / convertedPositiveTotal) * 100 : 0).toStringAsFixed(0)}%',
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
@@ -1082,8 +1105,12 @@ class _AccountsSectionState extends State<_AccountsSection> {
                         mainAxisSize: MainAxisSize.min,
                         children: List.generate(positiveAccounts.length, (i) {
                           final a = positiveAccounts[i];
-                          final bal = balanceMap[a.id]!;
-                          final pct = bal / positiveTotal * 100;
+                          final bal = balanceMap[a.id] ?? 0;
+                          final convertedBal = _toBase(bal, a);
+                          final pct = convertedPositiveTotal > 0
+                              ? convertedBal / convertedPositiveTotal * 100
+                              : 0.0;
+                          final acctSym = _acctSymbol(a);
                           final color =
                               _kAccountChartColors[i %
                                   _kAccountChartColors.length];
@@ -1132,15 +1159,29 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                     ],
                                   ),
                                 ),
-                                MaskedAmount(
-                                  visibleText: formatMoney(widget.symbol, bal),
-                                  visible: widget.visible,
-                                  currencyPrefix: widget.symbol,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isActive ? brand.ink : brand.inkSoft,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    MaskedAmount(
+                                      visibleText: formatMoney(acctSym, bal),
+                                      visible: widget.visible,
+                                      currencyPrefix: acctSym,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: isActive ? brand.ink : brand.inkSoft,
+                                      ),
+                                    ),
+                                    if (a.currencyCode != null && a.currencyCode != widget.mainCode && widget.converter != null)
+                                      Text(
+                                        'est. ${kSupportedCurrencies[widget.mainCode] ?? widget.mainCode} ${convertedBal.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w500,
+                                          color: brand.inkSoft.withValues(alpha: 0.7),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),

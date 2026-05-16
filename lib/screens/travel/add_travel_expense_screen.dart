@@ -5,9 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../models/travel_expense.dart';
 import '../../models/travel_group.dart';
+import '../../services/exchange_rate_service.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/currency_picker.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -60,6 +63,7 @@ class _AddTravelExpenseScreenState
   late DateTime _date;
   String _category = 'food';
   bool _saving = false;
+  late String _currencyCode;
 
   bool get _isEdit => widget.expense != null;
 
@@ -94,6 +98,8 @@ class _AddTravelExpenseScreenState
       _customCtrls[m.id] = TextEditingController();
     }
 
+    _currencyCode = widget.group.currency;
+
     if (_isEdit) {
       final e = widget.expense!;
       _amountCtrl.text = e.amount.toStringAsFixed(2);
@@ -102,6 +108,7 @@ class _AddTravelExpenseScreenState
       _splitAmong = Set<String>.from(e.splitAmong);
       _date = e.date;
       _category = e.category;
+      _currencyCode = e.currencyCode ?? widget.group.currency;
       // Restore split mode + custom field values from saved data
       if (e.splitAmounts != null && e.splitAmounts!.isNotEmpty) {
         final mode = _SplitMode.values.firstWhere(
@@ -296,6 +303,19 @@ class _AddTravelExpenseScreenState
       final user = ref.read(authStateProvider).valueOrNull;
       final svc = ref.read(travelGroupServiceProvider);
 
+      // Resolve currency fields
+      final groupCurrency = widget.group.currency;
+      final String? currencyCodeField =
+          _currencyCode != groupCurrency ? _currencyCode : null;
+      double? fxRate;
+      if (currencyCodeField != null) {
+        fxRate = await ExchangeRateService().getRate(
+          from: _currencyCode,
+          to: groupCurrency,
+          base: groupCurrency,
+        );
+      }
+
       // Build per-member amounts for non-equal splits
       final Map<String, double>? splitAmountsMap = _splitMode != _SplitMode.equally
           ? {for (final id in _splitAmong) id: _shareFor(id)}
@@ -314,6 +334,8 @@ class _AddTravelExpenseScreenState
           splitAmong: _splitAmong.toList(),
           splitAmounts: splitAmountsMap,
           splitMode: splitModeStr,
+          currencyCode: currencyCodeField,
+          exchangeRate: fxRate,
           updatedAt: DateTime.now(),
         );
         await svc.updateExpense(widget.group.id, updated);
@@ -334,6 +356,8 @@ class _AddTravelExpenseScreenState
           splitAmong: _splitAmong.toList(),
           splitAmounts: splitAmountsMap,
           splitMode: splitModeStr,
+          currencyCode: currencyCodeField,
+          exchangeRate: fxRate,
         );
         if (mounted) {
           AppToast.show(context, context.t('travel.expenseAdded'),
@@ -431,8 +455,22 @@ class _AddTravelExpenseScreenState
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
-                          Text(widget.group.currency,
-                              style: _display(22, tracking: -0.4, color: _ink48)),
+                          GestureDetector(
+                            onTap: () => showCurrencyPickerSheet(
+                              context,
+                              current: _currencyCode,
+                              onPicked: (code) => setState(() => _currencyCode = code),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _blue.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(_currencyCode,
+                                  style: _display(16, tracking: -0.2, color: _blue)),
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: TextField(
@@ -454,7 +492,28 @@ class _AddTravelExpenseScreenState
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    Builder(builder: (ctx) {
+                      final groupCurrency = widget.group.currency;
+                      final isForeign = _currencyCode != groupCurrency;
+                      final converter = ref.watch(currencyConverterProvider).valueOrNull;
+                      if (!isForeign || converter == null) return const SizedBox(height: 16);
+                      final groupSym = kSupportedCurrencies[groupCurrency] ?? groupCurrency;
+                      return ListenableBuilder(
+                        listenable: _amountCtrl,
+                        builder: (_, child) {
+                          final amt = double.tryParse(_amountCtrl.text) ?? 0;
+                          if (amt <= 0) return const SizedBox(height: 16);
+                          final converted = amt * converter.crossRate(_currencyCode, groupCurrency);
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6, left: 4, bottom: 10),
+                            child: Text(
+                              'est. $groupSym ${converted.toStringAsFixed(2)}',
+                              style: _body(13, color: _ink48),
+                            ),
+                          );
+                        },
+                      );
+                    }),
 
                     // DESCRIPTION section
                     Padding(
@@ -704,7 +763,7 @@ class _AddTravelExpenseScreenState
                             final avatarBg = _memberBgs[idx % _memberBgs.length];
                             final share = checked ? _shareFor(m.id) : 0.0;
                             final shareLabel = checked && _parsedAmount > 0
-                                ? '${widget.group.currency} ${share.toStringAsFixed(2)}'
+                                ? '$_currencyCode ${share.toStringAsFixed(2)}'
                                 : null;
 
                             return Column(

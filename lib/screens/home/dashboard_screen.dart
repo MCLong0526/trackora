@@ -17,6 +17,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/expense_card.dart';
 import '../../widgets/month_filter_bar.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
@@ -42,11 +43,11 @@ class DashboardScreen extends ConsumerWidget {
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final monthSpent = monthExpenses
         .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final monthIncome = monthExpenses
         .where((e) => e.type.isInflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final budgetableSpent = monthExpenses
         .where(
@@ -55,7 +56,7 @@ class DashboardScreen extends ConsumerWidget {
               e.category != 'Bills' &&
               !e.note.contains('(installment)'),
         )
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     final totalBalance = ref.watch(totalAccountBalanceProvider);
 
@@ -66,8 +67,8 @@ class DashboardScreen extends ConsumerWidget {
     double weekSpent = 0;
     for (final e in allExpenses) {
       if (e.type != EntryType.expense) continue;
-      if (!e.date.isBefore(todayStart)) todaySpent += e.amount;
-      if (!e.date.isBefore(weekStart)) weekSpent += e.amount;
+      if (!e.date.isBefore(todayStart)) todaySpent += e.convertedAmount;
+      if (!e.date.isBefore(weekStart)) weekSpent += e.convertedAmount;
     }
 
     final sortedRecent = [...allExpenses]
@@ -119,7 +120,13 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const ProfileAvatarButton(),
+                  Row(
+                    children: [
+                      const FxRateButton(),
+                      const SizedBox(width: 10),
+                      const ProfileAvatarButton(),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -384,7 +391,7 @@ class DashboardScreen extends ConsumerWidget {
     final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
     final total = sorted
         .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1448,4 +1455,5 @@ class _AllBillsSheet extends ConsumerWidget {
     );
   }
 }
+
 

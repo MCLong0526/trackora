@@ -10,9 +10,11 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/account.dart';
 import '../models/expense.dart';
 import '../services/money_format.dart';
+import '../services/prefs_service.dart';
 import '../state/providers.dart';
 import '../services/i18n.dart';
 import '../theme/app_theme.dart';
+import 'currency_picker.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
 
@@ -677,18 +679,13 @@ class _CardFront extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        MaskedAmount(
-                          visibleText: formatMoney(symbol, balance),
+                        _AccountBalanceDisplay(
+                          account: account,
+                          balance: balance,
+                          mainSymbol: symbol,
                           visible: visible,
-                          currencyPrefix: symbol,
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
-                            color: isNeg
-                                ? AppColors.expense
-                                : pal.ink,
-                            letterSpacing: -0.2,
-                          ),
+                          pal: pal,
+                          isNeg: isNeg,
                         ),
                       ],
                     ),
@@ -726,6 +723,70 @@ class _CardFront extends ConsumerWidget {
   }
 }
 
+// ── Account Balance Display (handles multi-currency) ──────────
+class _AccountBalanceDisplay extends ConsumerWidget {
+  final Account account;
+  final double balance;
+  final String mainSymbol;
+  final bool visible;
+  final _Pal pal;
+  final bool isNeg;
+  final double fontSize;
+
+  const _AccountBalanceDisplay({
+    required this.account,
+    required this.balance,
+    required this.mainSymbol,
+    required this.visible,
+    required this.pal,
+    required this.isNeg,
+    this.fontSize = 19,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
+    final acctCode = account.currencyCode;
+    final acctSymbol = acctCode != null
+        ? (kSupportedCurrencies[acctCode] ?? acctCode)
+        : mainSymbol;
+    final isForeign = acctCode != null && acctCode != mainCode;
+
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final estimatedBase = isForeign && converter != null
+        ? converter.toBase(balance, acctCode)
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        MaskedAmount(
+          visibleText: formatMoney(acctSymbol, balance),
+          visible: visible,
+          currencyPrefix: acctSymbol,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: isNeg ? AppColors.expense : pal.ink,
+            letterSpacing: -0.2,
+          ),
+        ),
+        if (isForeign && estimatedBase != null)
+          MaskedAmount(
+            visibleText: '≈ ${formatMoney(mainSymbol, estimatedBase)}',
+            visible: visible,
+            currencyPrefix: mainSymbol,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: pal.ink.withValues(alpha: 0.55),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // ── Card Back ─────────────────────────────────────────────────
 class _CardBack extends StatelessWidget {
   final Account account;
@@ -751,6 +812,10 @@ class _CardBack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isNeg = balance < 0;
+    final acctCode = account.currencyCode;
+    final acctSymbol = acctCode != null
+        ? (kSupportedCurrencies[acctCode] ?? acctCode)
+        : symbol;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -839,16 +904,14 @@ class _CardBack extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            MaskedAmount(
-              visibleText: formatMoney(symbol, balance),
+            _AccountBalanceDisplay(
+              account: account,
+              balance: balance,
+              mainSymbol: symbol,
               visible: visible,
-              currencyPrefix: symbol,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-                color: isNeg ? AppColors.expense : pal.ink,
-                letterSpacing: -0.3,
-              ),
+              pal: pal,
+              isNeg: isNeg,
+              fontSize: 24,
             ),
             const SizedBox(height: 14),
             _EditPill(ink: pal.ink, onTap: onEdit),
@@ -885,6 +948,9 @@ class _CardBack extends StatelessWidget {
                     final idx = entry.key;
                     final e = entry.value;
                     final isLast = idx == recentTxns.length - 1;
+                    final txnSym = e.originalCurrency != null
+                        ? (kSupportedCurrencies[e.originalCurrency!] ?? e.originalCurrency!)
+                        : acctSymbol;
                     return Column(
                       children: [
                         Padding(
@@ -923,8 +989,8 @@ class _CardBack extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text(
                                 e.type.isInflow
-                                    ? '+${formatMoney(symbol, e.amount)}'
-                                    : '−${formatMoney(symbol, e.amount)}',
+                                    ? '+${formatMoney(txnSym, e.amount)}'
+                                    : '−${formatMoney(txnSym, e.amount)}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
@@ -1205,6 +1271,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
   bool _success = false;
   bool _saving = false;
   double _animatedBalance = 0;
+  String _currencyCode = 'MYR';
 
   late final AnimationController _tileCtrl;
   late final AnimationController _stepCtrl;
@@ -1236,6 +1303,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     _balanceCtrl.addListener(() {
       final v = double.tryParse(_balanceCtrl.text) ?? 0.0;
       setState(() => _animatedBalance = v);
+    });
+
+    PrefsService().currencyCode().then((c) {
+      if (mounted) setState(() => _currencyCode = c);
     });
   }
 
@@ -1309,6 +1380,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
           name: name,
           type: t.type,
           openingBalance: opening,
+          currencyCode: _currencyCode,
           createdAt: DateTime.now(),
         ),
       );
@@ -1446,8 +1518,11 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                     success: _success,
                     saving: _saving,
                     confettiAnim: _confettiAnim,
+                    currencyCode: _currencyCode,
                     onSwatchChanged: (t) =>
                         setState(() => _swatchColor = t),
+                    onCurrencyChanged: (c) =>
+                        setState(() => _currencyCode = c),
                     onSubmit: _submit,
                   ),
           ),
@@ -1940,6 +2015,8 @@ class _Step2 extends StatefulWidget {
   final bool saving;
   final Animation<double> confettiAnim;
   final ValueChanged<AccountType> onSwatchChanged;
+  final ValueChanged<String> onCurrencyChanged;
+  final String currencyCode;
   final VoidCallback onSubmit;
 
   const _Step2({
@@ -1953,7 +2030,9 @@ class _Step2 extends StatefulWidget {
     required this.success,
     required this.saving,
     required this.confettiAnim,
+    required this.currencyCode,
     required this.onSwatchChanged,
+    required this.onCurrencyChanged,
     required this.onSubmit,
   });
 
@@ -2251,18 +2330,43 @@ class _Step2State extends State<_Step2> {
                         tween: Tween(begin: 0, end: widget.animatedBalance),
                         duration: const Duration(milliseconds: 360),
                         curve: Curves.easeOutCubic,
-                        builder: (ctx, v, _) => Text(
-                          NumberFormat.currency(
-                            symbol: 'RM ',
-                            decimalDigits: 2,
-                          ).format(v),
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                            color: widget.pal.ink,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
+                        builder: (ctx, v, _) {
+                          final sym = kSupportedCurrencies[widget.currencyCode] ?? widget.currencyCode;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                NumberFormat.currency(
+                                  symbol: '$sym ',
+                                  decimalDigits: 2,
+                                ).format(v),
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                  color: widget.pal.ink,
+                                  letterSpacing: -0.4,
+                                ),
+                              ),
+                              Consumer(builder: (ctx, ref, _) {
+                                final mainCode = ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
+                                final converter = ref.watch(currencyConverterProvider).valueOrNull;
+                                if (widget.currencyCode == mainCode || converter == null || v <= 0) {
+                                  return const SizedBox.shrink();
+                                }
+                                final mainSym = kSupportedCurrencies[mainCode] ?? mainCode;
+                                final est = converter.toBase(v, widget.currencyCode);
+                                return Text(
+                                  'est. $mainSym ${est.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.pal.ink.withValues(alpha: 0.65),
+                                  ),
+                                );
+                              }),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -2446,7 +2550,7 @@ class _Step2State extends State<_Step2> {
                       Row(
                         children: [
                           Text(
-                            'RM',
+                            kSupportedCurrencies[widget.currencyCode] ?? widget.currencyCode,
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -2480,6 +2584,46 @@ class _Step2State extends State<_Step2> {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: brand.divider,
+                    indent: 16),
+                // Currency picker row
+                InkWell(
+                  onTap: () => showCurrencyPickerSheet(
+                    context,
+                    current: widget.currencyCode,
+                    onPicked: widget.onCurrencyChanged,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Row(
+                      children: [
+                        Text(
+                          'CURRENCY',
+                          style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 0.5,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${kSupportedCurrencies[widget.currencyCode] ?? widget.currencyCode} (${widget.currencyCode})',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: brand.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+                      ],
+                    ),
                   ),
                 ),
               ],

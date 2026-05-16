@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/expense.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -54,9 +55,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       final day = e.date.day;
       final prev = map[day] ?? (expense: 0.0, income: 0.0);
       if (e.type.isOutflow) {
-        map[day] = (expense: prev.expense + e.amount, income: prev.income);
+        map[day] = (expense: prev.expense + e.convertedAmount, income: prev.income);
       } else if (e.type.isInflow) {
-        map[day] = (expense: prev.expense, income: prev.income + e.amount);
+        map[day] = (expense: prev.expense, income: prev.income + e.convertedAmount);
       }
     }
     return map;
@@ -495,10 +496,10 @@ class _DayHeader extends StatelessWidget {
     final brand = context.brand;
     final expense = expenses
         .where((e) => e.type.isOutflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
     final income = expenses
         .where((e) => e.type.isInflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     return Row(
       children: [
@@ -676,16 +677,21 @@ class _RecordRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              isIncome
-                  ? formatMoney(symbol, expense.amount, forceSign: true)
-                  : formatMoney(symbol, -expense.amount),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: isIncome ? AppColors.income : brand.ink,
-              ),
-            ),
+            Builder(builder: (ctx) {
+              final displaySym = expense.originalCurrency != null
+                  ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+                  : symbol;
+              return Text(
+                isIncome
+                    ? formatMoney(displaySym, expense.amount, forceSign: true)
+                    : formatMoney(displaySym, -expense.amount),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: isIncome ? AppColors.income : brand.ink,
+                ),
+              );
+            }),
           ],
         ),
       ),
@@ -778,10 +784,10 @@ class _MonthSummary extends StatelessWidget {
 
     final totalExpense = expenses
         .where((e) => e.type.isOutflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
     final totalIncome = expenses
         .where((e) => e.type.isInflow)
-        .fold<double>(0, (s, e) => s + e.amount);
+        .fold<double>(0, (s, e) => s + e.convertedAmount);
 
     return Container(
       decoration: BoxDecoration(
@@ -1518,9 +1524,12 @@ class _DialogTransactionRow extends StatelessWidget {
     final timeStr = DateFormat('HH:mm').format(expense.date);
     final categoryLabel = context.categoryLabel(expense.category);
 
+    final displaySym = expense.originalCurrency != null
+        ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+        : symbol;
     final amountStr = isIncome
-        ? formatMoney(symbol, expense.amount, forceSign: true)
-        : formatMoney(symbol, -expense.amount);
+        ? formatMoney(displaySym, expense.amount, forceSign: true)
+        : formatMoney(displaySym, -expense.amount);
     final amountColor = isIncome ? AppColors.income : brand.ink;
 
     return GestureDetector(

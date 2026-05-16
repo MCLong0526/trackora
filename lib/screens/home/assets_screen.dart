@@ -8,12 +8,15 @@ import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
 import '../../models/saving_plan.dart';
+import '../../services/currency_converter.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../travel/travel_groups_screen.dart';
@@ -45,12 +48,16 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
     final installments =
         installmentsAsync.valueOrNull ?? const <Installment>[];
 
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
     final snapshot = _AssetSnapshot.build(
       accounts: accounts,
       expenses: expenses,
       savingPlans: savingPlans,
       borrowLending: borrowLending,
       installments: installments,
+      converter: converter,
+      mainCode: mainCode,
     );
     final isLoading =
         accountsAsync.maybeWhen(loading: () => true, orElse: () => false);
@@ -73,6 +80,8 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                     snapshot: snapshot,
                     symbol: symbol,
                     visible: visible,
+                    converter: converter,
+                    mainCode: mainCode,
                   ),
                   const SizedBox(height: 20),
                   if (accounts.isEmpty)
@@ -290,6 +299,8 @@ class _Header extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 8),
+        const FxRateButton(),
+        const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],
     );
@@ -302,11 +313,15 @@ class _NetWorthCard extends StatefulWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
+  final CurrencyConverter? converter;
+  final String? mainCode;
 
   const _NetWorthCard({
     required this.snapshot,
     required this.symbol,
     required this.visible,
+    this.converter,
+    this.mainCode,
   });
 
   @override
@@ -377,6 +392,18 @@ class _NetWorthCardState extends State<_NetWorthCard>
                       color: soft,
                     ),
                   ),
+                  if (widget.snapshot.hasMultiCurrency) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '(est.)',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: soft,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   Text(
                     '${widget.snapshot.accounts.length} account${widget.snapshot.accounts.length == 1 ? '' : 's'}',
@@ -483,7 +510,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                         title: context.t('asset.assets'),
                         color: AppColors.income,
                         icon: CupertinoIcons.arrow_up_right,
-                        items: _buildAssetItems(widget.snapshot, context),
+                        items: _buildAssetItems(widget.snapshot, context, widget.converter, widget.mainCode),
                         total: widget.snapshot.totalAssets,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -505,7 +532,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                         title: context.t('asset.liabilities'),
                         color: AppColors.expense,
                         icon: CupertinoIcons.arrow_down_right,
-                        items: _buildLiabilityItems(widget.snapshot, context),
+                        items: _buildLiabilityItems(widget.snapshot, context, widget.converter, widget.mainCode),
                         total: widget.snapshot.totalLiabilities,
                         symbol: widget.symbol,
                         visible: widget.visible,
@@ -1218,6 +1245,9 @@ class _AssetSnapshot {
   /// Net income - expense change over the past 7 days.
   final double weeklyChange;
 
+  /// Whether any account uses a different currency (for "(est.)" label).
+  final bool hasMultiCurrency;
+
   const _AssetSnapshot({
     required this.accounts,
     required this.netWorth,
@@ -1230,6 +1260,7 @@ class _AssetSnapshot {
     required this.activeInstallments,
     required this.installmentLiability,
     required this.weeklyChange,
+    this.hasMultiCurrency = false,
   });
 
   factory _AssetSnapshot.build({
@@ -1238,8 +1269,19 @@ class _AssetSnapshot {
     required List<SavingPlan> savingPlans,
     required List<BorrowLending> borrowLending,
     required List<Installment> installments,
+    CurrencyConverter? converter,
+    String? mainCode,
   }) {
     final balances = _computeBalances(accounts, expenses);
+
+    // Convert a per-account balance to base currency for totals
+    double toBase(Account a, double bal) {
+      final code = a.currencyCode ?? mainCode;
+      if (converter != null && code != null && code != mainCode) {
+        return converter.toBase(bal, code);
+      }
+      return bal;
+    }
 
     // Split account balances into assets vs liabilities:
     // - Asset accounts (bank/eWallet/cash): positive = asset, negative = liability
@@ -1248,15 +1290,16 @@ class _AssetSnapshot {
     double accountLiabilitiesSum = 0;
     for (final account in accounts) {
       final bal = balances[account.id] ?? 0;
+      final baseBal = toBase(account, bal);
       if (account.type.isLiability) {
-        if (bal < 0) accountLiabilitiesSum += bal.abs();
+        if (baseBal < 0) accountLiabilitiesSum += baseBal.abs();
         // Positive balance on liability account (overpaid) counts as asset credit
-        if (bal > 0) accountAssetsSum += bal;
+        if (baseBal > 0) accountAssetsSum += baseBal;
       } else {
-        if (bal >= 0) {
-          accountAssetsSum += bal;
+        if (baseBal >= 0) {
+          accountAssetsSum += baseBal;
         } else {
-          accountLiabilitiesSum += bal.abs();
+          accountLiabilitiesSum += baseBal.abs();
         }
       }
     }
@@ -1314,12 +1357,16 @@ class _AssetSnapshot {
     for (final e in expenses) {
       if (e.date.isAfter(weekStart)) {
         if (e.type == EntryType.income || e.type == EntryType.receive) {
-          weeklyChange += e.amount;
+          weeklyChange += e.convertedAmount;
         } else if (e.type == EntryType.expense) {
-          weeklyChange -= e.amount;
+          weeklyChange -= e.convertedAmount;
         }
       }
     }
+
+    final hasMultiCurrency = accounts.any(
+      (a) => a.currencyCode != null && a.currencyCode != mainCode,
+    );
 
     return _AssetSnapshot(
       accounts: accountAssets,
@@ -1333,6 +1380,7 @@ class _AssetSnapshot {
       activeInstallments: activeInstallments,
       installmentLiability: installmentLiability,
       weeklyChange: weeklyChange,
+      hasMultiCurrency: hasMultiCurrency,
     );
   }
 
@@ -1353,25 +1401,35 @@ class _AccountAsset {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+double _effectiveAmountForAccount(Expense expense, String? accountCurrencyCode) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
+}
+
 Map<String, double> _computeBalances(
   List<Account> accounts,
   List<Expense> expenses,
 ) {
+  final currencyCodes = <String, String?>{
+    for (final a in accounts) a.id: a.currencyCode,
+  };
   final balances = <String, double>{
     for (final a in accounts) a.id: a.openingBalance,
   };
   for (final expense in expenses) {
     final from = expense.accountId;
     if (from != null && balances.containsKey(from)) {
+      final amt = _effectiveAmountForAccount(expense, currencyCodes[from]);
       if (expense.type.isInflow) {
-        balances[from] = (balances[from] ?? 0) + expense.amount;
+        balances[from] = (balances[from] ?? 0) + amt;
       } else {
-        balances[from] = (balances[from] ?? 0) - expense.amount;
+        balances[from] = (balances[from] ?? 0) - amt;
       }
     }
     final to = expense.toAccountId;
     if (to != null && balances.containsKey(to)) {
-      balances[to] = (balances[to] ?? 0) + expense.amount;
+      balances[to] = (balances[to] ?? 0) +
+          _effectiveAmountForAccount(expense, currencyCodes[to]);
     }
   }
   return balances;
@@ -1383,32 +1441,53 @@ class _BreakdownItem {
   final String name;
   final String type;
   final double amount;
+  final String? originalCurrencyCode;
+  final double? estAmount;
 
   const _BreakdownItem({
     required this.name,
     required this.type,
     required this.amount,
+    this.originalCurrencyCode,
+    this.estAmount,
   });
 }
 
-List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot, BuildContext context) {
+_BreakdownItem _accountItem(
+  _AccountAsset a,
+  String type,
+  CurrencyConverter? converter,
+  String? mainCode, {
+  bool abs = false,
+}) {
+  final bal = abs ? a.balance.abs() : a.balance;
+  final code = a.account.currencyCode;
+  final isForeign = code != null && code != mainCode;
+  final est = (isForeign && converter != null) ? converter.toBase(bal, code) : null;
+  return _BreakdownItem(
+    name: a.account.name,
+    type: type,
+    amount: bal,
+    originalCurrencyCode: isForeign ? code : null,
+    estAmount: est,
+  );
+}
+
+List<_BreakdownItem> _buildAssetItems(
+  _AssetSnapshot snapshot,
+  BuildContext context,
+  CurrencyConverter? converter,
+  String? mainCode,
+) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (!a.account.type.isLiability && a.balance > 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: a.account.type.label,
-        amount: a.balance,
-      ));
+      items.add(_accountItem(a, a.account.type.label, converter, mainCode));
     }
   }
   for (final a in snapshot.accounts) {
     if (a.account.type.isLiability && a.balance > 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: '${a.account.type.label} (overpaid)',
-        amount: a.balance,
-      ));
+      items.add(_accountItem(a, '${a.account.type.label} (overpaid)', converter, mainCode));
     }
   }
   if (snapshot.totalLent > 0) {
@@ -1421,24 +1500,21 @@ List<_BreakdownItem> _buildAssetItems(_AssetSnapshot snapshot, BuildContext cont
   return items;
 }
 
-List<_BreakdownItem> _buildLiabilityItems(_AssetSnapshot snapshot, BuildContext context) {
+List<_BreakdownItem> _buildLiabilityItems(
+  _AssetSnapshot snapshot,
+  BuildContext context,
+  CurrencyConverter? converter,
+  String? mainCode,
+) {
   final items = <_BreakdownItem>[];
   for (final a in snapshot.accounts) {
     if (a.account.type.isLiability && a.balance < 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: a.account.type.label,
-        amount: a.balance.abs(),
-      ));
+      items.add(_accountItem(a, a.account.type.label, converter, mainCode, abs: true));
     }
   }
   for (final a in snapshot.accounts) {
     if (!a.account.type.isLiability && a.balance < 0) {
-      items.add(_BreakdownItem(
-        name: a.account.name,
-        type: '${a.account.type.label} (negative)',
-        amount: a.balance.abs(),
-      ));
+      items.add(_accountItem(a, '${a.account.type.label} (negative)', converter, mainCode, abs: true));
     }
   }
   if (snapshot.totalBorrowed > 0) {
@@ -1640,6 +1716,10 @@ class _BreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final hasForeign = item.originalCurrencyCode != null && item.estAmount != null;
+    final displaySym = hasForeign
+        ? (kSupportedCurrencies[item.originalCurrencyCode!] ?? item.originalCurrencyCode!)
+        : symbol;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
       child: Row(
@@ -1671,17 +1751,31 @@ class _BreakdownRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          MaskedAmount(
-            visibleText: formatMoney(symbol, item.amount),
-            visible: visible,
-            currencyPrefix: symbol,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              MaskedAmount(
+                visibleText: formatMoney(displaySym, item.amount),
+                visible: visible,
+                currencyPrefix: displaySym,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              if (hasForeign)
+                Text(
+                  'est. $symbol ${item.estAmount!.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: brand.inkSoft,
+                  ),
+                ),
+            ],
           ),
         ],
       ),

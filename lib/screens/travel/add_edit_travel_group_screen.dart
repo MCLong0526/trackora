@@ -53,7 +53,7 @@ class AddEditTravelGroupScreen extends ConsumerStatefulWidget {
 class _AddEditTravelGroupScreenState
     extends ConsumerState<AddEditTravelGroupScreen> {
   final _nameCtrl = TextEditingController();
-  final _currencyCtrl = TextEditingController();
+  late String _selectedCurrency;
   late DateTime _startDate;
   DateTime? _endDate;
   bool _saving = false;
@@ -66,12 +66,12 @@ class _AddEditTravelGroupScreenState
     super.initState();
     if (_isEdit) {
       _nameCtrl.text = widget.group!.name;
-      _currencyCtrl.text = widget.group!.currency;
+      _selectedCurrency = widget.group!.currency;
       _startDate = widget.group!.startDate;
       _endDate = widget.group!.endDate;
     } else {
       _startDate = DateTime.now();
-      _currencyCtrl.text = 'MYR';
+      _selectedCurrency = 'MYR';
       // Current user is always first
       _travelers.add(const _Traveler(name: 'You', isYou: true));
     }
@@ -80,7 +80,6 @@ class _AddEditTravelGroupScreenState
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _currencyCtrl.dispose();
     super.dispose();
   }
 
@@ -103,9 +102,17 @@ class _AddEditTravelGroupScreenState
     });
   }
 
+  void _showCurrencyPicker() async {
+    final picked = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (ctx) => _CurrencyPickerSheet(selected: _selectedCurrency),
+    );
+    if (picked != null) setState(() => _selectedCurrency = picked);
+  }
+
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    final currency = _currencyCtrl.text.trim().toUpperCase();
+    final currency = _selectedCurrency;
     if (name.isEmpty) {
       AppToast.show(context, context.t('travel.saveFailed'), type: AppToastType.error);
       return;
@@ -119,7 +126,7 @@ class _AddEditTravelGroupScreenState
       if (_isEdit) {
         final updated = widget.group!.copyWith(
           name: name,
-          currency: currency.isEmpty ? 'MYR' : currency,
+          currency: currency,
           startDate: _startDate,
           endDate: _endDate,
           updatedAt: DateTime.now(),
@@ -134,13 +141,13 @@ class _AddEditTravelGroupScreenState
         final groupId = await svc.createGroup(
           userId: user.uid,
           name: name,
-          currency: currency.isEmpty ? 'MYR' : currency,
+          currency: currency,
           startDate: _startDate,
           endDate: _endDate,
         );
         final createdGroup = TravelGroup(
           id: groupId, name: name,
-          currency: currency.isEmpty ? 'MYR' : currency,
+          currency: currency,
           startDate: _startDate, endDate: _endDate,
           ownerId: user.uid, memberIds: [user.uid],
           createdAt: DateTime.now(), updatedAt: DateTime.now(),
@@ -317,21 +324,13 @@ class _AddEditTravelGroupScreenState
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
                     child: _FormCard(
                       isDark: isDark,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 4),
-                        child: TextField(
-                          controller: _currencyCtrl,
-                          textCapitalization: TextCapitalization.characters,
-                          maxLength: 10,
-                          style: _body(17, weight: 600),
-                          decoration: InputDecoration(
-                            hintText: context.t('travel.currencyHint'),
-                            hintStyle: _body(17, weight: 600, color: _ink24),
-                            border: InputBorder.none,
-                            counterText: '',
-                          ),
-                        ),
+                      child: _FormRow(
+                        label: 'Currency',
+                        value: _selectedCurrency,
+                        sub: _kCurrencyNames[_selectedCurrency],
+                        isDark: isDark,
+                        last: true,
+                        onTap: _showCurrencyPicker,
                       ),
                     ),
                   ),
@@ -810,6 +809,183 @@ class _SheetField extends StatelessWidget {
           hintStyle: _body(16, color: _ink48),
           border: InputBorder.none,
         ),
+      ),
+    );
+  }
+}
+
+// ── Currency data ─────────────────────────────────────────────────────────────
+
+const _kCurrencies = [
+  'MYR', 'USD', 'EUR', 'GBP', 'SGD', 'AUD', 'JPY', 'CNY',
+  'HKD', 'KRW', 'TWD', 'THB', 'IDR', 'PHP', 'VND', 'INR',
+  'CAD', 'CHF', 'NZD', 'SEK', 'NOK', 'DKK', 'AED', 'SAR',
+  'QAR', 'KWD', 'BHD', 'OMR', 'EGP', 'ZAR', 'TRY', 'BRL',
+  'MXN', 'PKR', 'BDT', 'LKR', 'NPR',
+];
+
+const _kCurrencyNames = {
+  'MYR': 'Malaysian Ringgit',    'USD': 'US Dollar',
+  'EUR': 'Euro',                 'GBP': 'British Pound',
+  'SGD': 'Singapore Dollar',    'AUD': 'Australian Dollar',
+  'JPY': 'Japanese Yen',        'CNY': 'Chinese Yuan',
+  'HKD': 'Hong Kong Dollar',    'KRW': 'South Korean Won',
+  'TWD': 'Taiwan Dollar',       'THB': 'Thai Baht',
+  'IDR': 'Indonesian Rupiah',   'PHP': 'Philippine Peso',
+  'VND': 'Vietnamese Dong',     'INR': 'Indian Rupee',
+  'CAD': 'Canadian Dollar',     'CHF': 'Swiss Franc',
+  'NZD': 'New Zealand Dollar',  'SEK': 'Swedish Krona',
+  'NOK': 'Norwegian Krone',     'DKK': 'Danish Krone',
+  'AED': 'UAE Dirham',          'SAR': 'Saudi Riyal',
+  'QAR': 'Qatari Riyal',        'KWD': 'Kuwaiti Dinar',
+  'BHD': 'Bahraini Dinar',      'OMR': 'Omani Rial',
+  'EGP': 'Egyptian Pound',      'ZAR': 'South African Rand',
+  'TRY': 'Turkish Lira',        'BRL': 'Brazilian Real',
+  'MXN': 'Mexican Peso',        'PKR': 'Pakistani Rupee',
+  'BDT': 'Bangladeshi Taka',    'LKR': 'Sri Lankan Rupee',
+  'NPR': 'Nepalese Rupee',
+};
+
+// ── Currency picker sheet ─────────────────────────────────────────────────────
+
+class _CurrencyPickerSheet extends StatefulWidget {
+  final String selected;
+  const _CurrencyPickerSheet({required this.selected});
+
+  @override
+  State<_CurrencyPickerSheet> createState() => _CurrencyPickerSheetState();
+}
+
+class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
+  late String _query;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _query = '';
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final searchBg = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
+
+    final filtered = _query.isEmpty
+        ? _kCurrencies
+        : _kCurrencies
+            .where((c) =>
+                c.toLowerCase().contains(_query.toLowerCase()) ||
+                (_kCurrencyNames[c] ?? '').toLowerCase().contains(_query.toLowerCase()))
+            .toList();
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.72,
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Handle
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              width: 40, height: 5,
+              decoration: BoxDecoration(color: _ink24, borderRadius: BorderRadius.circular(100)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Title
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Row(
+              children: [
+                Text('Currency', style: _body(18, weight: 600)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(fontSize: 16, color: _blue, letterSpacing: -0.2)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Search
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: searchBg, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.search, size: 16, color: _ink48),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      style: _body(15),
+                      decoration: InputDecoration(
+                        hintText: 'Search currency…',
+                        hintStyle: _body(15, color: _ink48),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onChanged: (v) => setState(() => _query = v),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Divider(height: 1, thickness: 1, color: divider),
+          // List
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(bottom: 24),
+              itemCount: filtered.length,
+              separatorBuilder: (ctx, i) =>
+                  Divider(height: 1, thickness: 1, color: divider, indent: 22, endIndent: 22),
+              itemBuilder: (_, i) {
+                final code = filtered[i];
+                final name = _kCurrencyNames[code] ?? code;
+                final isSelected = code == widget.selected;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.pop(context, code),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 14, 22, 14),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(code, style: _body(16, weight: 600)),
+                              Text(name, style: _body(13, color: _ink48)),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(CupertinoIcons.checkmark, size: 16, color: _blue),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
