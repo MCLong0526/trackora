@@ -2258,6 +2258,7 @@ class _BuyStockSheet extends ConsumerStatefulWidget {
 class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   double _units = 100;
   late final TextEditingController _unitsCtrl;
+  late final FocusNode _unitsFocusNode;
   double? _overridePrice;
   DateTime _date = DateTime.now();
   bool _saving = false;
@@ -2274,6 +2275,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   void initState() {
     super.initState();
     _unitsCtrl = TextEditingController(text: '100');
+    _unitsFocusNode = FocusNode();
     // Use the quote currency if available (most accurate), then fall back to
     // result.currency from search, then infer from exchange, finally default USD.
     final quoteCurrency = widget.quote?.currency ?? '';
@@ -2288,6 +2290,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   @override
   void dispose() {
     _unitsCtrl.dispose();
+    _unitsFocusNode.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -2338,51 +2341,55 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
         ? symbol                       // show in local currency
         : (_selectedCurrency == 'MYR' ? 'RM' : _selectedCurrency); // stock's own currency
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.88,
-        decoration: BoxDecoration(
-          color: brand.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 4),
-                decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Buy ${widget.quote?.name ?? widget.result.symbol}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _saving ? null : _save,
-                    child: Text('Save', style: TextStyle(fontSize: 16, color: _blue, fontWeight: FontWeight.w500)),
-                  ),
-                ],
-              ),
-            ),
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
 
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.88,
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // ── Fixed header — never hidden by keyboard ─────────────────────
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    FocusScope.of(context).unfocus();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
+                ),
+                Expanded(
+                  child: Text(
+                    'Buy ${widget.quote?.name ?? widget.result.symbol}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _saving ? null : _save,
+                  child: Text('Save', style: TextStyle(fontSize: 16, color: _blue, fontWeight: FontWeight.w500)),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Scrollable body — shrinks above keyboard ─────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, keyboardH + 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2418,6 +2425,8 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                               width: 180,
                               child: TextField(
                                 controller: _unitsCtrl,
+                                focusNode: _unitsFocusNode,
+                                autofocus: false,
                                 textAlign: TextAlign.center,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 style: TextStyle(
@@ -2610,7 +2619,6 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
             ),
           ],
         ),
-      ),
     );
   }
 
