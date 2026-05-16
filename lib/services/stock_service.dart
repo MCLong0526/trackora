@@ -18,6 +18,7 @@ class StockQuote {
   final double change;
   final double changePercent;
   final String currency;
+  final String exchange;
   final List<StockPoint> chartPoints;
 
   const StockQuote({
@@ -27,6 +28,7 @@ class StockQuote {
     required this.change,
     required this.changePercent,
     required this.currency,
+    this.exchange = '',
     required this.chartPoints,
   });
 
@@ -37,18 +39,19 @@ class StockSearchResult {
   final String symbol;
   final String name;
   final String exchange;
+  final String currency;
 
   const StockSearchResult({
     required this.symbol,
     required this.name,
     required this.exchange,
+    this.currency = 'USD',
   });
 }
 
 // ── Service ────────────────────────────────────────────────────────────────────
 
 /// Fetches real stock data from Yahoo Finance (no API key required).
-/// Uses the unofficial v8 chart API which works for mobile HTTP clients.
 class StockService {
   static const _host = 'query1.finance.yahoo.com';
   static const _fallbackHost = 'query2.finance.yahoo.com';
@@ -59,19 +62,20 @@ class StockService {
     'Accept': 'application/json',
   };
 
-  // Range labels shown in the UI → Yahoo Finance params
-  static const rangeOptions = ['1W', '1M', '3M', '6M', '1Y'];
+  static const rangeOptions = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
   static String _toYahooRange(String range) {
     switch (range) {
+      case '1D':
+        return '1d';
       case '1W':
         return '5d';
       case '3M':
         return '3mo';
-      case '6M':
-        return '6mo';
       case '1Y':
         return '1y';
+      case 'ALL':
+        return 'max';
       default:
         return '1mo';
     }
@@ -79,16 +83,19 @@ class StockService {
 
   static String _toYahooInterval(String range) {
     switch (range) {
+      case '1D':
+        return '5m';
       case '1W':
         return '1h';
+      case 'ALL':
+        return '1mo';
       default:
         return '1d';
     }
   }
 
-  /// Fetch quote + price history for [symbol] over [range] (e.g. '1M').
-  Future<StockQuote?> getQuote(String symbol,
-      {String range = '1M'}) async {
+  /// Fetch quote + price history for [symbol] over [range].
+  Future<StockQuote?> getQuote(String symbol, {String range = '1M'}) async {
     final yahooRange = _toYahooRange(range);
     final interval = _toYahooInterval(range);
     final sym = symbol.trim().toUpperCase();
@@ -128,6 +135,8 @@ class StockService {
         final name = meta['longName'] as String? ??
             meta['shortName'] as String? ??
             sym;
+        final exchange = meta['exchangeName'] as String? ??
+            meta['fullExchangeName'] as String? ?? '';
 
         final timestamps =
             (result['timestamp'] as List?)?.cast<num>() ?? [];
@@ -158,6 +167,7 @@ class StockService {
           change: change,
           changePercent: changePercent,
           currency: currency,
+          exchange: exchange,
           chartPoints: points,
         );
       } catch (_) {
@@ -165,6 +175,17 @@ class StockService {
       }
     }
     return null;
+  }
+
+  /// Fetch a short sparkline (5 recent points) for a symbol.
+  Future<List<StockPoint>> getSparkline(String symbol) async {
+    final q = await getQuote(symbol, range: '1M');
+    if (q == null || q.chartPoints.isEmpty) return [];
+    final pts = q.chartPoints;
+    if (pts.length <= 8) return pts;
+    // Return ~8 evenly spaced points for sparkline
+    final step = pts.length ~/ 8;
+    return [for (var i = 0; i < pts.length; i += step) pts[i]];
   }
 
   /// Search for stocks by symbol or company name.
@@ -194,6 +215,7 @@ class StockService {
                     q['shortname'] as String? ??
                     '',
                 exchange: q['exchange'] as String? ?? '',
+                currency: q['currency'] as String? ?? 'USD',
               ))
           .where((r) => r.symbol.isNotEmpty)
           .toList();

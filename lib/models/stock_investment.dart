@@ -7,6 +7,9 @@ class StockInvestment {
   final double quantity;
   final double buyPrice;
   final String? notes;
+  final String? exchange;
+  final String? currency;
+  final bool watchOnly;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -17,9 +20,18 @@ class StockInvestment {
     required this.quantity,
     required this.buyPrice,
     this.notes,
+    this.exchange,
+    this.currency,
+    this.watchOnly = false,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  String get exchangeDisplay {
+    if (exchange != null && exchange!.isNotEmpty) return exchange!;
+    if (currency == 'MYR') return 'KLSE';
+    return 'NASDAQ';
+  }
 
   double get totalCost => quantity * buyPrice;
 
@@ -39,6 +51,9 @@ class StockInvestment {
       quantity: (data['quantity'] as num?)?.toDouble() ?? 0.0,
       buyPrice: (data['buyPrice'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
+      exchange: data['exchange'] as String?,
+      currency: data['currency'] as String?,
+      watchOnly: data['watchOnly'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
     );
@@ -52,6 +67,9 @@ class StockInvestment {
       'quantity': quantity,
       'buyPrice': buyPrice,
       if (notes != null && notes!.isNotEmpty) 'notes': notes,
+      if (exchange != null && exchange!.isNotEmpty) 'exchange': exchange,
+      if (currency != null && currency!.isNotEmpty) 'currency': currency,
+      if (watchOnly) 'watchOnly': watchOnly,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -64,6 +82,9 @@ class StockInvestment {
     double? quantity,
     double? buyPrice,
     String? notes,
+    String? exchange,
+    String? currency,
+    bool? watchOnly,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -74,6 +95,9 @@ class StockInvestment {
       quantity: quantity ?? this.quantity,
       buyPrice: buyPrice ?? this.buyPrice,
       notes: notes ?? this.notes,
+      exchange: exchange ?? this.exchange,
+      currency: currency ?? this.currency,
+      watchOnly: watchOnly ?? this.watchOnly,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
