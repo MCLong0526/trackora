@@ -115,21 +115,13 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                         child: Icon(CupertinoIcons.chevron_left, size: 16, color: brand.ink),
                       ),
                     ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {},
-                      child: Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                        child: Icon(CupertinoIcons.slider_horizontal_3, size: 16, color: brand.ink),
-                      ),
-                    ),
                   ],
                 ),
               ),
             ),
 
             // ── Hero section ───────────────────────────────────────────────
+            if (stocks.isNotEmpty || metals.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
@@ -202,7 +194,8 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            if (stocks.isNotEmpty || metals.isNotEmpty)
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
 
             // ── Allocation section ─────────────────────────────────────────
             if (total > 0) ...[
@@ -286,57 +279,59 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
             ],
 
             // ── Asset class cards ──────────────────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  if (stocks.isNotEmpty)
-                    _AssetCard(
-                      onTap: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(builder: (_) => const StocksScreen()),
+            if (stocks.isEmpty && metals.isEmpty)
+              SliverFillRemaining(
+                child: _EmptyInvestments(
+                  onAddStocks: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(builder: (_) => const StocksScreen()),
+                  ),
+                  onAddMetals: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    if (stocks.isNotEmpty)
+                      _AssetCard(
+                        onTap: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute(builder: (_) => const StocksScreen()),
+                        ),
+                        leading: _StockAvatarRow(stocks: stocks.take(3).toList()),
+                        title: 'Stocks',
+                        subtitle: '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
+                        valueLabel: 'VALUE',
+                        value: '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
+                        brand: brand,
+                        isDark: isDark,
                       ),
-                      leading: _StockAvatarRow(stocks: stocks.take(3).toList()),
-                      title: 'Stocks',
-                      subtitle: '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
-                      valueLabel: 'VALUE',
-                      value: '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
-                      brand: brand,
-                      isDark: isDark,
-                    ),
 
-                  if (stocks.isNotEmpty && metals.isNotEmpty)
-                    const SizedBox(height: 12),
+                    if (stocks.isNotEmpty && metals.isNotEmpty)
+                      const SizedBox(height: 12),
 
-                  if (metals.isNotEmpty)
-                    _AssetCard(
-                      onTap: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+                    if (metals.isNotEmpty)
+                      _AssetCard(
+                        onTap: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+                        ),
+                        leading: _MetalAvatarRow(),
+                        title: 'Precious metals',
+                        subtitle: _metalSubtitle(metalHoldings),
+                        valueLabel: 'VALUE',
+                        value: '$symbol ${NumberFormat('#,##0').format(metalsCost)}',
+                        brand: brand,
+                        isDark: isDark,
                       ),
-                      leading: _MetalAvatarRow(),
-                      title: 'Precious metals',
-                      subtitle: _metalSubtitle(metalHoldings),
-                      valueLabel: 'VALUE',
-                      value: '$symbol ${NumberFormat('#,##0').format(metalsCost)}',
-                      brand: brand,
-                      isDark: isDark,
-                    ),
-
-                  if (stocks.isEmpty && metals.isEmpty)
-                    _EmptyInvestments(
-                      onAddStocks: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(builder: (_) => const StocksScreen()),
-                      ),
-                      onAddMetals: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
-                      ),
-                    ),
-                ]),
+                  ]),
+                ),
               ),
-            ),
           ],
         ),
       ),
