@@ -7,15 +7,15 @@ import '../../theme/app_theme.dart';
 
 // ── Design tokens (DESIGN.md aligned) ─────────────────────────────────────────
 const _kPurple = Color(0xFF6B40A8);
-const _kPurpleSoft = Color(0xFFF0EAFA);   // parchment-equivalent for purple
-const _kInk = Color(0xFF1D1D1F);          // near-black ink
-const _kInkMuted = Color(0xFF6E6E73);     // muted / secondary text
-const _kCanvas = Color(0xFFFFFFFF);       // pure white canvas
-const _kParchment = Color(0xFFF5F5F7);    // apple parchment surface
-const _kHairline = Color(0xFFE0E0E0);     // hairline border
-const _kRoundedLg = 18.0;                // {rounded.lg} card radius
-const _kRoundedSm = 8.0;                 // {rounded.sm} utility radius
-const _kRoundedPill = 999.0;             // {rounded.pill}
+const _kPurpleSoft = Color(0xFFF0EAFA); // parchment-equivalent for purple
+const _kInk = Color(0xFF1D1D1F); // near-black ink
+const _kInkMuted = Color(0xFF6E6E73); // muted / secondary text
+const _kCanvas = Color(0xFFFFFFFF); // pure white canvas
+const _kParchment = Color(0xFFF5F5F7); // apple parchment surface
+const _kHairline = Color(0xFFE0E0E0); // hairline border
+const _kRoundedLg = 18.0; // {rounded.lg} card radius
+const _kRoundedSm = 8.0; // {rounded.sm} utility radius
+const _kRoundedPill = 999.0; // {rounded.pill}
 
 const _kAvatarColors = [
   Color(0xFF6B40A8),
@@ -48,6 +48,7 @@ class SplitBillScreen extends StatefulWidget {
   final String currencySymbol;
   final String expenseTitle;
   final List<SplitMember> initialMembers;
+  final SplitMode initialSplitMode;
 
   const SplitBillScreen({
     super.key,
@@ -55,6 +56,7 @@ class SplitBillScreen extends StatefulWidget {
     required this.currencySymbol,
     required this.expenseTitle,
     required this.initialMembers,
+    this.initialSplitMode = SplitMode.equally,
   });
 
   @override
@@ -63,7 +65,7 @@ class SplitBillScreen extends StatefulWidget {
 
 class _SplitBillScreenState extends State<SplitBillScreen> {
   late List<SplitMember> _members;
-  SplitMode _mode = SplitMode.equally;
+  late SplitMode _mode;
   late double _totalAmount;
   final _scrollCtrl = ScrollController();
 
@@ -71,15 +73,16 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   final Map<String, TextEditingController> _amountCtrls = {};
   final Map<String, TextEditingController> _percentCtrls = {};
   final Map<String, TextEditingController> _sharesCtrls = {};
-  final Map<String, double> _percents = {};   // raw percent values 0-100
-  final Map<String, double> _shares = {};     // raw share counts
+  final Map<String, double> _percents = {}; // raw percent values 0-100
+  final Map<String, double> _shares = {}; // raw share counts
 
   @override
   void initState() {
     super.initState();
+    _mode = widget.initialSplitMode;
     _totalAmount = widget.totalAmount;
     _members = widget.initialMembers.isNotEmpty
-        ? List.from(widget.initialMembers)
+        ? widget.initialMembers.map((m) => m.copyWith()).toList()
         : [
             SplitMember(
               id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -89,24 +92,40 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               isPayer: true,
             ),
           ];
+    if (_members.isNotEmpty && !_members.any((m) => m.isPayer)) {
+      _members.first.isPayer = true;
+    }
     _initRawValues();
     _recalculate();
   }
 
   void _initRawValues() {
     final n = _members.length;
+    final amountTotal = _totalAmount > 0
+        ? _totalAmount
+        : _members.fold<double>(0, (s, m) => s + m.amount);
+    final defaultPercent = n > 0 ? 100.0 / n : 100.0;
     for (final m in _members) {
-      _percents.putIfAbsent(m.id, () => n > 0 ? 100.0 / n : 100.0);
-      _shares.putIfAbsent(m.id, () => 1.0);
+      final derivedPercent = amountTotal > 0
+          ? (m.amount / amountTotal * 100.0).clamp(0.0, 100.0).toDouble()
+          : defaultPercent;
+      _percents[m.id] = derivedPercent;
+      _shares[m.id] = m.amount > 0 ? m.amount : 1.0;
     }
   }
 
   @override
   void dispose() {
     _scrollCtrl.dispose();
-    for (final c in _amountCtrls.values) c.dispose();
-    for (final c in _percentCtrls.values) c.dispose();
-    for (final c in _sharesCtrls.values) c.dispose();
+    for (final c in _amountCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _percentCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _sharesCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -128,7 +147,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       case SplitMode.amount:
         for (final m in _members) {
           if (!_amountCtrls.containsKey(m.id)) {
-            final val = (_totalAmount / n).toStringAsFixed(2);
+            final seed = m.amount > 0 ? m.amount : _totalAmount / n;
+            final val = seed.toStringAsFixed(2);
             _amountCtrls[m.id] = TextEditingController(text: val);
             m.amount = double.tryParse(val) ?? 0;
           }
@@ -139,8 +159,9 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           _percents.putIfAbsent(m.id, () => 100.0 / n);
           final p = _percents[m.id]!;
           if (!_percentCtrls.containsKey(m.id)) {
-            _percentCtrls[m.id] =
-                TextEditingController(text: p.toStringAsFixed(1));
+            _percentCtrls[m.id] = TextEditingController(
+              text: p.toStringAsFixed(1),
+            );
           }
           m.amount = _totalAmount * (p / 100.0);
         }
@@ -149,8 +170,9 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         for (final m in _members) {
           _shares.putIfAbsent(m.id, () => 1.0);
           if (!_sharesCtrls.containsKey(m.id)) {
-            _sharesCtrls[m.id] =
-                TextEditingController(text: (_shares[m.id]!).toStringAsFixed(0));
+            _sharesCtrls[m.id] = TextEditingController(
+              text: (_shares[m.id]!).toStringAsFixed(0),
+            );
           }
         }
         final totalShares = _shares.values.fold<double>(0, (s, v) => s + v);
@@ -212,12 +234,14 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         ),
         actions: [
           CupertinoDialogAction(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Add')),
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -225,12 +249,14 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     if (trimmed.isEmpty) return;
     setState(() {
       final newId = DateTime.now().microsecondsSinceEpoch.toString();
-      _members.add(SplitMember(
-        id: newId,
-        name: trimmed,
-        colorIndex: _members.length % _kAvatarColors.length,
-        amount: 0,
-      ));
+      _members.add(
+        SplitMember(
+          id: newId,
+          name: trimmed,
+          colorIndex: _members.length % _kAvatarColors.length,
+          amount: 0,
+        ),
+      );
       // Re-equalise for new member
       final n = _members.length;
       for (final m in _members) {
@@ -277,8 +303,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   // ─── Edit total amount ────────────────────────────────────────────────────────
 
   void _editTotalAmount() async {
-    final ctrl =
-        TextEditingController(text: _totalAmount.toStringAsFixed(2));
+    final ctrl = TextEditingController(text: _totalAmount.toStringAsFixed(2));
     await showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
@@ -287,20 +312,22 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
             controller: ctrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             autofocus: true,
             prefix: Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: Text(widget.currencySymbol,
-                  style: const TextStyle(color: _kInkMuted)),
+              child: Text(
+                widget.currencySymbol,
+                style: const TextStyle(color: _kInkMuted),
+              ),
             ),
           ),
         ),
         actions: [
           CupertinoDialogAction(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () {
@@ -309,11 +336,17 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 setState(() {
                   _totalAmount = v;
                   // Clear all controllers so recalculate seeds fresh values
-                  for (final c in _amountCtrls.values) c.dispose();
+                  for (final c in _amountCtrls.values) {
+                    c.dispose();
+                  }
                   _amountCtrls.clear();
-                  for (final c in _percentCtrls.values) c.dispose();
+                  for (final c in _percentCtrls.values) {
+                    c.dispose();
+                  }
                   _percentCtrls.clear();
-                  for (final c in _sharesCtrls.values) c.dispose();
+                  for (final c in _sharesCtrls.values) {
+                    c.dispose();
+                  }
                   _sharesCtrls.clear();
                   _recalculate();
                 });
@@ -403,8 +436,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 color: _kParchment,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.xmark,
-                  size: 16, color: _kInk),
+              child: const Icon(CupertinoIcons.xmark, size: 16, color: _kInk),
             ),
           ),
           const SizedBox(width: 14),
@@ -496,12 +528,13 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: _kPurple.withValues(alpha: 0.12),
-                      borderRadius:
-                          BorderRadius.circular(_kRoundedSm),
+                      borderRadius: BorderRadius.circular(_kRoundedSm),
                     ),
                     child: const Text(
                       'edit',
@@ -520,8 +553,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           Text(
             countOwing > 0
                 ? 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · '
-                    '$countOwing ${countOwing == 1 ? "mate owes" : "mates owe"} you '
-                    '${widget.currencySymbol} ${amountEach.toStringAsFixed(2)} each'
+                      '$countOwing ${countOwing == 1 ? "mate owes" : "mates owe"} you '
+                      '${widget.currencySymbol} ${amountEach.toStringAsFixed(2)} each'
                 : 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · add mates to split',
             style: const TextStyle(
               fontSize: 14,
@@ -571,9 +604,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               },
               child: Padding(
                 padding: const EdgeInsets.only(right: 20),
-                child: isPayer
-                    ? _payerCard(m)
-                    : _nonPayerAvatar(m),
+                child: isPayer ? _payerCard(m) : _nonPayerAvatar(m),
               ),
             );
           }).toList(),
@@ -737,7 +768,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                             color: Colors.black.withValues(alpha: 0.06),
                             blurRadius: 6,
                             offset: const Offset(0, 1),
-                          )
+                          ),
                         ]
                       : null,
                 ),
@@ -795,8 +826,9 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
 
     return Dismissible(
       key: ValueKey(m.id),
-      direction:
-          m.isPayer ? DismissDirection.none : DismissDirection.endToStart,
+      direction: m.isPayer
+          ? DismissDirection.none
+          : DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
@@ -848,11 +880,12 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: _kPurpleSoft,
-                            borderRadius:
-                                BorderRadius.circular(_kRoundedSm),
+                            borderRadius: BorderRadius.circular(_kRoundedSm),
                           ),
                           child: const Text(
                             'YOU',
@@ -953,7 +986,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         final ctrl = _percentCtrls.putIfAbsent(
           m.id,
           () => TextEditingController(
-              text: (_percents[m.id] ?? 0).toStringAsFixed(1)),
+            text: (_percents[m.id] ?? 0).toStringAsFixed(1),
+          ),
         );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -983,7 +1017,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         final ctrl = _sharesCtrls.putIfAbsent(
           m.id,
           () => TextEditingController(
-              text: (_shares[m.id] ?? 1).toStringAsFixed(0)),
+            text: (_shares[m.id] ?? 1).toStringAsFixed(0),
+          ),
         );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -1023,8 +1058,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       height: 36,
       child: CupertinoTextField(
         controller: ctrl,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.right,
         style: const TextStyle(
           fontSize: 14,
@@ -1048,8 +1082,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   prefix,
-                  style: const TextStyle(
-                      fontSize: 12, color: _kInkMuted),
+                  style: const TextStyle(fontSize: 12, color: _kInkMuted),
                 ),
               )
             : null,
@@ -1058,8 +1091,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 padding: const EdgeInsets.only(right: 7),
                 child: Text(
                   suffix,
-                  style: const TextStyle(
-                      fontSize: 12, color: _kInkMuted),
+                  style: const TextStyle(fontSize: 12, color: _kInkMuted),
                 ),
               )
             : null,
@@ -1073,7 +1105,12 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   Widget _saveButton(double keyboardH) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 8, 20, keyboardH > 0 ? keyboardH + 8 : 20),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          keyboardH > 0 ? keyboardH + 8 : 20,
+        ),
         child: GestureDetector(
           onTap: () {
             HapticFeedback.mediumImpact();
@@ -1096,8 +1133,11 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(CupertinoIcons.checkmark_circle_fill,
-                    color: Colors.white, size: 20),
+                Icon(
+                  CupertinoIcons.checkmark_circle_fill,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 SizedBox(width: 10),
                 Text(
                   'Save & generate bill',

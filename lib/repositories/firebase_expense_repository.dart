@@ -41,7 +41,11 @@ class FirebaseExpenseRepository implements ExpenseRepository {
 
   @override
   Future<void> addExpense(String userId, Expense expense) async {
-    await _expensesRef(userId).add(_toFirestoreMap(expense));
+    if (expense.id.isEmpty) {
+      await _expensesRef(userId).add(_toFirestoreMap(expense));
+      return;
+    }
+    await _expensesRef(userId).doc(expense.id).set(_toFirestoreMap(expense));
   }
 
   @override
@@ -126,9 +130,11 @@ class FirebaseExpenseRepository implements ExpenseRepository {
       'counterpart': expense.counterpart,
       'createdAt': Timestamp.fromDate(expense.createdAt),
       'updatedAt': Timestamp.fromDate(expense.updatedAt),
-      if (expense.originalCurrency != null) 'originalCurrency': expense.originalCurrency,
+      if (expense.originalCurrency != null)
+        'originalCurrency': expense.originalCurrency,
       if (expense.exchangeRate != null) 'exchangeRate': expense.exchangeRate,
-      if (expense.baseCurrencyAmount != null) 'baseCurrencyAmount': expense.baseCurrencyAmount,
+      if (expense.baseCurrencyAmount != null)
+        'baseCurrencyAmount': expense.baseCurrencyAmount,
     };
   }
 
