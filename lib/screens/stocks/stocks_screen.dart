@@ -69,6 +69,14 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
   String _sort = 'Value'; // 'Value', 'Gain%', 'Name'
   String _groupBy = 'None'; // 'None', 'Sector', 'Market', 'Currency'
 
+  final _openSlidableId = ValueNotifier<String?>(null);
+
+  @override
+  void dispose() {
+    _openSlidableId.dispose();
+    super.dispose();
+  }
+
   List<StockInvestment> _applyFilter(List<StockInvestment> stocks) {
     if (_filter == 'All') return stocks;
     if (_filter == 'KLSE') {
@@ -166,36 +174,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-            // ── Buy / Sell buttons ──────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _PillBtn(
-                        label: '+ Buy stock',
-                        filled: true,
-                        onTap: () => _showAddStock(context),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: _PillBtn(
-                        label: 'Sell',
-                        filled: false,
-                        onTap: () => _showSellStock(context, stocks),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
             // ── Filter chips + sort ─────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
@@ -289,10 +267,13 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                               ),
                               child: Builder(builder: (ctx) {
                                 final s = filtered[i];
+                                final liveQuote = ref.watch(_stockQuoteProvider(s.symbol)).valueOrNull;
                                 return _Slidable(
+                                  id: s.id,
+                                  openNotifier: _openSlidableId,
                                   onBuy: () => s.watchOnly
-                                      ? _showBuyFromWatchlist(context, s)
-                                      : _showBuySheetForStockFromHolding(context, s),
+                                      ? _showBuyFromWatchlist(context, s, liveQuote)
+                                      : _showBuySheetForStockFromHolding(context, s, liveQuote),
                                   onSell: s.watchOnly ? null : () => _openSellSheet(context, s),
                                   child: _StockTileWithQuote(
                                     stock: s,
@@ -302,7 +283,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                                     onTap: () => _openDetail(context, s),
                                     onLongPress: () => _showStockActions(context, s),
                                     onBuyWatchlist: s.watchOnly
-                                        ? () => _showBuyFromWatchlist(context, s)
+                                        ? () => _showBuyFromWatchlist(context, s, liveQuote)
                                         : null,
                                   ),
                                 );
@@ -460,31 +441,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     return null;
   }
 
-  void _showSellStock(BuildContext context, List<StockInvestment> stocks) {
-    final holdings = stocks.where((s) => !s.watchOnly && s.quantity > 0).toList();
-    if (holdings.isEmpty) {
-      AppToast.show(context, 'No holdings to sell');
-      return;
-    }
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Select stock to sell'),
-        actions: holdings.map((s) => CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(ctx);
-            _openSellSheet(context, s);
-          },
-          child: Text('${s.symbol} · ${_fmtQty(s.quantity)} sh'),
-        )).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
-  }
-
   void _openSellSheet(BuildContext context, StockInvestment stock) {
     showModalBottomSheet<void>(
       context: context,
@@ -525,24 +481,24 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     );
   }
 
-  void _showBuyFromWatchlist(BuildContext context, StockInvestment watchlistStock) {
+  void _showBuyFromWatchlist(BuildContext context, StockInvestment watchlistStock, [StockQuote? quote]) {
     final result = StockSearchResult(
       symbol: watchlistStock.symbol,
-      name: watchlistStock.name ?? watchlistStock.symbol,
+      name: quote?.name ?? watchlistStock.name ?? watchlistStock.symbol,
       exchange: watchlistStock.exchange ?? '',
       currency: watchlistStock.currency ?? 'USD',
     );
-    _showBuySheetForStock(context, result, null, existingId: watchlistStock.id);
+    _showBuySheetForStock(context, result, quote, existingId: watchlistStock.id);
   }
 
-  void _showBuySheetForStockFromHolding(BuildContext context, StockInvestment stock) {
+  void _showBuySheetForStockFromHolding(BuildContext context, StockInvestment stock, [StockQuote? quote]) {
     final result = StockSearchResult(
       symbol: stock.symbol,
-      name: stock.name ?? stock.symbol,
+      name: quote?.name ?? stock.name ?? stock.symbol,
       exchange: stock.exchange ?? '',
       currency: stock.currency ?? 'USD',
     );
-    _showBuySheetForStock(context, result, null, existingId: stock.id);
+    _showBuySheetForStock(context, result, quote, existingId: stock.id);
   }
 
   String _fmtQty(double qty) {
@@ -1222,45 +1178,36 @@ class _EmptyPortfolio extends StatelessWidget {
     final brand = context.brand;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('📈', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 16),
+            Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+              child: Icon(CupertinoIcons.chart_bar_alt_fill, size: 30, color: brand.inkSoft),
+            ),
+            const SizedBox(height: 20),
             Text(
               'No stocks yet',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: brand.ink,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: brand.ink, letterSpacing: -0.5),
             ),
             const SizedBox(height: 8),
             Text(
-              'Search for a ticker to start tracking your portfolio.',
-              style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.4),
+              'Add your first stock or watch a ticker to get started.',
+              style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.5),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             GestureDetector(
               onTap: onAdd,
               child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                decoration: BoxDecoration(
-                  color: _blue,
-                  borderRadius: BorderRadius.circular(24),
-                ),
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(22)),
                 alignment: Alignment.center,
-                child: const Text(
-                  '+ Buy stock',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
+                child: const Text('+ Add Stock',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -0.2)),
               ),
             ),
           ],
@@ -1407,11 +1354,19 @@ class _FilterChipState extends State<_FilterChip> with SingleTickerProviderState
 // ── Swipe-action tile wrapper ─────────────────────────────────────────────────
 
 class _Slidable extends StatefulWidget {
+  final String id;
+  final ValueNotifier<String?> openNotifier;
   final Widget child;
   final VoidCallback? onBuy;
   final VoidCallback? onSell;
 
-  const _Slidable({required this.child, this.onBuy, this.onSell});
+  const _Slidable({
+    required this.id,
+    required this.openNotifier,
+    required this.child,
+    this.onBuy,
+    this.onSell,
+  });
 
   @override
   State<_Slidable> createState() => _SlidableState();
@@ -1434,15 +1389,33 @@ class _SlidableState extends State<_Slidable> with SingleTickerProviderStateMixi
     _ctrl.addListener(() {
       if (_anim != null) setState(() => _offset = _anim!.value);
     });
+    widget.openNotifier.addListener(_onGlobalOpen);
   }
 
   @override
   void dispose() {
+    widget.openNotifier.removeListener(_onGlobalOpen);
     _ctrl.dispose();
     super.dispose();
   }
 
+  void _onGlobalOpen() {
+    // Close this tile if another one was opened
+    if (widget.openNotifier.value != widget.id && _offset != 0) {
+      _snapTo(0);
+    }
+  }
+
   void _snapTo(double target) {
+    if (target != 0 && target.abs() >= _maxW * 0.9) {
+      // Opening — notify the global notifier
+      widget.openNotifier.value = widget.id;
+    } else if (target == 0) {
+      // Closing
+      if (widget.openNotifier.value == widget.id) {
+        widget.openNotifier.value = null;
+      }
+    }
     _anim = Tween<double>(begin: _offset, end: target).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
     );
@@ -1455,7 +1428,6 @@ class _SlidableState extends State<_Slidable> with SingleTickerProviderStateMixi
     _ctrl.stop();
     setState(() {
       final raw = _offset + d.delta.dx;
-      // Only allow drag in directions that have an action
       if (raw < 0 && widget.onBuy == null) return;
       if (raw > 0 && widget.onSell == null) return;
       _offset = raw.clamp(-_maxW, _maxW);
@@ -1493,9 +1465,9 @@ class _SlidableState extends State<_Slidable> with SingleTickerProviderStateMixi
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.minus_circle, size: 20, color: Colors.white),
-                      SizedBox(height: 4),
-                      Text('Sell', style: TextStyle(color: Colors.white, fontSize: 11,
+                      const Icon(CupertinoIcons.minus_circle, size: 20, color: Colors.white),
+                      const SizedBox(height: 4),
+                      const Text('Sell', style: TextStyle(color: Colors.white, fontSize: 11,
                           fontWeight: FontWeight.w700, letterSpacing: 0.2)),
                     ],
                   ),
@@ -1517,9 +1489,9 @@ class _SlidableState extends State<_Slidable> with SingleTickerProviderStateMixi
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.plus_circle, size: 20, color: Colors.white),
-                      SizedBox(height: 4),
-                      Text('Buy', style: TextStyle(color: Colors.white, fontSize: 11,
+                      const Icon(CupertinoIcons.plus_circle, size: 20, color: Colors.white),
+                      const SizedBox(height: 4),
+                      const Text('Buy', style: TextStyle(color: Colors.white, fontSize: 11,
                           fontWeight: FontWeight.w700, letterSpacing: 0.2)),
                     ],
                   ),
@@ -2148,50 +2120,15 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
 
-                    // Selected stock row
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: brand.surface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          StockAvatarBadge(symbol: widget.result.symbol, size: 36),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.quote?.name ?? widget.result.symbol,
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink)),
-                                Text(
-                                  '${widget.result.exchange} · ${widget.result.currency}${widget.quote != null ? ' · live \$${widget.quote!.price.toStringAsFixed(2)}' : ''}',
-                                  style: TextStyle(fontSize: 12, color: brand.inkSoft),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // Units label
-                    Text('UNITS',
+                    // Units stepper
+                    Text('SHARES',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w600,
-                        color: brand.inkSoft, letterSpacing: 1,
-                      ),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: brand.inkSoft, letterSpacing: 1),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 12),
 
-                    // Units stepper + custom input
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -2204,44 +2141,44 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                             }
                           },
                           child: Container(
-                            width: 44, height: 44,
+                            width: 48, height: 48,
                             decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                            child: Icon(CupertinoIcons.minus, size: 16, color: brand.ink),
+                            child: Icon(CupertinoIcons.minus, size: 20, color: brand.ink),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        SizedBox(
-                          width: 120,
-                          child: TextField(
-                            controller: _unitsCtrl,
-                            textAlign: TextAlign.center,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            style: TextStyle(
-                              fontSize: 52, fontWeight: FontWeight.w800,
-                              color: brand.ink, letterSpacing: -2,
-                            ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                              hintText: '0',
-                              hintStyle: TextStyle(
-                                fontSize: 52, fontWeight: FontWeight.w800,
-                                color: brand.divider, letterSpacing: -2,
+                        const SizedBox(width: 28),
+                        Column(
+                          children: [
+                            SizedBox(
+                              width: 130,
+                              child: TextField(
+                                controller: _unitsCtrl,
+                                textAlign: TextAlign.center,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                style: TextStyle(
+                                  fontSize: 64, fontWeight: FontWeight.w800,
+                                  color: brand.ink, letterSpacing: -2,
+                                ),
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  hintText: '0',
+                                  hintStyle: TextStyle(
+                                    fontSize: 64, fontWeight: FontWeight.w800,
+                                    color: brand.divider, letterSpacing: -2,
+                                  ),
+                                ),
+                                onChanged: (v) {
+                                  final d = double.tryParse(v);
+                                  if (d != null && d >= 0) setState(() => _units = d);
+                                },
                               ),
                             ),
-                            onChanged: (v) {
-                              final d = double.tryParse(v);
-                              if (d != null && d >= 0) setState(() => _units = d);
-                            },
-                          ),
+                            Text('shares', style: TextStyle(fontSize: 13, color: brand.inkSoft)),
+                          ],
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text('sh',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: brand.inkSoft)),
-                        ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 28),
                         GestureDetector(
                           onTap: () {
                             final v = _units + 1;
@@ -2249,13 +2186,15 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                             HapticFeedback.selectionClick();
                           },
                           child: Container(
-                            width: 44, height: 44,
+                            width: 48, height: 48,
                             decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                            child: Icon(CupertinoIcons.plus, size: 16, color: brand.ink),
+                            child: Icon(CupertinoIcons.plus, size: 20, color: brand.ink),
                           ),
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 8),
 
                     // ≈ local value
                     Text(
