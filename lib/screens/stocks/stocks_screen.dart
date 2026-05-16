@@ -2271,7 +2271,7 @@ class _BuyStockSheet extends ConsumerStatefulWidget {
 }
 
 class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
-  double _units = 100;
+  late double _units;
   late final TextEditingController _unitsCtrl;
   late final FocusNode _unitsFocusNode;
   double? _overridePrice;
@@ -2289,7 +2289,6 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   @override
   void initState() {
     super.initState();
-    _unitsCtrl = TextEditingController(text: '100');
     _unitsFocusNode = FocusNode();
     // Use the quote currency if available (most accurate), then fall back to
     // result.currency from search, then infer from exchange, finally default USD.
@@ -2300,6 +2299,9 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
         : resultCurrency.isNotEmpty
             ? resultCurrency
             : StockService.inferCurrency(widget.result.exchange, 'USD');
+    final isMalaysian = _selectedCurrency == 'MYR';
+    _units = isMalaysian ? 100 : 1;
+    _unitsCtrl = TextEditingController(text: isMalaysian ? '100' : '1');
   }
 
   @override
@@ -2358,7 +2360,10 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
     final keyboardH = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Container(
       height: MediaQuery.of(context).size.height * 0.88,
       decoration: BoxDecoration(
         color: brand.background,
@@ -2386,11 +2391,21 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                   child: const Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
                 ),
                 Expanded(
-                  child: Text(
-                    'Buy ${widget.quote?.name ?? widget.result.symbol}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    children: [
+                      Text(
+                        'Record ${widget.quote?.name ?? widget.result.symbol}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Record only · not a real trade',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: _blue),
+                      ),
+                    ],
                   ),
                 ),
                 GestureDetector(
@@ -2499,12 +2514,15 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
                     // Quick select chips
                     Row(
-                      children: [100, 500, 1000, 5000].map((qty) {
+                      children: (_selectedCurrency == 'MYR'
+                          ? [100, 500, 1000, 5000]
+                          : [1, 5, 10, 25]).map((qty) {
                         final sel = qty.toDouble() == _units;
                         return Expanded(
                           child: GestureDetector(
                             onTap: () {
                               HapticFeedback.selectionClick();
+                              FocusScope.of(context).unfocus();
                               setState(() { _units = qty.toDouble(); _unitsCtrl.text = qty.toString(); });
                             },
                             child: Container(
@@ -2634,6 +2652,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
             ),
           ],
         ),
+      ),
     );
   }
 
