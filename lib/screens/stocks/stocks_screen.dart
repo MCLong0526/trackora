@@ -240,6 +240,37 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
+            // ── Buy / Sell global action row ────────────────────────────────
+            if (filtered.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _PillBtn(
+                          label: 'Buy',
+                          filled: true,
+                          onTap: () => _showAddStock(context),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _PillBtn(
+                          label: 'Sell',
+                          filled: false,
+                          color: _red,
+                          onTap: () {
+                            final holdings = filtered.where((s) => !s.watchOnly).toList();
+                            _showSellPickerSheet(context, holdings);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // ── Stock list ──────────────────────────────────────────────────
             if (filtered.isEmpty)
               SliverFillRemaining(
@@ -253,10 +284,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 localSymbol: symbol,
                 isDark: isDark,
                 onTap: (s) => _openDetail(context, s),
-                onBuy: (s, q) => s.watchOnly
-                    ? _showBuyFromWatchlist(context, s, q)
-                    : _showBuySheetForStockFromHolding(context, s, q),
-                onSell: (s) => _openSellSheet(context, s),
               )
             else
               SliverPadding(
@@ -303,10 +330,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                                     onBuyWatchlist: s.watchOnly
                                         ? () => _showBuyFromWatchlist(context, s, liveQuote)
                                         : null,
-                                    onBuy: () => s.watchOnly
-                                        ? _showBuyFromWatchlist(context, s, liveQuote)
-                                        : _showBuySheetForStockFromHolding(context, s, liveQuote),
-                                    onSell: s.watchOnly ? null : () => _openSellSheet(context, s),
                                   ),
                                 );
                               }),
@@ -500,6 +523,59 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
           }
         },
       ),
+    );
+  }
+
+  void _showSellPickerSheet(BuildContext context, List<StockInvestment> holdings) {
+    if (holdings.isEmpty) return;
+    if (holdings.length == 1) {
+      _openSellSheet(context, holdings.first);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (ctx) {
+        final brand = ctx.brand;
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(width: 36, height: 4, decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text('Select holding to sell', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: brand.ink)),
+                ),
+                const SizedBox(height: 8),
+                for (final s in holdings) ...[
+                  Divider(height: 1, color: brand.divider, indent: 20, endIndent: 20),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    title: Text(s.symbol, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: brand.ink)),
+                    subtitle: Text('${_fmtQty(s.quantity)} shares · ${s.exchangeDisplay}', style: TextStyle(fontSize: 12, color: brand.inkSoft)),
+                    trailing: Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openSellSheet(context, s);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -754,8 +830,6 @@ class _GroupedStockList extends ConsumerWidget {
   final String localSymbol;
   final bool isDark;
   final void Function(StockInvestment) onTap;
-  final void Function(StockInvestment, StockQuote?)? onBuy;
-  final void Function(StockInvestment)? onSell;
 
   const _GroupedStockList({
     required this.stocks,
@@ -764,8 +838,6 @@ class _GroupedStockList extends ConsumerWidget {
     required this.localSymbol,
     required this.isDark,
     required this.onTap,
-    this.onBuy,
-    this.onSell,
   });
 
   String _groupKey(StockInvestment s) {
@@ -827,8 +899,6 @@ class _GroupedStockList extends ConsumerWidget {
                   isDark: isDark,
                   onTap: () => onTap(stock),
                   onLongPress: null,
-                  onBuy: onBuy != null ? () => onBuy!(stock, quote) : null,
-                  onSell: (!stock.watchOnly && onSell != null) ? () => onSell!(stock) : null,
                 );
               }
               idx += groupStocks.length;
@@ -909,8 +979,6 @@ class _StockTileWithQuote extends ConsumerWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onBuyWatchlist;
-  final VoidCallback? onBuy;
-  final VoidCallback? onSell;
 
   const _StockTileWithQuote({
     required this.stock,
@@ -920,8 +988,6 @@ class _StockTileWithQuote extends ConsumerWidget {
     required this.onTap,
     required this.onLongPress,
     this.onBuyWatchlist,
-    this.onBuy,
-    this.onSell,
   });
 
   @override
@@ -941,8 +1007,6 @@ class _StockTileWithQuote extends ConsumerWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       onBuyWatchlist: onBuyWatchlist,
-      onBuy: onBuy,
-      onSell: onSell,
     );
   }
 }
@@ -958,8 +1022,6 @@ class _StockListTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onBuyWatchlist;
-  final VoidCallback? onBuy;
-  final VoidCallback? onSell;
 
   const _StockListTile({
     required this.stock,
@@ -970,8 +1032,6 @@ class _StockListTile extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     this.onBuyWatchlist,
-    this.onBuy,
-    this.onSell,
   });
 
   @override
@@ -1001,147 +1061,138 @@ class _StockListTile extends StatelessWidget {
         onLongPress!();
       } : null,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
           children: [
-            // ── Main info row ──────────────────────────────────────
-            Row(
-              children: [
-                // Avatar circle
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE8E8EA),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
+            // Avatar circle
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE8E8EA),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                  letterSpacing: -0.5,
                 ),
-                const SizedBox(width: 12),
+              ),
+            ),
+            const SizedBox(width: 12),
 
-                // Ticker + exchange + shares
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            // Ticker + exchange + shares
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            stock.symbol,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: brand.ink,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            stock.exchangeDisplay,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: brand.inkSoft,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
                       Text(
-                        stock.watchOnly
-                            ? 'Watchlist · ${stock.name ?? stock.symbol}'
-                            : '${_fmtQty(stock.quantity)} sh · ${_fmtPrice(stock.buyPrice, stock.currency)} avg',
-                        style: TextStyle(fontSize: 12, color: stock.watchOnly ? _blue.withValues(alpha: 0.7) : brand.inkSoft),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        stock.symbol,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        stock.exchangeDisplay,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: brand.inkSoft,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    stock.watchOnly
+                        ? 'Watchlist · ${stock.name ?? stock.symbol}'
+                        : '${_fmtQty(stock.quantity)} sh · ${_fmtPrice(stock.buyPrice, stock.currency)} avg',
+                    style: TextStyle(fontSize: 12, color: stock.watchOnly ? _blue.withValues(alpha: 0.7) : brand.inkSoft),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
 
-                // Mini sparkline
-                if (quote != null && quote!.chartPoints.isNotEmpty) ...[
-                  SizedBox(
-                    width: 60,
-                    height: 32,
-                    child: _MiniSparkline(
-                      points: quote!.chartPoints,
+            // Mini sparkline
+            if (quote != null && quote!.chartPoints.isNotEmpty) ...[
+              SizedBox(
+                width: 60,
+                height: 32,
+                child: _MiniSparkline(
+                  points: quote!.chartPoints,
+                  color: trendColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+
+            // Value + gain% (or BUY button for watchOnly)
+            if (stock.watchOnly && onBuyWatchlist != null) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (currentLocalPrice != null)
+                    Text(
+                      '$localSymbol ${NumberFormat('#,##0.00').format(currentLocalPrice!)}',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.ink, letterSpacing: -0.2),
+                    ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      onBuyWatchlist!();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _blue,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('BUY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.3)),
+                    ),
+                  ),
+                ],
+              ),
+            ] else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    localValue != null
+                        ? '$localSymbol ${NumberFormat('#,##0').format(localValue)}'
+                        : '–',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    gainPct != null
+                        ? '${gainPct >= 0 ? '+' : ''}${gainPct.toStringAsFixed(2)}%'
+                        : '–',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                       color: trendColor,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                ],
-
-                // Value + gain%
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      stock.watchOnly
-                          ? (currentLocalPrice != null ? '$localSymbol ${NumberFormat('#,##0.00').format(currentLocalPrice!)}' : '–')
-                          : (localValue != null ? '$localSymbol ${NumberFormat('#,##0').format(localValue)}' : '–'),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: brand.ink,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      gainPct != null
-                          ? '${gainPct >= 0 ? '+' : ''}${gainPct.toStringAsFixed(2)}%'
-                          : (stock.watchOnly ? 'Watch' : '–'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: gainPct != null ? trendColor : brand.inkSoft,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            // ── Buy / Sell pill buttons ────────────────────────────
-            if (onBuy != null || onSell != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const SizedBox(width: 54), // indent to align with text
-                  if (onBuy != null)
-                    Expanded(
-                      child: _TilePillBtn(
-                        label: 'Buy',
-                        filled: true,
-                        color: _blue,
-                        onTap: onBuy!,
-                      ),
-                    ),
-                  if (onBuy != null && onSell != null)
-                    const SizedBox(width: 8),
-                  if (onSell != null)
-                    Expanded(
-                      child: _TilePillBtn(
-                        label: 'Sell',
-                        filled: false,
-                        color: _red,
-                        onTap: onSell!,
-                      ),
-                    ),
                 ],
               ),
-            ],
           ],
         ),
       ),
@@ -1345,8 +1396,9 @@ class _PillBtn extends StatefulWidget {
   final String label;
   final bool filled;
   final VoidCallback onTap;
+  final Color? color;
 
-  const _PillBtn({required this.label, required this.filled, required this.onTap});
+  const _PillBtn({required this.label, required this.filled, required this.onTap, this.color});
 
   @override
   State<_PillBtn> createState() => _PillBtnState();
@@ -1385,9 +1437,9 @@ class _PillBtnState extends State<_PillBtn> with SingleTickerProviderStateMixin 
         child: Container(
           height: 46,
           decoration: BoxDecoration(
-            color: widget.filled ? _blue : Colors.transparent,
+            color: widget.filled ? (widget.color ?? _blue) : Colors.transparent,
             borderRadius: BorderRadius.circular(23),
-            border: widget.filled ? null : Border.all(color: _blue, width: 1.5),
+            border: widget.filled ? null : Border.all(color: widget.color ?? _blue, width: 1.5),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -1396,7 +1448,7 @@ class _PillBtnState extends State<_PillBtn> with SingleTickerProviderStateMixin 
               fontSize: 15,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.3,
-              color: widget.filled ? Colors.white : _blue,
+              color: widget.filled ? Colors.white : (widget.color ?? _blue),
             ),
           ),
         ),
