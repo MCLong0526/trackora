@@ -159,17 +159,21 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 child: Row(
                   children: [
                     Expanded(
+                      flex: 3,
                       child: _PillBtn(
                         label: '+ Buy stock',
                         filled: true,
                         onTap: () => _showAddStock(context),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    _PillBtn(
-                      label: 'Sell',
-                      filled: false,
-                      onTap: () => _showSellStock(context, stocks),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: _PillBtn(
+                        label: 'Sell',
+                        filled: false,
+                        onTap: () => _showSellStock(context, stocks),
+                      ),
                     ),
                   ],
                 ),
@@ -298,6 +302,24 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     );
   }
 
+  void _openEditSheet(BuildContext context, StockInvestment stock) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (_) => _EditStockSheet(
+        stock: stock,
+        onSave: (updated) async {
+          final user = ref.read(authStateProvider).valueOrNull;
+          if (user == null) return;
+          await ref.read(stockInvestmentRepositoryProvider).update(user.uid, updated);
+          if (mounted) AppToast.show(context, '${updated.symbol} updated');
+        },
+      ),
+    );
+  }
+
   void _showAddStock(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -396,6 +418,13 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               _openDetail(context, stock);
             },
             child: const Text('View Details'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openEditSheet(context, stock);
+            },
+            child: const Text('Edit'),
           ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -1287,53 +1316,58 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.92,
-        decoration: BoxDecoration(
-          color: brand.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            // Handle + header
-            Center(
-              child: Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 4),
-                decoration: BoxDecoration(
-                  color: brand.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.92,
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle + header — always stays at top
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
-                  ),
-                  const Expanded(
-                    child: Text('Add Stock', textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  ),
-                  Text('Next',
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
+                ),
+                const Expanded(
+                  child: Text('Add Stock', textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                GestureDetector(
+                  onTap: _topMatch != null
+                      ? () => widget.onRecordTransaction(_topMatch!, _topQuote)
+                      : null,
+                  child: Text('Next',
                     style: TextStyle(
                       fontSize: 16,
                       color: _topMatch != null ? _blue : Colors.grey,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
 
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, keyboardH + 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1350,12 +1384,12 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
 
                     // Search field
                     Container(
-                      height: 48,
+                      height: 56,
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(28),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
                           Icon(CupertinoIcons.search, size: 16, color: Colors.grey.shade500),
@@ -1532,7 +1566,6 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -2146,6 +2179,229 @@ class StockAvatarBadge extends StatelessWidget {
           color: isDark ? Colors.white : Colors.black,
           letterSpacing: -0.5,
         ),
+      ),
+    );
+  }
+}
+
+// ── Edit stock sheet ──────────────────────────────────────────────────────────
+
+class _EditStockSheet extends ConsumerStatefulWidget {
+  final StockInvestment stock;
+  final Future<void> Function(StockInvestment) onSave;
+
+  const _EditStockSheet({required this.stock, required this.onSave});
+
+  @override
+  ConsumerState<_EditStockSheet> createState() => _EditStockSheetState();
+}
+
+class _EditStockSheetState extends ConsumerState<_EditStockSheet> {
+  late final TextEditingController _qtyCtrl;
+  late final TextEditingController _priceCtrl;
+  late final TextEditingController _notesCtrl;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _qtyCtrl = TextEditingController(
+        text: widget.stock.quantity == widget.stock.quantity.truncateToDouble()
+            ? widget.stock.quantity.toInt().toString()
+            : widget.stock.quantity.toStringAsFixed(4));
+    _priceCtrl = TextEditingController(
+        text: widget.stock.buyPrice.toStringAsFixed(2));
+    _notesCtrl = TextEditingController(text: widget.stock.notes ?? '');
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    _priceCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final qty = double.tryParse(_qtyCtrl.text.trim());
+    final price = double.tryParse(_priceCtrl.text.trim());
+    if (qty == null || qty < 0 || price == null || price < 0) return;
+    setState(() => _saving = true);
+    final updated = widget.stock.copyWith(
+      quantity: qty,
+      buyPrice: price,
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      updatedAt: DateTime.now(),
+    );
+    await widget.onSave(updated);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 4),
+                decoration: BoxDecoration(
+                  color: brand.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Text('Cancel',
+                        style: TextStyle(fontSize: 16, color: _blue)),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Edit ${widget.stock.symbol}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _saving ? null : _save,
+                    child: Text('Save',
+                        style: TextStyle(
+                            fontSize: 16,
+                            color: _blue,
+                            fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _EditRow(
+                          label: 'Units',
+                          controller: _qtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          hint: '0',
+                        ),
+                        Divider(height: 1, color: brand.divider,
+                            indent: 14, endIndent: 14),
+                        _EditRow(
+                          label: 'Buy price',
+                          controller: _priceCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          hint: '0.00',
+                          prefix: widget.stock.currency == 'MYR' ? 'RM ' : '\$ ',
+                        ),
+                        Divider(height: 1, color: brand.divider,
+                            indent: 14, endIndent: 14),
+                        _EditRow(
+                          label: 'Notes',
+                          controller: _notesCtrl,
+                          hint: 'Optional',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: _saving ? null : _save,
+                    child: Container(
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: _blue,
+                        borderRadius: BorderRadius.circular(27),
+                      ),
+                      alignment: Alignment.center,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Text('Save changes',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final TextInputType keyboardType;
+  final String hint;
+  final String? prefix;
+
+  const _EditRow({
+    required this.label,
+    required this.controller,
+    this.keyboardType = TextInputType.text,
+    required this.hint,
+    this.prefix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(label,
+                style: TextStyle(fontSize: 15, color: brand.inkSoft)),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboardType,
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 15, color: brand.ink),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: TextStyle(color: brand.inkSoft),
+                prefixText: prefix,
+                prefixStyle: TextStyle(fontSize: 15, color: brand.inkSoft),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
