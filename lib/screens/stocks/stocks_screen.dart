@@ -102,13 +102,32 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     return stocks;
   }
 
+  List<StockInvestment> _applySort(List<StockInvestment> stocks, double usdToLocal) {
+    final list = [...stocks];
+    if (_sort == 'Value') {
+      list.sort((a, b) {
+        final aVal = a.totalCost * (a.currency == 'USD' ? usdToLocal : 1.0);
+        final bVal = b.totalCost * (b.currency == 'USD' ? usdToLocal : 1.0);
+        return bVal.compareTo(aVal);
+      });
+    } else if (_sort == 'Gain%') {
+      list.sort((a, b) {
+        final aGain = a.buyPrice > 0 ? (a.buyPrice - a.buyPrice) / a.buyPrice : 0.0;
+        final bGain = b.buyPrice > 0 ? (b.buyPrice - b.buyPrice) / b.buyPrice : 0.0;
+        return bGain.compareTo(aGain);
+      });
+    } else if (_sort == 'Name') {
+      list.sort((a, b) => (a.name ?? a.symbol).compareTo(b.name ?? b.symbol));
+    }
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? <StockInvestment>[];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? 'RM';
-    final filtered = _applyFilter(stocks);
 
     // Determine currency symbol ISO for FX
     const symToIso = {
@@ -117,6 +136,8 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     final localIso = symToIso[symbol] ?? 'MYR';
     final fxAsync = ref.watch(stockFxRateProvider(localIso));
     final usdToLocal = fxAsync.valueOrNull ?? 4.48;
+
+    final filtered = _applySort(_applyFilter(stocks), usdToLocal);
 
     // Count unique markets
     final markets = stocks.map((s) => s.exchangeDisplay).toSet();
@@ -283,23 +304,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                           ),
                           const Icon(CupertinoIcons.chevron_down, size: 11, color: _blue),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _showGroupSheet(context),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: brand.surface,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          CupertinoIcons.line_horizontal_3_decrease,
-                          size: 15,
-                          color: brand.inkSoft,
-                        ),
                       ),
                     ),
                   ],
@@ -707,25 +711,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     );
   }
 
-  void _showGroupSheet(BuildContext context) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Group by'),
-        actions: ['None', 'Sector', 'Market', 'Currency'].map((g) => CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(ctx);
-            setState(() => _groupBy = g);
-          },
-          child: Text(g, style: TextStyle(fontWeight: _groupBy == g ? FontWeight.w700 : FontWeight.w400)),
-        )).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
-  }
 }
 
 // ── Portfolio Header ───────────────────────────────────────────────────────────
