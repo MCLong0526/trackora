@@ -12,10 +12,15 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/split_bill.dart';
 import '../../repositories/firebase_expense_repository.dart';
 import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_split_bill_repository.dart';
+import '../../repositories/split_bill_repository.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
+import '../../screens/expenses/bill_receipt_screen.dart';
+import '../../screens/expenses/split_bill_screen.dart';
 import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
@@ -42,12 +47,19 @@ const kIncomeCategories = ['Salary', 'Others'];
 
 class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? expense;
+
   /// When set, pre-fills the form from this expense but saves as a NEW record.
   final Expense? copyFrom;
   final EntryType? initialType;
   final double? initialAmount;
 
-  const AddEditExpenseScreen({super.key, this.expense, this.copyFrom, this.initialType, this.initialAmount});
+  const AddEditExpenseScreen({
+    super.key,
+    this.expense,
+    this.copyFrom,
+    this.initialType,
+    this.initialAmount,
+  });
 
   @override
   ConsumerState<AddEditExpenseScreen> createState() =>
@@ -94,6 +106,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   File? _newReceipt;
   String? _existingReceiptUrl;
 
+  bool _splitBillEnabled = false;
+  List<SplitMember> _splitMembers = [];
+  SplitMode _splitMode = SplitMode.equally;
+  double _splitBillTotal =
+      0.0; // total of the whole bill (not just payer's share)
+  SplitBill? _splitBill;
+
   bool get _isEdit => widget.expense != null;
 
   Color get _typeColor {
@@ -117,11 +136,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       vsync: this,
       duration: const Duration(milliseconds: 380),
     );
-    _entranceFade = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
-    _entranceSlide = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+    _entranceFade = CurvedAnimation(
+      parent: _entranceCtrl,
+      curve: Curves.easeOut,
+    );
+    _entranceSlide =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+          CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
+        );
 
     _closeCtrl = AnimationController(
       vsync: this,
@@ -185,6 +207,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _hasValidAmount = _checkAmountValid();
     _amountController.addListener(_onAmountChanged);
     _loadInitialCurrency();
+    if (_isEdit) _loadSplitBill();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceCtrl.forward();
@@ -224,7 +247,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   void _onSnapTick() {
     if (!mounted) return;
     setState(() {
-      _dragOffset = _snapStartOffset *
+      _dragOffset =
+          _snapStartOffset *
           (1.0 - Curves.easeOutCubic.transform(_snapCtrl.value));
     });
     if (_snapCtrl.isCompleted) {
@@ -336,6 +360,50 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
   }
 
+  Future<void> _openSplitBillSheet(BuildContext context) async {
+    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+    final amount = double.tryParse(_amountController.text) ?? 0;
+    final totalAmount = _splitBillEnabled && _splitBillTotal > 0
+        ? _splitBillTotal
+        : amount;
+    final title = _noteController.text.trim().isNotEmpty
+        ? _noteController.text.trim()
+        : _category;
+
+    final result = await Navigator.push<SplitBillResult>(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => SplitBillScreen(
+          totalAmount: totalAmount,
+          currencySymbol: symbol,
+          expenseTitle: title,
+          initialMembers: _splitMembers,
+          initialSplitMode: _splitMode,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (result != null) {
+      // Find payer's share — that's what the current user owes/spent
+      final payer = result.members.firstWhere(
+        (m) => m.isPayer,
+        orElse: () => result.members.first,
+      );
+      setState(() {
+        _splitBillEnabled = true;
+        _splitMembers = result.members;
+        _splitMode = result.splitMode;
+        _splitBillTotal = result.totalAmount;
+        _splitBill = null;
+        _amountController.text = payer.amount.toStringAsFixed(2);
+      });
+    } else if (_splitMembers.isEmpty) {
+      // User cancelled without configuring, turn off toggle
+      setState(() => _splitBillEnabled = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isAccountTransfer && _toAccountId == null) {
@@ -374,10 +442,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         try {
           uploadedNewUrl = await storage.saveReceipt(user.uid, _newReceipt!);
           receiptUrl = uploadedNewUrl;
-          dev.log(
-            '[RECEIPT_UPLOAD] Upload succeeded.',
-            name: 'AddEditExpense',
-          );
+          dev.log('[RECEIPT_UPLOAD] Upload succeeded.', name: 'AddEditExpense');
         } catch (uploadError) {
           dev.log(
             '[RECEIPT_UPLOAD] Upload failed: $uploadError — saving entry without receipt.',
@@ -412,8 +477,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
       final mainCode = await ref.read(currencyCodeProvider.future);
       final fxService = ref.read(exchangeRateServiceProvider);
-      final String? originalCurrencyField =
-          _currencyCode != mainCode ? _currencyCode : null;
+      final String? originalCurrencyField = _currencyCode != mainCode
+          ? _currencyCode
+          : null;
       double? fxRate;
       double? baseCurrencyAmount;
       if (_currencyCode != mainCode) {
@@ -444,6 +510,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         toAccountId = null;
       }
 
+      String savedExpenseId;
       if (_isEdit) {
         final updated = widget.expense!.copyWith(
           amount: amount,
@@ -460,6 +527,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           baseCurrencyAmount: baseCurrencyAmount,
           updatedAt: now,
         );
+        savedExpenseId = updated.id;
         dev.log(
           '[SAVE] Updating expense ${updated.id} | online: $isOnline | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
           name: 'AddEditExpense',
@@ -493,6 +561,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           createdAt: now,
           updatedAt: now,
         );
+        savedExpenseId = e.id;
         dev.log(
           '[SAVE] Adding expense ${e.id} | online: $isOnline | receiptUrl: ${receiptUrl != null ? "set" : "null"}',
           name: 'AddEditExpense',
@@ -507,6 +576,22 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         }
       }
 
+      // Save / update split bill — local-first, then Firestore best-effort.
+      if (_splitBillEnabled && _splitMembers.isNotEmpty) {
+        _splitBill = await _saveSplitBill(
+          uid: user.uid,
+          expenseId: savedExpenseId,
+          category: category,
+          isOnline: isOnline,
+        );
+      } else if (_isEdit) {
+        await _deleteSplitBillForExpense(
+          uid: user.uid,
+          expenseId: savedExpenseId,
+          isOnline: isOnline,
+        );
+      }
+
       if (mounted) {
         if (!isOnline) _showOfflineSavedBanner();
         FocusScope.of(context).unfocus();
@@ -519,7 +604,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (mounted) {
           AppToast.show(
             context,
-            _isEdit ? context.t('expense.entryUpdated') : context.t('expense.entrySaved'),
+            _isEdit
+                ? context.t('expense.entryUpdated')
+                : context.t('expense.entrySaved'),
             type: AppToastType.success,
           );
         }
@@ -548,11 +635,240 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
   }
 
+  Future<SplitBill?> _saveSplitBill({
+    required String uid,
+    required String expenseId,
+    required String category,
+    required bool isOnline,
+  }) async {
+    try {
+      final now2 = DateTime.now();
+      final mainCode2 = await ref.read(currencyCodeProvider.future);
+      final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+      final billTotal = _splitBillTotal > 0
+          ? _splitBillTotal
+          : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+      final title = _noteController.text.trim().isNotEmpty
+          ? _noteController.text.trim()
+          : category;
+
+      // Look up existing local record to preserve billNumber / createdAt.
+      final existingLocal = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(uid, expenseId);
+
+      final billNumber =
+          existingLocal?.billNumber ??
+          '#${now2.year}-${(now2.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';
+      final createdAt = existingLocal?.createdAt ?? now2;
+      final localId =
+          existingLocal?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
+
+      final bill = SplitBill(
+        id: localId,
+        expenseId: expenseId,
+        billNumber: billNumber,
+        title: title,
+        totalAmount: billTotal,
+        currency: mainCode2,
+        currencySymbol: sym,
+        splitMode: _splitMode,
+        members: _splitMembers,
+        date: _date,
+        createdAt: createdAt,
+        updatedAt: now2,
+      );
+
+      // Step 1: Always write to local Hive first (guaranteed, no network needed).
+      if (existingLocal != null) {
+        await LocalSplitBillRepository().updateSplitBill(uid, bill);
+      } else {
+        await LocalSplitBillRepository().saveSplitBill(uid, bill);
+      }
+
+      // Step 2: Sync to Firestore when online (best-effort, non-fatal).
+      if (isOnline) {
+        try {
+          final existingRemote = await SplitBillRepository()
+              .getSplitBillByExpenseId(uid, expenseId);
+          if (existingRemote != null) {
+            await SplitBillRepository().updateSplitBill(
+              uid,
+              SplitBill(
+                id: existingRemote.id,
+                expenseId: bill.expenseId,
+                billNumber: bill.billNumber,
+                title: bill.title,
+                totalAmount: bill.totalAmount,
+                currency: bill.currency,
+                currencySymbol: bill.currencySymbol,
+                splitMode: bill.splitMode,
+                members: bill.members,
+                date: bill.date,
+                createdAt: bill.createdAt,
+                updatedAt: bill.updatedAt,
+              ),
+            );
+          } else {
+            await SplitBillRepository().saveSplitBill(uid, bill);
+          }
+        } catch (firestoreErr) {
+          dev.log(
+            '[SAVE] Firestore split-bill sync failed (local copy saved): $firestoreErr',
+            name: 'AddEditExpense',
+          );
+        }
+      }
+      return bill;
+    } catch (e) {
+      dev.log('[SAVE] Split-bill save error: $e', name: 'AddEditExpense');
+      return null;
+    }
+  }
+
+  Future<void> _deleteSplitBillForExpense({
+    required String uid,
+    required String expenseId,
+    required bool isOnline,
+  }) async {
+    try {
+      final existingLocal = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(uid, expenseId);
+      if (existingLocal != null) {
+        await LocalSplitBillRepository().deleteSplitBill(
+          uid,
+          existingLocal.id,
+          expenseId,
+        );
+      }
+
+      if (isOnline) {
+        try {
+          final existingRemote = await SplitBillRepository()
+              .getSplitBillByExpenseId(uid, expenseId);
+          if (existingRemote != null) {
+            await SplitBillRepository().deleteSplitBill(uid, existingRemote.id);
+          }
+        } catch (firestoreErr) {
+          dev.log(
+            '[SAVE] Firestore split-bill delete failed: $firestoreErr',
+            name: 'AddEditExpense',
+          );
+        }
+      }
+      _splitBill = null;
+    } catch (e) {
+      dev.log('[SAVE] Split-bill delete error: $e', name: 'AddEditExpense');
+    }
+  }
+
   Future<void> _loadInitialCurrency() async {
     final mainCode = await ref.read(currencyCodeProvider.future);
     if (!mounted) return;
     final template = widget.expense ?? widget.copyFrom;
     setState(() => _currencyCode = template?.originalCurrency ?? mainCode);
+  }
+
+  Future<void> _loadSplitBill() async {
+    final expenseId = widget.expense?.id;
+    if (expenseId == null) return;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+
+    try {
+      // Try local first — fast and works offline.
+      SplitBill? bill = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(user.uid, expenseId);
+
+      bill ??= await _findLegacyLocalSplitBill(user.uid, expenseId);
+
+      // Fall back to Firestore if not cached locally.
+      if (bill == null && ref.read(isOnlineProvider)) {
+        try {
+          bill = await SplitBillRepository().getSplitBillByExpenseId(
+            user.uid,
+            expenseId,
+          );
+          // Cache it locally so next open is instant.
+          if (bill != null) {
+            await LocalSplitBillRepository().saveSplitBill(user.uid, bill);
+          }
+        } catch (firestoreErr) {
+          dev.log(
+            '[LOAD] Firestore split-bill lookup failed: $firestoreErr',
+            name: 'AddEditExpense',
+          );
+        }
+      }
+
+      if (!mounted || bill == null) return;
+      setState(() {
+        _splitBillEnabled = true;
+        _splitMembers = bill!.members;
+        _splitMode = bill.splitMode;
+        _splitBillTotal = bill.totalAmount;
+        _splitBill = bill;
+        final payer = bill.members.firstWhere(
+          (m) => m.isPayer,
+          orElse: () => bill!.members.first,
+        );
+        _amountController.text = payer.amount.toStringAsFixed(2);
+      });
+    } catch (e) {
+      dev.log('[LOAD] Split-bill load error: $e', name: 'AddEditExpense');
+    }
+  }
+
+  Future<SplitBill?> _findLegacyLocalSplitBill(
+    String uid,
+    String expenseId,
+  ) async {
+    final expense = widget.expense;
+    if (expense == null) return null;
+
+    final expectedTitle = expense.note.trim().isNotEmpty
+        ? expense.note.trim()
+        : expense.category;
+    final bills = await LocalSplitBillRepository().getAllSplitBills(uid);
+    for (final bill in bills) {
+      if (bill.expenseId == expenseId) continue;
+      if (bill.title != expectedTitle) continue;
+      if (!_sameCalendarDate(bill.date, expense.date)) continue;
+      if ((bill.payer.amount - expense.amount).abs() > 0.01) continue;
+      if (_durationAbs(bill.createdAt.difference(expense.createdAt)) >
+          const Duration(minutes: 5)) {
+        continue;
+      }
+
+      final relinked = _withExpenseId(bill, expenseId);
+      await LocalSplitBillRepository().updateSplitBill(uid, relinked);
+      return relinked;
+    }
+    return null;
+  }
+
+  bool _sameCalendarDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Duration _durationAbs(Duration duration) {
+    return duration.isNegative ? -duration : duration;
+  }
+
+  SplitBill _withExpenseId(SplitBill bill, String expenseId) {
+    return SplitBill(
+      id: bill.id,
+      expenseId: expenseId,
+      billNumber: bill.billNumber,
+      title: bill.title,
+      totalAmount: bill.totalAmount,
+      currency: bill.currency,
+      currencySymbol: bill.currencySymbol,
+      splitMode: bill.splitMode,
+      members: bill.members,
+      date: bill.date,
+      createdAt: bill.createdAt,
+      updatedAt: DateTime.now(),
+    );
   }
 
   Future<void> _delete() async {
@@ -578,6 +894,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
     if (confirm != true) return;
     final expenseId = widget.expense!.id;
+    await _deleteSplitBillForExpense(
+      uid: user.uid,
+      expenseId: expenseId,
+      isOnline:
+          storageMode == StorageMode.firebase && ref.read(isOnlineProvider),
+    );
     await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
     if (storageMode == StorageMode.firebase) {
       await SyncService().clearPending(user.uid, expenseId);
@@ -593,7 +915,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       }
     }
     if (mounted) {
-      AppToast.show(context, context.t('expense.entryDeleted'), type: AppToastType.success);
+      AppToast.show(
+        context,
+        context.t('expense.entryDeleted'),
+        type: AppToastType.success,
+      );
       Navigator.pop(context);
     }
   }
@@ -662,14 +988,23 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                                       color: brand.surface,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(CupertinoIcons.xmark, size: 17, color: brand.ink),
+                                    child: Icon(
+                                      CupertinoIcons.xmark,
+                                      size: 17,
+                                      color: brand.ink,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    _isEdit ? context.t('expense.edit') : context.t('expense.new'),
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                                    _isEdit
+                                        ? context.t('expense.edit')
+                                        : context.t('expense.new'),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18,
+                                    ),
                                   ),
                                 ),
                                 if (_isEdit)
@@ -714,36 +1049,36 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                           const SizedBox(height: 100),
                         ],
                       ),
-                    // Type picker chips — float above the bottom bar
-                    Positioned(
-                      bottom: 86,
-                      left: 16,
-                      right: 16,
-                      child: _typeChipsOverlay(brand),
-                    ),
-                    // Bottom action bar
-                    Positioned(
-                      bottom: 16,
-                      left: 20,
-                      right: 20,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _typeMenuButton(brand),
-                          const SizedBox(width: 12),
-                          Expanded(child: _floatingSavePill(brand)),
-                        ],
+                      // Type picker chips — float above the bottom bar
+                      Positioned(
+                        bottom: 86,
+                        left: 16,
+                        right: 16,
+                        child: _typeChipsOverlay(brand),
                       ),
-                    ),
-                  ],
+                      // Bottom action bar
+                      Positioned(
+                        bottom: 16,
+                        left: 20,
+                        right: 20,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _typeMenuButton(brand),
+                            const SizedBox(width: 12),
+                            Expanded(child: _floatingSavePill(brand)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   // ─── Type Card Swiper ─────────────────────────────────────────────────────────
@@ -816,7 +1151,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         decoration: BoxDecoration(
           color: _typeMenuOpen ? _typeColor : brand.surface,
           shape: BoxShape.circle,
-          ),
+        ),
         child: AnimatedRotation(
           turns: _typeMenuOpen ? 0.125 : 0,
           duration: const Duration(milliseconds: 280),
@@ -868,21 +1203,25 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         decoration: BoxDecoration(
                           color: isSelected ? _kTypeAccents[i] : brand.surface,
                           borderRadius: BorderRadius.circular(18),
-                          ),
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               _kTypeIcons[i],
                               size: 18,
-                              color: isSelected ? Colors.white : _kTypeAccents[i],
+                              color: isSelected
+                                  ? Colors.white
+                                  : _kTypeAccents[i],
                             ),
                             const SizedBox(height: 5),
                             Text(
                               typeLabels[i],
                               style: TextStyle(
                                 fontSize: 10,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                                 color: isSelected ? Colors.white : brand.ink,
                               ),
                             ),
@@ -959,7 +1298,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       context.t('expense.typeTransferDesc'),
       context.t('expense.typeReceiveDesc'),
     ];
-    final bgColors = [AppColors.lilac, AppColors.mint, AppColors.blush, AppColors.sky];
+    final bgColors = [
+      AppColors.lilac,
+      AppColors.mint,
+      AppColors.blush,
+      AppColors.sky,
+    ];
 
     final accent = _kTypeAccents[index];
     final bg = bgColors[index];
@@ -1074,93 +1418,108 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ),
           const SizedBox(height: 20),
           // Amount field
-          Builder(builder: (context) {
-            final entrySymbol = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
-            final converter = ref.watch(currencyConverterProvider).valueOrNull;
-            final mainCode = converter?.base ?? ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
-            final mainSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
-            final isForeign = _currencyCode != mainCode;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        entrySymbol,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          color: brand.inkSoft,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _amountController,
-                        focusNode: _amountFocus,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: TextStyle(
-                          fontSize: 46,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -2,
-                          color: brand.ink,
-                        ),
-                        decoration: InputDecoration(
-                          filled: false,
-                          hintText: '0.00',
-                          hintStyle: TextStyle(
-                            color: brand.inkSoft.withValues(alpha: 0.5),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 46,
-                            letterSpacing: -2,
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                        ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return context.t('validation.enterAmount');
-                          }
-                          final n = double.tryParse(v);
-                          if (n == null || n <= 0) {
-                            return context.t('validation.invalidAmount');
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                if (isForeign && converter != null)
-                  ListenableBuilder(
-                    listenable: _amountController,
-                    builder: (ctx, _) {
-                      final amt = double.tryParse(_amountController.text) ?? 0;
-                      if (amt <= 0) return const SizedBox.shrink();
-                      final converted = converter.toBase(amt, _currencyCode);
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 2, left: 2, bottom: 4),
+          Builder(
+            builder: (context) {
+              final entrySymbol =
+                  kSupportedCurrencies[_currencyCode] ?? _currencyCode;
+              final converter = ref
+                  .watch(currencyConverterProvider)
+                  .valueOrNull;
+              final mainCode =
+                  converter?.base ??
+                  ref.watch(currencyCodeProvider).valueOrNull ??
+                  'MYR';
+              final mainSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
+              final isForeign = _currencyCode != mainCode;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
                         child: Text(
-                          'est. $mainSymbol ${converted.toStringAsFixed(2)}',
+                          entrySymbol,
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
                             color: brand.inkSoft,
-                            letterSpacing: -0.2,
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _amountController,
+                          focusNode: _amountFocus,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          style: TextStyle(
+                            fontSize: 46,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -2,
+                            color: brand.ink,
+                          ),
+                          decoration: InputDecoration(
+                            filled: false,
+                            hintText: '0.00',
+                            hintStyle: TextStyle(
+                              color: brand.inkSoft.withValues(alpha: 0.5),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 46,
+                              letterSpacing: -2,
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) {
+                              return context.t('validation.enterAmount');
+                            }
+                            final n = double.tryParse(v);
+                            if (n == null || n <= 0) {
+                              return context.t('validation.invalidAmount');
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            );
-          }),
+                  if (isForeign && converter != null)
+                    ListenableBuilder(
+                      listenable: _amountController,
+                      builder: (ctx, _) {
+                        final amt =
+                            double.tryParse(_amountController.text) ?? 0;
+                        if (amt <= 0) return const SizedBox.shrink();
+                        final converted = converter.toBase(amt, _currencyCode);
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            top: 2,
+                            left: 2,
+                            bottom: 4,
+                          ),
+                          child: Text(
+                            'est. $mainSymbol ${converted.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: brand.inkSoft,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 20),
           // Category section (expense / income)
           if (type == EntryType.expense || type == EntryType.income) ...[
@@ -1234,6 +1593,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             accounts: accounts,
             dateLabel: dateLabel,
             isAccountTransfer: type == EntryType.transfer && _isAccountTransfer,
+            entryType: type,
           ),
         ],
       ),
@@ -1295,7 +1655,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             builder: (context, _) {
               final previewBrand = context.brand;
               return Text(
-                _amountController.text.isEmpty ? '0.00' : _amountController.text,
+                _amountController.text.isEmpty
+                    ? '0.00'
+                    : _amountController.text,
                 style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.w600,
@@ -1364,8 +1726,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final bgColor = _saveSuccess
         ? _kSuccessGreen
         : (_saving || _hasValidAmount)
-            ? _typeColor
-            : brand.surface;
+        ? _typeColor
+        : brand.surface;
 
     return AnimatedBuilder(
       animation: _saveBtnBounce,
@@ -1405,7 +1767,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       key: const ValueKey('success'),
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(CupertinoIcons.checkmark_alt, color: Colors.white, size: 20),
+                        const Icon(
+                          CupertinoIcons.checkmark_alt,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                         const SizedBox(width: 9),
                         Text(
                           context.t('expense.entrySavedSuccess'),
@@ -1419,45 +1785,44 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       ],
                     )
                   : _saving
-                      ? const SizedBox(
-                          key: ValueKey('saving'),
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Row(
-                          key: const ValueKey('idle'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              CupertinoIcons.checkmark_circle_fill,
-                              color: active ? Colors.white : brand.inkSoft,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 9),
-                            Text(
-                              _isEdit
-                                  ? context.t('common.update')
-                                  : context.t('expense.saveEntry'),
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: active ? Colors.white : brand.inkSoft,
-                                letterSpacing: 0.1,
-                              ),
-                            ),
-                          ],
+                  ? const SizedBox(
+                      key: ValueKey('saving'),
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      key: const ValueKey('idle'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.checkmark_circle_fill,
+                          color: active ? Colors.white : brand.inkSoft,
+                          size: 20,
                         ),
+                        const SizedBox(width: 9),
+                        Text(
+                          _isEdit
+                              ? context.t('common.update')
+                              : context.t('expense.saveEntry'),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: active ? Colors.white : brand.inkSoft,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ),
       ),
     );
   }
-
 
   // ─── Account Transfer Toggle ──────────────────────────────────────────────────
 
@@ -1485,7 +1850,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               children: [
                 Text(
                   context.t('expense.transferBetweenAccounts'),
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
                 Text(
                   'e.g. Maybank → Touch \'n Go',
@@ -1516,6 +1884,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required List<Account> accounts,
     required String dateLabel,
     required bool isAccountTransfer,
+    EntryType? entryType,
   }) {
     final divider = Container(
       height: 0.5,
@@ -1564,20 +1933,37 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             InkWell(
               onTap: _pickDate,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 13,
+                ),
                 child: Row(
                   children: [
-                    Icon(CupertinoIcons.calendar, size: 18, color: brand.inkSoft),
+                    Icon(
+                      CupertinoIcons.calendar,
+                      size: 18,
+                      color: brand.inkSoft,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         context.t('expense.date'),
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
-                    Text(dateLabel, style: TextStyle(color: brand.inkSoft, fontSize: 15)),
+                    Text(
+                      dateLabel,
+                      style: TextStyle(color: brand.inkSoft, fontSize: 15),
+                    ),
                     const SizedBox(width: 4),
-                    Icon(CupertinoIcons.chevron_right, size: 13, color: brand.inkSoft),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 13,
+                      color: brand.inkSoft,
+                    ),
                   ],
                 ),
               ),
@@ -1589,6 +1975,16 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               onChanged: (code) => setState(() => _currencyCode = code),
               label: 'Currency',
             ),
+            // Split bill toggle (expense only)
+            if (entryType == EntryType.expense) ...[
+              divider,
+              _splitBillToggleRow(brand),
+              if (_splitBillEnabled) ...[
+                divider,
+                _splitWithRow(brand),
+                if (_splitBill != null) ...[divider, _generateReceiptButton()],
+              ],
+            ],
             divider,
             // Note row
             Padding(
@@ -1598,7 +1994,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(top: 14),
-                    child: Icon(CupertinoIcons.doc_text, size: 18, color: brand.inkSoft),
+                    child: Icon(
+                      CupertinoIcons.doc_text,
+                      size: 18,
+                      color: brand.inkSoft,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1608,12 +2008,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       style: const TextStyle(fontSize: 15),
                       decoration: InputDecoration(
                         hintText: context.t('expense.note'),
-                        hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                        hintStyle: TextStyle(
+                          color: brand.inkSoft,
+                          fontSize: 15,
+                        ),
                         filled: false,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 13,
+                        ),
                       ),
                     ),
                   ),
@@ -1627,7 +2032,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ? _pickReceipt
                   : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: _receiptInlineContent(brand),
               ),
             ),
@@ -1636,6 +2044,235 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       ),
     );
   }
+
+  // ─── Split Bill Toggle Row ────────────────────────────────────────────────────
+
+  String _splitSubtitle(String symbol) {
+    final n = _splitMembers.length;
+    if (n == 0) return '';
+    switch (_splitMode) {
+      case SplitMode.equally:
+        final each = _splitBillTotal > 0
+            ? _splitBillTotal / n
+            : _splitMembers.fold<double>(0, (s, m) => s + m.amount) / n;
+        return '$n people · $symbol ${each.toStringAsFixed(2)} each';
+      case SplitMode.amount:
+        final total = _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+        return '$n people · $symbol ${total.toStringAsFixed(2)} total';
+      case SplitMode.percent:
+        return '$n people · by percentage';
+      case SplitMode.shares:
+        return '$n people · by shares';
+    }
+  }
+
+  Widget _splitBillToggleRow(BrandColors brand) {
+    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+
+    return InkWell(
+      onTap: () => _openSplitBillSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Icon(
+              CupertinoIcons.person_2,
+              size: 18,
+              color: _splitBillEnabled
+                  ? const Color(0xFF6B40A8)
+                  : brand.inkSoft,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Split bill',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: _splitBillEnabled
+                          ? const Color(0xFF6B40A8)
+                          : brand.ink,
+                    ),
+                  ),
+                  if (_splitBillEnabled && _splitMembers.isNotEmpty)
+                    Text(
+                      _splitSubtitle(symbol),
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    )
+                  else
+                    Text(
+                      'Share this expense with others',
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    ),
+                ],
+              ),
+            ),
+            CupertinoSwitch(
+              value: _splitBillEnabled,
+              activeTrackColor: const Color(0xFF6B40A8),
+              onChanged: (v) {
+                HapticFeedback.selectionClick();
+                if (v) {
+                  // Just enable — user taps Edit to configure
+                  final amount = double.tryParse(_amountController.text) ?? 0;
+                  setState(() {
+                    _splitBillEnabled = true;
+                    if (_splitBillTotal <= 0) _splitBillTotal = amount;
+                    if (_splitMembers.isEmpty) {
+                      _splitMembers = [
+                        SplitMember(
+                          id: DateTime.now().microsecondsSinceEpoch.toString(),
+                          name: 'You',
+                          colorIndex: 0,
+                          amount: amount,
+                          isPayer: true,
+                        ),
+                      ];
+                    }
+                  });
+                } else {
+                  setState(() {
+                    _splitBillEnabled = false;
+                    _splitBill = null;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Split With Row (inside details card) ────────────────────────────────────
+
+  Widget _splitWithRow(BrandColors brand) {
+    final debtors = _splitMembers.where((m) => !m.isPayer).toList();
+    return InkWell(
+      onTap: () => _openSplitBillSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(CupertinoIcons.person_2_fill, size: 18, color: brand.inkSoft),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Split with',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            // Mini avatars (up to 3 debtors)
+            ...debtors.take(3).map((m) {
+              final color =
+                  _kSplitAvatarColors[m.colorIndex %
+                      _kSplitAvatarColors.length];
+              return Container(
+                width: 24,
+                height: 24,
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: Center(
+                  child: Text(
+                    m.initials.isNotEmpty ? m.initials[0] : '?',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (debtors.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text(
+                  '+${debtors.length - 3}',
+                  style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                ),
+              ),
+            const SizedBox(width: 4),
+            const Text(
+              'Edit',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6B40A8),
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              size: 13,
+              color: Color(0xFF6B40A8),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBillReceipt() async {
+    final bill = _splitBill;
+    if (bill == null) return;
+
+    await Navigator.push(
+      context,
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => BillReceiptScreen(bill: bill),
+      ),
+    );
+    if (mounted) await _loadSplitBill();
+  }
+
+  Widget _generateReceiptButton() {
+    return GestureDetector(
+      onTap: _openBillReceipt,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF6B40A8),
+            borderRadius: BorderRadius.circular(9999),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(CupertinoIcons.doc_text, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Text(
+                'Generate Receipt',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _kSplitAvatarColors = [
+    Color(0xFF6B40A8),
+    Color(0xFF2A82B4),
+    Color(0xFFC0833A),
+    Color(0xFF2A8C52),
+    Color(0xFFB23A4A),
+    Color(0xFFE8820E),
+  ];
 
   // ─── Inline Account Row ───────────────────────────────────────────────────────
 
@@ -1661,7 +2298,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           );
           return;
         }
-        _showAccountPicker(available, brand, selectedId: selectedId, onSelect: onSelect);
+        _showAccountPicker(
+          available,
+          brand,
+          selectedId: selectedId,
+          onSelect: onSelect,
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -1680,11 +2322,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                ),
               ),
             ),
             Text(
-              selected?.name ?? (available.isEmpty ? context.t('expense.addAccount') : context.t('expense.none')),
+              selected?.name ??
+                  (available.isEmpty
+                      ? context.t('expense.addAccount')
+                      : context.t('expense.none')),
               style: TextStyle(color: brand.inkSoft, fontSize: 15),
             ),
             const SizedBox(width: 4),
@@ -1727,9 +2375,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               context,
               CupertinoPageRoute(
                 builder: (_) => Scaffold(
-                  appBar: AppBar(
-                    title: Text(context.t('expense.receipt')),
-                  ),
+                  appBar: AppBar(title: Text(context.t('expense.receipt'))),
                   body: Center(
                     child: InteractiveViewer(
                       child: Image.file(_newReceipt!, fit: BoxFit.contain),
@@ -1741,7 +2387,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(_newReceipt!, width: 44, height: 44, fit: BoxFit.cover),
+              child: Image.file(
+                _newReceipt!,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+              ),
             ),
           )
         else
@@ -1762,7 +2413,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               onTap: _pickReceipt,
               child: Text(
                 context.t('expense.replace'),
-                style: TextStyle(fontSize: 13, color: brand.accentDark, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: brand.accentDark,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1773,7 +2428,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               }),
               child: Text(
                 context.t('expense.remove'),
-                style: const TextStyle(fontSize: 13, color: AppColors.expense, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.expense,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -1860,12 +2519,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   void _showAccountPicker(
-      List<Account> accounts,
-      BrandColors brand, {
-        required String? selectedId,
-        required void Function(String? id) onSelect,
-        bool allowNone = true,
-      }) {
+    List<Account> accounts,
+    BrandColors brand, {
+    required String? selectedId,
+    required void Function(String? id) onSelect,
+    bool allowNone = true,
+  }) {
     FocusScope.of(context).unfocus();
     showModalBottomSheet<void>(
       context: context,
