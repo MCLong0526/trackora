@@ -255,6 +255,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   onNext: () => _step(1),
                   excludeFixed: _excludeFixed,
                   onExcludeChanged: (v) => setState(() => _excludeFixed = v),
+                  hasForeignExpense: rangedExpenses.any((e) => e.baseCurrencyAmount != null),
                 ),
                 const SizedBox(height: 14),
 
@@ -723,6 +724,7 @@ class _SpendingHeader extends StatelessWidget {
   final VoidCallback onNext;
   final bool? excludeFixed;
   final ValueChanged<bool>? onExcludeChanged;
+  final bool hasForeignExpense;
 
   const _SpendingHeader({
     required this.period,
@@ -737,6 +739,7 @@ class _SpendingHeader extends StatelessWidget {
     required this.onNext,
     this.excludeFixed,
     this.onExcludeChanged,
+    this.hasForeignExpense = false,
   });
 
   @override
@@ -775,6 +778,18 @@ class _SpendingHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          if (hasForeignExpense) ...[
+            Text(
+              'Est.',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: brand.inkSoft,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 2),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
