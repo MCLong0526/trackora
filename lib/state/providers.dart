@@ -54,6 +54,10 @@ import '../repositories/local_travel_group_repository.dart';
 import '../repositories/firebase_travel_group_repository.dart';
 import '../models/travel_group.dart';
 import '../models/travel_expense.dart';
+import '../models/stock_investment.dart';
+import '../repositories/stock_investment_repository.dart';
+import '../repositories/firebase_stock_investment_repository.dart';
+import '../services/stock_service.dart';
 
 // ── Network connectivity ──────────────────────────────────────────────────────
 
@@ -602,4 +606,21 @@ final travelGroupExpensesProvider =
     return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
   },
 );
+
+// ── Stock Investments ─────────────────────────────────────────────────────────
+
+final stockInvestmentRepositoryProvider =
+    Provider<StockInvestmentRepository>((_) {
+  return FirebaseStockInvestmentRepository();
+});
+
+final stockServiceProvider = Provider((_) => StockService());
+
+/// Stream of all stock investments for the active user.
+final stockInvestmentsProvider =
+    StreamProvider.autoDispose<List<StockInvestment>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.read(stockInvestmentRepositoryProvider).getAll(user.uid);
+});
 
