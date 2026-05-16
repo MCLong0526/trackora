@@ -1772,12 +1772,31 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
   bool _searching = false;
   bool _loadingQuote = false;
 
+  // (displaySymbol, yahooSymbol, name, exchange, currency)
   static const _trending = [
-    ('MAYBANK', 'Malayan Banking', 'KLSE · MYR'),
-    ('PBBANK', 'Public Bank', 'KLSE · MYR'),
-    ('TENAGA', 'Tenaga Nasional', 'KLSE · MYR'),
-    ('CIMB', 'CIMB Group', 'KLSE · MYR'),
+    ('MAYBANK', 'MAYBANK.KL', 'Malayan Banking', 'KLS', 'MYR'),
+    ('PBBANK',  'PBBANK.KL',  'Public Bank',     'KLS', 'MYR'),
+    ('TENAGA',  'TENAGA.KL',  'Tenaga Nasional',  'KLS', 'MYR'),
+    ('CIMB',    'CIMB.KL',    'CIMB Group',      'KLS', 'MYR'),
   ];
+
+  void _selectTrending((String, String, String, String, String) t) {
+    final result = StockSearchResult(
+      symbol: t.$2,
+      name: t.$3,
+      exchange: t.$4,
+      currency: t.$5,
+    );
+    setState(() {
+      _topMatch = result;
+      _topQuote = null;
+      _loadingQuote = true;
+      _results = [];
+    });
+    ref.read(stockServiceProvider).getQuote(result.symbol, range: '1M').then((q) {
+      if (mounted) setState(() { _topQuote = q; _loadingQuote = false; });
+    });
+  }
 
   @override
   void dispose() {
@@ -2028,29 +2047,46 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
-                          children: _trending.map((t) => Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            child: Row(
-                              children: [
-                                StockAvatarBadge(symbol: t.$1, size: 36),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                          children: () {
+                            final widgets = <Widget>[];
+                            for (var i = 0; i < _trending.length; i++) {
+                              final t = _trending[i];
+                              if (i > 0) {
+                                widgets.add(Divider(
+                                  height: 1, indent: 62, endIndent: 14,
+                                  color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7),
+                                ));
+                              }
+                              widgets.add(GestureDetector(
+                                onTap: () => _selectTrending(t),
+                                behavior: HitTestBehavior.opaque,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  child: Row(
                                     children: [
-                                      Text(t.$1,
-                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                                          color: isDark ? Colors.white : Colors.black)),
-                                      Text(t.$2,
-                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                      StockAvatarBadge(symbol: t.$1, size: 36),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(t.$1,
+                                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                                                color: isDark ? Colors.white : Colors.black)),
+                                            Text(t.$3,
+                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                          ],
+                                        ),
+                                      ),
+                                      Text('${t.$4 == 'KLS' ? 'KLSE' : t.$4} · ${t.$5}',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
                                     ],
                                   ),
                                 ),
-                                Text(t.$3,
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                              ],
-                            ),
-                          )).toList(),
+                              ));
+                            }
+                            return widgets;
+                          }(),
                         ),
                       ),
                     ],
@@ -2125,7 +2161,7 @@ class _TopMatchCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '\$${quote!.price.toStringAsFixed(2)}',
+                      '${result.currency == 'MYR' ? 'RM' : result.currency == 'USD' ? '\$' : result.currency} ${quote!.price.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : Colors.black,
