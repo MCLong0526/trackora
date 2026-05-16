@@ -559,112 +559,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         }
       }
 
-      // Save / update split bill — runs for BOTH new and edit saves.
-      // Persisted to Firestore when online AND to Hive always (so it survives
-      // network changes). Looks up an existing bill to decide save vs update.
+      // Save / update split bill — local-first, then Firestore best-effort.
       if (_splitBillEnabled && _splitMembers.isNotEmpty) {
-        final now2 = DateTime.now();
-        final mainCode2 = await ref.read(currencyCodeProvider.future);
-        final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
-        final billTotal = _splitBillTotal > 0
-            ? _splitBillTotal
-            : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
-        final title = _noteController.text.trim().isNotEmpty
-            ? _noteController.text.trim()
-            : category;
-
-        // Find existing bills in both stores so we can update in place.
-        SplitBill? existingRemote;
-        if (isOnline) {
-          try {
-            existingRemote = await SplitBillRepository()
-                .getSplitBillByExpenseId(user.uid, savedExpenseId);
-          } catch (lookupErr) {
-            dev.log('[SAVE] Remote split-bill lookup failed: $lookupErr',
-                name: 'AddEditExpense');
-          }
-        }
-        final existingLocal = await LocalSplitBillRepository()
-            .getSplitBillByExpenseId(user.uid, savedExpenseId);
-
-        final existingId =
-            existingRemote?.id ?? existingLocal?.id ?? '';
-        final billNumber = existingRemote?.billNumber ??
-            existingLocal?.billNumber ??
-            '#${now2.year}-${(now2.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';
-        final createdAt =
-            existingRemote?.createdAt ?? existingLocal?.createdAt ?? now2;
-
-        final splitBill = SplitBill(
-          id: existingId,
+        await _saveSplitBill(
+          uid: user.uid,
           expenseId: savedExpenseId,
-          billNumber: billNumber,
-          title: title,
-          totalAmount: billTotal,
-          currency: mainCode2,
-          currencySymbol: sym,
-          splitMode: _splitMode,
-          members: _splitMembers,
-          date: _date,
-          createdAt: createdAt,
-          updatedAt: now2,
+          category: category,
+          isOnline: isOnline,
         );
-
-        if (isOnline) {
-          try {
-            if (existingRemote != null) {
-              await SplitBillRepository()
-                  .updateSplitBill(user.uid, splitBill);
-            } else {
-              final newId = await SplitBillRepository()
-                  .saveSplitBill(user.uid, splitBill);
-              // Mirror to local with the Firestore-generated id.
-              await LocalSplitBillRepository().saveSplitBill(
-                user.uid,
-                SplitBill(
-                  id: newId,
-                  expenseId: splitBill.expenseId,
-                  billNumber: splitBill.billNumber,
-                  title: splitBill.title,
-                  totalAmount: splitBill.totalAmount,
-                  currency: splitBill.currency,
-                  currencySymbol: splitBill.currencySymbol,
-                  splitMode: splitBill.splitMode,
-                  members: splitBill.members,
-                  date: splitBill.date,
-                  createdAt: splitBill.createdAt,
-                  updatedAt: splitBill.updatedAt,
-                ),
-              );
-            }
-          } catch (remoteErr) {
-            dev.log('[SAVE] Remote split-bill write failed: $remoteErr',
-                name: 'AddEditExpense');
-          }
-        }
-        // Always mirror to local so offline open works.
-        if (existingLocal != null) {
-          await LocalSplitBillRepository().updateSplitBill(
-            user.uid,
-            SplitBill(
-              id: existingLocal.id,
-              expenseId: splitBill.expenseId,
-              billNumber: splitBill.billNumber,
-              title: splitBill.title,
-              totalAmount: splitBill.totalAmount,
-              currency: splitBill.currency,
-              currencySymbol: splitBill.currencySymbol,
-              splitMode: splitBill.splitMode,
-              members: splitBill.members,
-              date: splitBill.date,
-              createdAt: splitBill.createdAt,
-              updatedAt: splitBill.updatedAt,
-            ),
-          );
-        } else if (!isOnline) {
-          // Offline brand-new bill — write to local only.
-          await LocalSplitBillRepository().saveSplitBill(user.uid, splitBill);
-        }
       }
 
       if (mounted) {
@@ -708,6 +610,90 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
   }
 
+  Future<void> _saveSplitBill({
+    required String uid,
+    required String expenseId,
+    required String category,
+    required bool isOnline,
+  }) async {
+    try {
+      final now2 = DateTime.now();
+      final mainCode2 = await ref.read(currencyCodeProvider.future);
+      final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+      final billTotal = _splitBillTotal > 0
+          ? _splitBillTotal
+          : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+      final title = _noteController.text.trim().isNotEmpty
+          ? _noteController.text.trim()
+          : category;
+
+      // Look up existing local record to preserve billNumber / createdAt.
+      final existingLocal = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(uid, expenseId);
+
+      final billNumber = existingLocal?.billNumber ??
+          '#${now2.year}-${(now2.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';
+      final createdAt = existingLocal?.createdAt ?? now2;
+      final localId = existingLocal?.id ?? '';
+
+      final bill = SplitBill(
+        id: localId,
+        expenseId: expenseId,
+        billNumber: billNumber,
+        title: title,
+        totalAmount: billTotal,
+        currency: mainCode2,
+        currencySymbol: sym,
+        splitMode: _splitMode,
+        members: _splitMembers,
+        date: _date,
+        createdAt: createdAt,
+        updatedAt: now2,
+      );
+
+      // Step 1: Always write to local Hive first (guaranteed, no network needed).
+      if (existingLocal != null) {
+        await LocalSplitBillRepository().updateSplitBill(uid, bill);
+      } else {
+        await LocalSplitBillRepository().saveSplitBill(uid, bill);
+      }
+
+      // Step 2: Sync to Firestore when online (best-effort, non-fatal).
+      if (isOnline) {
+        try {
+          final existingRemote = await SplitBillRepository()
+              .getSplitBillByExpenseId(uid, expenseId);
+          if (existingRemote != null) {
+            await SplitBillRepository().updateSplitBill(
+              uid,
+              SplitBill(
+                id: existingRemote.id,
+                expenseId: bill.expenseId,
+                billNumber: bill.billNumber,
+                title: bill.title,
+                totalAmount: bill.totalAmount,
+                currency: bill.currency,
+                currencySymbol: bill.currencySymbol,
+                splitMode: bill.splitMode,
+                members: bill.members,
+                date: bill.date,
+                createdAt: bill.createdAt,
+                updatedAt: bill.updatedAt,
+              ),
+            );
+          } else {
+            await SplitBillRepository().saveSplitBill(uid, bill);
+          }
+        } catch (firestoreErr) {
+          dev.log('[SAVE] Firestore split-bill sync failed (local copy saved): $firestoreErr',
+              name: 'AddEditExpense');
+        }
+      }
+    } catch (e) {
+      dev.log('[SAVE] Split-bill save error: $e', name: 'AddEditExpense');
+    }
+  }
+
   Future<void> _loadInitialCurrency() async {
     final mainCode = await ref.read(currencyCodeProvider.future);
     if (!mounted) return;
@@ -721,27 +707,41 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
 
-    SplitBill? bill;
-    final isOnline = ref.read(isOnlineProvider);
-    if (isOnline) {
-      bill = await SplitBillRepository().getSplitBillByExpenseId(user.uid, expenseId);
-    }
-    // Fall back to local if not found online or offline
-    bill ??= await LocalSplitBillRepository().getSplitBillByExpenseId(user.uid, expenseId);
+    try {
+      // Try local first — fast and works offline.
+      SplitBill? bill = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(user.uid, expenseId);
 
-    if (!mounted || bill == null) return;
-    setState(() {
-      _splitBillEnabled = true;
-      _splitMembers = bill!.members;
-      _splitMode = bill.splitMode;
-      _splitBillTotal = bill.totalAmount;
-      // Set amount to payer's share
-      final payer = bill.members.firstWhere(
-        (m) => m.isPayer,
-        orElse: () => bill!.members.first,
-      );
-      _amountController.text = payer.amount.toStringAsFixed(2);
-    });
+      // Fall back to Firestore if not cached locally.
+      if (bill == null && ref.read(isOnlineProvider)) {
+        try {
+          bill = await SplitBillRepository()
+              .getSplitBillByExpenseId(user.uid, expenseId);
+          // Cache it locally so next open is instant.
+          if (bill != null) {
+            await LocalSplitBillRepository().saveSplitBill(user.uid, bill);
+          }
+        } catch (firestoreErr) {
+          dev.log('[LOAD] Firestore split-bill lookup failed: $firestoreErr',
+              name: 'AddEditExpense');
+        }
+      }
+
+      if (!mounted || bill == null) return;
+      setState(() {
+        _splitBillEnabled = true;
+        _splitMembers = bill!.members;
+        _splitMode = bill.splitMode;
+        _splitBillTotal = bill.totalAmount;
+        final payer = bill.members.firstWhere(
+          (m) => m.isPayer,
+          orElse: () => bill!.members.first,
+        );
+        _amountController.text = payer.amount.toStringAsFixed(2);
+      });
+    } catch (e) {
+      dev.log('[LOAD] Split-bill load error: $e', name: 'AddEditExpense');
+    }
   }
 
   Future<void> _delete() async {
