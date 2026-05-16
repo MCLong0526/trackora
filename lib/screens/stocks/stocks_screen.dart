@@ -188,6 +188,75 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
+            // ── Buy / Sell global action row ────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: GestureDetector(
+                        onTap: () => _showAddStock(context),
+                        child: Container(
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: _blue,
+                            borderRadius: BorderRadius.circular(23),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(CupertinoIcons.plus, size: 16, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text(
+                                'Buy stock',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: GestureDetector(
+                        onTap: () {
+                          final holdings = stocks.where((s) => !s.watchOnly).toList();
+                          _showSellPickerSheet(context, holdings);
+                        },
+                        child: Container(
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(23),
+                            border: Border.all(color: _blue, width: 1.5),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Sell',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _blue,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             // ── Filter chips + sort ─────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
@@ -239,37 +308,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-            // ── Buy / Sell global action row ────────────────────────────────
-            if (filtered.isNotEmpty)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _PillBtn(
-                          label: 'Buy',
-                          filled: true,
-                          onTap: () => _showAddStock(context),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _PillBtn(
-                          label: 'Sell',
-                          filled: false,
-                          color: _red,
-                          onTap: () {
-                            final holdings = filtered.where((s) => !s.watchOnly).toList();
-                            _showSellPickerSheet(context, holdings);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
             // ── Stock list ──────────────────────────────────────────────────
             if (filtered.isEmpty)
@@ -1396,9 +1434,8 @@ class _PillBtn extends StatefulWidget {
   final String label;
   final bool filled;
   final VoidCallback onTap;
-  final Color? color;
 
-  const _PillBtn({required this.label, required this.filled, required this.onTap, this.color});
+  const _PillBtn({required this.label, required this.filled, required this.onTap});
 
   @override
   State<_PillBtn> createState() => _PillBtnState();
@@ -1437,9 +1474,9 @@ class _PillBtnState extends State<_PillBtn> with SingleTickerProviderStateMixin 
         child: Container(
           height: 46,
           decoration: BoxDecoration(
-            color: widget.filled ? (widget.color ?? _blue) : Colors.transparent,
+            color: widget.filled ? _blue : Colors.transparent,
             borderRadius: BorderRadius.circular(23),
-            border: widget.filled ? null : Border.all(color: widget.color ?? _blue, width: 1.5),
+            border: widget.filled ? null : Border.all(color: _blue, width: 1.5),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -1448,7 +1485,7 @@ class _PillBtnState extends State<_PillBtn> with SingleTickerProviderStateMixin 
               fontSize: 15,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.3,
-              color: widget.filled ? Colors.white : (widget.color ?? _blue),
+              color: widget.filled ? Colors.white : _blue,
             ),
           ),
         ),
