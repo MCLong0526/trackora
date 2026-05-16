@@ -736,51 +736,46 @@ class _HeroAmount extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        if (hasForeign)
+        if (hasForeign) ...[
           Text(
-            'Est.',
+            'est.',
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
               color: soft,
-              letterSpacing: 0.2,
+              letterSpacing: -0.12,
               height: 1,
             ),
           ),
-        if (hasForeign) const SizedBox(height: 2),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              symbol,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: soft,
-                height: 1,
-              ),
+          const SizedBox(width: 5),
+        ],
+        Text(
+          symbol,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: soft,
+            height: 1,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            formatMoney('', amount).trim(),
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.w700,
+              color: ink,
+              height: 0.96,
             ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                formatMoney('', amount).trim(),
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.w700,
-                  color: ink,
-                  height: 0.96,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                softWrap: false,
-              ),
-            ),
-          ],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+          ),
         ),
       ],
     );

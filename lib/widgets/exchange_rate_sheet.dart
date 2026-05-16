@@ -95,8 +95,13 @@ class ExchangeRateSheet extends ConsumerStatefulWidget {
   const ExchangeRateSheet({super.key});
 
   static void show(BuildContext context) {
-    showCupertinoModalPopup<void>(
+    showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      enableDrag: true,
+      isDismissible: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (_) => const ExchangeRateSheet(),
     );
   }
@@ -105,7 +110,11 @@ class ExchangeRateSheet extends ConsumerStatefulWidget {
   ConsumerState<ExchangeRateSheet> createState() => _ExchangeRateSheetState();
 }
 
-class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
+class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entryCtrl;
+  late final Animation<double> _entryFade;
+  late final Animation<Offset> _entrySlide;
   final _searchCtrl = TextEditingController();
   String _query = '';
   Map<String, double>? _rates;
@@ -133,6 +142,16 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
   @override
   void initState() {
     super.initState();
+    _entryCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _entryFade = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
+    _entrySlide = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+    _entryCtrl.forward();
     _init();
   }
 
@@ -252,6 +271,7 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
 
   @override
   void dispose() {
+    _entryCtrl.dispose();
     _searchCtrl.dispose();
     _fromCtrl.dispose();
     _toCtrl.dispose();
@@ -313,7 +333,11 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
         ? 'Updated ${DateFormat('d MMM, HH:mm').format(_lastFetched!)}'
         : '';
 
-    return GestureDetector(
+    return FadeTransition(
+      opacity: _entryFade,
+      child: SlideTransition(
+        position: _entrySlide,
+        child: GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Material(
@@ -511,6 +535,7 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
                             behavior: HitTestBehavior.translucent,
                             onTap: () => FocusScope.of(context).unfocus(),
                             child: CustomScrollView(
+                              primary: true,
                               slivers: [
                                 // Starred section
                                 if (starredVisible.isNotEmpty && _query.isEmpty) ...[
@@ -647,6 +672,8 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet> {
               ),
             ],
           ),
+        ),
+      ),
         ),
       ),
     );
