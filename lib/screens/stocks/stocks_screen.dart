@@ -2183,7 +2183,7 @@ class _BuyStockSheet extends ConsumerStatefulWidget {
 }
 
 class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
-  double _units = 5;
+  double _units = 100;
   late final TextEditingController _unitsCtrl;
   double? _overridePrice;
   DateTime _date = DateTime.now();
@@ -2200,7 +2200,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   @override
   void initState() {
     super.initState();
-    _unitsCtrl = TextEditingController(text: '5');
+    _unitsCtrl = TextEditingController(text: '100');
     // Use the quote currency if available (most accurate), then fall back to
     // result.currency from search, then infer from exchange, finally default USD.
     final quoteCurrency = widget.quote?.currency ?? '';
@@ -2327,11 +2327,10 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                       children: [
                         GestureDetector(
                           onTap: () {
-                            if (_units > 0) {
-                              final v = _units - 1;
-                              setState(() { _units = v; _unitsCtrl.text = _fmtUnits(v); });
-                              HapticFeedback.selectionClick();
-                            }
+                            final step = _units >= 1000 ? 100.0 : _units >= 100 ? 10.0 : 1.0;
+                            final v = (_units - step).clamp(0.0, double.infinity);
+                            setState(() { _units = v; _unitsCtrl.text = _fmtUnits(v); });
+                            HapticFeedback.selectionClick();
                           },
                           child: Container(
                             width: 48, height: 48,
@@ -2339,18 +2338,20 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                             child: Icon(CupertinoIcons.minus, size: 20, color: brand.ink),
                           ),
                         ),
-                        const SizedBox(width: 28),
+                        const SizedBox(width: 16),
                         Column(
                           children: [
                             SizedBox(
-                              width: 130,
+                              width: 180,
                               child: TextField(
                                 controller: _unitsCtrl,
                                 textAlign: TextAlign.center,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 style: TextStyle(
-                                  fontSize: 64, fontWeight: FontWeight.w800,
-                                  color: brand.ink, letterSpacing: -2,
+                                  fontSize: _units >= 10000 ? 44 : _units >= 1000 ? 52 : 64,
+                                  fontWeight: FontWeight.w800,
+                                  color: brand.ink,
+                                  letterSpacing: -2,
                                 ),
                                 decoration: InputDecoration(
                                   border: InputBorder.none,
@@ -2363,7 +2364,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                                   ),
                                 ),
                                 onChanged: (v) {
-                                  final d = double.tryParse(v);
+                                  final d = double.tryParse(v.replaceAll(',', ''));
                                   if (d != null && d >= 0) setState(() => _units = d);
                                 },
                               ),
@@ -2371,10 +2372,11 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                             Text('shares', style: TextStyle(fontSize: 13, color: brand.inkSoft)),
                           ],
                         ),
-                        const SizedBox(width: 28),
+                        const SizedBox(width: 16),
                         GestureDetector(
                           onTap: () {
-                            final v = _units + 1;
+                            final step = _units >= 1000 ? 100 : _units >= 100 ? 10 : 1;
+                            final v = _units + step;
                             setState(() { _units = v; _unitsCtrl.text = _fmtUnits(v); });
                             HapticFeedback.selectionClick();
                           },
@@ -2400,7 +2402,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
                     // Quick select chips
                     Row(
-                      children: [1, 5, 10, 25].map((qty) {
+                      children: [100, 500, 1000, 5000].map((qty) {
                         final sel = qty.toDouble() == _units;
                         return Expanded(
                           child: GestureDetector(
@@ -2417,9 +2419,9 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                               ),
                               alignment: Alignment.center,
                               child: Text(
-                                '$qty',
+                                qty >= 1000 ? '${qty ~/ 1000}k' : '$qty',
                                 style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w600,
+                                  fontSize: 15, fontWeight: FontWeight.w600,
                                   color: sel ? brand.background : brand.ink,
                                 ),
                               ),
@@ -2448,9 +2450,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                           Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
                           _DetailRow(
                             label: 'Account',
-                            value: displayAccount != null
-                                ? '${displayAccount.name} · ${displayAccount.currencyCode ?? 'USD'}'
-                                : 'Default',
+                            value: displayAccount?.name ?? 'Default',
                             subtitle: _selectedAccount == null ? 'Default' : null,
                             onTap: accounts.isNotEmpty
                                 ? () => _pickAccount(context, accounts, displayAccount)
@@ -2595,7 +2595,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
             setState(() => _selectedAccount = a);
           },
           child: Text(
-            '${a.name} · ${a.currencyCode ?? 'USD'}',
+            a.name,
             style: TextStyle(
               fontWeight: a.id == current?.id ? FontWeight.w700 : FontWeight.w400,
             ),
