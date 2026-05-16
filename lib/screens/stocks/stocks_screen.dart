@@ -1772,30 +1772,45 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
   bool _searching = false;
   bool _loadingQuote = false;
 
-  // (displaySymbol, yahooSymbol, name, exchange, currency)
+  // (displaySymbol, searchQuery, name, exchange, currency)
   static const _trending = [
-    ('MAYBANK', 'MAYBANK.KL', 'Malayan Banking', 'KLS', 'MYR'),
-    ('PBBANK',  'PBBANK.KL',  'Public Bank',     'KLS', 'MYR'),
-    ('TENAGA',  'TENAGA.KL',  'Tenaga Nasional',  'KLS', 'MYR'),
-    ('CIMB',    'CIMB.KL',    'CIMB Group',      'KLS', 'MYR'),
+    ('MAYBANK', 'MAYBANK', 'Malayan Banking', 'KLS', 'MYR'),
+    ('PBBANK',  'PBBANK',  'Public Bank',     'KLS', 'MYR'),
+    ('TENAGA',  'TENAGA',  'Tenaga Nasional', 'KLS', 'MYR'),
+    ('CIMB',    'CIMB',    'CIMB Group',      'KLS', 'MYR'),
   ];
 
-  void _selectTrending((String, String, String, String, String) t) {
-    final result = StockSearchResult(
-      symbol: t.$2,
+  Future<void> _selectTrending((String, String, String, String, String) t) async {
+    // Show loading state immediately using a placeholder result
+    final placeholder = StockSearchResult(
+      symbol: t.$1,
       name: t.$3,
       exchange: t.$4,
       currency: t.$5,
     );
     setState(() {
-      _topMatch = result;
+      _topMatch = placeholder;
       _topQuote = null;
       _loadingQuote = true;
       _results = [];
     });
-    ref.read(stockServiceProvider).getQuote(result.symbol, range: '1M').then((q) {
-      if (mounted) setState(() { _topQuote = q; _loadingQuote = false; });
-    });
+
+    // Use the search API to resolve the correct Yahoo Finance symbol (e.g. 1295.KL)
+    // — same path as a manual search, guarantees correct ticker and chart data.
+    final svc = ref.read(stockServiceProvider);
+    final searchResults = await svc.search(t.$2);
+    if (!mounted) return;
+
+    // Pick the best KLSE match from the results
+    final match = searchResults.firstWhere(
+      (r) => r.exchange == 'KLS' || r.exchange == 'KL' || r.currency == 'MYR',
+      orElse: () => searchResults.isNotEmpty ? searchResults.first : placeholder,
+    );
+
+    setState(() { _topMatch = match; });
+
+    final quote = await svc.getQuote(match.symbol, range: '1M');
+    if (mounted) setState(() { _topQuote = quote; _loadingQuote = false; });
   }
 
   @override
