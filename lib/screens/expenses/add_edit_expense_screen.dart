@@ -1662,6 +1662,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             if (entryType == EntryType.expense) ...[
               divider,
               _splitBillToggleRow(brand),
+              if (_splitBillEnabled) ...[
+                divider,
+                _splitWithRow(brand),
+              ],
             ],
             divider,
             // Note row
@@ -1772,6 +1776,63 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       ),
     );
   }
+
+  // ─── Split With Row (inside details card) ────────────────────────────────────
+
+  Widget _splitWithRow(BrandColors brand) {
+    final debtors = _splitMembers.where((m) => !m.isPayer).toList();
+    return InkWell(
+      onTap: () => _openSplitBillSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(CupertinoIcons.person_2_fill, size: 18, color: brand.inkSoft),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Split with',
+                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+              ),
+            ),
+            // Mini avatars (up to 3 debtors)
+            ...debtors.take(3).map((m) {
+              final color = _kSplitAvatarColors[m.colorIndex % _kSplitAvatarColors.length];
+              return Container(
+                width: 24,
+                height: 24,
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: Center(
+                  child: Text(
+                    m.initials.length >= 1 ? m.initials[0] : '?',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              );
+            }),
+            if (debtors.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text('+${debtors.length - 3}', style: TextStyle(fontSize: 12, color: brand.inkSoft)),
+              ),
+            const SizedBox(width: 4),
+            const Text(
+              'Edit',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6B40A8)),
+            ),
+            const SizedBox(width: 2),
+            const Icon(CupertinoIcons.chevron_right, size: 13, color: Color(0xFF6B40A8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _kSplitAvatarColors = [
+    Color(0xFF6B40A8), Color(0xFF2A82B4), Color(0xFFC0833A),
+    Color(0xFF2A8C52), Color(0xFFB23A4A), Color(0xFFE8820E),
+  ];
 
   // ─── Splitting With Section ───────────────────────────────────────────────────
 
