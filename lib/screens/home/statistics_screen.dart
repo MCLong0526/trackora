@@ -255,6 +255,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   onNext: () => _step(1),
                   excludeFixed: _excludeFixed,
                   onExcludeChanged: (v) => setState(() => _excludeFixed = v),
+                  hasForeignExpense: rangedExpenses.any((e) => e.baseCurrencyAmount != null),
                 ),
                 const SizedBox(height: 14),
 
@@ -723,6 +724,7 @@ class _SpendingHeader extends StatelessWidget {
   final VoidCallback onNext;
   final bool? excludeFixed;
   final ValueChanged<bool>? onExcludeChanged;
+  final bool hasForeignExpense;
 
   const _SpendingHeader({
     required this.period,
@@ -737,6 +739,7 @@ class _SpendingHeader extends StatelessWidget {
     required this.onNext,
     this.excludeFixed,
     this.onExcludeChanged,
+    this.hasForeignExpense = false,
   });
 
   @override
@@ -782,14 +785,32 @@ class _SpendingHeader extends StatelessWidget {
                 child: FittedBox(
                   alignment: Alignment.centerLeft,
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    formatMoney(symbol, currentTotal),
-                    style: TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -1.5,
-                      color: brand.ink,
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      if (hasForeignExpense) ...[
+                        Text(
+                          'est.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: brand.inkSoft,
+                            letterSpacing: -0.12,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        formatMoney(symbol, currentTotal),
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1.5,
+                          color: brand.ink,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

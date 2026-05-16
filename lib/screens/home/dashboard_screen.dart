@@ -41,9 +41,12 @@ class DashboardScreen extends ConsumerWidget {
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-    final monthSpent = monthExpenses
-        .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.convertedAmount);
+    final monthExpenseOnly =
+        monthExpenses.where((e) => e.type == EntryType.expense).toList();
+    final monthSpent =
+        monthExpenseOnly.fold<double>(0, (s, e) => s + e.convertedAmount);
+    final hasForeignExpense =
+        monthExpenseOnly.any((e) => e.baseCurrencyAmount != null);
 
     final monthIncome = monthExpenses
         .where((e) => e.type.isInflow)
@@ -143,6 +146,7 @@ class DashboardScreen extends ConsumerWidget {
                 budget: budget,
                 budgetSpent: budgetableSpent,
                 selectedMonth: selectedMonth,
+                hasForeignExpense: hasForeignExpense,
               ),
             ),
           ),
@@ -426,6 +430,7 @@ class _HomeOverviewCard extends ConsumerWidget {
   final double budget;
   final double budgetSpent;
   final DateTime selectedMonth;
+  final bool hasForeignExpense;
 
   const _HomeOverviewCard({
     required this.balance,
@@ -435,6 +440,7 @@ class _HomeOverviewCard extends ConsumerWidget {
     required this.budget,
     required this.budgetSpent,
     required this.selectedMonth,
+    required this.hasForeignExpense,
   });
 
   @override
@@ -493,6 +499,7 @@ class _HomeOverviewCard extends ConsumerWidget {
           statPillBg: statPillBg,
           shadows: firstCardShadow,
           isDark: isDark,
+          hasForeignExpense: hasForeignExpense,
         ),
         const SizedBox(height: 12),
         _BudgetOverviewCard(
@@ -530,6 +537,7 @@ class _SpendingOverviewCard extends StatelessWidget {
   final Color statPillBg;
   final List<BoxShadow> shadows;
   final bool isDark;
+  final bool hasForeignExpense;
 
   const _SpendingOverviewCard({
     required this.visible,
@@ -545,6 +553,7 @@ class _SpendingOverviewCard extends StatelessWidget {
     required this.statPillBg,
     required this.shadows,
     required this.isDark,
+    required this.hasForeignExpense,
   });
 
   @override
@@ -633,6 +642,7 @@ class _SpendingOverviewCard extends StatelessWidget {
               amount: monthSpent,
               ink: ink,
               soft: soft,
+              hasForeign: hasForeignExpense,
             ),
           ),
           Positioned(
@@ -701,6 +711,7 @@ class _HeroAmount extends StatelessWidget {
   final double amount;
   final Color ink;
   final Color soft;
+  final bool hasForeign;
 
   const _HeroAmount({
     required this.visible,
@@ -708,6 +719,7 @@ class _HeroAmount extends StatelessWidget {
     required this.amount,
     required this.ink,
     required this.soft,
+    this.hasForeign = false,
   });
 
   @override
@@ -728,6 +740,19 @@ class _HeroAmount extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
+        if (hasForeign) ...[
+          Text(
+            'est.',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: soft,
+              letterSpacing: -0.12,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 5),
+        ],
         Text(
           symbol,
           style: TextStyle(

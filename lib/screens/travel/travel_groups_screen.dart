@@ -366,24 +366,27 @@ class _TripCardActive extends ConsumerWidget {
                       const SizedBox(height: 4),
                       expensesAsync.isLoading
                           ? const CupertinoActivityIndicator()
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
                               children: [
-                                if (hasForeign)
+                                if (hasForeign) ...[
                                   Text(
-                                    'Est.',
+                                    'est.',
                                     style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      letterSpacing: 0.2,
-                                      color: isDark
-                                          ? const Color(0xFF8E8E93)
-                                          : const Color(0xFF8E8E93),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: -0.12,
+                                      color: const Color(0xFF8E8E93),
                                     ),
                                   ),
-                                Text(
-                                  '${group.currency} ${amtFmt.format(totalSpent)}',
-                                  style: _display(28, tracking: -0.6, lh: 1.05),
+                                  const SizedBox(width: 4),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    '${group.currency} ${amtFmt.format(totalSpent)}',
+                                    style: _display(28, tracking: -0.6, lh: 1.05),
+                                  ),
                                 ),
                               ],
                             ),
