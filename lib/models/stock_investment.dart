@@ -29,9 +29,29 @@ class StockInvestment {
     this.transactions = const [],
   });
 
+  // Maps Yahoo Finance exchange codes to user-friendly display names.
+  static const _yahooExchangeMap = {
+    'KLS': 'KLSE', 'KL': 'KLSE',               // Bursa Malaysia
+    'NMS': 'NASDAQ', 'NGM': 'NASDAQ', 'NCM': 'NASDAQ',
+    'NYQ': 'NYSE', 'NYE': 'NYSE',
+    'ASX': 'ASX',                               // Australia
+    'SGX': 'SGX', 'SES': 'SGX',                // Singapore
+    'LSE': 'LSE',                               // London
+    'TSX': 'TSX',                               // Toronto
+    'HKG': 'HKEX', 'HKS': 'HKEX',             // Hong Kong
+    'TYO': 'TSE',                               // Tokyo
+    'SHH': 'SSE', 'SHZ': 'SZSE',              // China
+  };
+
   String get exchangeDisplay {
-    if (exchange != null && exchange!.isNotEmpty) return exchange!;
+    if (exchange != null && exchange!.isNotEmpty) {
+      return _yahooExchangeMap[exchange!] ?? exchange!;
+    }
     if (currency == 'MYR') return 'KLSE';
+    if (currency == 'SGD') return 'SGX';
+    if (currency == 'HKD') return 'HKEX';
+    if (currency == 'AUD') return 'ASX';
+    if (currency == 'GBP') return 'LSE';
     return 'NASDAQ';
   }
 

@@ -188,15 +188,34 @@ class StockService {
     return [for (var i = 0; i < pts.length; i += step) pts[i]];
   }
 
+  /// Allowed Yahoo Finance quote types.
+  static const _allowedTypes = {'EQUITY', 'ETF'};
+
+  /// Infer currency from exchange code when Yahoo doesn't provide it.
+  static String inferCurrency(String exchange, String fallback) {
+    const exchangeCurrency = {
+      'KLS': 'MYR', 'KL': 'MYR',
+      'SGX': 'SGD', 'SES': 'SGD',
+      'ASX': 'AUD', 'LSE': 'GBP',
+      'HKG': 'HKD', 'HKS': 'HKD',
+      'TYO': 'JPY',
+    };
+    return exchangeCurrency[exchange] ?? fallback;
+  }
+
   /// Search for stocks by symbol or company name.
+  /// Supports Bursa Malaysia (use bare name/symbol — Yahoo handles .KL suffix).
   Future<List<StockSearchResult>> search(String query) async {
-    if (query.trim().isEmpty) return [];
+    final q = query.trim();
+    if (q.isEmpty) return [];
     try {
       final uri = Uri.https(_host, '/v1/finance/search', {
-        'q': query.trim(),
-        'quotesCount': '10',
+        'q': q,
+        'quotesCount': '15',
         'newsCount': '0',
-        'enableFuzzyQuery': 'false',
+        'enableFuzzyQuery': 'true',    // fuzzy so partial company names work
+        'enableNavLinks': 'false',
+        'enableEnhancedTrivialQuery': 'true',
       });
       final response = await http
           .get(uri, headers: _headers)
@@ -208,15 +227,22 @@ class StockService {
 
       return quotes
           .whereType<Map<String, dynamic>>()
-          .where((q) => q['quoteType'] == 'EQUITY')
-          .map((q) => StockSearchResult(
-                symbol: q['symbol'] as String? ?? '',
-                name: q['longname'] as String? ??
-                    q['shortname'] as String? ??
-                    '',
-                exchange: q['exchange'] as String? ?? '',
-                currency: q['currency'] as String? ?? 'USD',
-              ))
+          .where((q) => _allowedTypes.contains(q['quoteType'] as String? ?? ''))
+          .map((q) {
+            final exchange = q['exchange'] as String? ?? '';
+            final rawCurrency = q['currency'] as String? ?? '';
+            final currency = rawCurrency.isNotEmpty
+                ? rawCurrency
+                : inferCurrency(exchange, 'USD');
+            return StockSearchResult(
+              symbol: q['symbol'] as String? ?? '',
+              name: q['longname'] as String? ??
+                  q['shortname'] as String? ??
+                  '',
+              exchange: exchange,
+              currency: currency,
+            );
+          })
           .where((r) => r.symbol.isNotEmpty)
           .toList();
     } catch (_) {

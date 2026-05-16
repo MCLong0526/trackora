@@ -55,6 +55,20 @@ final _stockQuoteProvider =
   },
 );
 
+/// Convert a raw price (in [stockCurrency]) to the user's local currency.
+/// [usdToLocal] = USD → localIso exchange rate.
+/// For MYR stocks viewed by a MYR user, returns the price unchanged.
+/// For USD stocks viewed by a MYR user, multiplies by the rate.
+double _toLocalPrice(double rawPrice, String? stockCurrency, double usdToLocal) {
+  if (stockCurrency == null || stockCurrency.isEmpty) return rawPrice;
+  // If the stock IS priced in USD, convert to local using the FX rate.
+  if (stockCurrency == 'USD') return rawPrice * usdToLocal;
+  // MYR, SGD, EUR etc. — return as-is (price already in that currency;
+  // for SGD/EUR shown to a MYR user this is approximate but avoids a second
+  // API call. A future improvement could add cross-rate support).
+  return rawPrice;
+}
+
 // ── Stocks Screen ──────────────────────────────────────────────────────────────
 
 class StocksScreen extends ConsumerStatefulWidget {
@@ -620,17 +634,18 @@ class _PortfolioHeader extends ConsumerWidget {
 
     for (final s in stocks) {
       if (!s.watchOnly) {
-        final fx = s.currency == 'MYR' ? 1.0 : usdToLocal;
-        final cost = s.currency == 'MYR' ? s.totalCost : s.totalCost * usdToLocal;
-        totalCost += cost;
+        // Convert buy price to local currency for total cost
+        final costLocal = _toLocalPrice(s.buyPrice, s.currency, usdToLocal) * s.quantity;
+        totalCost += costLocal;
 
         final q = ref.watch(_stockQuoteProvider(s.symbol)).valueOrNull;
         if (q != null) {
           anyLoaded = true;
-          liveTotal += q.price * s.quantity * fx;
-          todayGain += q.change * s.quantity * fx;
+          // Convert live price + today's change to local currency
+          liveTotal += _toLocalPrice(q.price, s.currency, usdToLocal) * s.quantity;
+          todayGain += _toLocalPrice(q.change, s.currency, usdToLocal) * s.quantity;
         } else {
-          liveTotal += cost;
+          liveTotal += costLocal;
         }
       }
     }
@@ -788,9 +803,9 @@ class _GroupedStockList extends ConsumerWidget {
                 final stock = groupStocks[i - idx];
                 final quoteAsync = ref.watch(_stockQuoteProvider(stock.symbol));
                 final quote = quoteAsync.valueOrNull;
-                final currentUsd = quote?.price;
-                final localPrice = currentUsd != null
-                    ? (stock.currency == 'MYR' ? currentUsd : currentUsd * usdToLocal)
+                final rawPrice = quote?.price;
+                final localPrice = rawPrice != null
+                    ? _toLocalPrice(rawPrice, stock.currency, usdToLocal)
                     : null;
                 return _StockListTile(
                   stock: stock,
@@ -894,9 +909,9 @@ class _StockTileWithQuote extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final quote = ref.watch(_stockQuoteProvider(stock.symbol)).valueOrNull;
-    final currentUsd = quote?.price;
-    final localPrice = currentUsd != null
-        ? (stock.currency == 'MYR' ? currentUsd : currentUsd * usdToLocal)
+    final rawPrice = quote?.price; // in the stock's own currency (MYR, USD, etc.)
+    final localPrice = rawPrice != null
+        ? _toLocalPrice(rawPrice, stock.currency, usdToLocal)
         : null;
 
     return _StockListTile(
@@ -2027,7 +2042,15 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   void initState() {
     super.initState();
     _unitsCtrl = TextEditingController(text: '5');
-    _selectedCurrency = widget.result.currency.isNotEmpty ? widget.result.currency : 'USD';
+    // Use the quote currency if available (most accurate), then fall back to
+    // result.currency from search, then infer from exchange, finally default USD.
+    final quoteCurrency = widget.quote?.currency ?? '';
+    final resultCurrency = widget.result.currency;
+    _selectedCurrency = quoteCurrency.isNotEmpty
+        ? quoteCurrency
+        : resultCurrency.isNotEmpty
+            ? resultCurrency
+            : StockService.inferCurrency(widget.result.exchange, 'USD');
   }
 
   @override
@@ -2069,8 +2092,19 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
     final accounts = ref.watch(accountsProvider).valueOrNull ?? <Account>[];
     final displayAccount = _selectedAccount ?? (accounts.isNotEmpty ? accounts.first : null);
 
-    final isUsd = _selectedCurrency == 'USD';
-    final unitLocalValue = _unitPrice * (isUsd ? usdToLocal : 1.0) * _units;
+    // Conversion rate: stock currency → user's local currency
+    final stockToLocal = _selectedCurrency == localIso
+        ? 1.0                           // stock already in local currency
+        : _selectedCurrency == 'USD'
+            ? usdToLocal               // USD → local via fetched FX
+            : _selectedCurrency == 'MYR' && localIso == 'USD'
+                ? 1.0 / usdToLocal     // MYR → USD (inverse)
+                : 1.0;                 // other cross-rates: show as-is
+    final unitLocalValue = _unitPrice * stockToLocal * _units;
+    // Label for the ≈ estimate — prefer local symbol when conversion is known
+    final approxSymbol = (stockToLocal != 1.0 || _selectedCurrency == localIso)
+        ? symbol                       // show in local currency
+        : (_selectedCurrency == 'MYR' ? 'RM' : _selectedCurrency); // stock's own currency
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -2196,9 +2230,9 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
                     const SizedBox(height: 8),
 
-                    // ≈ local value
+                    // ≈ estimated total
                     Text(
-                      '≈ $symbol ${NumberFormat('#,##0.00').format(unitLocalValue)}',
+                      '≈ $approxSymbol ${NumberFormat('#,##0.00').format(unitLocalValue)}',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, color: brand.inkSoft),
                     ),
