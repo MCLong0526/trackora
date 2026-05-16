@@ -121,7 +121,6 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
             ),
 
             // ── Hero section ───────────────────────────────────────────────
-            if (stocks.isNotEmpty || metals.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
@@ -194,8 +193,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
               ),
             ),
 
-            if (stocks.isNotEmpty || metals.isNotEmpty)
-              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
 
             // ── Allocation section ─────────────────────────────────────────
             if (total > 0) ...[
@@ -279,59 +277,52 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
             ],
 
             // ── Asset class cards ──────────────────────────────────────────
-            if (stocks.isEmpty && metals.isEmpty)
-              SliverFillRemaining(
-                child: _EmptyInvestments(
-                  onAddStocks: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(builder: (_) => const StocksScreen()),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // Stocks card — always visible
+                  _AssetCard(
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(builder: (_) => const StocksScreen()),
+                    ),
+                    leading: _StockAvatarRow(stocks: stocks.take(3).toList()),
+                    title: 'Stocks',
+                    subtitle: stocks.isEmpty
+                        ? 'No holdings yet'
+                        : '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
+                    valueLabel: 'VALUE',
+                    value: stocks.isEmpty
+                        ? '–'
+                        : '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
+                    brand: brand,
+                    isDark: isDark,
                   ),
-                  onAddMetals: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+
+                  const SizedBox(height: 12),
+
+                  // Precious metals card — always visible
+                  _AssetCard(
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
+                    ),
+                    leading: _MetalAvatarRow(),
+                    title: 'Precious metals',
+                    subtitle: metals.isEmpty
+                        ? 'No holdings yet'
+                        : _metalSubtitle(metalHoldings),
+                    valueLabel: 'VALUE',
+                    value: metals.isEmpty
+                        ? '–'
+                        : '$symbol ${NumberFormat('#,##0').format(metalsCost)}',
+                    brand: brand,
+                    isDark: isDark,
                   ),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    if (stocks.isNotEmpty)
-                      _AssetCard(
-                        onTap: () => Navigator.push(
-                          context,
-                          CupertinoPageRoute(builder: (_) => const StocksScreen()),
-                        ),
-                        leading: _StockAvatarRow(stocks: stocks.take(3).toList()),
-                        title: 'Stocks',
-                        subtitle: '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
-                        valueLabel: 'VALUE',
-                        value: '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
-                        brand: brand,
-                        isDark: isDark,
-                      ),
-
-                    if (stocks.isNotEmpty && metals.isNotEmpty)
-                      const SizedBox(height: 12),
-
-                    if (metals.isNotEmpty)
-                      _AssetCard(
-                        onTap: () => Navigator.push(
-                          context,
-                          CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
-                        ),
-                        leading: _MetalAvatarRow(),
-                        title: 'Precious metals',
-                        subtitle: _metalSubtitle(metalHoldings),
-                        valueLabel: 'VALUE',
-                        value: '$symbol ${NumberFormat('#,##0').format(metalsCost)}',
-                        brand: brand,
-                        isDark: isDark,
-                      ),
-                  ]),
-                ),
+                ]),
               ),
+            ),
           ],
         ),
       ),
@@ -630,67 +621,3 @@ class _MetalAvatarRow extends StatelessWidget {
   }
 }
 
-// ── Empty state ────────────────────────────────────────────────────────────────
-
-class _EmptyInvestments extends StatelessWidget {
-  final VoidCallback onAddStocks;
-  final VoidCallback onAddMetals;
-
-  const _EmptyInvestments({required this.onAddStocks, required this.onAddMetals});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(
-        children: [
-          const Text('📊', style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 16),
-          Text('Start tracking your investments',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: brand.ink),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text('Add stocks or precious metals to see your full portfolio here.',
-            style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.4),
-            textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: onAddStocks,
-                child: Container(
-                  height: 46,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: _blue,
-                    borderRadius: BorderRadius.circular(23),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text('Add Stocks',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: onAddMetals,
-                child: Container(
-                  height: 46,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: _goldColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(23),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text('Add Metals',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _goldColor)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
