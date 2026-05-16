@@ -194,6 +194,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _hasValidAmount = _checkAmountValid();
     _amountController.addListener(_onAmountChanged);
     _loadInitialCurrency();
+    if (_isEdit) _loadSplitBill();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceCtrl.forward();
@@ -632,6 +633,35 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (!mounted) return;
     final template = widget.expense ?? widget.copyFrom;
     setState(() => _currencyCode = template?.originalCurrency ?? mainCode);
+  }
+
+  Future<void> _loadSplitBill() async {
+    final expenseId = widget.expense?.id;
+    if (expenseId == null) return;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+
+    SplitBill? bill;
+    final isOnline = ref.read(isOnlineProvider);
+    if (isOnline) {
+      bill = await SplitBillRepository().getSplitBillByExpenseId(user.uid, expenseId);
+    }
+    // Fall back to local if not found online or offline
+    bill ??= await LocalSplitBillRepository().getSplitBillByExpenseId(user.uid, expenseId);
+
+    if (!mounted || bill == null) return;
+    setState(() {
+      _splitBillEnabled = true;
+      _splitMembers = bill!.members;
+      _splitMode = bill.splitMode;
+      _splitBillTotal = bill.totalAmount;
+      // Set amount to payer's share
+      final payer = bill.members.firstWhere(
+        (m) => m.isPayer,
+        orElse: () => bill!.members.first,
+      );
+      _amountController.text = payer.amount.toStringAsFixed(2);
+    });
   }
 
   Future<void> _delete() async {
@@ -1729,11 +1759,27 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Split Bill Toggle Row ────────────────────────────────────────────────────
 
+  String _splitSubtitle(String symbol) {
+    final n = _splitMembers.length;
+    if (n == 0) return '';
+    switch (_splitMode) {
+      case SplitMode.equally:
+        final each = _splitBillTotal > 0
+            ? _splitBillTotal / n
+            : _splitMembers.fold<double>(0, (s, m) => s + m.amount) / n;
+        return '$n people · $symbol ${each.toStringAsFixed(2)} each';
+      case SplitMode.amount:
+        final total = _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+        return '$n people · $symbol ${total.toStringAsFixed(2)} total';
+      case SplitMode.percent:
+        return '$n people · by percentage';
+      case SplitMode.shares:
+        return '$n people · by shares';
+    }
+  }
+
   Widget _splitBillToggleRow(BrandColors brand) {
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
-    final perPerson = _splitMembers.isNotEmpty
-        ? _splitMembers.first.amount
-        : 0.0;
 
     return InkWell(
       onTap: () => _openSplitBillSheet(context),
@@ -1761,7 +1807,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ),
                   if (_splitBillEnabled && _splitMembers.isNotEmpty)
                     Text(
-                      '${_splitMembers.length} people · $symbol ${perPerson.toStringAsFixed(2)} each',
+                      _splitSubtitle(symbol),
                       style: TextStyle(fontSize: 12, color: brand.inkSoft),
                     )
                   else
