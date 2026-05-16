@@ -23,6 +23,10 @@ class TravelExpense {
   /// Null → 1.0 (same currency or unknown).
   final double? exchangeRate;
 
+  /// Amount expressed in the group's base currency.
+  /// For same-currency expenses this equals [amount].
+  double get amountInGroupCurrency => amount * (exchangeRate ?? 1.0);
+
   const TravelExpense({
     required this.id,
     required this.groupId,

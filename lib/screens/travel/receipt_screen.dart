@@ -405,30 +405,51 @@ class _ReceiptCard extends StatelessWidget {
               ),
             ),
             ...paidExpenses.map(
-              (e) => Padding(
-                padding: const EdgeInsets.fromLTRB(24, 3, 24, 3),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        e.description.isNotEmpty ? e.description : e.category,
-                        style: const TextStyle(fontSize: 12, color: _inkColor),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              (e) {
+                final isForeign = e.currencyCode != null &&
+                    e.currencyCode != group.currency;
+                final expenseCurrency = e.currencyCode ?? group.currency;
+                final convertedAmt = e.amountInGroupCurrency;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 3, 24, 3),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          e.description.isNotEmpty ? e.description : e.category,
+                          style: const TextStyle(fontSize: 12, color: _inkColor),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${group.currency} ${fmt.format(e.amount)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: _inkColor,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '$expenseCurrency ${fmt.format(e.amount)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: _inkColor,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                          if (isForeign)
+                            Text(
+                              '~ Est. ${group.currency} ${fmt.format(convertedAmt)}',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: _ink60,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                    ],
+                  ),
+                );
+              },
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 5, 24, 9),

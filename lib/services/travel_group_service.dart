@@ -246,12 +246,12 @@ class TravelGroupService {
     List<TravelGroupMember> members,
     List<TravelExpense> expenses,
   ) {
-    final totalSpent = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+    final totalSpent = expenses.fold<double>(0, (sum, e) => sum + e.amountInGroupCurrency);
 
     // Build member lookup
     final memberMap = {for (final m in members) m.id: m};
 
-    // Calculate net balance for each member
+    // Calculate net balance for each member (all amounts in group currency)
     final paidMap = <String, double>{};
     final shareMap = <String, double>{};
 
@@ -261,15 +261,17 @@ class TravelGroupService {
     }
 
     for (final expense in expenses) {
+      final rate = expense.exchangeRate ?? 1.0;
+      final convertedTotal = expense.amountInGroupCurrency;
       paidMap[expense.paidByMemberId] =
-          (paidMap[expense.paidByMemberId] ?? 0) + expense.amount;
+          (paidMap[expense.paidByMemberId] ?? 0) + convertedTotal;
 
       if (expense.splitAmounts != null && expense.splitAmounts!.isNotEmpty) {
         for (final entry in expense.splitAmounts!.entries) {
-          shareMap[entry.key] = (shareMap[entry.key] ?? 0) + entry.value;
+          shareMap[entry.key] = (shareMap[entry.key] ?? 0) + entry.value * rate;
         }
       } else if (expense.splitAmong.isNotEmpty) {
-        final share = expense.amount / expense.splitAmong.length;
+        final share = convertedTotal / expense.splitAmong.length;
         for (final memberId in expense.splitAmong) {
           shareMap[memberId] = (shareMap[memberId] ?? 0) + share;
         }

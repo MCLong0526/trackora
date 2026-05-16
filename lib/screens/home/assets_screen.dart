@@ -16,6 +16,7 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../travel/travel_groups_screen.dart';
@@ -297,6 +298,8 @@ class _Header extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        const FxRateButton(),
         const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],

@@ -763,7 +763,7 @@ class _AddTravelExpenseScreenState
                             final avatarBg = _memberBgs[idx % _memberBgs.length];
                             final share = checked ? _shareFor(m.id) : 0.0;
                             final shareLabel = checked && _parsedAmount > 0
-                                ? '${widget.group.currency} ${share.toStringAsFixed(2)}'
+                                ? '$_currencyCode ${share.toStringAsFixed(2)}'
                                 : null;
 
                             return Column(

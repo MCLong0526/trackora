@@ -17,6 +17,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/expense_card.dart';
 import '../../widgets/month_filter_bar.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
@@ -119,7 +120,13 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const ProfileAvatarButton(),
+                  Row(
+                    children: [
+                      const FxRateButton(),
+                      const SizedBox(width: 10),
+                      const ProfileAvatarButton(),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1448,4 +1455,5 @@ class _AllBillsSheet extends ConsumerWidget {
     );
   }
 }
+
 

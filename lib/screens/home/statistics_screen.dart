@@ -18,6 +18,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 
@@ -528,13 +529,7 @@ class _TopActionBar extends StatelessWidget {
           onTap: onManage,
         ),
         const SizedBox(width: 8),
-        Opacity(
-          opacity: onShare == null ? 0.5 : 1,
-          child: _ActionBtn(
-            icon: CupertinoIcons.share,
-            onTap: onShare ?? () {},
-          ),
-        ),
+        const FxRateButton(),
         const SizedBox(width: 8),
         const ProfileAvatarButton(),
       ],

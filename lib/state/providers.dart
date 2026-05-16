@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,7 @@ import '../services/auth_service.dart';
 import '../services/borrow_lending_service.dart';
 import '../services/currency_converter.dart';
 import '../services/exchange_rate_service.dart';
+import '../services/fx_preferences_service.dart';
 import '../services/expense_service.dart';
 import '../services/i18n.dart';
 import '../services/installment_service.dart';
@@ -346,6 +348,13 @@ final currencyCodeProvider = FutureProvider<String>(
 );
 
 final exchangeRateServiceProvider = Provider((_) => ExchangeRateService());
+
+/// FX preferences (starred / hidden currencies) — synced to Firestore.
+final fxPreferencesProvider = StreamProvider<FxPreferences>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const FxPreferences());
+  return FxPreferencesService(FirebaseFirestore.instance, user.uid).stream();
+});
 
 /// Live FX rates keyed by currency code (relative to user's main currency).
 final ratesProvider = FutureProvider.autoDispose<Map<String, double>>((ref) async {
