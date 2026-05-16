@@ -15,6 +15,7 @@ import '../../models/expense.dart';
 import '../../models/split_bill.dart';
 import '../../repositories/firebase_expense_repository.dart';
 import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_split_bill_repository.dart';
 import '../../repositories/split_bill_repository.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
@@ -100,6 +101,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   bool _splitBillEnabled = false;
   List<SplitMember> _splitMembers = [];
   SplitMode _splitMode = SplitMode.equally;
+  double _splitBillTotal = 0.0; // total of the whole bill (not just payer's share)
 
   bool get _isEdit => widget.expense != null;
 
@@ -364,10 +366,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
 
     if (result != null) {
+      // Find payer's share — that's what the current user owes/spent
+      final payer = result.members.firstWhere(
+        (m) => m.isPayer,
+        orElse: () => result.members.first,
+      );
       setState(() {
         _splitBillEnabled = true;
         _splitMembers = result.members;
         _splitMode = result.splitMode;
+        _splitBillTotal = result.totalAmount;
+        _amountController.text = payer.amount.toStringAsFixed(2);
       });
     } else if (_splitMembers.isEmpty) {
       // User cancelled without configuring, turn off toggle
@@ -545,19 +554,23 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           }
         }
 
-        // Save split bill if enabled
-        if (_splitBillEnabled && _splitMembers.isNotEmpty && isOnline) {
+        // Save split bill if enabled (online → Firestore, offline → Hive)
+        if (_splitBillEnabled && _splitMembers.isNotEmpty) {
           final now2 = DateTime.now();
           final billNumber = '#${now2.year}-${(now2.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';
-          final mainCode = await ref.read(currencyCodeProvider.future);
+          final mainCode2 = await ref.read(currencyCodeProvider.future);
           final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+          // Use the full bill total, not payer-only amount
+          final billTotal = _splitBillTotal > 0
+              ? _splitBillTotal
+              : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
           final splitBill = SplitBill(
             id: '',
             expenseId: e.id,
             billNumber: billNumber,
             title: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : category,
-            totalAmount: amount,
-            currency: mainCode,
+            totalAmount: billTotal,
+            currency: mainCode2,
             currencySymbol: sym,
             splitMode: _splitMode,
             members: _splitMembers,
@@ -565,7 +578,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             createdAt: now2,
             updatedAt: now2,
           );
-          await SplitBillRepository().saveSplitBill(user.uid, splitBill);
+          if (isOnline) {
+            await SplitBillRepository().saveSplitBill(user.uid, splitBill);
+          } else {
+            await LocalSplitBillRepository().saveSplitBill(user.uid, splitBill);
+          }
         }
       }
 
@@ -1298,11 +1315,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             isAccountTransfer: type == EntryType.transfer && _isAccountTransfer,
             entryType: type,
           ),
-          // Splitting with section (expense only, when split enabled)
-          if (type == EntryType.expense && _splitBillEnabled && _splitMembers.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _splittingWithSection(brand),
-          ],
         ],
       ),
     );
@@ -1849,80 +1861,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     Color(0xFF6B40A8), Color(0xFF2A82B4), Color(0xFFC0833A),
     Color(0xFF2A8C52), Color(0xFFB23A4A), Color(0xFFE8820E),
   ];
-
-  // ─── Splitting With Section ───────────────────────────────────────────────────
-
-  Widget _splittingWithSection(BrandColors brand) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'SPLITTING WITH',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: brand.inkSoft,
-                letterSpacing: 1,
-              ),
-            ),
-            const Spacer(),
-            GestureDetector(
-              onTap: () => _openSplitBillSheet(context),
-              child: const Text(
-                'Edit >',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B40A8),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 44,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _splitMembers.length,
-            itemBuilder: (context, i) {
-              final m = _splitMembers[i];
-              final colors = [
-                const Color(0xFF6B40A8),
-                const Color(0xFF1F7A60),
-                const Color(0xFF2A6FB5),
-                const Color(0xFFB23A4A),
-                const Color(0xFFA0801C),
-                const Color(0xFFE8820E),
-                const Color(0xFF5C3A9E),
-              ];
-              final color = colors[m.colorIndex % colors.length];
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                  child: Center(
-                    child: Text(
-                      m.initials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
   // ─── Inline Account Row ───────────────────────────────────────────────────────
 
