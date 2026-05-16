@@ -133,6 +133,9 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                           ref.invalidate(_stockQuoteProvider(s.symbol));
                         }
                         HapticFeedback.selectionClick();
+                        AppToast.show(context, stocks.isEmpty
+                            ? 'No holdings to refresh'
+                            : '${stocks.length} price${stocks.length == 1 ? '' : 's'} refreshed');
                       },
                       brand: brand,
                     ),
@@ -284,17 +287,26 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                                   child: child,
                                 ),
                               ),
-                              child: _StockTileWithQuote(
-                                stock: filtered[i],
-                                usdToLocal: usdToLocal,
-                                localSymbol: symbol,
-                                isDark: isDark,
-                                onTap: () => _openDetail(context, filtered[i]),
-                                onLongPress: () => _showStockActions(context, filtered[i]),
-                                onBuyWatchlist: filtered[i].watchOnly
-                                    ? () => _showBuyFromWatchlist(context, filtered[i])
-                                    : null,
-                              ),
+                              child: Builder(builder: (ctx) {
+                                final s = filtered[i];
+                                return _Slidable(
+                                  onBuy: () => s.watchOnly
+                                      ? _showBuyFromWatchlist(context, s)
+                                      : _showBuySheetForStockFromHolding(context, s),
+                                  onSell: s.watchOnly ? null : () => _openSellSheet(context, s),
+                                  child: _StockTileWithQuote(
+                                    stock: s,
+                                    usdToLocal: usdToLocal,
+                                    localSymbol: symbol,
+                                    isDark: isDark,
+                                    onTap: () => _openDetail(context, s),
+                                    onLongPress: () => _showStockActions(context, s),
+                                    onBuyWatchlist: s.watchOnly
+                                        ? () => _showBuyFromWatchlist(context, s)
+                                        : null,
+                                  ),
+                                );
+                              }),
                             ),
                           ],
                         ],
@@ -392,6 +404,13 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
           try {
             final allStocks = ref.read(stockInvestmentsProvider).valueOrNull ?? [];
             final existing = _findExisting(allStocks, investment.symbol, id: existingId);
+            final newTx = {
+              'date': DateTime.now().toIso8601String(),
+              'qty': investment.quantity,
+              'price': investment.buyPrice,
+              'currency': investment.currency ?? 'USD',
+              'type': 'buy',
+            };
             if (existing != null) {
               final merged = existing.copyWith(
                 quantity: existing.watchOnly ? investment.quantity : existing.quantity + investment.quantity,
@@ -400,11 +419,26 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 watchOnly: false,
                 notes: investment.notes ?? existing.notes,
                 updatedAt: DateTime.now(),
+                transactions: [...existing.transactions, newTx],
               );
               await ref.read(stockInvestmentRepositoryProvider).update(user.uid, merged);
               if (mounted) AppToast.show(context, '${investment.symbol} updated');
             } else {
-              await ref.read(stockInvestmentRepositoryProvider).add(user.uid, investment);
+              final withTx = StockInvestment(
+                id: investment.id,
+                symbol: investment.symbol,
+                name: investment.name,
+                quantity: investment.quantity,
+                buyPrice: investment.buyPrice,
+                notes: investment.notes,
+                exchange: investment.exchange,
+                currency: investment.currency,
+                watchOnly: investment.watchOnly,
+                createdAt: investment.createdAt,
+                updatedAt: investment.updatedAt,
+                transactions: [newTx],
+              );
+              await ref.read(stockInvestmentRepositoryProvider).add(user.uid, withTx);
               if (mounted) AppToast.show(context, '${investment.symbol} purchase recorded');
             }
           } catch (_) {
@@ -463,6 +497,13 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
         onSell: (qty, price) async {
           final user = ref.read(authStateProvider).valueOrNull;
           if (user == null) return;
+          final sellTx = {
+            'date': DateTime.now().toIso8601String(),
+            'qty': qty,
+            'price': price,
+            'currency': stock.currency ?? 'USD',
+            'type': 'sell',
+          };
           try {
             if (qty >= stock.quantity) {
               await ref.read(stockInvestmentRepositoryProvider).delete(user.uid, stock.id);
@@ -471,6 +512,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               final updated = stock.copyWith(
                 quantity: stock.quantity - qty,
                 updatedAt: DateTime.now(),
+                transactions: [...stock.transactions, sellTx],
               );
               await ref.read(stockInvestmentRepositoryProvider).update(user.uid, updated);
               if (mounted) AppToast.show(context, 'Sold ${_fmtQty(qty)} sh of ${stock.symbol}');
@@ -491,6 +533,16 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       currency: watchlistStock.currency ?? 'USD',
     );
     _showBuySheetForStock(context, result, null, existingId: watchlistStock.id);
+  }
+
+  void _showBuySheetForStockFromHolding(BuildContext context, StockInvestment stock) {
+    final result = StockSearchResult(
+      symbol: stock.symbol,
+      name: stock.name ?? stock.symbol,
+      exchange: stock.exchange ?? '',
+      currency: stock.currency ?? 'USD',
+    );
+    _showBuySheetForStock(context, result, null, existingId: stock.id);
   }
 
   String _fmtQty(double qty) {
@@ -1352,6 +1404,145 @@ class _FilterChipState extends State<_FilterChip> with SingleTickerProviderState
   }
 }
 
+// ── Swipe-action tile wrapper ─────────────────────────────────────────────────
+
+class _Slidable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onBuy;
+  final VoidCallback? onSell;
+
+  const _Slidable({required this.child, this.onBuy, this.onSell});
+
+  @override
+  State<_Slidable> createState() => _SlidableState();
+}
+
+class _SlidableState extends State<_Slidable> with SingleTickerProviderStateMixin {
+  double _offset = 0.0;
+  late final AnimationController _ctrl;
+  Animation<double>? _anim;
+
+  static const double _maxW = 76.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
+    _ctrl.addListener(() {
+      if (_anim != null) setState(() => _offset = _anim!.value);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _snapTo(double target) {
+    _anim = Tween<double>(begin: _offset, end: target).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
+    );
+    _ctrl
+      ..reset()
+      ..forward();
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    _ctrl.stop();
+    setState(() {
+      final raw = _offset + d.delta.dx;
+      // Only allow drag in directions that have an action
+      if (raw < 0 && widget.onBuy == null) return;
+      if (raw > 0 && widget.onSell == null) return;
+      _offset = raw.clamp(-_maxW, _maxW);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final vel = d.primaryVelocity ?? 0;
+    if (_offset < -28 || vel < -400) {
+      _snapTo(-_maxW);
+    } else if (_offset > 28 || vel > 400) {
+      _snapTo(_maxW);
+    } else {
+      _snapTo(0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Stack(
+        children: [
+          // Sell action (left side, revealed on right-swipe)
+          if (widget.onSell != null)
+            Positioned(
+              left: 0, top: 0, bottom: 0,
+              width: _offset > 0 ? _offset.clamp(0, _maxW) : 0,
+              child: GestureDetector(
+                onTap: () {
+                  _snapTo(0);
+                  widget.onSell!();
+                },
+                child: Container(
+                  color: _red,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.minus_circle, size: 20, color: Colors.white),
+                      SizedBox(height: 4),
+                      Text('Sell', style: TextStyle(color: Colors.white, fontSize: 11,
+                          fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Buy action (right side, revealed on left-swipe)
+          if (widget.onBuy != null)
+            Positioned(
+              right: 0, top: 0, bottom: 0,
+              width: _offset < 0 ? (-_offset).clamp(0, _maxW) : 0,
+              child: GestureDetector(
+                onTap: () {
+                  _snapTo(0);
+                  widget.onBuy!();
+                },
+                child: Container(
+                  color: _blue,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.plus_circle, size: 20, color: Colors.white),
+                      SizedBox(height: 4),
+                      Text('Buy', style: TextStyle(color: Colors.white, fontSize: 11,
+                          fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Main tile
+          Transform.translate(
+            offset: Offset(_offset, 0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              onTap: _offset != 0 ? () => _snapTo(0) : null,
+              child: widget.child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Circle icon button ─────────────────────────────────────────────────────────
 
 class _CircleBtn extends StatelessWidget {
@@ -1474,7 +1665,7 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
                   child: Text('Cancel', style: TextStyle(fontSize: 16, color: _blue)),
                 ),
                 const Expanded(
-                  child: Text('Add Stock', textAlign: TextAlign.center,
+                  child: Text('Find Ticker', textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
                 GestureDetector(
@@ -1499,64 +1690,56 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Find a ticker.',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.8),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Search by symbol or company name. Bursa Malaysia and major US exchanges supported.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.4),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Search field
+                    // Search bar: full-width, rounded rectangle, with icon
                     Container(
-                      height: 56,
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Row(
                         children: [
-                          Icon(CupertinoIcons.search, size: 16, color: Colors.grey.shade500),
-                          const SizedBox(width: 8),
+                          Icon(CupertinoIcons.search, size: 17, color: Colors.grey.shade500),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
                               controller: _ctrl,
                               autofocus: false,
                               textCapitalization: TextCapitalization.characters,
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: isDark ? Colors.white : Colors.black,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w400,
+                                color: isDark ? Colors.white : const Color(0xFF1D1D1F),
+                                letterSpacing: -0.3,
                               ),
                               decoration: InputDecoration(
                                 border: InputBorder.none,
-                                hintText: 'Search ticker or company',
-                                hintStyle: TextStyle(fontSize: 15, color: Colors.grey.shade500),
+                                hintText: 'Ticker or company name',
+                                hintStyle: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.grey.shade500,
+                                  letterSpacing: -0.3,
+                                ),
                                 isDense: true,
-                                contentPadding: EdgeInsets.zero,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 14),
                               ),
                               onChanged: _search,
                             ),
                           ),
                           if (_searching)
-                            const SizedBox(
-                              width: 14, height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: _blue),
-                            )
-                          else if (_results.isNotEmpty)
-                            Text(
-                              '${_results.length} matches',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            const SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: _blue))
+                          else if (_ctrl.text.isNotEmpty)
+                            GestureDetector(
+                              onTap: () { _ctrl.clear(); _search(''); },
+                              child: Icon(CupertinoIcons.clear_circled_solid, size: 17, color: Colors.grey.shade400),
                             ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
                     // Top match card
                     if (_topMatch != null) ...[

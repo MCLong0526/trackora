@@ -12,6 +12,7 @@ class StockInvestment {
   final bool watchOnly;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<Map<String, dynamic>> transactions;
 
   const StockInvestment({
     required this.id,
@@ -25,6 +26,7 @@ class StockInvestment {
     this.watchOnly = false,
     required this.createdAt,
     required this.updatedAt,
+    this.transactions = const [],
   });
 
   String get exchangeDisplay {
@@ -56,6 +58,9 @@ class StockInvestment {
       watchOnly: data['watchOnly'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      transactions: (data['transactions'] as List?)
+          ?.map((e) => Map<String, dynamic>.from(e as Map))
+          .toList() ?? [],
     );
   }
 
@@ -72,6 +77,7 @@ class StockInvestment {
       if (watchOnly) 'watchOnly': watchOnly,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      if (transactions.isNotEmpty) 'transactions': transactions,
     };
   }
 
@@ -87,6 +93,7 @@ class StockInvestment {
     bool? watchOnly,
     DateTime? createdAt,
     DateTime? updatedAt,
+    List<Map<String, dynamic>>? transactions,
   }) {
     return StockInvestment(
       id: id ?? this.id,
@@ -100,6 +107,7 @@ class StockInvestment {
       watchOnly: watchOnly ?? this.watchOnly,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      transactions: transactions ?? this.transactions,
     );
   }
 

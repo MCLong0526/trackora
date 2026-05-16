@@ -53,6 +53,15 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     });
   }
 
+  void _showHistory(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _PurchaseHistorySheet(stock: widget.stock),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -115,17 +124,31 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                       ],
                     ),
                     const Spacer(),
-                    GestureDetector(
-                      onTap: () => setState(() => _bookmarked = !_bookmarked),
-                      child: Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                        child: Icon(
-                          _bookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
-                          size: 16,
-                          color: _bookmarked ? _blue : brand.ink,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showHistory(context),
+                          child: Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                            child: Icon(CupertinoIcons.clock, size: 16, color: brand.ink),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => setState(() => _bookmarked = !_bookmarked),
+                          child: Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                            child: Icon(
+                              _bookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
+                              size: 16,
+                              color: _bookmarked ? _blue : brand.ink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -594,6 +617,150 @@ class _LineChart extends StatelessWidget {
       ),
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
+    );
+  }
+}
+
+// ── Purchase history sheet ─────────────────────────────────────────────────────
+
+class _PurchaseHistorySheet extends StatelessWidget {
+  final StockInvestment stock;
+
+  const _PurchaseHistorySheet({required this.stock});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final txns = stock.transactions.reversed.toList();
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 4),
+              decoration: BoxDecoration(
+                color: brand.divider, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  '${stock.symbol} History',
+                  style: TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w700,
+                    color: brand.ink, letterSpacing: -0.3,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${txns.length} record${txns.length == 1 ? '' : 's'}',
+                  style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: brand.divider),
+          if (txns.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40),
+              child: Text(
+                'No transaction history yet.',
+                style: TextStyle(fontSize: 15, color: brand.inkSoft),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                itemCount: txns.length,
+                separatorBuilder: (_, __) => Divider(height: 1, color: brand.divider),
+                itemBuilder: (_, i) {
+                  final tx = txns[i];
+                  final isBuy = (tx['type'] as String?) != 'sell';
+                  final qty = (tx['qty'] as num?)?.toDouble() ?? 0;
+                  final price = (tx['price'] as num?)?.toDouble() ?? 0;
+                  final currency = tx['currency'] as String? ?? 'USD';
+                  final currSym = currency == 'MYR' ? 'RM' : '\$';
+                  final date = DateTime.tryParse(tx['date'] as String? ?? '') ?? DateTime.now();
+                  final dateStr = DateFormat('MMM d, y · h:mm a').format(date);
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: isBuy
+                                ? const Color(0xFF0066CC).withValues(alpha: 0.1)
+                                : const Color(0xFFFF3B30).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isBuy ? CupertinoIcons.arrow_up_right : CupertinoIcons.arrow_down_left,
+                            size: 16,
+                            color: isBuy ? const Color(0xFF0066CC) : const Color(0xFFFF3B30),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isBuy ? 'Bought' : 'Sold',
+                                style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w600,
+                                  color: brand.ink, letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                dateStr,
+                                style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${qty == qty.floorToDouble() ? qty.toInt() : qty.toStringAsFixed(2)} sh',
+                              style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700,
+                                color: brand.ink, letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$currSym${price.toStringAsFixed(2)}/sh',
+                              style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
