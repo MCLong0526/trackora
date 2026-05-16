@@ -12,10 +12,13 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/split_bill.dart';
 import '../../repositories/firebase_expense_repository.dart';
 import '../../repositories/local_expense_repository.dart';
+import '../../repositories/split_bill_repository.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
+import '../../screens/expenses/split_bill_screen.dart';
 import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
@@ -93,6 +96,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   String _currencyCode = 'MYR';
   File? _newReceipt;
   String? _existingReceiptUrl;
+
+  bool _splitBillEnabled = false;
+  List<SplitMember> _splitMembers = [];
+  SplitMode _splitMode = SplitMode.equally;
 
   bool get _isEdit => widget.expense != null;
 
@@ -336,6 +343,38 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
   }
 
+  Future<void> _openSplitBillSheet(BuildContext context) async {
+    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+    final amount = double.tryParse(_amountController.text) ?? 0;
+    final title = _noteController.text.trim().isNotEmpty
+        ? _noteController.text.trim()
+        : _category;
+
+    final result = await Navigator.push<SplitBillResult>(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => SplitBillScreen(
+          totalAmount: amount,
+          currencySymbol: symbol,
+          expenseTitle: title,
+          initialMembers: _splitMembers,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _splitBillEnabled = true;
+        _splitMembers = result.members;
+        _splitMode = result.splitMode;
+      });
+    } else if (_splitMembers.isEmpty) {
+      // User cancelled without configuring, turn off toggle
+      setState(() => _splitBillEnabled = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isAccountTransfer && _toAccountId == null) {
@@ -504,6 +543,29 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           if (storageMode == StorageMode.firebase) {
             await SyncService().markPending(user.uid, e.id);
           }
+        }
+
+        // Save split bill if enabled
+        if (_splitBillEnabled && _splitMembers.isNotEmpty && isOnline) {
+          final now2 = DateTime.now();
+          final billNumber = '#${now2.year}-${(now2.millisecondsSinceEpoch % 10000).toString().padLeft(4, '0')}';
+          final mainCode = await ref.read(currencyCodeProvider.future);
+          final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+          final splitBill = SplitBill(
+            id: '',
+            expenseId: e.id,
+            billNumber: billNumber,
+            title: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : category,
+            totalAmount: amount,
+            currency: mainCode,
+            currencySymbol: sym,
+            splitMode: _splitMode,
+            members: _splitMembers,
+            date: _date,
+            createdAt: now2,
+            updatedAt: now2,
+          );
+          await SplitBillRepository().saveSplitBill(user.uid, splitBill);
         }
       }
 
@@ -1234,7 +1296,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             accounts: accounts,
             dateLabel: dateLabel,
             isAccountTransfer: type == EntryType.transfer && _isAccountTransfer,
+            entryType: type,
           ),
+          // Splitting with section (expense only, when split enabled)
+          if (type == EntryType.expense && _splitBillEnabled && _splitMembers.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _splittingWithSection(brand),
+          ],
         ],
       ),
     );
@@ -1516,6 +1584,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required List<Account> accounts,
     required String dateLabel,
     required bool isAccountTransfer,
+    EntryType? entryType,
   }) {
     final divider = Container(
       height: 0.5,
@@ -1589,6 +1658,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               onChanged: (code) => setState(() => _currencyCode = code),
               label: 'Currency',
             ),
+            // Split bill toggle (expense only)
+            if (entryType == EntryType.expense) ...[
+              divider,
+              _splitBillToggleRow(brand),
+            ],
             divider,
             // Note row
             Padding(
@@ -1634,6 +1708,142 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ],
         ),
       ),
+    );
+  }
+
+  // ─── Split Bill Toggle Row ────────────────────────────────────────────────────
+
+  Widget _splitBillToggleRow(BrandColors brand) {
+    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+    final perPerson = _splitMembers.isNotEmpty
+        ? _splitMembers.first.amount
+        : 0.0;
+
+    return InkWell(
+      onTap: () => _openSplitBillSheet(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Icon(
+              CupertinoIcons.person_2,
+              size: 18,
+              color: _splitBillEnabled ? const Color(0xFF6B40A8) : brand.inkSoft,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Split bill',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: _splitBillEnabled ? const Color(0xFF6B40A8) : brand.ink,
+                    ),
+                  ),
+                  if (_splitBillEnabled && _splitMembers.isNotEmpty)
+                    Text(
+                      '${_splitMembers.length} people · $symbol ${perPerson.toStringAsFixed(2)} each',
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    )
+                  else
+                    Text(
+                      'Share this expense with others',
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    ),
+                ],
+              ),
+            ),
+            CupertinoSwitch(
+              value: _splitBillEnabled,
+              activeTrackColor: const Color(0xFF6B40A8),
+              onChanged: (v) {
+                if (v) {
+                  _openSplitBillSheet(context);
+                } else {
+                  setState(() => _splitBillEnabled = false);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Splitting With Section ───────────────────────────────────────────────────
+
+  Widget _splittingWithSection(BrandColors brand) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'SPLITTING WITH',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: brand.inkSoft,
+                letterSpacing: 1,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _openSplitBillSheet(context),
+              child: const Text(
+                'Edit >',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B40A8),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 44,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _splitMembers.length,
+            itemBuilder: (context, i) {
+              final m = _splitMembers[i];
+              final colors = [
+                const Color(0xFF6B40A8),
+                const Color(0xFF1F7A60),
+                const Color(0xFF2A6FB5),
+                const Color(0xFFB23A4A),
+                const Color(0xFFA0801C),
+                const Color(0xFFE8820E),
+                const Color(0xFF5C3A9E),
+              ];
+              final color = colors[m.colorIndex % colors.length];
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      m.initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
