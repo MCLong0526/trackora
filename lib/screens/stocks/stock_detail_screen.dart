@@ -306,57 +306,145 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                     ),
                     child: Column(
                       children: [
-                        // Row 1: UNITS | EST. VALUE
-                        _HoldingRow(
-                          left: _HoldingCell(
-                            label: 'UNITS',
-                            value: '${_fmtQty(stock.quantity)} sh',
-                            brand: brand,
+                        // Row 1: UNITS | EST. VALUE — large numbers
+                        IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('UNITS',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                          color: brand.inkSoft, letterSpacing: 0.8)),
+                                      const SizedBox(height: 6),
+                                      RichText(
+                                        text: TextSpan(children: [
+                                          TextSpan(
+                                            text: _fmtQty(stock.quantity),
+                                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                                              color: brand.ink, letterSpacing: -0.8),
+                                          ),
+                                          TextSpan(
+                                            text: ' sh',
+                                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500,
+                                              color: brand.inkSoft),
+                                          ),
+                                        ]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              VerticalDivider(width: 1, color: brand.divider),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('EST. VALUE',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                          color: brand.inkSoft, letterSpacing: 0.8)),
+                                      const SizedBox(height: 6),
+                                      if (estValue != null)
+                                        RichText(
+                                          text: TextSpan(children: [
+                                            TextSpan(
+                                              text: '$symbol ',
+                                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500,
+                                                color: brand.inkSoft),
+                                            ),
+                                            TextSpan(
+                                              text: NumberFormat('#,##0').format(estValue),
+                                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                                                color: brand.ink, letterSpacing: -0.8),
+                                            ),
+                                          ]),
+                                        )
+                                      else
+                                        Text('–', style: TextStyle(fontSize: 28,
+                                          fontWeight: FontWeight.w800, color: brand.ink)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          right: _HoldingCell(
-                            label: 'EST. VALUE',
-                            value: estValue != null
-                                ? '${symbol} ${NumberFormat('#,##0').format(estValue)}'
-                                : '–',
-                            brand: brand,
-                          ),
-                          brand: brand,
                         ),
                         Divider(height: 1, color: brand.divider, indent: 16, endIndent: 16),
-                        // Row 2: AVG BUY | COST BASIS
-                        _HoldingRow(
-                          left: _HoldingCell(
-                            label: 'AVG BUY',
-                            value: '\$${stock.buyPrice.toStringAsFixed(2)}',
-                            brand: brand,
+                        // Bottom: 2-column — AVG BUY/GAIN | COST BASIS/RETURN
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('AVG BUY',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '\$${stock.buyPrice.toStringAsFixed(2)}',
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
+                                        color: brand.ink, letterSpacing: -0.3),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text('GAIN',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      gain != null
+                                          ? '${gain >= 0 ? '+' : '-'}$symbol ${NumberFormat('#,##0').format(gain.abs())}'
+                                          : '–',
+                                      style: TextStyle(
+                                        fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3,
+                                        color: gain != null ? (gain >= 0 ? _green : _red) : brand.inkSoft,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('COST BASIS',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$symbol ${NumberFormat('#,##0').format(costBasis)}',
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
+                                        color: brand.ink, letterSpacing: -0.3),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text('RETURN',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      returnPct != null
+                                          ? '${returnPct >= 0 ? '+' : ''}${returnPct.toStringAsFixed(2)}%'
+                                          : '–',
+                                      style: TextStyle(
+                                        fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3,
+                                        color: returnPct != null
+                                            ? (returnPct >= 0 ? _green : _red)
+                                            : brand.inkSoft,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          right: _HoldingCell(
-                            label: 'COST BASIS',
-                            value: '$symbol ${NumberFormat('#,##0').format(costBasis)}',
-                            brand: brand,
-                          ),
-                          brand: brand,
-                        ),
-                        Divider(height: 1, color: brand.divider, indent: 16, endIndent: 16),
-                        // Row 3: GAIN | RETURN
-                        _HoldingRow(
-                          left: _HoldingCell(
-                            label: 'GAIN',
-                            value: gain != null
-                                ? '${gain >= 0 ? '+' : ''}$symbol ${NumberFormat('#,##0').format(gain.abs())}'
-                                : '–',
-                            valueColor: gain != null ? (gain >= 0 ? _green : _red) : null,
-                            brand: brand,
-                          ),
-                          right: _HoldingCell(
-                            label: 'RETURN',
-                            value: returnPct != null
-                                ? '${returnPct >= 0 ? '+' : ''}${returnPct.toStringAsFixed(2)}%'
-                                : '–',
-                            valueColor: returnPct != null ? (returnPct >= 0 ? _green : _red) : null,
-                            brand: brand,
-                          ),
-                          brand: brand,
                         ),
                       ],
                     ),
@@ -382,74 +470,6 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     return qty == qty.floorToDouble()
         ? NumberFormat('#,##0').format(qty)
         : qty.toStringAsFixed(2);
-  }
-}
-
-// ── Holding layout ─────────────────────────────────────────────────────────────
-
-class _HoldingRow extends StatelessWidget {
-  final _HoldingCell left;
-  final _HoldingCell right;
-  final BrandColors brand;
-
-  const _HoldingRow({required this.left, required this.right, required this.brand});
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        children: [
-          Expanded(child: left),
-          VerticalDivider(width: 1, color: brand.divider),
-          Expanded(child: right),
-        ],
-      ),
-    );
-  }
-}
-
-class _HoldingCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final BrandColors brand;
-
-  const _HoldingCell({
-    required this.label,
-    required this.value,
-    this.valueColor,
-    required this.brand,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: brand.inkSoft,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? brand.ink,
-              letterSpacing: -0.4,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

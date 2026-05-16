@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../models/account.dart';
 import '../../models/stock_investment.dart';
 import '../../services/stock_service.dart';
 import '../../state/providers.dart';
@@ -1355,47 +1356,60 @@ class _FindTickerSheetState extends ConsumerState<_FindTickerSheet> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
-                          children: _results.skip(1).take(5).map((r) {
-                            return GestureDetector(
-                              onTap: () {
-                                // Select this as top match
-                                setState(() {
-                                  _topMatch = r;
-                                  _topQuote = null;
-                                  _loadingQuote = true;
-                                });
-                                ref.read(stockServiceProvider).getQuote(r.symbol, range: '1M').then((q) {
-                                  if (mounted) setState(() { _topQuote = q; _loadingQuote = false; });
-                                });
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    StockAvatarBadge(symbol: r.symbol, size: 36),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(r.symbol,
-                                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                                              color: isDark ? Colors.white : Colors.black)),
-                                          Text(r.name,
-                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                                        ],
+                          children: () {
+                            final matches = _results.skip(1).take(5).toList();
+                            final widgets = <Widget>[];
+                            for (var i = 0; i < matches.length; i++) {
+                              final r = matches[i];
+                              if (i > 0) {
+                                widgets.add(Divider(
+                                  height: 1,
+                                  indent: 62,
+                                  endIndent: 14,
+                                  color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFF2F2F7),
+                                ));
+                              }
+                              widgets.add(GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _topMatch = r;
+                                    _topQuote = null;
+                                    _loadingQuote = true;
+                                  });
+                                  ref.read(stockServiceProvider).getQuote(r.symbol, range: '1M').then((q) {
+                                    if (mounted) setState(() { _topQuote = q; _loadingQuote = false; });
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      StockAvatarBadge(symbol: r.symbol, size: 36),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(r.symbol,
+                                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                                                color: isDark ? Colors.white : Colors.black)),
+                                            Text(r.name,
+                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      '${r.exchange} · ${r.currency}',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                    ),
-                                  ],
+                                      Text(
+                                        '${r.exchange} · ${r.currency}',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          }).toList(),
+                              ));
+                            }
+                            return widgets;
+                          }(),
                         ),
                       ),
                     ],
@@ -1613,6 +1627,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
   double? _overridePrice;
   DateTime _date = DateTime.now();
   bool _saving = false;
+  Account? _selectedAccount;
   final _notesCtrl = TextEditingController();
 
   double get _unitPrice => _overridePrice ?? widget.quote?.price ?? 0;
@@ -1653,6 +1668,8 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
     final localIso = symToIso[symbol] ?? 'MYR';
     final fxAsync = ref.watch(stockFxRateProvider(localIso));
     final usdToLocal = fxAsync.valueOrNull ?? 4.48;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? <Account>[];
+    final displayAccount = _selectedAccount ?? (accounts.isNotEmpty ? accounts.first : null);
 
     final isUsd = widget.result.currency == 'USD';
     final unitLocalValue = _unitPrice * (isUsd ? usdToLocal : 1.0) * _units;
@@ -1856,6 +1873,17 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
                           ),
                           Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
                           _DetailRow(
+                            label: 'Account',
+                            value: displayAccount != null
+                                ? '${displayAccount.name} · ${displayAccount.currencyCode ?? 'USD'}'
+                                : 'Default',
+                            subtitle: _selectedAccount == null ? 'Default' : null,
+                            onTap: accounts.isNotEmpty
+                                ? () => _pickAccount(context, accounts, displayAccount)
+                                : null,
+                          ),
+                          Divider(height: 1, color: brand.divider, indent: 14, endIndent: 14),
+                          _DetailRow(
                             label: 'Date',
                             value: DateFormat('MMM d, y').format(_date),
                             subtitle: _date.difference(DateTime.now()).inDays == 0 ? 'Today' : null,
@@ -1971,6 +1999,31 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
               child: const Text('Set price'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _pickAccount(BuildContext context, List<Account> accounts, Account? current) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Select account'),
+        actions: accounts.map((a) => CupertinoActionSheetAction(
+          onPressed: () {
+            Navigator.pop(ctx);
+            setState(() => _selectedAccount = a);
+          },
+          child: Text(
+            '${a.name} · ${a.currencyCode ?? 'USD'}',
+            style: TextStyle(
+              fontWeight: a.id == current?.id ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+        )).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
         ),
       ),
     );
