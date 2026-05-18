@@ -18,7 +18,9 @@ import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
+import '../repositories/local_split_bill_repository.dart';
 import '../repositories/local_storage.dart';
+import '../repositories/split_bill_repository.dart';
 import 'storage_service.dart';
 
 enum SyncState { idle, syncing, success, failed }
@@ -268,7 +270,10 @@ class SyncService {
       }
       final count = await pendingCount(localUserId);
       final deleteIds = getPendingDeleteIds(localUserId);
-      if (count == 0 && deleteIds.isEmpty) return;
+      if (count == 0 && deleteIds.isEmpty) {
+        onState(SyncState.success);
+        return;
+      }
       onState(SyncState.syncing);
       if (count > 0) await _uploadAll(localUserId, user.uid);
       if (deleteIds.isNotEmpty) {
@@ -315,33 +320,42 @@ class SyncService {
     final expenses = await localExpenses.getAllExpenses(fromUid).first;
     for (var e in expenses) {
       if (!stillCurrent()) return;
-      // Upload any locally-cached receipt to Supabase before syncing.
-      final url = e.receiptUrl;
-      if (url != null &&
-          !StorageService.isRemote(url) &&
-          !StorageService.isFirebasePath(url)) {
-        try {
-          final localFile = await StorageService.resolveLocal(url);
-          if (localFile != null) {
-            final supabaseUrl = await storage.saveReceipt(toUid, localFile);
-            e = e.copyWith(receiptUrl: supabaseUrl);
-            // Update local copy so re-syncs don't re-upload.
-            await localExpenses.upsertExpense(fromUid, e);
+      try {
+        // Upload any locally-cached receipt to Supabase before syncing.
+        final url = e.receiptUrl;
+        if (url != null &&
+            !StorageService.isRemote(url) &&
+            !StorageService.isFirebasePath(url)) {
+          try {
+            final localFile = await StorageService.resolveLocal(url);
+            if (localFile != null) {
+              final supabaseUrl = await storage.saveReceipt(toUid, localFile);
+              e = e.copyWith(receiptUrl: supabaseUrl);
+              // Update local copy so re-syncs don't re-upload.
+              await localExpenses.upsertExpense(fromUid, e);
+              dev.log(
+                '[SYNC] Receipt uploaded for expense ${e.id}: $supabaseUrl',
+                name: 'SyncService',
+              );
+            }
+          } catch (uploadErr) {
             dev.log(
-              '[SYNC] Receipt uploaded for expense ${e.id}: $supabaseUrl',
+              '[SYNC] Receipt upload failed for expense ${e.id}: $uploadErr — syncing without receipt URL.',
               name: 'SyncService',
+              error: uploadErr,
             );
+            e = e.copyWith(receiptUrl: null);
           }
-        } catch (uploadErr) {
-          dev.log(
-            '[SYNC] Receipt upload failed for expense ${e.id}: $uploadErr — syncing without receipt URL.',
-            name: 'SyncService',
-            error: uploadErr,
-          );
-          e = e.copyWith(receiptUrl: null);
         }
+        await fbExpenses.upsertExpense(toUid, e);
+      } catch (itemErr, itemSt) {
+        dev.log(
+          '[SYNC] Skipping expense ${e.id} due to error: $itemErr',
+          name: 'SyncService',
+          error: itemErr,
+          stackTrace: itemSt,
+        );
       }
-      await fbExpenses.upsertExpense(toUid, e);
     }
 
     if (!stillCurrent()) return;
@@ -399,6 +413,24 @@ class SyncService {
       if (m.id.isEmpty) continue;
       if (!stillCurrent()) return;
       await fbMetals.upsertById(toUid, m);
+    }
+
+    // ── Split Bills ───────────────────────────────────────────────────────────
+    final localSplitBills = LocalSplitBillRepository();
+    final fbSplitBills = SplitBillRepository();
+    final splitBills = await localSplitBills.getAllSplitBills(fromUid);
+    for (final sb in splitBills) {
+      if (sb.id.isEmpty || sb.expenseId.isEmpty) continue;
+      if (!stillCurrent()) return;
+      try {
+        await fbSplitBills.saveSplitBill(toUid, sb);
+      } catch (sbErr) {
+        dev.log(
+          '[SYNC] Skipping split bill ${sb.id}: $sbErr',
+          name: 'SyncService',
+          error: sbErr,
+        );
+      }
     }
   }
 }

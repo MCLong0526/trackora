@@ -30,7 +30,6 @@ class BillReceiptScreen extends StatefulWidget {
 }
 
 class _BillReceiptScreenState extends State<BillReceiptScreen> {
-  final _receiptKey = GlobalKey();
   final _shareButtonKey = GlobalKey();
   bool _sharing = false;
 
@@ -50,19 +49,53 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
   }
 
   Future<void> _shareImageReceipt(Rect shareOrigin) async {
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final captureKey = GlobalKey();
+    final screenSize = MediaQuery.sizeOf(context);
 
-    final boundary =
-        _receiptKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
-    if (boundary == null) throw StateError('RepaintBoundary not found');
+    final entry = OverlayEntry(
+      builder: (ctx) => Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            width: screenSize.width,
+            child: Material(
+              color: Colors.transparent,
+              child: Center(
+                child: RepaintBoundary(
+                  key: captureKey,
+                  child: _ReceiptCard(bill: widget.bill),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(color: const Color(0xFF1C1C1E)),
+            ),
+          ),
+        ],
+      ),
+    );
 
+    overlay.insert(entry);
     ui.Image? img;
     try {
-      img = await boundary.toImage(pixelRatio: 3.0);
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+
+      if (!mounted) return;
+
+      final boundary =
+          captureKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('RepaintBoundary not found');
+
+      img = await boundary.toImage(pixelRatio: 2.5);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw StateError('PNG encoding returned null');
 
@@ -84,6 +117,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
       );
     } finally {
       img?.dispose();
+      entry.remove();
     }
   }
 
@@ -145,7 +179,6 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                       child: RepaintBoundary(
-                        key: _receiptKey,
                         child: _ReceiptCard(bill: widget.bill),
                       ),
                     ),

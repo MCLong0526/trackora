@@ -1571,12 +1571,16 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
         localUserId: user.uid,
         onState: _onSyncState,
       );
+      // Don't show success if the sync internally failed.
+      if (_state == SyncState.failed) return;
       if (mounted) {
+        _onSyncState(SyncState.success);
         setState(() => _lastSynced = DateTime.now());
         await ref.read(watchServiceProvider).syncToWatch();
         _showSuccessBanner();
       }
     } catch (e) {
+      _onSyncState(SyncState.failed);
       if (mounted) _showError(e.toString());
     }
   }

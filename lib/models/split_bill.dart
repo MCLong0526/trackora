@@ -38,16 +38,16 @@ class SplitMember {
       };
 
   factory SplitMember.fromMap(Map<String, dynamic> m) => SplitMember(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        colorIndex: (m['colorIndex'] as num).toInt(),
-        amount: (m['amount'] as num).toDouble(),
+        id: m['id'] as String? ?? '',
+        name: m['name'] as String? ?? '',
+        colorIndex: (m['colorIndex'] as num?)?.toInt() ?? 0,
+        amount: (m['amount'] as num?)?.toDouble() ?? 0.0,
         isPayer: m['isPayer'] as bool? ?? false,
         status: SplitMemberStatus.values.firstWhere(
           (s) => s.name == m['status'],
           orElse: () => SplitMemberStatus.pending,
         ),
-        paidAt: m['paidAt'] != null ? DateTime.tryParse(m['paidAt'] as String) : null,
+        paidAt: m['paidAt'] != null ? DateTime.tryParse(m['paidAt'] as String? ?? '') : null,
       );
 
   SplitMember copyWith({
@@ -131,7 +131,7 @@ class SplitBill {
         expenseId: m['expenseId'] as String? ?? '',
         billNumber: m['billNumber'] as String? ?? '',
         title: m['title'] as String? ?? '',
-        totalAmount: (m['totalAmount'] as num).toDouble(),
+        totalAmount: (m['totalAmount'] as num?)?.toDouble() ?? 0.0,
         currency: m['currency'] as String? ?? 'MYR',
         currencySymbol: m['currencySymbol'] as String? ?? 'RM',
         splitMode: SplitMode.values.firstWhere(
@@ -141,10 +141,19 @@ class SplitBill {
         members: (m['members'] as List<dynamic>? ?? [])
             .map((e) => SplitMember.fromMap(Map<String, dynamic>.from(e as Map)))
             .toList(),
-        date: DateTime.parse(m['date'] as String),
-        createdAt: DateTime.parse(m['createdAt'] as String),
-        updatedAt: DateTime.parse(m['updatedAt'] as String),
+        date: _parseDate(m['date']),
+        createdAt: _parseDate(m['createdAt']),
+        updatedAt: _parseDate(m['updatedAt']),
       );
+
+  static DateTime _parseDate(Object? v) {
+    if (v is String) {
+      final d = DateTime.tryParse(v);
+      if (d != null) return d;
+    }
+    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
 
   SplitBill copyWith({List<SplitMember>? members, DateTime? updatedAt}) => SplitBill(
         id: id,
