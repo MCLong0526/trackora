@@ -1,4 +1,7 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:hive/hive.dart';
 
 class LocalStorage {
   static const expensesBoxName = 'trackora_expenses_v1';
@@ -21,7 +24,10 @@ class LocalStorage {
   static Future<void> init() async {
     if (_initialized) return;
 
-    await Hive.initFlutter();
+    if (!kIsWeb && !Hive.isBoxOpen(expensesBoxName)) {
+      final dir = await _hiveDirectory();
+      Hive.init(dir.path);
+    }
     await _openBox(expensesBoxName);
     await _openBox(metaBoxName);
     await _openBox(installmentsBoxName);
@@ -71,5 +77,17 @@ class LocalStorage {
     if (!Hive.isBoxOpen(name)) {
       await Hive.openBox(name);
     }
+  }
+
+  static Future<Directory> _hiveDirectory() async {
+    final home = Platform.environment['HOME'];
+    final basePath = home != null && home.isNotEmpty
+        ? '$home/Library/Application Support/Trackora/hive'
+        : '${Directory.systemTemp.path}/trackora_hive';
+    final dir = Directory(basePath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
   }
 }

@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import '../app_config.dart';
 import '../firebase_options.dart';
+import '../models/expense.dart';
 import '../repositories/firebase_account_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
 import '../repositories/firebase_expense_repository.dart';
@@ -168,6 +169,8 @@ class SyncService {
   // ── Pending offline delete tracking ──────────────────────────────────────
 
   static String _pendingDeleteKey(String userId) => 'pending_delete:$userId';
+  static String _deletedTombstoneKey(String userId) =>
+      'deleted_expenses:$userId';
 
   /// Marks [expenseId] as needing deletion from Firebase, owned by [userId].
   Future<void> markPendingDelete(String userId, String expenseId) async {
@@ -176,6 +179,7 @@ class SyncService {
     final ids = _readPendingDeleteIds(key);
     if (!ids.contains(expenseId)) ids.add(expenseId);
     await LocalStorage.pendingDeletes.put(key, ids);
+    await _rememberDeletedExpense(userId, expenseId);
   }
 
   /// Removes [expenseId] from the pending-delete set for [userId].
@@ -193,6 +197,22 @@ class SyncService {
     await LocalStorage.pendingDeletes.delete(_pendingDeleteKey(userId));
   }
 
+  Future<void> _rememberDeletedExpense(String userId, String expenseId) async {
+    final key = _deletedTombstoneKey(userId);
+    final raw = LocalStorage.pendingDeletes.get(key, defaultValue: <dynamic>[]);
+    final ids = raw is List ? raw.whereType<String>().toSet() : <String>{};
+    ids.add(expenseId);
+    await LocalStorage.pendingDeletes.put(key, ids.toList());
+  }
+
+  Set<String> _deletedExpenseIds(String userId) {
+    final raw = LocalStorage.pendingDeletes.get(
+      _deletedTombstoneKey(userId),
+      defaultValue: <dynamic>[],
+    );
+    return raw is List ? raw.whereType<String>().toSet() : <String>{};
+  }
+
   List<String> _readPendingDeleteIds(String key) {
     final raw = LocalStorage.pendingDeletes.get(key, defaultValue: <dynamic>[]);
     if (raw is! List) return [];
@@ -202,6 +222,20 @@ class SyncService {
   /// Returns the list of expense ids pending deletion for [userId].
   List<String> getPendingDeleteIds(String userId) {
     return _readPendingDeleteIds(_pendingDeleteKey(userId));
+  }
+
+  Future<int> pendingDeleteCount(String userId) async {
+    await LocalStorage.init();
+    return _readPendingDeleteIds(_pendingDeleteKey(userId)).length;
+  }
+
+  Stream<int> pendingDeleteCountStream(String userId) async* {
+    await LocalStorage.init();
+    final key = _pendingDeleteKey(userId);
+    yield _readPendingDeleteIds(key).length;
+    yield* LocalStorage.pendingDeletes
+        .watch(key: key)
+        .map<int>((_) => _readPendingDeleteIds(key).length);
   }
 
   /// Stream of pending count changes.
@@ -256,7 +290,10 @@ class SyncService {
     try {
       await _ensureFirebase();
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        onState(SyncState.success);
+        return;
+      }
       // Hard guard: only ever flush a pending queue into the account that
       // owns it. Prevents account A's offline writes from being uploaded
       // to account B after a logout / user-switch.
@@ -266,27 +303,29 @@ class SyncService {
           '!= current Firebase uid (${user.uid}).',
           name: 'SyncService',
         );
+        onState(SyncState.success);
         return;
       }
       final count = await pendingCount(localUserId);
       final deleteIds = getPendingDeleteIds(localUserId);
       if (count == 0 && deleteIds.isEmpty) {
+        await _refreshLocalExpenseMirror(user.uid);
         onState(SyncState.success);
         return;
       }
       onState(SyncState.syncing);
-      if (count > 0) await _uploadAll(localUserId, user.uid);
       if (deleteIds.isNotEmpty) {
         final db = FirebaseFirestore.instance;
         final fbExpenses = FirebaseExpenseRepository(firestore: db);
         for (final id in deleteIds) {
           try {
             await fbExpenses.deleteExpense(user.uid, id);
+            await clearPendingDelete(localUserId, id);
           } catch (_) {}
         }
-        await clearAllPendingDeletes(localUserId);
       }
-      await clearAllPending(localUserId);
+      if (count > 0) await _uploadPendingExpenses(localUserId, user.uid);
+      await _refreshLocalExpenseMirror(user.uid);
       onState(SyncState.success);
     } catch (e, st) {
       dev.log(
@@ -296,6 +335,114 @@ class SyncService {
         stackTrace: st,
       );
       onState(SyncState.failed);
+    }
+  }
+
+  Future<void> deleteExpense({
+    required String userId,
+    required String expenseId,
+    required bool isOnline,
+  }) async {
+    await LocalStorage.init();
+    await _rememberDeletedExpense(userId, expenseId);
+    await clearPending(userId, expenseId);
+    await LocalExpenseRepository().deleteExpense(userId, expenseId);
+
+    if (!isOnline) {
+      await markPendingDelete(userId, expenseId);
+      return;
+    }
+
+    try {
+      await FirebaseExpenseRepository().deleteExpense(userId, expenseId);
+      await clearPendingDelete(userId, expenseId);
+    } catch (_) {
+      await markPendingDelete(userId, expenseId);
+    }
+  }
+
+  Future<void> _uploadPendingExpenses(String fromUid, String toUid) async {
+    final localExpenses = LocalExpenseRepository();
+    final fbExpenses = FirebaseExpenseRepository();
+    final storage = StorageService();
+    final entries = _readPendingEntries(_pendingKey(fromUid));
+    final deletedIds = _deletedExpenseIds(fromUid)
+      ..addAll(_readPendingDeleteIds(_pendingDeleteKey(fromUid)));
+
+    for (final entry in entries) {
+      final id = entry['id'];
+      if (id == null || deletedIds.contains(id)) {
+        await clearPending(fromUid, id ?? '');
+        continue;
+      }
+      var expense = await localExpenses.getExpenseById(fromUid, id);
+      if (expense == null) {
+        await clearPending(fromUid, id);
+        continue;
+      }
+      try {
+        final url = expense.receiptUrl;
+        if (url != null &&
+            !StorageService.isRemote(url) &&
+            !StorageService.isFirebasePath(url)) {
+          final localFile = await StorageService.resolveLocal(url);
+          if (localFile != null) {
+            final supabaseUrl = await storage.saveReceipt(toUid, localFile);
+            expense = expense.copyWith(receiptUrl: supabaseUrl);
+            await localExpenses.upsertExpense(fromUid, expense);
+          }
+        }
+        await fbExpenses.upsertExpense(toUid, expense);
+        await clearPending(fromUid, id);
+      } catch (e, st) {
+        dev.log(
+          '[SYNC] Failed to upload pending expense $id: $e',
+          name: 'SyncService',
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadExpensesToLocal(String uid) async {
+    final pendingIds = _readPendingEntries(
+      _pendingKey(uid),
+    ).map((e) => e['id']).whereType<String>().toSet();
+    final pendingDeleteIds = _readPendingDeleteIds(
+      _pendingDeleteKey(uid),
+    ).toSet();
+    final deletedIds = _deletedExpenseIds(uid)..addAll(pendingDeleteIds);
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('expenses')
+        .get();
+    final remote = <Expense>[];
+    for (final doc in snap.docs) {
+      if (deletedIds.contains(doc.id)) continue;
+      remote.add(Expense.fromMap(doc.data(), id: doc.id));
+    }
+    await LocalExpenseRepository().replaceAllExpenses(
+      uid,
+      remote,
+      preserveIds: pendingIds,
+    );
+    for (final id in pendingDeleteIds) {
+      await LocalExpenseRepository().deleteExpense(uid, id);
+    }
+  }
+
+  Future<void> _refreshLocalExpenseMirror(String uid) async {
+    try {
+      await _downloadExpensesToLocal(uid);
+    } catch (e, st) {
+      dev.log(
+        '[SYNC] Local expense mirror refresh failed: $e',
+        name: 'SyncService',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 

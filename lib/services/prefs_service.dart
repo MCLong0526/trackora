@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'i18n.dart';
@@ -39,17 +40,20 @@ class PrefsService {
   /// Whether the user wants the home balance to be readable. Default
   /// `true` (shown). Persisted so the choice survives app restart.
   Future<bool> balanceVisible() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return false;
     return p.getBool(_kBalanceVisible) ?? false;
   }
 
   Future<void> setBalanceVisible(bool visible) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setBool(_kBalanceVisible, visible);
   }
 
   Future<List<String>> homeCardOrder() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return defaultHomeCards;
     final saved = p.getStringList(_kHomeCardOrder);
     if (saved == null) return defaultHomeCards;
     final all = defaultHomeCards.toSet();
@@ -61,12 +65,14 @@ class PrefsService {
   }
 
   Future<void> setHomeCardOrder(List<String> order) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setStringList(_kHomeCardOrder, order);
   }
 
   Future<Set<String>> visibleHomeCards() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return defaultHomeCards.toSet();
     return _decodeVisibleSet(
       p.getStringList(_kHomeCardsVisible),
       defaultHomeCards,
@@ -74,7 +80,8 @@ class PrefsService {
   }
 
   Future<void> setVisibleHomeCards(Set<String> ids) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setStringList(
       _kHomeCardsVisible,
       _sanitizeVisibleSet(ids, defaultHomeCards).toList(),
@@ -82,7 +89,8 @@ class PrefsService {
   }
 
   Future<Set<String>> visibleMoneyHubModules() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return defaultMoneyHubModules.toSet();
     return _decodeVisibleSet(
       p.getStringList(_kMoneyHubModulesVisible),
       defaultMoneyHubModules,
@@ -90,7 +98,8 @@ class PrefsService {
   }
 
   Future<void> setVisibleMoneyHubModules(Set<String> ids) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setStringList(
       _kMoneyHubModulesVisible,
       _sanitizeVisibleSet(ids, defaultMoneyHubModules).toList(),
@@ -98,7 +107,8 @@ class PrefsService {
   }
 
   Future<Set<String>> visibleStatsSections() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return defaultStatsSections.toSet();
     return _decodeVisibleSet(
       p.getStringList(_kStatsSectionsVisible),
       defaultStatsSections,
@@ -106,7 +116,8 @@ class PrefsService {
   }
 
   Future<void> setVisibleStatsSections(Set<String> ids) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setStringList(
       _kStatsSectionsVisible,
       _sanitizeVisibleSet(ids, defaultStatsSections).toList(),
@@ -114,50 +125,71 @@ class PrefsService {
   }
 
   Future<AppLocale> appLocale() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return AppLocale.system;
     return AppLocale.decode(p.getString(_kAppLocale));
   }
 
   Future<void> setAppLocale(AppLocale locale) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setString(_kAppLocale, locale.encode());
   }
 
   Future<String> currencySymbol() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return '\$';
     return p.getString(_kCurrency) ?? '\$';
   }
 
   Future<String> currencyCode() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return 'USD';
     return p.getString(_kCurrencyCode) ?? 'USD';
   }
 
   Future<void> setCurrency(String code, String symbol) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setString(_kCurrencyCode, code);
     await p.setString(_kCurrency, symbol);
   }
 
   Future<bool> liveActivityEnabled() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return false;
     return p.getBool(_kLiveActivityEnabled) ?? false;
   }
 
   Future<void> setLiveActivityEnabled(bool enabled) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setBool(_kLiveActivityEnabled, enabled);
   }
 
   /// Stored as one of: 'system', 'light', 'dark'. Default is 'system'.
   Future<ThemeMode> themeMode() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return ThemeMode.system;
     return _decodeThemeMode(p.getString(_kThemeMode));
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await _prefsOrNull();
+    if (p == null) return;
     await p.setString(_kThemeMode, _encodeThemeMode(mode));
+  }
+
+  Future<SharedPreferences?> _prefsOrNull() async {
+    try {
+      return await SharedPreferences.getInstance();
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
   }
 
   static ThemeMode _decodeThemeMode(String? raw) {

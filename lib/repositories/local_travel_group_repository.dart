@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive/hive.dart';
 
 import '../models/travel_expense.dart';
 import '../models/travel_group.dart';
@@ -12,7 +12,8 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
   Box<dynamic> get _expenses => LocalStorage.travelExpenses;
   Box<dynamic> get _members => LocalStorage.travelMembers;
 
-  String _newId() => Random().nextInt(0x7FFFFFFF).toRadixString(16) +
+  String _newId() =>
+      Random().nextInt(0x7FFFFFFF).toRadixString(16) +
       DateTime.now().millisecondsSinceEpoch.toRadixString(16);
 
   // ── Groups ──────────────────────────────────────────────────────────────────
@@ -27,10 +28,12 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
   List<TravelGroup> _readGroups(String userId) {
     return _groups.values
         .whereType<Map>()
-        .map((m) => TravelGroup.fromMap(
-              Map<String, dynamic>.from(m),
-              id: m['id'] as String,
-            ))
+        .map(
+          (m) => TravelGroup.fromMap(
+            Map<String, dynamic>.from(m),
+            id: m['id'] as String,
+          ),
+        )
         .where((g) => g.ownerId == userId || g.memberIds.contains(userId))
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -76,9 +79,9 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
   Stream<List<TravelGroupMember>> getMembers(String groupId) async* {
     await LocalStorage.init();
     yield _readMembers(groupId);
-    yield* _members
-        .watch()
-        .map<List<TravelGroupMember>>((_) => _readMembers(groupId));
+    yield* _members.watch().map<List<TravelGroupMember>>(
+      (_) => _readMembers(groupId),
+    );
   }
 
   List<TravelGroupMember> _readMembers(String groupId) {
@@ -88,10 +91,7 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
           final m = _members.get(k);
           if (m == null) return null;
           final data = Map<String, dynamic>.from(m as Map);
-          return TravelGroupMember.fromMap(
-            data,
-            id: data['id'] as String,
-          );
+          return TravelGroupMember.fromMap(data, id: data['id'] as String);
         })
         .whereType<TravelGroupMember>()
         .toList()
@@ -126,9 +126,9 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
   Stream<List<TravelExpense>> getExpenses(String groupId) async* {
     await LocalStorage.init();
     yield _readExpenses(groupId);
-    yield* _expenses
-        .watch()
-        .map<List<TravelExpense>>((_) => _readExpenses(groupId));
+    yield* _expenses.watch().map<List<TravelExpense>>(
+      (_) => _readExpenses(groupId),
+    );
   }
 
   List<TravelExpense> _readExpenses(String groupId) {
@@ -175,7 +175,10 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
 
   @override
   Future<void> storeInviteCode(
-      String code, String ownerId, String groupId) async {}
+    String code,
+    String ownerId,
+    String groupId,
+  ) async {}
 
   @override
   Future<String?> resolveInviteCode(String code) async => null;
@@ -193,7 +196,11 @@ class LocalTravelGroupRepository implements TravelGroupRepository {
   // ── Email Invites (not supported in local mode) ───────────────────────────────
 
   @override
-  Future<void> storeEmailInvite({required String email, required String groupId, required String ownerId}) async {}
+  Future<void> storeEmailInvite({
+    required String email,
+    required String groupId,
+    required String ownerId,
+  }) async {}
 
   @override
   Future<List<Map<String, String>>> fetchEmailInvites(String email) async => [];

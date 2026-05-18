@@ -73,10 +73,12 @@ final networkStatusProvider = StreamProvider<bool>((ref) async* {
 
 /// `true` if the device currently has internet access.
 final isOnlineProvider = Provider<bool>((ref) {
-  return ref.watch(networkStatusProvider).maybeWhen(
-    data: (online) => online,
-    orElse: () => true, // assume online until we know otherwise
-  );
+  return ref
+      .watch(networkStatusProvider)
+      .maybeWhen(
+        data: (online) => online,
+        orElse: () => true, // assume online until we know otherwise
+      );
 });
 
 final authServiceProvider = Provider((_) => AuthService());
@@ -200,8 +202,7 @@ final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final month = ref.watch(selectedMonthProvider);
   if (storageMode == StorageMode.firebase) {
     final isOnline = ref.watch(isOnlineProvider);
-    final pendingCount =
-        ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+    final pendingCount = ref.watch(pendingExpenseChangeCountProvider);
     // Use local Hive when offline or while pending entries are being synced
     // so newly-created offline entries appear immediately without flicker.
     if (!isOnline || pendingCount > 0) {
@@ -219,8 +220,7 @@ final allExpensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   if (user == null) return Stream.value([]);
   if (storageMode == StorageMode.firebase) {
     final isOnline = ref.watch(isOnlineProvider);
-    final pendingCount =
-        ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+    final pendingCount = ref.watch(pendingExpenseChangeCountProvider);
     if (!isOnline || pendingCount > 0) {
       return LocalExpenseRepository().getAllExpenses(user.uid);
     }
@@ -292,7 +292,8 @@ Map<String, double> computeAccountBalanceMap(
     }
     final toId = e.toAccountId;
     if (toId != null && balances.containsKey(toId)) {
-      balances[toId] = (balances[toId] ?? 0) + _effectiveAmount(e, currencyCodes[toId]);
+      balances[toId] =
+          (balances[toId] ?? 0) + _effectiveAmount(e, currencyCodes[toId]);
     }
   }
   return balances;
@@ -361,17 +362,21 @@ final fxPreferencesProvider = StreamProvider<FxPreferences>((ref) {
 });
 
 /// Live FX rates keyed by currency code (relative to user's main currency).
-final ratesProvider = FutureProvider.autoDispose<Map<String, double>>((ref) async {
+final ratesProvider = FutureProvider.autoDispose<Map<String, double>>((
+  ref,
+) async {
   final base = await ref.watch(currencyCodeProvider.future);
   return ref.read(exchangeRateServiceProvider).getRates(base);
 });
 
 /// Synchronous converter backed by currently loaded rates.
-final currencyConverterProvider = FutureProvider.autoDispose<CurrencyConverter>((ref) async {
-  final base = await ref.watch(currencyCodeProvider.future);
-  final rates = await ref.watch(ratesProvider.future);
-  return CurrencyConverter(base, rates);
-});
+final currencyConverterProvider = FutureProvider.autoDispose<CurrencyConverter>(
+  (ref) async {
+    final base = await ref.watch(currencyCodeProvider.future);
+    final rates = await ref.watch(ratesProvider.future);
+    return CurrencyConverter(base, rates);
+  },
+);
 
 /// Persisted theme-mode selection (system / light / dark). Reads on app
 /// start and writes whenever the user changes the picker in Settings.
@@ -537,6 +542,19 @@ final pendingSyncCountProvider = StreamProvider.autoDispose<int>((ref) {
   return SyncService().pendingCountStream(user.uid);
 });
 
+final pendingDeleteCountProvider = StreamProvider.autoDispose<int>((ref) {
+  if (storageMode != StorageMode.firebase) return Stream.value(0);
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(0);
+  return SyncService().pendingDeleteCountStream(user.uid);
+});
+
+final pendingExpenseChangeCountProvider = Provider.autoDispose<int>((ref) {
+  final pendingWrites = ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
+  final pendingDeletes = ref.watch(pendingDeleteCountProvider).valueOrNull ?? 0;
+  return pendingWrites + pendingDeletes;
+});
+
 final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((_) {
   switch (storageMode) {
     case StorageMode.local:
@@ -547,8 +565,9 @@ final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((_) {
 });
 
 /// Stream of all precious metal transactions for the active user.
-final preciousMetalsProvider =
-    StreamProvider.autoDispose<List<PreciousMetal>>((ref) {
+final preciousMetalsProvider = StreamProvider.autoDispose<List<PreciousMetal>>((
+  ref,
+) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
   return ref.read(preciousMetalRepositoryProvider).getAll(user.uid);
@@ -586,31 +605,29 @@ final travelGroupServiceProvider = Provider<TravelGroupService>((ref) {
   return TravelGroupService(ref.read(travelGroupRepositoryProvider));
 });
 
-final travelGroupsProvider =
-    StreamProvider.autoDispose<List<TravelGroup>>((ref) {
+final travelGroupsProvider = StreamProvider.autoDispose<List<TravelGroup>>((
+  ref,
+) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
   return ref.read(travelGroupRepositoryProvider).getGroups(user.uid);
 });
 
-final travelGroupMembersProvider =
-    StreamProvider.autoDispose.family<List<TravelGroupMember>, String>(
-  (ref, groupId) {
-    return ref.read(travelGroupRepositoryProvider).getMembers(groupId);
-  },
-);
+final travelGroupMembersProvider = StreamProvider.autoDispose
+    .family<List<TravelGroupMember>, String>((ref, groupId) {
+      return ref.read(travelGroupRepositoryProvider).getMembers(groupId);
+    });
 
-final travelGroupExpensesProvider =
-    StreamProvider.autoDispose.family<List<TravelExpense>, String>(
-  (ref, groupId) {
-    return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
-  },
-);
+final travelGroupExpensesProvider = StreamProvider.autoDispose
+    .family<List<TravelExpense>, String>((ref, groupId) {
+      return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
+    });
 
 // ── Stock Investments ─────────────────────────────────────────────────────────
 
-final stockInvestmentRepositoryProvider =
-    Provider<StockInvestmentRepository>((_) {
+final stockInvestmentRepositoryProvider = Provider<StockInvestmentRepository>((
+  _,
+) {
   return FirebaseStockInvestmentRepository();
 });
 
@@ -619,8 +636,7 @@ final stockServiceProvider = Provider((_) => StockService());
 /// Stream of all stock investments for the active user.
 final stockInvestmentsProvider =
     StreamProvider.autoDispose<List<StockInvestment>>((ref) {
-  final user = ref.watch(authStateProvider).valueOrNull;
-  if (user == null) return Stream.value(const []);
-  return ref.read(stockInvestmentRepositoryProvider).getAll(user.uid);
-});
-
+      final user = ref.watch(authStateProvider).valueOrNull;
+      if (user == null) return Stream.value(const []);
+      return ref.read(stockInvestmentRepositoryProvider).getAll(user.uid);
+    });

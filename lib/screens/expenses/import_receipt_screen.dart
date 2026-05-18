@@ -314,7 +314,15 @@ class _ImportReceiptScreenState extends ConsumerState<ImportReceiptScreen> {
       );
 
       if (isOnline) {
-        await expenses.addExpense(user.uid, expense);
+        try {
+          await expenses.addExpense(user.uid, expense);
+          await LocalExpenseRepository().upsertExpense(user.uid, expense);
+        } catch (_) {
+          await LocalExpenseRepository().upsertExpense(user.uid, expense);
+          if (storageMode == StorageMode.firebase) {
+            await SyncService().markPending(user.uid, expense.id);
+          }
+        }
       } else {
         await LocalExpenseRepository().upsertExpense(user.uid, expense);
         if (storageMode == StorageMode.firebase) {

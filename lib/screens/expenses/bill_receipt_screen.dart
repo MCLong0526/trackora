@@ -10,10 +10,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/split_bill.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
-const _paper = Color(0xFFF5F0E8);
-const _paperEdge = Color(0xFFE8E0D0);
+const _paper = Colors.white;
+const _paperEdge = Color(0xFFE0E0E0);
 const _purple = Color(0xFF6B40A8);
 const _ink = Color(0xFF1A1614);
 const _ink60 = Color(0xFF6B6259);
@@ -31,6 +32,7 @@ class BillReceiptScreen extends StatefulWidget {
 
 class _BillReceiptScreenState extends State<BillReceiptScreen> {
   final _shareButtonKey = GlobalKey();
+  final _receiptKey = GlobalKey();
   bool _sharing = false;
 
   Future<void> _share() async {
@@ -50,52 +52,17 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
 
   Future<void> _shareImageReceipt(Rect shareOrigin) async {
     if (!mounted) return;
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final captureKey = GlobalKey();
-    final screenSize = MediaQuery.sizeOf(context);
 
-    final entry = OverlayEntry(
-      builder: (ctx) => Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 0,
-            width: screenSize.width,
-            child: Material(
-              color: Colors.transparent,
-              child: Center(
-                child: RepaintBoundary(
-                  key: captureKey,
-                  child: _ReceiptCard(bill: widget.bill),
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(color: const Color(0xFF1C1C1E)),
-            ),
-          ),
-        ],
-      ),
-    );
+    // Capture directly from the RepaintBoundary in the widget tree —
+    // no overlay needed, which avoids iOS native share-sheet conflicts.
+    final boundary =
+        _receiptKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+    if (boundary == null) throw StateError('Receipt not ready for capture');
 
-    overlay.insert(entry);
     ui.Image? img;
     try {
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-
-      if (!mounted) return;
-
-      final boundary =
-          captureKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null) throw StateError('RepaintBoundary not found');
-
-      img = await boundary.toImage(pixelRatio: 2.5);
+      img = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw StateError('PNG encoding returned null');
 
@@ -117,7 +84,6 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
       );
     } finally {
       img?.dispose();
-      entry.remove();
     }
   }
 
@@ -134,8 +100,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE8E3DA);
+    final bg = context.brand.background;
 
     return Scaffold(
       backgroundColor: bg,
@@ -179,6 +144,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                       child: RepaintBoundary(
+                        key: _receiptKey,
                         child: _ReceiptCard(bill: widget.bill),
                       ),
                     ),

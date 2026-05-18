@@ -20,9 +20,10 @@ import '../services/prefs_service.dart';
 ///   snapshot (currency + totals + accounts + recentExpenses) via
 ///   WCSession applicationContext on every dashboard rebuild.
 class WatchService {
-  final WatchConnectivity _watch = WatchConnectivity();
   static const _watchQueueChannel = MethodChannel('trackora/watch_queue');
   StreamSubscription<Map<String, dynamic>>? _sub;
+  WatchConnectivity? _watch;
+  bool _watchUnavailable = false;
 
   String? _userId;
   ExpenseRepository? _repository;
@@ -69,8 +70,14 @@ class WatchService {
     // Also subscribe to messageStream as a fallback for sendMessage delivery.
     final bool supported;
     try {
-      supported = await _watch.isSupported;
+      final watch = _watchClient();
+      if (watch == null) return;
+      supported = await watch.isSupported;
     } on MissingPluginException {
+      return;
+    } on ArgumentError catch (e) {
+      debugPrint('[WatchService] native bridge unavailable: $e');
+      _watchUnavailable = true;
       return;
     } catch (_) {
       return;
@@ -78,7 +85,9 @@ class WatchService {
     if (!supported) return;
 
     try {
-      _sub = _watch.messageStream.listen(
+      final watch = _watchClient();
+      if (watch == null) return;
+      _sub = watch.messageStream.listen(
         (message) async {
           final uid = _userId;
           final repo = _repository;
@@ -95,6 +104,10 @@ class WatchService {
       );
     } on MissingPluginException {
       return;
+    } on ArgumentError catch (e) {
+      debugPrint('[WatchService] native bridge unavailable: $e');
+      _watchUnavailable = true;
+      return;
     } catch (_) {
       return;
     }
@@ -110,6 +123,21 @@ class WatchService {
     await _sub?.cancel();
     _sub = null;
     _subscribed = false;
+  }
+
+  WatchConnectivity? _watchClient() {
+    if (_watchUnavailable) return null;
+    try {
+      return _watch ??= WatchConnectivity();
+    } on ArgumentError catch (e) {
+      debugPrint('[WatchService] native bridge unavailable: $e');
+      _watchUnavailable = true;
+      return null;
+    } catch (e) {
+      debugPrint('[WatchService] bridge unavailable: $e');
+      _watchUnavailable = true;
+      return null;
+    }
   }
 
   Future<void> _handle(

@@ -1,6 +1,6 @@
 import 'dart:developer' as dev;
 
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive/hive.dart';
 
 import '../models/expense.dart';
 import 'expense_repository.dart';
@@ -60,6 +60,43 @@ class LocalExpenseRepository implements ExpenseRepository {
     await _expenses.delete(_expenseKey(userId, expenseId));
   }
 
+  Future<Expense?> getExpenseById(String userId, String expenseId) async {
+    await LocalStorage.init();
+    final raw = _expenses.get(_expenseKey(userId, expenseId));
+    if (raw is! Map) return null;
+    final data = Map<String, dynamic>.from(raw);
+    if (data['userId'] != userId) return null;
+    return Expense.fromMap(data, id: expenseId);
+  }
+
+  Future<void> replaceAllExpenses(
+    String userId,
+    List<Expense> expenses, {
+    Set<String> preserveIds = const {},
+  }) async {
+    await LocalStorage.init();
+    final incomingIds = expenses
+        .map((e) => e.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    for (final key in _expenses.keys.toList()) {
+      final raw = _expenses.get(key);
+      if (raw is! Map) continue;
+      final data = Map<String, dynamic>.from(raw);
+      final id = data['id'];
+      if (data['userId'] == userId &&
+          id is String &&
+          !incomingIds.contains(id) &&
+          !preserveIds.contains(id)) {
+        await _expenses.delete(key);
+      }
+    }
+    for (final expense in expenses) {
+      if (expense.id.isEmpty) continue;
+      await upsertExpense(userId, expense);
+    }
+  }
+
   @override
   Stream<double> getMonthlyBudget(String userId) async* {
     await LocalStorage.init();
@@ -97,7 +134,10 @@ class LocalExpenseRepository implements ExpenseRepository {
           try {
             return Expense.fromMap(data, id: data['id'] as String);
           } catch (e, st) {
-            dev.log('[LocalExpenseRepo] skipping malformed row ${data['id']}: $e', stackTrace: st);
+            dev.log(
+              '[LocalExpenseRepo] skipping malformed row ${data['id']}: $e',
+              stackTrace: st,
+            );
             return null;
           }
         })

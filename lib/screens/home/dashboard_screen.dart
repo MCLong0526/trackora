@@ -7,8 +7,8 @@ import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/expense.dart';
-import '../../repositories/firebase_expense_repository.dart';
 import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_split_bill_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../services/sync_service.dart';
@@ -41,12 +41,16 @@ class DashboardScreen extends ConsumerWidget {
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-    final monthExpenseOnly =
-        monthExpenses.where((e) => e.type == EntryType.expense).toList();
-    final monthSpent =
-        monthExpenseOnly.fold<double>(0, (s, e) => s + e.convertedAmount);
-    final hasForeignExpense =
-        monthExpenseOnly.any((e) => e.baseCurrencyAmount != null);
+    final monthExpenseOnly = monthExpenses
+        .where((e) => e.type == EntryType.expense)
+        .toList();
+    final monthSpent = monthExpenseOnly.fold<double>(
+      0,
+      (s, e) => s + e.convertedAmount,
+    );
+    final hasForeignExpense = monthExpenseOnly.any(
+      (e) => e.baseCurrencyAmount != null,
+    );
 
     final monthIncome = monthExpenses
         .where((e) => e.type.isInflow)
@@ -242,6 +246,9 @@ class DashboardScreen extends ConsumerWidget {
                                 currencySymbol: symbol,
                                 account: acct,
                                 flat: true,
+                                hasSplitBill: user != null &&
+                                    LocalSplitBillRepository.hasSplitBillSync(
+                                        user.uid, expense.id),
                                 onTap: () => Navigator.push(
                                   context,
                                   CupertinoPageRoute(
@@ -259,31 +266,35 @@ class DashboardScreen extends ConsumerWidget {
                                 onDelete: () async {
                                   if (user == null) return;
                                   final uid = user.uid;
-                                  if (storageMode == StorageMode.firebase) {
-                                    final isOnline = ref.read(isOnlineProvider);
-                                    if (isOnline) {
-                                      try {
-                                        await FirebaseExpenseRepository()
-                                            .deleteExpense(uid, expense.id);
-                                      } catch (_) {
-                                        await SyncService().markPendingDelete(
-                                            uid, expense.id);
-                                      }
+                                  try {
+                                    if (storageMode == StorageMode.firebase) {
+                                      final isOnline = ref.read(
+                                        isOnlineProvider,
+                                      );
+                                      await SyncService().deleteExpense(
+                                        userId: uid,
+                                        expenseId: expense.id,
+                                        isOnline: isOnline,
+                                      );
                                     } else {
-                                      await SyncService().markPendingDelete(
-                                          uid, expense.id);
+                                      await LocalExpenseRepository()
+                                          .deleteExpense(uid, expense.id);
                                     }
-                                    await SyncService()
-                                        .clearPending(uid, expense.id);
-                                  }
-                                  await LocalExpenseRepository()
-                                      .deleteExpense(uid, expense.id);
-                                  if (context.mounted) {
+                                    if (!context.mounted) return;
                                     AppToast.show(
                                       context,
                                       context.t('expense.entryDeleted'),
                                       type: AppToastType.info,
                                       icon: CupertinoIcons.trash,
+                                    );
+                                  } catch (_) {
+                                    if (!context.mounted) return;
+                                    AppToast.show(
+                                      context,
+                                      context.t('common.error'),
+                                      type: AppToastType.error,
+                                      icon: CupertinoIcons
+                                          .exclamationmark_circle_fill,
                                     );
                                   }
                                 },
@@ -980,7 +991,9 @@ class _BudgetOverviewCard extends StatelessWidget {
                     value: visible
                         ? formatMoney('', budgetRemaining.abs()).trim()
                         : '****',
-                    label: overspent ? context.t('home.overBy') : context.t('home.budgetRemaining'),
+                    label: overspent
+                        ? context.t('home.overBy')
+                        : context.t('home.budgetRemaining'),
                     valueColor: overspent
                         ? AppColors.expense
                         : AppColors.income,
@@ -1302,26 +1315,31 @@ class _AllBillsSheet extends ConsumerWidget {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final uid = user.uid;
-    if (storageMode == StorageMode.firebase) {
-      final isOnline = ref.read(isOnlineProvider);
-      if (isOnline) {
-        try {
-          await FirebaseExpenseRepository().deleteExpense(uid, expense.id);
-        } catch (_) {
-          await SyncService().markPendingDelete(uid, expense.id);
-        }
+    try {
+      if (storageMode == StorageMode.firebase) {
+        final isOnline = ref.read(isOnlineProvider);
+        await SyncService().deleteExpense(
+          userId: uid,
+          expenseId: expense.id,
+          isOnline: isOnline,
+        );
       } else {
-        await SyncService().markPendingDelete(uid, expense.id);
+        await LocalExpenseRepository().deleteExpense(uid, expense.id);
       }
-      await SyncService().clearPending(uid, expense.id);
-    }
-    await LocalExpenseRepository().deleteExpense(uid, expense.id);
-    if (context.mounted) {
+      if (!context.mounted) return;
       AppToast.show(
         context,
         context.t('expense.entryDeleted'),
         type: AppToastType.info,
         icon: CupertinoIcons.trash,
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      AppToast.show(
+        context,
+        context.t('common.error'),
+        type: AppToastType.error,
+        icon: CupertinoIcons.exclamationmark_circle_fill,
       );
     }
   }
@@ -1479,5 +1497,3 @@ class _AllBillsSheet extends ConsumerWidget {
     );
   }
 }
-
-

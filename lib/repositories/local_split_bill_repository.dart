@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:hive/hive.dart';
+
 import '../models/split_bill.dart';
 import 'local_storage.dart';
 
@@ -9,6 +11,14 @@ class LocalSplitBillRepository {
   static String _key(String uid, String id) => 'splitbill_${uid}_$id';
   static String _byExpenseKey(String uid, String expenseId) =>
       'splitbill_expense_${uid}_$expenseId';
+
+  /// Returns true if the expense has an associated split bill stored locally.
+  /// Safe to call synchronously after LocalStorage is initialized.
+  static bool hasSplitBillSync(String uid, String expenseId) {
+    if (!Hive.isBoxOpen(LocalStorage.splitBillsBoxName)) return false;
+    return LocalStorage.splitBills
+        .containsKey('splitbill_expense_${uid}_$expenseId');
+  }
 
   Future<String> saveSplitBill(String uid, SplitBill bill) async {
     await LocalStorage.init();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
@@ -20,7 +22,8 @@ class WidgetSyncService {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
 
-  final WatchConnectivity _watch = WatchConnectivity();
+  bool _watchUnavailable = false;
+  WatchConnectivity? _watch;
 
   // Last context successfully pushed to the Watch so we can re-send it
   // when the WCSession activates without waiting for a dashboard rebuild.
@@ -28,7 +31,7 @@ class WidgetSyncService {
 
   Future<void> init() async {
     if (!_enabled) return;
-    await _runOptional(HomeWidget.setAppGroupId(_appGroupId));
+    await _runOptional(() => HomeWidget.setAppGroupId(_appGroupId));
   }
 
   Future<void> push({
@@ -67,7 +70,7 @@ class WidgetSyncService {
         iOSName: _iosWidgetName,
         androidName: _androidWidgetProvider,
       );
-    }());
+    });
 
     // Keep Live Activity in sync with latest spending (no-ops if not active).
     LiveActivityService.update(
@@ -80,20 +83,26 @@ class WidgetSyncService {
     // without depending solely on the App Group UserDefaults being populated.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       try {
-        final supported = await _watch.isSupported;
+        final watch = _watchClient();
+        if (watch == null) return;
+        final supported = await watch.isSupported;
         if (supported) {
-          final expensesPayload = recentExpenses.take(5).map((e) => {
-            'id': e.id,
-            'amount': e.amount,
-            'category': e.category,
-            'note': e.note,
-            'type': e.type.name,
-            'date': e.date.millisecondsSinceEpoch / 1000.0,
-          }).toList();
-          final accountsPayload = accounts.map((a) => {
-            'id': a.id,
-            'name': a.name,
-          }).toList();
+          final expensesPayload = recentExpenses
+              .take(5)
+              .map(
+                (e) => {
+                  'id': e.id,
+                  'amount': e.amount,
+                  'category': e.category,
+                  'note': e.note,
+                  'type': e.type.name,
+                  'date': e.date.millisecondsSinceEpoch / 1000.0,
+                },
+              )
+              .toList();
+          final accountsPayload = accounts
+              .map((a) => {'id': a.id, 'name': a.name})
+              .toList();
           final ctx = {
             'currency': currencySymbol,
             'monthSpent': monthSpent,
@@ -103,11 +112,14 @@ class WidgetSyncService {
             'recentExpenses': expensesPayload,
             'accounts': accountsPayload,
           };
-          await _watch.updateApplicationContext(ctx);
+          await watch.updateApplicationContext(ctx);
           _lastWatchContext = ctx;
         }
       } on MissingPluginException {
         // watch_connectivity not available — skip
+      } on ArgumentError catch (e) {
+        debugPrint('[WidgetSync] watch native bridge unavailable: $e');
+        _watchUnavailable = true;
       } catch (_) {
         // Best-effort; never block the main app
       }
@@ -122,12 +134,17 @@ class WidgetSyncService {
     final ctx = _lastWatchContext;
     if (ctx == null) return;
     try {
-      final supported = await _watch.isSupported;
+      final watch = _watchClient();
+      if (watch == null) return;
+      final supported = await watch.isSupported;
       if (supported) {
-        await _watch.updateApplicationContext(ctx);
+        await watch.updateApplicationContext(ctx);
       }
     } on MissingPluginException {
       // watch_connectivity not available
+    } on ArgumentError catch (e) {
+      debugPrint('[WidgetSync] watch native bridge unavailable: $e');
+      _watchUnavailable = true;
     } catch (_) {
       // Best-effort
     }
@@ -141,7 +158,7 @@ class WidgetSyncService {
         iOSName: _iosWidgetName,
         androidName: _androidWidgetProvider,
       );
-    }());
+    });
   }
 
   /// Optimistically reflects a quick expense before the next dashboard rebuild
@@ -185,16 +202,19 @@ class WidgetSyncService {
         iOSName: _iosWidgetName,
         androidName: _androidWidgetProvider,
       );
-    }());
+    });
   }
 
-  Future<void> _runOptional(Future<void> future) async {
+  Future<void> _runOptional(FutureOr<void> Function() action) async {
     try {
-      await future;
+      await action();
     } on MissingPluginException {
       _enabled = false;
     } on PlatformException {
       // Widget sync is best-effort; the main app must still open.
+    } on ArgumentError catch (e) {
+      debugPrint('[WidgetSync] native bridge unavailable: $e');
+      _enabled = false;
     } catch (_) {
       // Keep launch and saves resilient even if the native widget bridge fails.
     }
@@ -208,7 +228,26 @@ class WidgetSyncService {
       return null;
     } on PlatformException {
       return null;
+    } on ArgumentError catch (e) {
+      debugPrint('[WidgetSync] native bridge unavailable: $e');
+      _enabled = false;
+      return null;
     } catch (_) {
+      return null;
+    }
+  }
+
+  WatchConnectivity? _watchClient() {
+    if (_watchUnavailable) return null;
+    try {
+      return _watch ??= WatchConnectivity();
+    } on ArgumentError catch (e) {
+      debugPrint('[WidgetSync] watch native bridge unavailable: $e');
+      _watchUnavailable = true;
+      return null;
+    } catch (e) {
+      debugPrint('[WidgetSync] watch bridge unavailable: $e');
+      _watchUnavailable = true;
       return null;
     }
   }

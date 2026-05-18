@@ -31,16 +31,16 @@ class StockInvestment {
 
   // Maps Yahoo Finance exchange codes to user-friendly display names.
   static const _yahooExchangeMap = {
-    'KLS': 'KLSE', 'KL': 'KLSE',               // Bursa Malaysia
+    'KLS': 'KLSE', 'KL': 'KLSE', // Bursa Malaysia
     'NMS': 'NASDAQ', 'NGM': 'NASDAQ', 'NCM': 'NASDAQ',
     'NYQ': 'NYSE', 'NYE': 'NYSE',
-    'ASX': 'ASX',                               // Australia
-    'SGX': 'SGX', 'SES': 'SGX',                // Singapore
-    'LSE': 'LSE',                               // London
-    'TSX': 'TSX',                               // Toronto
-    'HKG': 'HKEX', 'HKS': 'HKEX',             // Hong Kong
-    'TYO': 'TSE',                               // Tokyo
-    'SHH': 'SSE', 'SHZ': 'SZSE',              // China
+    'ASX': 'ASX', // Australia
+    'SGX': 'SGX', 'SES': 'SGX', // Singapore
+    'LSE': 'LSE', // London
+    'TSX': 'TSX', // Toronto
+    'HKG': 'HKEX', 'HKS': 'HKEX', // Hong Kong
+    'TYO': 'TSE', // Tokyo
+    'SHH': 'SSE', 'SHZ': 'SZSE', // China
   };
 
   String get exchangeDisplay {
@@ -59,13 +59,26 @@ class StockInvestment {
 
   double currentValue(double currentPrice) => quantity * currentPrice;
 
-  double gainLoss(double currentPrice) => currentValue(currentPrice) - totalCost;
+  double gainLoss(double currentPrice) =>
+      currentValue(currentPrice) - totalCost;
 
   double gainLossPercent(double currentPrice) =>
       totalCost > 0 ? (gainLoss(currentPrice) / totalCost) * 100 : 0;
 
-  factory StockInvestment.fromMap(Map<String, dynamic> data,
-      {required String id}) {
+  double get realizedGainLoss {
+    var total = 0.0;
+    for (final tx in transactions) {
+      if (tx['type'] == 'sell') {
+        total += (tx['realizedGainLoss'] as num?)?.toDouble() ?? 0.0;
+      }
+    }
+    return total;
+  }
+
+  factory StockInvestment.fromMap(
+    Map<String, dynamic> data, {
+    required String id,
+  }) {
     return StockInvestment(
       id: id,
       symbol: data['symbol'] as String? ?? '',
@@ -78,9 +91,11 @@ class StockInvestment {
       watchOnly: data['watchOnly'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
-      transactions: (data['transactions'] as List?)
-          ?.map((e) => Map<String, dynamic>.from(e as Map))
-          .toList() ?? [],
+      transactions:
+          (data['transactions'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
     );
   }
 

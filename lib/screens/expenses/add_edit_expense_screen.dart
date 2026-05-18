@@ -13,7 +13,6 @@ import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/split_bill.dart';
-import '../../repositories/firebase_expense_repository.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../repositories/local_split_bill_repository.dart';
 import '../../repositories/split_bill_repository.dart';
@@ -533,9 +532,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           name: 'AddEditExpense',
         );
         if (isOnline) {
-          await expenses.updateExpense(user.uid, updated);
-          if (uploadedNewUrl != null && _existingReceiptUrl != null) {
-            await storage.delete(_existingReceiptUrl!);
+          try {
+            await expenses.updateExpense(user.uid, updated);
+            await LocalExpenseRepository().upsertExpense(user.uid, updated);
+            if (uploadedNewUrl != null && _existingReceiptUrl != null) {
+              await storage.delete(_existingReceiptUrl!);
+            }
+          } catch (_) {
+            await LocalExpenseRepository().upsertExpense(user.uid, updated);
+            if (storageMode == StorageMode.firebase) {
+              await SyncService().markPending(user.uid, updated.id);
+            }
           }
         } else {
           await LocalExpenseRepository().updateExpense(user.uid, updated);
@@ -567,7 +574,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           name: 'AddEditExpense',
         );
         if (isOnline) {
-          await expenses.addExpense(user.uid, e);
+          try {
+            await expenses.addExpense(user.uid, e);
+            await LocalExpenseRepository().upsertExpense(user.uid, e);
+          } catch (_) {
+            await LocalExpenseRepository().upsertExpense(user.uid, e);
+            if (storageMode == StorageMode.firebase) {
+              await SyncService().markPending(user.uid, e.id);
+            }
+          }
         } else {
           await LocalExpenseRepository().upsertExpense(user.uid, e);
           if (storageMode == StorageMode.firebase) {
@@ -895,30 +910,34 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (confirm != true) return;
     final expenseId = widget.expense!.id;
     try {
-      final isOnline = storageMode == StorageMode.firebase && ref.read(isOnlineProvider);
+      final isOnline =
+          storageMode == StorageMode.firebase && ref.read(isOnlineProvider);
       await _deleteSplitBillForExpense(
         uid: user.uid,
         expenseId: expenseId,
         isOnline: isOnline,
       );
       if (storageMode == StorageMode.firebase) {
-        // Tombstone before clearing pending so provider stream doesn't flip mid-flow.
-        if (isOnline) {
-          try {
-            await FirebaseExpenseRepository().deleteExpense(user.uid, expenseId);
-          } catch (_) {
-            await SyncService().markPendingDelete(user.uid, expenseId);
-          }
-        } else {
-          await SyncService().markPendingDelete(user.uid, expenseId);
-        }
-        await SyncService().clearPending(user.uid, expenseId);
+        await SyncService().deleteExpense(
+          userId: user.uid,
+          expenseId: expenseId,
+          isOnline: isOnline,
+        );
+      } else {
+        await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
       }
-      await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
     } catch (e, st) {
-      dev.log('[Expense] delete failed: $e', name: 'AddEditExpense', stackTrace: st);
+      dev.log(
+        '[Expense] delete failed: $e',
+        name: 'AddEditExpense',
+        stackTrace: st,
+      );
       if (mounted) {
-        AppToast.show(context, context.t('common.error'), type: AppToastType.error);
+        AppToast.show(
+          context,
+          context.t('common.error'),
+          type: AppToastType.error,
+        );
       }
       return;
     }

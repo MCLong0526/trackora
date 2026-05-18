@@ -919,15 +919,10 @@ class _AccountsSectionState extends State<_AccountsSection> {
           decoration: BoxDecoration(
             color: brand.surface,
             borderRadius: BorderRadius.circular(18),
-            ),
+          ),
           child: widget.accounts.isEmpty
               ? _buildEmpty(context, brand)
-              : _buildChart(
-                  context,
-                  brand,
-                  positiveAccounts,
-                  balanceMap,
-                ),
+              : _buildChart(context, brand, positiveAccounts, balanceMap),
         ),
       ],
     );
@@ -1169,16 +1164,22 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
-                                        color: isActive ? brand.ink : brand.inkSoft,
+                                        color: isActive
+                                            ? brand.ink
+                                            : brand.inkSoft,
                                       ),
                                     ),
-                                    if (a.currencyCode != null && a.currencyCode != widget.mainCode && widget.converter != null)
+                                    if (a.currencyCode != null &&
+                                        a.currencyCode != widget.mainCode &&
+                                        widget.converter != null)
                                       Text(
                                         'est. ${kSupportedCurrencies[widget.mainCode] ?? widget.mainCode} ${convertedBal.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontSize: 9,
                                           fontWeight: FontWeight.w500,
-                                          color: brand.inkSoft.withValues(alpha: 0.7),
+                                          color: brand.inkSoft.withValues(
+                                            alpha: 0.7,
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -1262,7 +1263,7 @@ class _GroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Column(children: children),
@@ -1539,8 +1540,14 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return context.t('settings.justNow');
-    if (diff.inMinutes < 60) return context.t('settings.minutesAgo').replaceAll('{m}', '${diff.inMinutes}');
-    if (diff.inHours < 24) return context.t('settings.hoursAgo').replaceAll('{h}', '${diff.inHours}');
+    if (diff.inMinutes < 60)
+      return context
+          .t('settings.minutesAgo')
+          .replaceAll('{m}', '${diff.inMinutes}');
+    if (diff.inHours < 24)
+      return context
+          .t('settings.hoursAgo')
+          .replaceAll('{h}', '${diff.inHours}');
     return context.t('settings.daysAgo').replaceAll('{d}', '${diff.inDays}');
   }
 
@@ -1562,6 +1569,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
       final user = ref.read(authStateProvider).valueOrNull;
       if (user == null) {
         _onSyncState(SyncState.failed);
+        _showError('Not signed in to Firebase.');
         return;
       }
       // Only sync pending changes for the authenticated user.
@@ -1572,7 +1580,10 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
         onState: _onSyncState,
       );
       // Don't show success if the sync internally failed.
-      if (_state == SyncState.failed) return;
+      if (_state == SyncState.failed) {
+        if (mounted) _showError('Sync failed.');
+        return;
+      }
       if (mounted) {
         _onSyncState(SyncState.success);
         setState(() => _lastSynced = DateTime.now());
@@ -1645,7 +1656,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
     final pendingCount = ref.watch(pendingSyncCountProvider).valueOrNull ?? 0;
 
     // Auto-sync when connectivity is restored.
-    if (_prevOnline == false && isOnline && _email != null &&
+    if (_prevOnline == false &&
+        isOnline &&
+        _email != null &&
         _state != SyncState.syncing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _state != SyncState.syncing) _syncNow();
@@ -1688,23 +1701,31 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
     } else if (hasFailed) {
       syncLabel = context.t('settings.syncFailed');
     } else if (_lastSynced != null) {
-      syncLabel = context.t('settings.syncedRelative').replaceAll('{time}', _relativeTime(_lastSynced!));
+      syncLabel = context
+          .t('settings.syncedRelative')
+          .replaceAll('{time}', _relativeTime(_lastSynced!));
     } else if (hasSynced) {
       syncLabel = context.t('settings.syncedToCloud');
     } else if (hasPending) {
-      syncLabel = context.t('settings.pendingCount').replaceAll('{count}', '$pendingCount');
+      syncLabel = context
+          .t('settings.pendingCount')
+          .replaceAll('{count}', '$pendingCount');
     } else {
-      syncLabel = _email != null ? context.t('settings.notSyncedYet') : context.t('settings.notConnected');
+      syncLabel = _email != null
+          ? context.t('settings.notSyncedYet')
+          : context.t('settings.notConnected');
     }
 
     final bool canSync = isOnline && !isSyncing;
-    final String syncBtnLabel = _email != null ? context.t('settings.syncNow') : context.t('settings.signInSync');
+    final String syncBtnLabel = _email != null
+        ? context.t('settings.syncNow')
+        : context.t('settings.signInSync');
 
     return Container(
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: Column(
@@ -1734,10 +1755,8 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                           )
                         : AnimatedSwitcher(
                             duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, anim) => ScaleTransition(
-                              scale: anim,
-                              child: child,
-                            ),
+                            transitionBuilder: (child, anim) =>
+                                ScaleTransition(scale: anim, child: child),
                             child: Icon(
                               iconData,
                               key: ValueKey(iconData),
@@ -1761,7 +1780,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                         ),
                         if (hasPending)
                           Text(
-                            context.t('settings.pendingOffline').replaceAll('{count}', '$pendingCount'),
+                            context
+                                .t('settings.pendingOffline')
+                                .replaceAll('{count}', '$pendingCount'),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -1849,7 +1870,9 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        isOnline ? context.t('settings.online') : context.t('settings.offline'),
+                        isOnline
+                            ? context.t('settings.online')
+                            : context.t('settings.offline'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -2254,7 +2277,9 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      context.t('settings.verificationSent').replaceAll('{email}', _newEmailCtrl.text.trim()),
+                      context
+                          .t('settings.verificationSent')
+                          .replaceAll('{email}', _newEmailCtrl.text.trim()),
                       style: TextStyle(
                         fontSize: 13,
                         color: brand.ink,

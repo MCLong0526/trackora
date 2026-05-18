@@ -42,7 +42,10 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
   }
 
   Future<void> _loadQuote() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final svc = ref.read(stockServiceProvider);
     final q = await svc.getQuote(widget.stock.symbol, range: _range);
     if (!mounted) return;
@@ -81,10 +84,14 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
     final currentPriceLocal = _quote != null
         ? (_quote!.price * (isUsd ? usdToLocal : 1.0))
         : null;
-    final estValue = currentPriceLocal != null ? currentPriceLocal * stock.quantity : null;
+    final estValue = currentPriceLocal != null
+        ? currentPriceLocal * stock.quantity
+        : null;
     final costBasis = stock.totalCost * (isUsd ? usdToLocal : 1.0);
     final gain = estValue != null ? estValue - costBasis : null;
-    final returnPct = costBasis > 0 && gain != null ? (gain / costBasis) * 100 : null;
+    final returnPct = costBasis > 0 && gain != null
+        ? (gain / costBasis) * 100
+        : null;
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -100,9 +107,17 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                        child: Icon(CupertinoIcons.chevron_left, size: 16, color: brand.ink),
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.chevron_left,
+                          size: 16,
+                          color: brand.ink,
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -115,10 +130,21 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(stock.symbol,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: brand.ink)),
-                            Text(stock.exchangeDisplay,
-                              style: TextStyle(fontSize: 11, color: brand.inkSoft)),
+                            Text(
+                              stock.symbol,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: brand.ink,
+                              ),
+                            ),
+                            Text(
+                              stock.exchangeDisplay,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: brand.inkSoft,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -130,19 +156,34 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                         GestureDetector(
                           onTap: () => _showHistory(context),
                           child: Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                            child: Icon(CupertinoIcons.clock, size: 16, color: brand.ink),
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: brand.surface,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              CupertinoIcons.clock,
+                              size: 16,
+                              color: brand.ink,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: () => setState(() => _bookmarked = !_bookmarked),
+                          onTap: () =>
+                              setState(() => _bookmarked = !_bookmarked),
                           child: Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: brand.surface,
+                              shape: BoxShape.circle,
+                            ),
                             child: Icon(
-                              _bookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
+                              _bookmarked
+                                  ? CupertinoIcons.bookmark_fill
+                                  : CupertinoIcons.bookmark,
                               size: 16,
                               color: _bookmarked ? _blue : brand.ink,
                             ),
@@ -195,7 +236,11 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                         children: [
                           Text(
                             '\$',
-                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500, color: brand.inkSoft),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w500,
+                              color: brand.inkSoft,
+                            ),
                           ),
                           const SizedBox(width: 2),
                           Text(
@@ -210,7 +255,11 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                           const SizedBox(width: 8),
                           Text(
                             _quote!.currency,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: brand.inkSoft),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: brand.inkSoft,
+                            ),
                           ),
                         ],
                       ),
@@ -226,11 +275,20 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text('Today', style: TextStyle(fontSize: 14, color: brand.inkSoft)),
+                          Text(
+                            'Today',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: brand.inkSoft,
+                            ),
+                          ),
                         ],
                       ),
                     ] else if (_loading)
-                      const SizedBox(height: 60, child: Center(child: CupertinoActivityIndicator())),
+                      const SizedBox(
+                        height: 60,
+                        child: Center(child: CupertinoActivityIndicator()),
+                      ),
                   ],
                 ),
               ),
@@ -256,10 +314,30 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                         child: _loading
                             ? const Center(child: CupertinoActivityIndicator())
                             : _error != null
-                                ? Center(child: Text(_error!, style: TextStyle(color: brand.inkSoft, fontSize: 13)))
-                                : _quote != null && _quote!.chartPoints.isNotEmpty
-                                    ? _LineChart(points: _quote!.chartPoints, color: lineColor, isDark: isDark)
-                                    : Center(child: Text('No data', style: TextStyle(color: brand.inkSoft, fontSize: 13))),
+                            ? Center(
+                                child: Text(
+                                  _error!,
+                                  style: TextStyle(
+                                    color: brand.inkSoft,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              )
+                            : _quote != null && _quote!.chartPoints.isNotEmpty
+                            ? _LineChart(
+                                points: _quote!.chartPoints,
+                                color: lineColor,
+                                isDark: isDark,
+                              )
+                            : Center(
+                                child: Text(
+                                  'No data',
+                                  style: TextStyle(
+                                    color: brand.inkSoft,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
                       ),
                       const SizedBox(height: 12),
                       // Range selector
@@ -323,25 +401,41 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('UNITS',
-                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                          color: brand.inkSoft, letterSpacing: 0.8)),
+                                      Text(
+                                        'UNITS',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: brand.inkSoft,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
                                       const SizedBox(height: 6),
                                       RichText(
-                                        text: TextSpan(children: [
-                                          TextSpan(
-                                            text: _fmtQty(stock.quantity),
-                                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
-                                              color: brand.ink, letterSpacing: -0.8),
-                                          ),
-                                          TextSpan(
-                                            text: ' sh',
-                                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500,
-                                              color: brand.inkSoft),
-                                          ),
-                                        ]),
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: _fmtQty(stock.quantity),
+                                              style: TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.w800,
+                                                color: brand.ink,
+                                                letterSpacing: -0.8,
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: ' sh',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                                color: brand.inkSoft,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -352,30 +446,54 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('EST. VALUE',
-                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                          color: brand.inkSoft, letterSpacing: 0.8)),
+                                      Text(
+                                        'EST. VALUE',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: brand.inkSoft,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
                                       const SizedBox(height: 6),
                                       if (estValue != null)
                                         RichText(
-                                          text: TextSpan(children: [
-                                            TextSpan(
-                                              text: '$symbol ',
-                                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500,
-                                                color: brand.inkSoft),
-                                            ),
-                                            TextSpan(
-                                              text: NumberFormat('#,##0').format(estValue),
-                                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
-                                                color: brand.ink, letterSpacing: -0.8),
-                                            ),
-                                          ]),
+                                          text: TextSpan(
+                                            children: [
+                                              TextSpan(
+                                                text: '$symbol ',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: brand.inkSoft,
+                                                ),
+                                              ),
+                                              TextSpan(
+                                                text: NumberFormat(
+                                                  '#,##0',
+                                                ).format(estValue),
+                                                style: TextStyle(
+                                                  fontSize: 28,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: brand.ink,
+                                                  letterSpacing: -0.8,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         )
                                       else
-                                        Text('–', style: TextStyle(fontSize: 28,
-                                          fontWeight: FontWeight.w800, color: brand.ink)),
+                                        Text(
+                                          '–',
+                                          style: TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w800,
+                                            color: brand.ink,
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -383,7 +501,12 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                             ],
                           ),
                         ),
-                        Divider(height: 1, color: brand.divider, indent: 16, endIndent: 16),
+                        Divider(
+                          height: 1,
+                          color: brand.divider,
+                          indent: 16,
+                          endIndent: 16,
+                        ),
                         // Bottom: 2-column — AVG BUY/GAIN | COST BASIS/RETURN
                         Padding(
                           padding: const EdgeInsets.all(16),
@@ -394,27 +517,47 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('AVG BUY',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    Text(
+                                      'AVG BUY',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       '\$${stock.buyPrice.toStringAsFixed(2)}',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
-                                        color: brand.ink, letterSpacing: -0.3),
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: brand.ink,
+                                        letterSpacing: -0.3,
+                                      ),
                                     ),
                                     const SizedBox(height: 16),
-                                    Text('GAIN',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    Text(
+                                      'GAIN',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       gain != null
                                           ? '${gain >= 0 ? '+' : '-'}$symbol ${NumberFormat('#,##0').format(gain.abs())}'
                                           : '–',
                                       style: TextStyle(
-                                        fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3,
-                                        color: gain != null ? (gain >= 0 ? _green : _red) : brand.inkSoft,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.3,
+                                        color: gain != null
+                                            ? (gain >= 0 ? _green : _red)
+                                            : brand.inkSoft,
                                       ),
                                     ),
                                   ],
@@ -424,26 +567,44 @@ class _StockDetailScreenState extends ConsumerState<StockDetailScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('COST BASIS',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    Text(
+                                      'COST BASIS',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       '$symbol ${NumberFormat('#,##0').format(costBasis)}',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
-                                        color: brand.ink, letterSpacing: -0.3),
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: brand.ink,
+                                        letterSpacing: -0.3,
+                                      ),
                                     ),
                                     const SizedBox(height: 16),
-                                    Text('RETURN',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                        color: brand.inkSoft, letterSpacing: 0.8)),
+                                    Text(
+                                      'RETURN',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: brand.inkSoft,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       returnPct != null
                                           ? '${returnPct >= 0 ? '+' : ''}${returnPct.toStringAsFixed(2)}%'
                                           : '–',
                                       style: TextStyle(
-                                        fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.3,
                                         color: returnPct != null
                                             ? (returnPct >= 0 ? _green : _red)
                                             : brand.inkSoft,
@@ -490,22 +651,33 @@ class _RangeBtn extends StatefulWidget {
   final VoidCallback onTap;
   final BrandColors brand;
 
-  const _RangeBtn({required this.label, required this.selected, required this.onTap, required this.brand});
+  const _RangeBtn({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.brand,
+  });
 
   @override
   State<_RangeBtn> createState() => _RangeBtnState();
 }
 
-class _RangeBtnState extends State<_RangeBtn> with SingleTickerProviderStateMixin {
+class _RangeBtnState extends State<_RangeBtn>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 80));
-    _scale = Tween<double>(begin: 1.0, end: 0.88)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.88,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
 
   @override
@@ -539,7 +711,9 @@ class _RangeBtnState extends State<_RangeBtn> with SingleTickerProviderStateMixi
             style: TextStyle(
               fontSize: 12,
               fontWeight: widget.selected ? FontWeight.w700 : FontWeight.w500,
-              color: widget.selected ? widget.brand.background : widget.brand.inkSoft,
+              color: widget.selected
+                  ? widget.brand.background
+                  : widget.brand.inkSoft,
             ),
           ),
         ),
@@ -555,11 +729,17 @@ class _LineChart extends StatelessWidget {
   final Color color;
   final bool isDark;
 
-  const _LineChart({required this.points, required this.color, required this.isDark});
+  const _LineChart({
+    required this.points,
+    required this.color,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final spots = points.asMap().entries
+    final spots = points
+        .asMap()
+        .entries
         .map((e) => FlSpot(e.key.toDouble(), e.value.close))
         .toList();
     final minY = points.map((p) => p.close).reduce((a, b) => a < b ? a : b);
@@ -581,10 +761,18 @@ class _LineChart extends StatelessWidget {
             getTooltipColor: (_) =>
                 isDark ? const Color(0xFF2C2C2E) : Colors.white,
             tooltipRoundedRadius: 10,
-            getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
-              '\$${s.y.toStringAsFixed(2)}',
-              TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-            )).toList(),
+            getTooltipItems: (spots) => spots
+                .map(
+                  (s) => LineTooltipItem(
+                    '\$${s.y.toStringAsFixed(2)}',
+                    TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                )
+                .toList(),
           ),
         ),
         lineBarsData: [
@@ -607,7 +795,10 @@ class _LineChart extends StatelessWidget {
             belowBarData: BarAreaData(
               show: true,
               gradient: LinearGradient(
-                colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
+                colors: [
+                  color.withValues(alpha: 0.18),
+                  color.withValues(alpha: 0.0),
+                ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -646,10 +837,13 @@ class _PurchaseHistorySheet extends StatelessWidget {
         children: [
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               margin: const EdgeInsets.only(top: 10, bottom: 4),
               decoration: BoxDecoration(
-                color: brand.divider, borderRadius: BorderRadius.circular(2)),
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           Padding(
@@ -659,8 +853,10 @@ class _PurchaseHistorySheet extends StatelessWidget {
                 Text(
                   '${stock.symbol} History',
                   style: TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w700,
-                    color: brand.ink, letterSpacing: -0.3,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                    letterSpacing: -0.3,
                   ),
                 ),
                 const Spacer(),
@@ -687,15 +883,19 @@ class _PurchaseHistorySheet extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 itemCount: txns.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: brand.divider),
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: brand.divider),
                 itemBuilder: (_, i) {
                   final tx = txns[i];
                   final isBuy = (tx['type'] as String?) != 'sell';
                   final qty = (tx['qty'] as num?)?.toDouble() ?? 0;
                   final price = (tx['price'] as num?)?.toDouble() ?? 0;
+                  final realized = (tx['realizedGainLoss'] as num?)?.toDouble();
                   final currency = tx['currency'] as String? ?? 'USD';
                   final currSym = currency == 'MYR' ? 'RM' : '\$';
-                  final date = DateTime.tryParse(tx['date'] as String? ?? '') ?? DateTime.now();
+                  final date =
+                      DateTime.tryParse(tx['date'] as String? ?? '') ??
+                      DateTime.now();
                   final dateStr = DateFormat('MMM d, y · h:mm a').format(date);
 
                   return Padding(
@@ -703,17 +903,24 @@ class _PurchaseHistorySheet extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          width: 36, height: 36,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
                             color: isBuy
                                 ? const Color(0xFF0066CC).withValues(alpha: 0.1)
-                                : const Color(0xFFFF3B30).withValues(alpha: 0.1),
+                                : const Color(
+                                    0xFFFF3B30,
+                                  ).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isBuy ? CupertinoIcons.arrow_up_right : CupertinoIcons.arrow_down_left,
+                            isBuy
+                                ? CupertinoIcons.arrow_up_right
+                                : CupertinoIcons.arrow_down_left,
                             size: 16,
-                            color: isBuy ? const Color(0xFF0066CC) : const Color(0xFFFF3B30),
+                            color: isBuy
+                                ? const Color(0xFF0066CC)
+                                : const Color(0xFFFF3B30),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -724,14 +931,19 @@ class _PurchaseHistorySheet extends StatelessWidget {
                               Text(
                                 isBuy ? 'Bought' : 'Sold',
                                 style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w600,
-                                  color: brand.ink, letterSpacing: -0.2,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: brand.ink,
+                                  letterSpacing: -0.2,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 dateStr,
-                                style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: brand.inkSoft,
+                                ),
                               ),
                             ],
                           ),
@@ -742,14 +954,21 @@ class _PurchaseHistorySheet extends StatelessWidget {
                             Text(
                               '${qty == qty.floorToDouble() ? qty.toInt() : qty.toStringAsFixed(2)} sh',
                               style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700,
-                                color: brand.ink, letterSpacing: -0.3,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: brand.ink,
+                                letterSpacing: -0.3,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '$currSym${price.toStringAsFixed(2)}/sh',
-                              style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                              !isBuy && realized != null
+                                  ? '$currSym${price.toStringAsFixed(2)}/sh · ${realized >= 0 ? '+' : '-'}$currSym${realized.abs().toStringAsFixed(2)}'
+                                  : '$currSym${price.toStringAsFixed(2)}/sh',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: brand.inkSoft,
+                              ),
                             ),
                           ],
                         ),

@@ -160,7 +160,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
     try {
       if (isOnline) {
-        await repo.addExpense(user.uid, expense);
+        try {
+          await repo.addExpense(user.uid, expense);
+          await LocalExpenseRepository().upsertExpense(user.uid, expense);
+        } catch (_) {
+          await LocalExpenseRepository().upsertExpense(user.uid, expense);
+          if (storageMode == StorageMode.firebase) {
+            await SyncService().markPending(user.uid, expense.id);
+          }
+        }
       } else {
         await LocalExpenseRepository().upsertExpense(user.uid, expense);
         if (storageMode == StorageMode.firebase) {
@@ -178,7 +186,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       if (mounted) {
         AppToast.show(
           context,
-          isOnline ? context.t('expense.entrySaved') : context.t('expense.savedOffline'),
+          isOnline
+              ? context.t('expense.entrySaved')
+              : context.t('expense.savedOffline'),
           type: AppToastType.success,
           icon: CupertinoIcons.checkmark_circle_fill,
         );
@@ -223,10 +233,19 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 child: ListView(
                   children: [
                     ListTile(
-                      leading: Icon(CupertinoIcons.xmark_circle, color: brand.inkSoft),
-                      title: Text(context.t('expense.none'), style: TextStyle(color: brand.inkSoft)),
+                      leading: Icon(
+                        CupertinoIcons.xmark_circle,
+                        color: brand.inkSoft,
+                      ),
+                      title: Text(
+                        context.t('expense.none'),
+                        style: TextStyle(color: brand.inkSoft),
+                      ),
                       trailing: _accountId == null
-                          ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                          ? Icon(
+                              CupertinoIcons.checkmark_alt,
+                              color: brand.accentDark,
+                            )
                           : null,
                       onTap: () {
                         setState(() => _accountId = null);
@@ -252,7 +271,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                           style: TextStyle(color: brand.inkSoft),
                         ),
                         trailing: isSelected
-                            ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                            ? Icon(
+                                CupertinoIcons.checkmark_alt,
+                                color: brand.accentDark,
+                              )
                             : null,
                         onTap: () {
                           setState(() => _accountId = a.id);
@@ -272,35 +294,55 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   IconData _iconForAccountType(AccountType type) {
     switch (type) {
-      case AccountType.bank: return CupertinoIcons.building_2_fill;
-      case AccountType.eWallet: return CupertinoIcons.device_phone_portrait;
-      case AccountType.cash: return CupertinoIcons.money_dollar_circle_fill;
-      case AccountType.investment: return CupertinoIcons.chart_bar_fill;
-      case AccountType.savings: return CupertinoIcons.archivebox_fill;
-      case AccountType.crypto: return CupertinoIcons.bitcoin_circle_fill;
-      case AccountType.forex: return CupertinoIcons.globe;
-      case AccountType.creditCard: return CupertinoIcons.creditcard_fill;
-      case AccountType.loan: return CupertinoIcons.doc_text_fill;
-      case AccountType.mortgage: return CupertinoIcons.house_fill;
-      case AccountType.bnpl: return CupertinoIcons.cart_fill;
-      case AccountType.otherLiability: return CupertinoIcons.minus_circle_fill;
+      case AccountType.bank:
+        return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet:
+        return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.investment:
+        return CupertinoIcons.chart_bar_fill;
+      case AccountType.savings:
+        return CupertinoIcons.archivebox_fill;
+      case AccountType.crypto:
+        return CupertinoIcons.bitcoin_circle_fill;
+      case AccountType.forex:
+        return CupertinoIcons.globe;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.loan:
+        return CupertinoIcons.doc_text_fill;
+      case AccountType.mortgage:
+        return CupertinoIcons.house_fill;
+      case AccountType.bnpl:
+        return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability:
+        return CupertinoIcons.minus_circle_fill;
     }
   }
 
   Color _accentForAccountType(AccountType type) {
     switch (type) {
-      case AccountType.bank: return const Color(0xFF2A6FB5);
-      case AccountType.eWallet: return const Color(0xFF8B5CF6);
-      case AccountType.cash: return const Color(0xFF2A7D5A);
-      case AccountType.investment: return const Color(0xFF2E9E5A);
-      case AccountType.savings: return const Color(0xFF2E7EB5);
-      case AccountType.crypto: return const Color(0xFFE8820E);
-      case AccountType.forex: return const Color(0xFF7F4FD4);
+      case AccountType.bank:
+        return const Color(0xFF2A6FB5);
+      case AccountType.eWallet:
+        return const Color(0xFF8B5CF6);
+      case AccountType.cash:
+        return const Color(0xFF2A7D5A);
+      case AccountType.investment:
+        return const Color(0xFF2E9E5A);
+      case AccountType.savings:
+        return const Color(0xFF2E7EB5);
+      case AccountType.crypto:
+        return const Color(0xFFE8820E);
+      case AccountType.forex:
+        return const Color(0xFF7F4FD4);
       case AccountType.creditCard:
       case AccountType.loan:
       case AccountType.mortgage:
       case AccountType.bnpl:
-      case AccountType.otherLiability: return AppColors.expense;
+      case AccountType.otherLiability:
+        return AppColors.expense;
     }
   }
 
@@ -309,7 +351,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final brand = context.brand;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
-    final selectedAccount = accounts.where((a) => a.id == _accountId).firstOrNull;
+    final selectedAccount = accounts
+        .where((a) => a.id == _accountId)
+        .firstOrNull;
 
     return SafeArea(
       child: AnimatedPadding(
@@ -331,7 +375,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    ),
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -440,8 +484,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                   vertical: 7,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: selected ? brand.accentDark : s.background,
-                                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                                  color: selected
+                                      ? brand.accentDark
+                                      : s.background,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.chip,
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -494,7 +542,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                     : CupertinoIcons.creditcard,
                                 size: 17,
                                 color: selectedAccount != null
-                                    ? _accentForAccountType(selectedAccount.type)
+                                    ? _accentForAccountType(
+                                        selectedAccount.type,
+                                      )
                                     : brand.inkSoft,
                               ),
                               const SizedBox(width: 12),
@@ -509,7 +559,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                 ),
                               ),
                               Text(
-                                selectedAccount?.name ?? context.t('expense.none'),
+                                selectedAccount?.name ??
+                                    context.t('expense.none'),
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: brand.inkSoft,
@@ -552,7 +603,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                               child: TextField(
                                 controller: _noteCtrl,
                                 maxLines: 1,
-                                style: TextStyle(fontSize: 14, color: brand.ink),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: brand.ink,
+                                ),
                                 decoration: InputDecoration(
                                   hintText: context.t('expense.note'),
                                   hintStyle: TextStyle(
@@ -563,8 +617,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(vertical: 13),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
                                 ),
                               ),
                             ),
@@ -578,7 +633,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         child: SizedBox(
                           height: 50,
                           child: FilledButton(
-                            onPressed: _saving || _amountCents == 0 ? null : _save,
+                            onPressed: _saving || _amountCents == 0
+                                ? null
+                                : _save,
                             style: FilledButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -590,7 +647,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                                     width: 18,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Theme.of(context).colorScheme.onPrimary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
                                     ),
                                   )
                                 : Text(

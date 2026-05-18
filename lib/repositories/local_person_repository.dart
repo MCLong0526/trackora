@@ -1,4 +1,4 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive/hive.dart';
 
 import '../models/person.dart';
 import 'local_storage.dart';
@@ -46,9 +46,7 @@ class LocalPersonRepository implements PersonRepository {
         .whereType<Map>()
         .map<Map<String, dynamic>>((raw) => Map<String, dynamic>.from(raw))
         .where((data) => data['userId'] == userId && data['id'] is String)
-        .map<Person>(
-          (data) => Person.fromMap(data, id: data['id'] as String),
-        )
+        .map<Person>((data) => Person.fromMap(data, id: data['id'] as String))
         .toList();
     list.sort((a, b) => a.name.compareTo(b.name));
     return list;

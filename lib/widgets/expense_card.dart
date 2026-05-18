@@ -27,6 +27,9 @@ class ExpenseCard extends StatefulWidget {
   /// When true, renders as a flat row (no outer card decoration).
   final bool flat;
 
+  /// When true, shows a small split-bill indicator in the trailing row.
+  final bool hasSplitBill;
+
   const ExpenseCard({
     super.key,
     required this.expense,
@@ -38,6 +41,7 @@ class ExpenseCard extends StatefulWidget {
     this.onLongPress,
     this.account,
     this.flat = false,
+    this.hasSplitBill = false,
   });
 
   @override
@@ -194,6 +198,7 @@ class _ExpenseCardState extends State<ExpenseCard>
       onLongPress: widget.onLongPress,
       account: widget.account,
       flat: widget.flat,
+      hasSplitBill: widget.hasSplitBill,
     );
 
     if (!canSwipeLeft && !canSwipeRight) return card;
@@ -271,6 +276,7 @@ class _CardContents extends StatelessWidget {
   final VoidCallback? onLongPress;
   final Account? account;
   final bool flat;
+  final bool hasSplitBill;
 
   const _CardContents({
     required this.expense,
@@ -279,6 +285,7 @@ class _CardContents extends StatelessWidget {
     this.onLongPress,
     this.account,
     this.flat = false,
+    this.hasSplitBill = false,
   });
 
   @override
@@ -394,6 +401,10 @@ class _CardContents extends StatelessWidget {
             if (expense.receiptUrl != null) ...[
               const SizedBox(width: 6),
               Icon(CupertinoIcons.paperclip, size: 14, color: brand.inkSoft),
+            ],
+            if (hasSplitBill) ...[
+              const SizedBox(width: 6),
+              Icon(CupertinoIcons.person_2_fill, size: 13, color: brand.inkSoft),
             ],
           ],
         ),

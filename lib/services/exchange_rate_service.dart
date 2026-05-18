@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -91,9 +92,7 @@ class ExchangeRateService {
   }
 
   Future<Map<String, double>> _fetchFromNetwork(String base) async {
-    final uri = Uri.parse(
-      'https://api.frankfurter.app/latest?base=$base',
-    );
+    final uri = Uri.parse('https://api.frankfurter.app/latest?base=$base');
     final response = await http.get(uri).timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) {
       throw Exception('FX fetch failed: ${response.statusCode}');
@@ -109,7 +108,8 @@ class ExchangeRateService {
   }
 
   Future<Map<String, dynamic>?> _loadCached(String base) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return null;
     final raw = prefs.getString('$_kCachePrefix$base');
     if (raw == null) return null;
     try {
@@ -125,12 +125,25 @@ class ExchangeRateService {
   }
 
   Future<void> _saveCache(String base, Map<String, double> rates) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return;
     final payload = jsonEncode({
       'fetchedAt': DateTime.now().toIso8601String(),
       'base': base,
       'rates': rates,
     });
     await prefs.setString('$_kCachePrefix$base', payload);
+  }
+
+  Future<SharedPreferences?> _prefsOrNull() async {
+    try {
+      return await SharedPreferences.getInstance();
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
   }
 }
