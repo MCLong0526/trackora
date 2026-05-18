@@ -283,7 +283,13 @@ class SyncService {
       }
       await clearAllPending(localUserId);
       onState(SyncState.success);
-    } catch (_) {
+    } catch (e, st) {
+      dev.log(
+        '[SYNC] syncPendingIfAuthenticated failed: $e',
+        name: 'SyncService',
+        error: e,
+        stackTrace: st,
+      );
       onState(SyncState.failed);
     }
   }

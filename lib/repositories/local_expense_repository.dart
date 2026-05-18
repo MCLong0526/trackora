@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/expense.dart';
@@ -91,7 +93,15 @@ class LocalExpenseRepository implements ExpenseRepository {
         .whereType<Map>()
         .map<Map<String, dynamic>>((raw) => Map<String, dynamic>.from(raw))
         .where((data) => data['userId'] == userId && data['id'] is String)
-        .map<Expense>((data) => Expense.fromMap(data, id: data['id'] as String))
+        .map<Expense?>((data) {
+          try {
+            return Expense.fromMap(data, id: data['id'] as String);
+          } catch (e, st) {
+            dev.log('[LocalExpenseRepo] skipping malformed row ${data['id']}: $e', stackTrace: st);
+            return null;
+          }
+        })
+        .whereType<Expense>()
         .where((expense) {
           if (month == null) return true;
           final start = DateTime(month.year, month.month, 1);

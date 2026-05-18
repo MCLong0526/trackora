@@ -50,19 +50,20 @@ class Expense {
   double get convertedAmount => baseCurrencyAmount ?? amount;
 
   factory Expense.fromMap(Map<String, dynamic> data, {required String id}) {
+    final date = _readDate(data['date']);
     return Expense(
       id: id,
-      amount: (data['amount'] as num).toDouble(),
-      category: data['category'] as String,
+      amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
+      category: data['category'] as String? ?? '',
       note: data['note'] as String? ?? '',
-      date: _readDate(data['date']),
+      date: date,
       type: _decodeType(data['type'] as String?),
       receiptUrl: data['receiptUrl'] as String?,
       accountId: data['accountId'] as String?,
       toAccountId: data['toAccountId'] as String?,
       counterpart: data['counterpart'] as String?,
-      createdAt: _readDate(data['createdAt']),
-      updatedAt: _readDate(data['updatedAt']),
+      createdAt: _readDate(data['createdAt'], fallback: date),
+      updatedAt: _readDate(data['updatedAt'], fallback: date),
       originalCurrency: data['originalCurrency'] as String?,
       exchangeRate: (data['exchangeRate'] as num?)?.toDouble(),
       baseCurrencyAmount: (data['baseCurrencyAmount'] as num?)?.toDouble(),
@@ -166,16 +167,19 @@ class Expense {
     }
   }
 
-  static DateTime _readDate(Object? value) {
+  static DateTime _readDate(Object? value, {DateTime? fallback}) {
     if (value is DateTime) return value;
     if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
-    if (value is String) return DateTime.parse(value);
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
     if (value != null) {
       try {
         final date = (value as dynamic).toDate();
         if (date is DateTime) return date;
       } catch (_) {}
     }
-    throw FormatException('Unsupported date value: $value');
+    return fallback ?? DateTime.fromMillisecondsSinceEpoch(0);
   }
 }

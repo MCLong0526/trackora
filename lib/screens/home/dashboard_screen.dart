@@ -259,13 +259,8 @@ class DashboardScreen extends ConsumerWidget {
                                 onDelete: () async {
                                   if (user == null) return;
                                   final uid = user.uid;
-                                  await LocalExpenseRepository()
-                                      .deleteExpense(uid, expense.id);
                                   if (storageMode == StorageMode.firebase) {
-                                    await SyncService()
-                                        .clearPending(uid, expense.id);
-                                    final isOnline =
-                                        ref.read(isOnlineProvider);
+                                    final isOnline = ref.read(isOnlineProvider);
                                     if (isOnline) {
                                       try {
                                         await FirebaseExpenseRepository()
@@ -278,7 +273,11 @@ class DashboardScreen extends ConsumerWidget {
                                       await SyncService().markPendingDelete(
                                           uid, expense.id);
                                     }
+                                    await SyncService()
+                                        .clearPending(uid, expense.id);
                                   }
+                                  await LocalExpenseRepository()
+                                      .deleteExpense(uid, expense.id);
                                   if (context.mounted) {
                                     AppToast.show(
                                       context,
@@ -1303,9 +1302,7 @@ class _AllBillsSheet extends ConsumerWidget {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final uid = user.uid;
-    await LocalExpenseRepository().deleteExpense(uid, expense.id);
     if (storageMode == StorageMode.firebase) {
-      await SyncService().clearPending(uid, expense.id);
       final isOnline = ref.read(isOnlineProvider);
       if (isOnline) {
         try {
@@ -1316,7 +1313,9 @@ class _AllBillsSheet extends ConsumerWidget {
       } else {
         await SyncService().markPendingDelete(uid, expense.id);
       }
+      await SyncService().clearPending(uid, expense.id);
     }
+    await LocalExpenseRepository().deleteExpense(uid, expense.id);
     if (context.mounted) {
       AppToast.show(
         context,

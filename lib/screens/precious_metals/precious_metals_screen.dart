@@ -284,13 +284,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
   }
 
   Future<void> _openHistory() async {
-    final metals =
-        ref.read(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
-    final filtered = metals
-        .where((m) => m.metalType == _active)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -298,7 +292,6 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _HistorySheet(
         metalType: _active,
-        items: filtered,
         symbol: symbol,
         onEdit: _openEdit,
         onDelete: _deleteMetal,
@@ -2241,9 +2234,8 @@ class _ActionButton extends StatelessWidget {
 // History sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HistorySheet extends StatelessWidget {
+class _HistorySheet extends ConsumerWidget {
   final MetalType metalType;
-  final List<PreciousMetal> items;
   final String symbol;
   final ValueChanged<PreciousMetal> onEdit;
   final Future<void> Function(PreciousMetal)? onDelete;
@@ -2251,7 +2243,6 @@ class _HistorySheet extends StatelessWidget {
 
   const _HistorySheet({
     required this.metalType,
-    required this.items,
     required this.symbol,
     required this.onEdit,
     this.onDelete,
@@ -2259,10 +2250,17 @@ class _HistorySheet extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final bottomPad = MediaQuery.of(context).padding.bottom;
     final c = metalType.primaryColor;
+
+    // Watch live so deletes/edits update the list immediately.
+    final allMetals = ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final items = allMetals
+        .where((m) => m.metalType == metalType)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.80,

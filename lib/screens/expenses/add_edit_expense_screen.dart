@@ -894,25 +894,33 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
     if (confirm != true) return;
     final expenseId = widget.expense!.id;
-    await _deleteSplitBillForExpense(
-      uid: user.uid,
-      expenseId: expenseId,
-      isOnline:
-          storageMode == StorageMode.firebase && ref.read(isOnlineProvider),
-    );
-    await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
-    if (storageMode == StorageMode.firebase) {
-      await SyncService().clearPending(user.uid, expenseId);
-      final isOnline = ref.read(isOnlineProvider);
-      if (isOnline) {
-        try {
-          await FirebaseExpenseRepository().deleteExpense(user.uid, expenseId);
-        } catch (_) {
+    try {
+      final isOnline = storageMode == StorageMode.firebase && ref.read(isOnlineProvider);
+      await _deleteSplitBillForExpense(
+        uid: user.uid,
+        expenseId: expenseId,
+        isOnline: isOnline,
+      );
+      if (storageMode == StorageMode.firebase) {
+        // Tombstone before clearing pending so provider stream doesn't flip mid-flow.
+        if (isOnline) {
+          try {
+            await FirebaseExpenseRepository().deleteExpense(user.uid, expenseId);
+          } catch (_) {
+            await SyncService().markPendingDelete(user.uid, expenseId);
+          }
+        } else {
           await SyncService().markPendingDelete(user.uid, expenseId);
         }
-      } else {
-        await SyncService().markPendingDelete(user.uid, expenseId);
+        await SyncService().clearPending(user.uid, expenseId);
       }
+      await LocalExpenseRepository().deleteExpense(user.uid, expenseId);
+    } catch (e, st) {
+      dev.log('[Expense] delete failed: $e', name: 'AddEditExpense', stackTrace: st);
+      if (mounted) {
+        AppToast.show(context, context.t('common.error'), type: AppToastType.error);
+      }
+      return;
     }
     if (mounted) {
       AppToast.show(

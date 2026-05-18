@@ -250,7 +250,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                       flex: 2,
                       child: GestureDetector(
                         onTap: () {
-                          final holdings = stocks.where((s) => !s.watchOnly).toList();
+                          final holdings = stocks.where((s) => !s.watchOnly && s.quantity > 0).toList();
                           _showSellPickerSheet(context, holdings);
                         },
                         child: Container(
@@ -361,7 +361,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                                   onBuy: () => s.watchOnly
                                       ? _showBuyFromWatchlist(context, s, liveQuote)
                                       : _showBuySheetForStockFromHolding(context, s, liveQuote),
-                                  onSell: s.watchOnly ? null : () => _openSellSheet(context, s),
+                                  onSell: (s.watchOnly || s.quantity <= 0) ? null : () => _openSellSheet(context, s),
                                   child: _StockTileWithQuote(
                                     stock: s,
                                     usdToLocal: usdToLocal,
@@ -548,17 +548,19 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
             'type': 'sell',
           };
           try {
-            if (qty >= stock.quantity) {
-              await ref.read(stockInvestmentRepositoryProvider).delete(user.uid, stock.id);
-              if (mounted) AppToast.show(context, '${stock.symbol} position closed');
-            } else {
-              final updated = stock.copyWith(
-                quantity: stock.quantity - qty,
-                updatedAt: DateTime.now(),
-                transactions: [...stock.transactions, sellTx],
-              );
-              await ref.read(stockInvestmentRepositoryProvider).update(user.uid, updated);
-              if (mounted) AppToast.show(context, 'Sold ${_fmtQty(qty)} sh of ${stock.symbol}');
+            final soldQty = qty >= stock.quantity ? stock.quantity : qty;
+            final updated = stock.copyWith(
+              quantity: stock.quantity - soldQty,
+              updatedAt: DateTime.now(),
+              transactions: [...stock.transactions, sellTx],
+            );
+            await ref.read(stockInvestmentRepositoryProvider).update(user.uid, updated);
+            if (mounted) {
+              if (updated.quantity <= 0) {
+                AppToast.show(context, '${stock.symbol} position closed — record preserved');
+              } else {
+                AppToast.show(context, 'Sold ${_fmtQty(soldQty)} sh of ${stock.symbol}');
+              }
             }
           } catch (_) {
             if (mounted) AppToast.show(context, 'Failed to sell', type: AppToastType.error);
