@@ -17,7 +17,6 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
-import 'precious_metals_design2_test.dart'; // TEST — remove when done
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live price provider
@@ -481,14 +480,6 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // ── Design 2 test preview banner (TEST — remove when done) ──
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: _Design2PreviewBanner(),
                 ),
               ),
 
@@ -3758,71 +3749,3 @@ class _SheetNoteRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEST — Design 2 preview banner (remove with import + SliverToBoxAdapter above)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Design2PreviewBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const PreciousMetalsDesign2Test(),
-        ),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE4E9EE), width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE4E9EE),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(
-                child: Text(
-                  '2',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF555F6B),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Design 2 — Neumorphic',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                  Text(
-                    'Test preview · tap to open',
-                    style: TextStyle(fontSize: 12, color: brand.inkSoft),
-                  ),
-                ],
-              ),
-            ),
-            Icon(CupertinoIcons.chevron_right, size: 16, color: brand.inkSoft),
-          ],
-        ),
-      ),
-    );
-  }
-}
