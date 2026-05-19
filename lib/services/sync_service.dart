@@ -384,6 +384,7 @@ class SyncService {
         final url = expense.receiptUrl;
         if (url != null &&
             !StorageService.isRemote(url) &&
+            !StorageService.isSupabasePath(url) &&
             !StorageService.isFirebasePath(url)) {
           final localFile = await StorageService.resolveLocal(url);
           if (localFile != null) {
@@ -472,6 +473,7 @@ class SyncService {
         final url = e.receiptUrl;
         if (url != null &&
             !StorageService.isRemote(url) &&
+            !StorageService.isSupabasePath(url) &&
             !StorageService.isFirebasePath(url)) {
           try {
             final localFile = await StorageService.resolveLocal(url);
