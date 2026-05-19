@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -225,6 +226,25 @@ class SettingsScreen extends ConsumerWidget {
                         (route) => false,
                       );
                     },
+                  ),
+                  _GroupDivider(),
+                  _Tile(
+                    icon: CupertinoIcons.trash,
+                    iconColor: AppColors.expense,
+                    label: context.t('settings.deleteAccount'),
+                    destructive: true,
+                    onTap: () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => _DeleteAccountSheet(
+                        authService: ref.read(authServiceProvider),
+                        onDeleted: () => rootNavKey.currentState?.pushAndRemoveUntil(
+                          CupertinoPageRoute(builder: (_) => const WelcomeScreen()),
+                          (route) => false,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -1540,14 +1560,12 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return context.t('settings.justNow');
-    if (diff.inMinutes < 60)
-      return context
-          .t('settings.minutesAgo')
-          .replaceAll('{m}', '${diff.inMinutes}');
-    if (diff.inHours < 24)
-      return context
-          .t('settings.hoursAgo')
-          .replaceAll('{h}', '${diff.inHours}');
+    if (diff.inMinutes < 60) {
+      return context.t('settings.minutesAgo').replaceAll('{m}', '${diff.inMinutes}');
+    }
+    if (diff.inHours < 24) {
+      return context.t('settings.hoursAgo').replaceAll('{h}', '${diff.inHours}');
+    }
     return context.t('settings.daysAgo').replaceAll('{d}', '${diff.inDays}');
   }
 
@@ -2198,23 +2216,26 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
         currentPassword: password,
         newEmail: newEmail,
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _done = true;
         });
+      }
     } on ReauthRequiredException catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = e.message;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = context.t('settings.somethingWentWrong');
         });
+      }
     }
   }
 
@@ -2339,6 +2360,346 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
                 child: _loading
                     ? const CupertinoActivityIndicator(color: Colors.white)
                     : Text(context.t('settings.sendVerificationLink')),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Delete Account Sheet ───────────────────────────────────────────────────────
+
+enum _DeleteStep { confirm, reauthPassword, loading }
+
+class _DeleteAccountSheet extends StatefulWidget {
+  final AuthService authService;
+  final VoidCallback onDeleted;
+
+  const _DeleteAccountSheet({
+    required this.authService,
+    required this.onDeleted,
+  });
+
+  @override
+  State<_DeleteAccountSheet> createState() => _DeleteAccountSheetState();
+}
+
+class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
+  _DeleteStep _step = _DeleteStep.confirm;
+  final _passwordCtrl = TextEditingController();
+  bool _obscure = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  String _providerId() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'password';
+    for (final info in user.providerData) {
+      if (info.providerId == 'google.com') return 'google.com';
+      if (info.providerId == 'apple.com') return 'apple.com';
+    }
+    return 'password';
+  }
+
+  Future<void> _attemptDelete() async {
+    setState(() { _step = _DeleteStep.loading; _error = null; });
+    try {
+      await widget.authService.deleteAccount();
+      if (mounted) {
+        Navigator.pop(context);
+        AppToast.show(
+          context,
+          context.t('settings.deleteAccountSuccess'),
+          type: AppToastType.success,
+          icon: CupertinoIcons.checkmark_circle,
+        );
+        widget.onDeleted();
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        final provider = _providerId();
+        if (provider == 'google.com') {
+          await _reauthGoogle();
+        } else if (provider == 'apple.com') {
+          await _reauthApple();
+        } else {
+          if (mounted) setState(() => _step = _DeleteStep.reauthPassword);
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _step = _DeleteStep.confirm;
+            _error = context.t('settings.deleteAccountFailed');
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _DeleteStep.confirm;
+          _error = context.t('settings.deleteAccountFailed');
+        });
+      }
+    }
+  }
+
+  Future<void> _reauthGoogle() async {
+    try {
+      await widget.authService.reauthWithGoogle();
+      await widget.authService.deleteAccount();
+      if (mounted) {
+        Navigator.pop(context);
+        AppToast.show(
+          context,
+          context.t('settings.deleteAccountSuccess'),
+          type: AppToastType.success,
+          icon: CupertinoIcons.checkmark_circle,
+        );
+        widget.onDeleted();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _DeleteStep.confirm;
+          _error = context.t('settings.deleteAccountReauthFailed');
+        });
+      }
+    }
+  }
+
+  Future<void> _reauthApple() async {
+    try {
+      await widget.authService.reauthWithApple();
+      await widget.authService.deleteAccount();
+      if (mounted) {
+        Navigator.pop(context);
+        AppToast.show(
+          context,
+          context.t('settings.deleteAccountSuccess'),
+          type: AppToastType.success,
+          icon: CupertinoIcons.checkmark_circle,
+        );
+        widget.onDeleted();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _DeleteStep.confirm;
+          _error = context.t('settings.deleteAccountReauthFailed');
+        });
+      }
+    }
+  }
+
+  Future<void> _reauthPasswordAndDelete() async {
+    final password = _passwordCtrl.text;
+    if (password.isEmpty) return;
+    setState(() { _step = _DeleteStep.loading; _error = null; });
+    try {
+      await widget.authService.reauthWithPassword(password);
+      await widget.authService.deleteAccount();
+      if (mounted) {
+        Navigator.pop(context);
+        AppToast.show(
+          context,
+          context.t('settings.deleteAccountSuccess'),
+          type: AppToastType.success,
+          icon: CupertinoIcons.checkmark_circle,
+        );
+        widget.onDeleted();
+      }
+    } on ReauthRequiredException {
+      if (mounted) {
+        setState(() {
+          _step = _DeleteStep.reauthPassword;
+          _error = context.t('settings.deleteAccountWrongPassword');
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _step = _DeleteStep.reauthPassword;
+          _error = context.t('settings.deleteAccountReauthFailed');
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottom),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: brand.inkSoft.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          if (_step == _DeleteStep.loading) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: CupertinoActivityIndicator(),
+              ),
+            ),
+          ] else if (_step == _DeleteStep.reauthPassword) ...[
+            // Password re-auth step
+            Text(
+              context.t('settings.deleteAccountReauthTitle'),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: brand.ink,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t('settings.deleteAccountReauthBody'),
+              style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+            _Field(
+              controller: _passwordCtrl,
+              label: context.t('settings.deleteAccountPassword'),
+              hint: '••••••••',
+              obscure: _obscure,
+              brand: brand,
+              suffix: GestureDetector(
+                onTap: () => setState(() => _obscure = !_obscure),
+                child: Icon(
+                  _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                  size: 18,
+                  color: brand.inkSoft,
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 13, color: AppColors.expense),
+              ),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                color: AppColors.expense,
+                onPressed: _reauthPasswordAndDelete,
+                child: Text(
+                  context.t('settings.deleteAccountVerify'),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  context.t('common.cancel'),
+                  style: TextStyle(color: brand.inkSoft),
+                ),
+              ),
+            ),
+          ] else ...[
+            // Confirm step
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.expense.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.trash,
+                    color: AppColors.expense,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  context.t('settings.deleteAccountConfirmTitle'),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.expense.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                context.t('settings.deleteAccountConfirmBody'),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: brand.ink,
+                  height: 1.45,
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(fontSize: 13, color: AppColors.expense),
+              ),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                color: AppColors.expense,
+                onPressed: _attemptDelete,
+                child: Text(
+                  context.t('settings.deleteAccountConfirm'),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  context.t('common.cancel'),
+                  style: TextStyle(color: brand.inkSoft),
+                ),
               ),
             ),
           ],
