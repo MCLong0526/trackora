@@ -320,7 +320,9 @@ class _TripCardActive extends ConsumerWidget {
                 ? const Color(0xFFFF3B30)
                 : _ink48;
 
-    return _Card(
+    return GestureDetector(
+      onTap: onOpen,
+      child: _Card(
       isDark: isDark,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
@@ -444,6 +446,7 @@ class _TripCardActive extends ConsumerWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -1561,7 +1561,7 @@ void _showBreakdown(
   );
 }
 
-class _BreakdownSheet extends StatelessWidget {
+class _BreakdownSheet extends StatefulWidget {
   final String title;
   final Color color;
   final IconData icon;
@@ -1581,9 +1581,25 @@ class _BreakdownSheet extends StatelessWidget {
   });
 
   @override
+  State<_BreakdownSheet> createState() => _BreakdownSheetState();
+}
+
+class _BreakdownSheetState extends State<_BreakdownSheet> {
+  bool _excludeInstallments = false;
+
+  @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final hasInstallments =
+        widget.items.any((i) => i.type == 'Installments');
+    final displayItems = _excludeInstallments
+        ? widget.items.where((i) => i.type != 'Installments').toList()
+        : widget.items;
+    final displayTotal =
+        displayItems.fold(0.0, (s, i) => s + i.amount);
+
     return Container(
       margin: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 40),
       decoration: BoxDecoration(
@@ -1616,10 +1632,11 @@ class _BreakdownSheet extends StatelessWidget {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+                          color: widget.color
+                              .withValues(alpha: isDark ? 0.18 : 0.12),
                           borderRadius: BorderRadius.circular(11),
                         ),
-                        child: Icon(icon, size: 17, color: color),
+                        child: Icon(widget.icon, size: 17, color: widget.color),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1627,14 +1644,14 @@ class _BreakdownSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              title,
+                              widget.title,
                               style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             Text(
-                              '${items.length} source${items.length == 1 ? '' : 's'}',
+                              '${displayItems.length} source${displayItems.length == 1 ? '' : 's'}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -1645,19 +1662,45 @@ class _BreakdownSheet extends StatelessWidget {
                         ),
                       ),
                       MaskedAmount(
-                        visibleText: formatMoney(symbol, total),
-                        visible: visible,
-                        currencyPrefix: symbol,
+                        visibleText: formatMoney(widget.symbol, displayTotal),
+                        visible: widget.visible,
+                        currencyPrefix: widget.symbol,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: color,
+                          color: widget.color,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  if (items.isEmpty)
+                  // Exclude installments toggle (only for liabilities sheet)
+                  if (hasInstallments) ...[
+                    const SizedBox(height: 14),
+                    Container(height: 1, color: brand.divider),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Exclude bills + installments',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: brand.inkSoft,
+                            ),
+                          ),
+                        ),
+                        CupertinoSwitch(
+                          value: _excludeInstallments,
+                          onChanged: (v) =>
+                              setState(() => _excludeInstallments = v),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                  ] else
+                    const SizedBox(height: 18),
+                  if (displayItems.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
@@ -1677,14 +1720,17 @@ class _BreakdownSheet extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       child: Column(
                         children: [
-                          for (var i = 0; i < items.length; i++) ...[
+                          for (var i = 0; i < displayItems.length; i++) ...[
                             if (i > 0)
-                              Divider(height: 1, thickness: 1, color: brand.divider),
+                              Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: brand.divider),
                             _BreakdownRow(
-                              item: items[i],
-                              symbol: symbol,
-                              visible: visible,
-                              color: color,
+                              item: displayItems[i],
+                              symbol: widget.symbol,
+                              visible: widget.visible,
+                              color: widget.color,
                             ),
                           ],
                         ],
