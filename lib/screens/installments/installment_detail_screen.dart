@@ -4,10 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/account.dart';
+import '../../models/expense.dart';
 import '../../models/installment.dart';
+import '../../repositories/firebase_expense_repository.dart';
+import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -52,14 +57,20 @@ class InstallmentDetailScreen extends ConsumerWidget {
               )
             : const SizedBox.shrink(),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Icon(
-              CupertinoIcons.arrow_up_right_diamond,
-              color: AppActionBlue.color,
-              size: 22,
+          if (itemsAsync.valueOrNull != null)
+            Builder(
+              builder: (ctx) {
+                final inst = itemsAsync.valueOrNull!.firstWhere(
+                  (i) => i.id == installmentId,
+                  orElse: () => _missing,
+                );
+                if (identical(inst, _missing)) return const SizedBox.shrink();
+                return IconButton(
+                  icon: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
+                  onPressed: () => _showActionsSheet(ctx, ref, inst, user?.uid),
+                );
+              },
             ),
-          ),
         ],
       ),
       body: itemsAsync.when(
@@ -92,12 +103,196 @@ class InstallmentDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
                 _RecentPaymentsSection(inst: inst, symbol: symbol),
-                const SizedBox(height: 28),
-                _ActionButtons(inst: inst, userId: user?.uid),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showActionsSheet(
+    BuildContext context,
+    WidgetRef ref,
+    Installment inst,
+    String? userId,
+  ) {
+    if (userId == null) return;
+    final isActive = inst.status == InstallmentStatus.active;
+    final isCancelled = inst.status == InstallmentStatus.cancelled;
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AddEditInstallmentScreen(installment: inst),
+                ),
+              );
+            },
+            child: Text(context.t('inst.edit')),
+          ),
+          if (isActive)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ref
+                      .read(installmentServiceProvider)
+                      .markCompleted(userId, inst);
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Marked as completed',
+                      type: AppToastType.success,
+                    );
+                    Navigator.pop(context);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Failed to complete',
+                      type: AppToastType.error,
+                    );
+                  }
+                }
+              },
+              child: Text(context.t('inst.markCompleted')),
+            ),
+          if (isCancelled)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ref
+                      .read(installmentServiceProvider)
+                      .reactivate(userId, inst);
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Reactivated',
+                      type: AppToastType.success,
+                    );
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Failed to reactivate',
+                      type: AppToastType.error,
+                    );
+                  }
+                }
+              },
+              child: Text(context.t('inst.reactivate')),
+            ),
+          if (!isCancelled)
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final ok = await showCupertinoDialog<bool>(
+                  context: context,
+                  builder: (dctx) => CupertinoAlertDialog(
+                    title: Text(context.t('inst.cancelTitle')),
+                    content: Text(context.t('inst.cancelMessage')),
+                    actions: [
+                      CupertinoDialogAction(
+                        onPressed: () => Navigator.pop(dctx, false),
+                        child: Text(context.t('inst.keep')),
+                      ),
+                      CupertinoDialogAction(
+                        isDestructiveAction: true,
+                        onPressed: () => Navigator.pop(dctx, true),
+                        child: Text(context.t('inst.cancelIt')),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true && context.mounted) {
+                  try {
+                    await ref
+                        .read(installmentServiceProvider)
+                        .setCancelled(userId, inst, true);
+                    if (context.mounted) {
+                      AppToast.show(
+                        context,
+                        'Installment cancelled',
+                        type: AppToastType.success,
+                      );
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      AppToast.show(
+                        context,
+                        'Failed to cancel',
+                        type: AppToastType.error,
+                      );
+                    }
+                  }
+                }
+              },
+              child: Text(context.t('inst.cancel')),
+            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await showCupertinoDialog<bool>(
+                context: context,
+                builder: (dctx) => CupertinoAlertDialog(
+                  title: Text(context.t('inst.deleteTitle')),
+                  content: Text(context.t('inst.deleteMessage')),
+                  actions: [
+                    CupertinoDialogAction(
+                      onPressed: () => Navigator.pop(dctx, false),
+                      child: Text(context.t('common.cancel')),
+                    ),
+                    CupertinoDialogAction(
+                      isDestructiveAction: true,
+                      onPressed: () => Navigator.pop(dctx, true),
+                      child: Text(context.t('common.delete')),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true && context.mounted) {
+                try {
+                  await ref
+                      .read(installmentServiceProvider)
+                      .delete(userId, inst.id);
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Installment deleted',
+                      type: AppToastType.success,
+                    );
+                    Navigator.pop(context);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Failed to delete',
+                      type: AppToastType.error,
+                    );
+                  }
+                }
+              }
+            },
+            child: Text(context.t('common.delete')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.t('common.cancel')),
+        ),
       ),
     );
   }
@@ -343,8 +538,17 @@ class _StatusCardState extends ConsumerState<_StatusCard> {
 
     final svc = ref.read(installmentServiceProvider);
     try {
-      await svc.markPaid(widget.userId!, widget.inst, widget.month,
-          accountId: _selectedAccountId);
+      // 1. Update installment paidMonths
+      await svc.markPaid(widget.userId!, widget.inst, widget.month);
+
+      // 2. Create activity expense with proper offline-first sync
+      await _createPaymentExpense(
+        userId: widget.userId!,
+        inst: widget.inst,
+        month: widget.month,
+        accountId: _selectedAccountId,
+      );
+
       if (mounted) {
         AppToast.show(context, 'Marked as paid', type: AppToastType.success);
       }
@@ -352,6 +556,70 @@ class _StatusCardState extends ConsumerState<_StatusCard> {
       if (mounted) {
         AppToast.show(context, 'Failed to update payment', type: AppToastType.error);
       }
+    }
+  }
+
+  /// Creates (or re-upserts) the expense activity record for a payment.
+  /// Uses a deterministic ID so marking paid twice doesn't create duplicates.
+  Future<void> _createPaymentExpense({
+    required String userId,
+    required Installment inst,
+    required DateTime month,
+    String? accountId,
+  }) async {
+    final key = Installment.monthKey(month);
+    // Deterministic ID: stable across retries, prevents duplicates.
+    final expenseId = 'inst_${inst.id}_$key';
+    final now = DateTime.now();
+    final expense = Expense(
+      id: expenseId,
+      amount: inst.amount,
+      category: inst.category,
+      note: '${inst.name} (installment)',
+      date: inst.dueDateIn(month),
+      type: EntryType.expense,
+      accountId: accountId,
+      createdAt: now,
+      updatedAt: now,
+      sourceInstallmentId: inst.id,
+      sourceMonthKey: key,
+    );
+
+    final local = LocalExpenseRepository();
+    await local.upsertExpense(userId, expense);
+
+    if (storageMode == StorageMode.firebase) {
+      final isOnline = ref.read(isOnlineProvider);
+      if (isOnline) {
+        try {
+          await FirebaseExpenseRepository().upsertExpense(userId, expense);
+          await SyncService().clearPending(userId, expenseId);
+        } catch (_) {
+          await SyncService().markPending(userId, expenseId);
+        }
+      } else {
+        await SyncService().markPending(userId, expenseId);
+      }
+    }
+  }
+
+  /// Deletes the expense activity record for a payment.
+  Future<void> _deletePaymentExpense({
+    required String userId,
+    required Installment inst,
+    required DateTime month,
+  }) async {
+    final key = Installment.monthKey(month);
+    final expenseId = 'inst_${inst.id}_$key';
+    if (storageMode == StorageMode.firebase) {
+      final isOnline = ref.read(isOnlineProvider);
+      await SyncService().deleteExpense(
+        userId: userId,
+        expenseId: expenseId,
+        isOnline: isOnline,
+      );
+    } else {
+      await LocalExpenseRepository().deleteExpense(userId, expenseId);
     }
   }
 
@@ -479,6 +747,11 @@ class _StatusCardState extends ConsumerState<_StatusCard> {
         try {
           if (paid) {
             await svc.markUnpaid(widget.userId!, widget.inst, widget.month);
+            await _deletePaymentExpense(
+              userId: widget.userId!,
+              inst: widget.inst,
+              month: widget.month,
+            );
             if (context.mounted) {
               AppToast.show(context, 'Marked as unpaid', type: AppToastType.success);
             }
@@ -692,250 +965,3 @@ class _PaymentRow extends StatelessWidget {
   }
 }
 
-// ── Action Buttons ────────────────────────────────────────────
-
-class _ActionButtons extends ConsumerWidget {
-  final Installment inst;
-  final String? userId;
-
-  const _ActionButtons({required this.inst, required this.userId});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isActive = inst.status == InstallmentStatus.active;
-    final isCancelled = inst.status == InstallmentStatus.cancelled;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _OutlineBtn(
-                label: 'Edit',
-                onTap: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    builder: (_) =>
-                        AddEditInstallmentScreen(installment: inst),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _FilledBtn(
-                label: isActive
-                    ? 'Mark complete'
-                    : isCancelled
-                    ? 'Reactivate'
-                    : 'Completed',
-                color: AppActionBlue.color,
-                textColor: Colors.white,
-                onTap: isActive
-                    ? () async {
-                        if (userId == null) return;
-                        try {
-                          await ref
-                              .read(installmentServiceProvider)
-                              .markCompleted(userId!, inst);
-                          if (context.mounted) {
-                            AppToast.show(context, 'Marked as completed', type: AppToastType.success);
-                            Navigator.pop(context);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            AppToast.show(context, 'Failed to complete', type: AppToastType.error);
-                          }
-                        }
-                      }
-                    : isCancelled
-                    ? () async {
-                        if (userId == null) return;
-                        try {
-                          await ref
-                              .read(installmentServiceProvider)
-                              .reactivate(userId!, inst);
-                          if (context.mounted) {
-                            AppToast.show(context, 'Reactivated', type: AppToastType.success);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
-                          }
-                        }
-                      }
-                    : () {},
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _FilledBtn(
-                label: 'Cancel installment',
-                color: const Color(0xFFFEE2E2),
-                textColor: AppColors.expense,
-                onTap: () => _confirmCancel(context, ref),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _FilledBtn(
-                label: 'Delete',
-                color: const Color(0xFFFEE2E2),
-                textColor: AppColors.expense,
-                onTap: () => _confirmDelete(context, ref),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _confirmCancel(BuildContext context, WidgetRef ref) async {
-    if (userId == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dctx) => CupertinoAlertDialog(
-        title: Text(context.t('inst.cancelTitle')),
-        content: Text(context.t('inst.cancelMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
-            child: Text(context.t('inst.keep')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(context.t('inst.cancelIt')),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await ref
-            .read(installmentServiceProvider)
-            .setCancelled(userId!, inst, true);
-        if (context.mounted) {
-          AppToast.show(context, 'Installment cancelled', type: AppToastType.success);
-        }
-      } catch (_) {
-        if (context.mounted) {
-          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
-        }
-      }
-    }
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    if (userId == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dctx) => CupertinoAlertDialog(
-        title: Text(context.t('inst.deleteTitle')),
-        content: Text(context.t('inst.deleteMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
-            child: Text(context.t('common.cancel')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await ref.read(installmentServiceProvider).delete(userId!, inst.id);
-        if (context.mounted) {
-          AppToast.show(context, 'Installment deleted', type: AppToastType.success);
-          Navigator.pop(context);
-        }
-      } catch (_) {
-        if (context.mounted) {
-          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
-        }
-      }
-    }
-  }
-}
-
-class _OutlineBtn extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _OutlineBtn({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: brand.divider, width: 1.5),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: brand.ink,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilledBtn extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color? textColor;
-  final VoidCallback onTap;
-  const _FilledBtn({
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = textColor ?? foregroundOn(color);
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: fg,
-          ),
-        ),
-      ),
-    );
-  }
-}

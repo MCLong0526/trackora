@@ -1,17 +1,11 @@
-import '../models/expense.dart';
 import '../models/installment.dart';
-import '../repositories/expense_repository.dart';
 import '../repositories/installment_repository.dart';
 
 class InstallmentService {
   final InstallmentRepository _repository;
-  final ExpenseRepository _expenses;
 
-  InstallmentService({
-    required InstallmentRepository repository,
-    required ExpenseRepository expenses,
-  }) : _repository = repository,
-       _expenses = expenses;
+  InstallmentService({required InstallmentRepository repository})
+      : _repository = repository;
 
   Stream<List<Installment>> getAll(String userId) {
     return _repository.getAll(userId);
@@ -29,15 +23,14 @@ class InstallmentService {
     return _repository.delete(userId, id);
   }
 
-  /// Marks the installment paid for `month` and creates a matching expense
-  /// so it shows up in the regular ledger and totals.
-  /// If [accountId] is provided, the expense is linked to that account.
+  /// Marks the installment paid for `month`. Expense creation is handled
+  /// by the caller (UI layer) so it can apply the correct offline-first
+  /// sync pattern (local Hive + Firebase + SyncService.markPending).
   Future<void> markPaid(
     String userId,
     Installment installment,
-    DateTime month, {
-    String? accountId,
-  }) async {
+    DateTime month,
+  ) async {
     final key = Installment.monthKey(month);
     if (installment.paidMonths.contains(key)) return;
 
@@ -52,26 +45,10 @@ class InstallmentService {
                     .toDouble(),
           );
     await _repository.update(userId, updatedInstallment);
-
-    final now = DateTime.now();
-    await _expenses.addExpense(
-      userId,
-      Expense(
-        id: '',
-        amount: installment.amount,
-        category: installment.category,
-        note: '${installment.name} (installment)',
-        date: installment.dueDateIn(month),
-        type: EntryType.expense,
-        accountId: accountId,
-        createdAt: now,
-        updatedAt: now,
-        sourceInstallmentId: installment.id,
-        sourceMonthKey: key,
-      ),
-    );
   }
 
+  /// Removes the paid mark for `month`. Expense deletion is handled by
+  /// the caller (UI layer) for the same offline-first reasons.
   Future<void> markUnpaid(
     String userId,
     Installment installment,
@@ -88,20 +65,6 @@ class InstallmentService {
                 installment.remainingAmountOverride! + installment.amount,
           );
     await _repository.update(userId, updatedInstallment);
-
-    // Find and delete the expense that was created for this payment
-    try {
-      final allExpenses = await _expenses.getAllExpenses(userId).first;
-      final toDelete = allExpenses.where((e) =>
-        e.sourceInstallmentId == installment.id &&
-        e.sourceMonthKey == key
-      ).toList();
-      for (final e in toDelete) {
-        await _expenses.deleteExpense(userId, e.id);
-      }
-    } catch (_) {
-      // Non-critical: if expense deletion fails, continue
-    }
   }
 
   /// Toggle cancellation. Cancelled installments hide from monthly totals
