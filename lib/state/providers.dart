@@ -427,7 +427,7 @@ final localeProvider = StateNotifierProvider<LocaleNotifier, AppLocale>(
 /// `false` = masked as `RM ****`. Persisted via `PrefsService` so the
 /// choice survives restart. Calculations are unaffected.
 class BalanceVisibilityNotifier extends StateNotifier<bool> {
-  BalanceVisibilityNotifier(this._prefs) : super(false) {
+  BalanceVisibilityNotifier(this._prefs) : super(true) {
     _load();
   }
   final PrefsService _prefs;
