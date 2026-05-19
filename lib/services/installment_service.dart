@@ -66,6 +66,8 @@ class InstallmentService {
         accountId: accountId,
         createdAt: now,
         updatedAt: now,
+        sourceInstallmentId: installment.id,
+        sourceMonthKey: key,
       ),
     );
   }
@@ -86,6 +88,20 @@ class InstallmentService {
                 installment.remainingAmountOverride! + installment.amount,
           );
     await _repository.update(userId, updatedInstallment);
+
+    // Find and delete the expense that was created for this payment
+    try {
+      final allExpenses = await _expenses.getAllExpenses(userId).first;
+      final toDelete = allExpenses.where((e) =>
+        e.sourceInstallmentId == installment.id &&
+        e.sourceMonthKey == key
+      ).toList();
+      for (final e in toDelete) {
+        await _expenses.deleteExpense(userId, e.id);
+      }
+    } catch (_) {
+      // Non-critical: if expense deletion fails, continue
+    }
   }
 
   /// Toggle cancellation. Cancelled installments hide from monthly totals

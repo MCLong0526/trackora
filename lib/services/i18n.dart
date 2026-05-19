@@ -381,6 +381,8 @@ class AppStrings {
     'inst.completedSummary': 'All {months} months paid',
     'inst.cancelledSummary': 'No longer counted in monthly totals',
     'inst.fixedTerm': 'Fixed-term installment',
+    'inst.fixedTermShort': 'Fixed Term',
+    'inst.lifetimeShort': 'Lifetime',
     'inst.lifetimeSubtitle':
         'No end date required. Use this for ongoing payments.',
     'inst.fixedSubtitle': 'Has a fixed number of months.',
@@ -1186,6 +1188,8 @@ class AppStrings {
     'inst.completedSummary': '全部 {months} 个月已付',
     'inst.cancelledSummary': '不再计入月度总额',
     'inst.fixedTerm': '固定期限分期',
+    'inst.fixedTermShort': '固定期限',
+    'inst.lifetimeShort': '长期',
     'inst.lifetimeSubtitle': '不需要结束日期，适合长期付款。',
     'inst.fixedSubtitle': '有固定付款月数。',
     'inst.monthsPaidHint': '填写已付或剩余其一',
@@ -1994,6 +1998,8 @@ class AppStrings {
     'inst.completedSummary': 'Semua {months} bulan dibayar',
     'inst.cancelledSummary': 'Tidak lagi dikira dalam jumlah bulanan',
     'inst.fixedTerm': 'Ansuran bertempoh tetap',
+    'inst.fixedTermShort': 'Tempoh Tetap',
+    'inst.lifetimeShort': 'Berterusan',
     'inst.lifetimeSubtitle':
         'Tiada tarikh tamat diperlukan. Sesuai untuk bayaran berterusan.',
     'inst.fixedSubtitle': 'Ada bilangan bulan tetap.',

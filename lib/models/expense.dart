@@ -27,6 +27,10 @@ class Expense {
   /// Pre-computed amount in user's main/base currency (amount × exchangeRate).
   /// Null → use [amount] as-is.
   final double? baseCurrencyAmount;
+  /// The installment ID that generated this expense (null if not from installment).
+  final String? sourceInstallmentId;
+  /// The month key (e.g. '2024-01') for which this installment payment was made.
+  final String? sourceMonthKey;
 
   const Expense({
     required this.id,
@@ -44,6 +48,8 @@ class Expense {
     this.originalCurrency,
     this.exchangeRate,
     this.baseCurrencyAmount,
+    this.sourceInstallmentId,
+    this.sourceMonthKey,
   });
 
   /// Returns the amount converted to main/base currency.
@@ -67,6 +73,8 @@ class Expense {
       originalCurrency: data['originalCurrency'] as String?,
       exchangeRate: (data['exchangeRate'] as num?)?.toDouble(),
       baseCurrencyAmount: (data['baseCurrencyAmount'] as num?)?.toDouble(),
+      sourceInstallmentId: data['sourceInstallmentId'] as String?,
+      sourceMonthKey: data['sourceMonthKey'] as String?,
     );
   }
 
@@ -87,6 +95,8 @@ class Expense {
       if (originalCurrency != null) 'originalCurrency': originalCurrency,
       if (exchangeRate != null) 'exchangeRate': exchangeRate,
       if (baseCurrencyAmount != null) 'baseCurrencyAmount': baseCurrencyAmount,
+      if (sourceInstallmentId != null) 'sourceInstallmentId': sourceInstallmentId,
+      if (sourceMonthKey != null) 'sourceMonthKey': sourceMonthKey,
     };
   }
 
@@ -107,6 +117,8 @@ class Expense {
     Object? originalCurrency = _sentinel,
     Object? exchangeRate = _sentinel,
     Object? baseCurrencyAmount = _sentinel,
+    Object? sourceInstallmentId = _sentinel,
+    Object? sourceMonthKey = _sentinel,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -138,6 +150,12 @@ class Expense {
       baseCurrencyAmount: identical(baseCurrencyAmount, _sentinel)
           ? this.baseCurrencyAmount
           : baseCurrencyAmount as double?,
+      sourceInstallmentId: identical(sourceInstallmentId, _sentinel)
+          ? this.sourceInstallmentId
+          : sourceInstallmentId as String?,
+      sourceMonthKey: identical(sourceMonthKey, _sentinel)
+          ? this.sourceMonthKey
+          : sourceMonthKey as String?,
     );
   }
 

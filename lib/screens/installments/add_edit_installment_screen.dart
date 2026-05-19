@@ -384,6 +384,50 @@ class _AddEditInstallmentScreenState
     }
   }
 
+  Future<void> _showActionsSheet() async {
+    final i = widget.installment!;
+    final status = i.status;
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          if (status == InstallmentStatus.active)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _markCompleted();
+              },
+              child: Text(context.t('inst.markCompleted')),
+            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: status != InstallmentStatus.cancelled,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _toggleCancelled();
+            },
+            child: Text(
+              status == InstallmentStatus.cancelled
+                  ? context.t('inst.reactivate')
+                  : context.t('inst.cancel'),
+            ),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _delete();
+            },
+            child: Text(context.t('common.delete')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.t('common.cancel')),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickStartDate() async {
     FocusScope.of(context).unfocus();
     DateTime temp = _start;
@@ -437,12 +481,8 @@ class _AddEditInstallmentScreenState
           actions: [
             if (_isEdit)
               IconButton(
-                icon: const Icon(
-                  CupertinoIcons.delete,
-                  color: AppColors.expense,
-                  size: 20,
-                ),
-                onPressed: _delete,
+                icon: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
+                onPressed: _showActionsSheet,
               ),
           ],
         ),
@@ -518,23 +558,19 @@ class _AddEditInstallmentScreenState
                 const SizedBox(height: 24),
 
                 // ── Section: Plan ────────────────────────────────────
-                Row(
-                  children: [
-                    Expanded(child: _SectionHeader(label: context.t('inst.planLength'))),
-                    _LifetimeToggle(
-                      value: _lifetime,
-                      onChanged: (v) => setState(() {
-                        _lifetime = v;
-                        if (v) {
-                          // Clear plan fields when switching to lifetime
-                          _updating = true;
-                          _months.clear();
-                          _remainingMonths.clear();
-                          _updating = false;
-                        }
-                      }),
-                    ),
-                  ],
+                _SectionHeader(label: context.t('inst.planLength')),
+                const SizedBox(height: 8),
+                _PlanTypeSelector(
+                  isLifetime: _lifetime,
+                  onChanged: (isLifetime) => setState(() {
+                    _lifetime = isLifetime;
+                    if (isLifetime) {
+                      _updating = true;
+                      _months.clear();
+                      _remainingMonths.clear();
+                      _updating = false;
+                    }
+                  }),
                 ),
                 const SizedBox(height: 8),
                 SectionCard(
@@ -805,28 +841,6 @@ class _AddEditInstallmentScreenState
                         ),
                 ),
 
-                if (_isEdit) ...[
-                  const SizedBox(height: 12),
-                  if (status == InstallmentStatus.active)
-                    OutlinedButton(
-                      onPressed: _markCompleted,
-                      child: Text(context.t('inst.markCompleted')),
-                    ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _toggleCancelled,
-                    style: TextButton.styleFrom(
-                      foregroundColor: status == InstallmentStatus.cancelled
-                          ? AppColors.income
-                          : AppColors.expense,
-                    ),
-                    child: Text(
-                      status == InstallmentStatus.cancelled
-                          ? context.t('inst.reactivate')
-                          : context.t('inst.cancel'),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -889,41 +903,63 @@ class _Divider extends StatelessWidget {
   }
 }
 
-class _LifetimeToggle extends StatelessWidget {
-  final bool value;
+class _PlanTypeSelector extends StatelessWidget {
+  final bool isLifetime;
   final ValueChanged<bool> onChanged;
-  const _LifetimeToggle({required this.value, required this.onChanged});
+  const _PlanTypeSelector({required this.isLifetime, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: value ? brand.accentDark.withValues(alpha: 0.12) : brand.divider.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              value ? CupertinoIcons.infinite : CupertinoIcons.calendar,
-              size: 13,
-              color: value ? brand.accentDark : brand.inkSoft,
+    final selectedFg = foregroundOn(brand.accentDark);
+
+    Widget option(bool lifetime, IconData icon, String label) {
+      final selected = isLifetime == lifetime;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(lifetime),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: selected ? brand.accentDark : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
             ),
-            const SizedBox(width: 5),
-            Text(
-              context.t('inst.lifetime'),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: value ? brand.accentDark : brand.inkSoft,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 14,
+                  color: selected ? selectedFg : brand.inkSoft,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? selectedFg : brand.ink,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+      ),
+      child: Row(
+        children: [
+          option(false, CupertinoIcons.calendar, context.t('inst.fixedTermShort')),
+          option(true, CupertinoIcons.infinite, context.t('inst.lifetimeShort')),
+        ],
       ),
     );
   }
