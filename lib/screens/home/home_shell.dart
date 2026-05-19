@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
+import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
@@ -35,6 +37,48 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   ];
 
   static const _navPurple = AppActionBlue.color;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeShowFirstLaunchCurrencyPicker();
+  }
+
+  /// On the very first launch (flag not yet set), shows the currency picker
+  /// so the user can choose their currency before seeing any amounts.
+  Future<void> _maybeShowFirstLaunchCurrencyPicker() async {
+    final prefs = ref.read(prefsServiceProvider);
+    final done = await prefs.isFirstLaunchDone();
+    if (done || !mounted) return;
+    await prefs.markFirstLaunchDone();
+    if (!mounted) return;
+    // Defer until the first frame is drawn so the scaffold is ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final currentCode = await prefs.currencyCode();
+      if (!mounted) return;
+      await _showFirstLaunchCurrencySheet(currentCode);
+    });
+  }
+
+  Future<void> _showFirstLaunchCurrencySheet(String currentCode) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (_) => _FirstLaunchCurrencySheet(
+        currentCode: currentCode,
+        onPicked: (code) async {
+          final sym = kSupportedCurrencies[code] ?? code;
+          await ref.read(prefsServiceProvider).setCurrency(code, sym);
+          ref.invalidate(currencySymbolProvider);
+          ref.invalidate(currencyCodeProvider);
+        },
+      ),
+    );
+  }
 
   void _openManualEntry() {
     Navigator.push(
@@ -835,6 +879,263 @@ class _NavItem extends StatelessWidget {
               child: Text(label),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── First-launch currency picker ─────────────────────────────────────────────
+
+class _FirstLaunchCurrencySheet extends StatefulWidget {
+  final String currentCode;
+  final Future<void> Function(String code) onPicked;
+
+  const _FirstLaunchCurrencySheet({
+    required this.currentCode,
+    required this.onPicked,
+  });
+
+  @override
+  State<_FirstLaunchCurrencySheet> createState() =>
+      _FirstLaunchCurrencySheetState();
+}
+
+class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
+  late String _selected;
+  String _query = '';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.currentCode;
+  }
+
+  Future<void> _confirm() async {
+    setState(() => _saving = true);
+    await widget.onPicked(_selected);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final entries = kSupportedCurrencies.entries
+        .where((e) =>
+            _query.isEmpty ||
+            e.key.toLowerCase().contains(_query.toLowerCase()) ||
+            e.value.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.80,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: brand.inkSoft.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: brand.accentDark.withValues(alpha: 0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.money_dollar_circle_fill,
+                          color: brand.accentDark,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Choose your currency',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: brand.ink,
+                        letterSpacing: -0.374,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'You can always change this later in Settings.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: brand.inkSoft,
+                        height: 1.47,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Search field
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: brand.background,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.search,
+                              size: 16, color: brand.inkSoft),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              onChanged: (v) => setState(() => _query = v),
+                              style: TextStyle(
+                                  fontSize: 15, color: brand.ink),
+                              decoration: InputDecoration(
+                                hintText: 'Search currency…',
+                                hintStyle: TextStyle(
+                                  color: brand.inkSoft,
+                                  fontSize: 15,
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              // Currency list
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: entries.length,
+                  itemBuilder: (ctx, i) {
+                    final code = entries[i].key;
+                    final sym = entries[i].value;
+                    final selected = code == _selected;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selected = code),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        margin: const EdgeInsets.symmetric(vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? brand.accentDark.withValues(alpha: 0.10)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selected
+                                ? brand.accentDark.withValues(alpha: 0.35)
+                                : Colors.transparent,
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? brand.accentDark.withValues(alpha: 0.15)
+                                    : brand.background,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                sym,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? brand.accentDark
+                                      : brand.ink,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                code,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: brand.ink,
+                                ),
+                              ),
+                            ),
+                            if (selected)
+                              Icon(
+                                CupertinoIcons.check_mark_circled_solid,
+                                size: 20,
+                                color: brand.accentDark,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Confirm button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                child: SizedBox(
+                  height: 50,
+                  child: TextButton(
+                    onPressed: _saving ? null : _confirm,
+                    style: TextButton.styleFrom(
+                      backgroundColor: brand.accentDark,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: _saving
+                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        : Text(
+                            'Continue with ${kSupportedCurrencies[_selected] ?? _selected}  $_selected',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 17,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -263,7 +263,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = _friendlyError(e.code);
+          // Never show "Incorrect password" for Apple sign-in — the
+          // invalid-credential code here means the Apple ID token was
+          // rejected (misconfigured provider, expired token, etc.) which
+          // has nothing to do with a password.
+          _errorMessage = (e.code == 'wrong-password' || e.code == 'invalid-credential')
+              ? 'Apple sign-in failed. Please try again.'
+              : _friendlyError(e.code);
           _isLoading = false;
         });
       }

@@ -15,6 +15,7 @@ class PrefsService {
   static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
   static const _kStatsSectionsVisible = 'stats_sections_visible';
   static const _kLiveActivityEnabled = 'live_activity_enabled';
+  static const _kFirstLaunchDone = 'first_launch_done';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -41,14 +42,27 @@ class PrefsService {
   /// `true` (shown). Persisted so the choice survives app restart.
   Future<bool> balanceVisible() async {
     final p = await _prefsOrNull();
-    if (p == null) return false;
-    return p.getBool(_kBalanceVisible) ?? false;
+    if (p == null) return true;
+    return p.getBool(_kBalanceVisible) ?? true;
   }
 
   Future<void> setBalanceVisible(bool visible) async {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.setBool(_kBalanceVisible, visible);
+  }
+
+  /// Returns true if the first-launch currency setup has been completed.
+  Future<bool> isFirstLaunchDone() async {
+    final p = await _prefsOrNull();
+    if (p == null) return true; // default to done on error
+    return p.getBool(_kFirstLaunchDone) ?? false;
+  }
+
+  Future<void> markFirstLaunchDone() async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setBool(_kFirstLaunchDone, true);
   }
 
   Future<List<String>> homeCardOrder() async {
