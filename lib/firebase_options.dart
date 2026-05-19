@@ -63,6 +63,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '957463431763',
     projectId: 'trackora-9c965',
     storageBucket: 'trackora-9c965.firebasestorage.app',
-    iosBundleId: 'com.example.trackora',
+    iosBundleId: 'com.michaelchia.trackora',
   );
 }
