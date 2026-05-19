@@ -3749,7 +3749,3 @@ class _SheetNoteRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEST — Design 2 preview banner (remove with import + SliverToBoxAdapter above)
-// ─────────────────────────────────────────────────────────────────────────────
-
