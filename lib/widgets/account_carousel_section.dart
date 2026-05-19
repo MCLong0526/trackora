@@ -1403,7 +1403,9 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     final pal = _paletteForAccountType(_swatchColor);
     final brand = context.brand;
 
-    return Container(
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
       decoration: BoxDecoration(
         color: brand.background,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1486,7 +1488,8 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
             ),
           ),
           // Steps — intrinsic height with AnimatedSwitcher
-          AnimatedSwitcher(
+          Flexible(
+          child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 480),
             switchInCurve: const Cubic(0.34, 1.36, 0.64, 1.0),
             switchOutCurve: Curves.easeIn,
@@ -1526,9 +1529,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                     onSubmit: _submit,
                   ),
           ),
-          SizedBox(
-              height: MediaQuery.of(context).viewInsets.bottom > 0 ? 8 : 20),
+          ),
+          const SizedBox(height: 20),
         ],
+      ),
       ),
     );
   }
