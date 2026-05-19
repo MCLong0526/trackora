@@ -304,7 +304,7 @@ class _AddEditTravelGroupScreenState
                             horizontal: 20, vertical: 4),
                         child: TextField(
                           controller: _nameCtrl,
-                          autofocus: !_isEdit,
+                          autofocus: false,
                           textCapitalization: TextCapitalization.words,
                           style: _body(17, weight: 600),
                           decoration: InputDecoration(
@@ -696,7 +696,7 @@ class _AddTravelerSheetState extends State<_AddTravelerSheet> {
               const SizedBox(height: 16),
               Text('Add Traveler', style: _body(18, weight: 700)),
               const SizedBox(height: 16),
-              _SheetField(ctrl: _nameCtrl, hint: 'Name', autofocus: true, isDark: isDark),
+              _SheetField(ctrl: _nameCtrl, hint: 'Name', autofocus: false, isDark: isDark),
               const SizedBox(height: 10),
               _SheetField(
                 ctrl: _emailCtrl, hint: 'Email (optional)',
