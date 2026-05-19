@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/account.dart';
 import '../../models/installment.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
@@ -87,6 +88,7 @@ class InstallmentDetailScreen extends ConsumerWidget {
                   inst: inst,
                   month: selectedMonth,
                   userId: user?.uid,
+                  accounts: ref.watch(accountsProvider).valueOrNull ?? const [],
                 ),
                 const SizedBox(height: 20),
                 _RecentPaymentsSection(inst: inst, symbol: symbol),
@@ -308,44 +310,181 @@ class _PlanDetailsCard extends StatelessWidget {
 
 // ── Status Card ───────────────────────────────────────────────
 
-class _StatusCard extends ConsumerWidget {
+class _StatusCard extends ConsumerStatefulWidget {
   final Installment inst;
   final DateTime month;
   final String? userId;
+  final List<Account> accounts;
 
   const _StatusCard({
     required this.inst,
     required this.month,
     required this.userId,
+    required this.accounts,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (inst.status != InstallmentStatus.active) return const SizedBox.shrink();
+  ConsumerState<_StatusCard> createState() => _StatusCardState();
+}
+
+class _StatusCardState extends ConsumerState<_StatusCard> {
+  String? _selectedAccountId;
+
+  Future<void> _handleMarkPaid() async {
+    if (widget.userId == null) return;
+    HapticFeedback.selectionClick();
+
+    // Show account picker if accounts exist
+    if (widget.accounts.isNotEmpty) {
+      final accountId = await _showAccountPicker();
+      if (!mounted) return;
+      _selectedAccountId = accountId;
+    }
+
+    final svc = ref.read(installmentServiceProvider);
+    try {
+      await svc.markPaid(widget.userId!, widget.inst, widget.month,
+          accountId: _selectedAccountId);
+      if (mounted) {
+        AppToast.show(context, 'Marked as paid', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed to update payment', type: AppToastType.error);
+      }
+    }
+  }
+
+  Future<String?> _showAccountPicker() async {
     final brand = context.brand;
-    final paid = inst.isPaidIn(month);
-    final monthLabel = DateFormat('MMM').format(month);
-    final next = inst.nextDueDate();
+    return showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: brand.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 360,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Text(
+                  'Pay from account',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  'Which account would you like to deduct from?',
+                  style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    ListTile(
+                      leading: Icon(CupertinoIcons.xmark_circle, color: brand.inkSoft),
+                      title: Text('No account', style: TextStyle(color: brand.inkSoft)),
+                      trailing: _selectedAccountId == null
+                          ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                          : null,
+                      onTap: () => Navigator.pop(ctx, null),
+                    ),
+                    ...widget.accounts.map((a) {
+                      final isSelected = _selectedAccountId == a.id;
+                      return ListTile(
+                        leading: Icon(
+                          _iconForType(a.type),
+                          color: _accentForType(a.type),
+                        ),
+                        title: Text(
+                          a.name,
+                          style: TextStyle(
+                            color: brand.ink,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(a.type.label, style: TextStyle(color: brand.inkSoft)),
+                        trailing: isSelected
+                            ? Icon(CupertinoIcons.checkmark_alt, color: brand.accentDark)
+                            : null,
+                        onTap: () => Navigator.pop(ctx, a.id),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _iconForType(AccountType type) {
+    return switch (type) {
+      AccountType.bank => CupertinoIcons.building_2_fill,
+      AccountType.eWallet => CupertinoIcons.device_phone_portrait,
+      AccountType.cash => CupertinoIcons.money_dollar_circle_fill,
+      AccountType.investment => CupertinoIcons.chart_bar_fill,
+      AccountType.savings => CupertinoIcons.archivebox_fill,
+      AccountType.crypto => CupertinoIcons.bitcoin_circle_fill,
+      AccountType.forex => CupertinoIcons.globe,
+      AccountType.creditCard => CupertinoIcons.creditcard_fill,
+      AccountType.loan => CupertinoIcons.doc_text_fill,
+      _ => CupertinoIcons.creditcard,
+    };
+  }
+
+  Color _accentForType(AccountType type) {
+    return switch (type) {
+      AccountType.bank => const Color(0xFF2563EB),
+      AccountType.eWallet => const Color(0xFF7C3AED),
+      AccountType.cash => const Color(0xFF16A34A),
+      AccountType.investment => const Color(0xFFD97706),
+      AccountType.savings => const Color(0xFF0891B2),
+      AccountType.crypto => const Color(0xFFF59E0B),
+      AccountType.forex => const Color(0xFF059669),
+      AccountType.creditCard => const Color(0xFFDC2626),
+      AccountType.loan => const Color(0xFF6B7280),
+      _ => const Color(0xFF6B7280),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.inst.status != InstallmentStatus.active) return const SizedBox.shrink();
+    final brand = context.brand;
+    final paid = widget.inst.isPaidIn(widget.month);
+    final monthLabel = DateFormat('MMM').format(widget.month);
+    final next = widget.inst.nextDueDate();
     final nextStr = next != null
         ? 'Next charge on ${DateFormat('MMM d, yyyy').format(next)}'
         : '';
 
     return GestureDetector(
       onTap: () async {
-        if (userId == null) return;
+        if (widget.userId == null) return;
         HapticFeedback.selectionClick();
         final svc = ref.read(installmentServiceProvider);
         try {
           if (paid) {
-            await svc.markUnpaid(userId!, inst, month);
+            await svc.markUnpaid(widget.userId!, widget.inst, widget.month);
             if (context.mounted) {
               AppToast.show(context, 'Marked as unpaid', type: AppToastType.success);
             }
           } else {
-            await svc.markPaid(userId!, inst, month);
-            if (context.mounted) {
-              AppToast.show(context, 'Marked as paid', type: AppToastType.success);
-            }
+            await _handleMarkPaid();
+            return;
           }
         } catch (_) {
           if (context.mounted) {
@@ -394,7 +533,9 @@ class _StatusCard extends ConsumerWidget {
                   Text(
                     paid && nextStr.isNotEmpty
                         ? nextStr
-                        : 'Tap to mark as paid',
+                        : widget.accounts.isNotEmpty
+                            ? 'Tap to pay • choose account'
+                            : 'Tap to mark as paid',
                     style: TextStyle(
                       fontSize: 12,
                       color: brand.inkSoft,

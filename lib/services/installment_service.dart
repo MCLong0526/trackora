@@ -31,11 +31,13 @@ class InstallmentService {
 
   /// Marks the installment paid for `month` and creates a matching expense
   /// so it shows up in the regular ledger and totals.
+  /// If [accountId] is provided, the expense is linked to that account.
   Future<void> markPaid(
     String userId,
     Installment installment,
-    DateTime month,
-  ) async {
+    DateTime month, {
+    String? accountId,
+  }) async {
     final key = Installment.monthKey(month);
     if (installment.paidMonths.contains(key)) return;
 
@@ -61,6 +63,7 @@ class InstallmentService {
         note: '${installment.name} (installment)',
         date: installment.dueDateIn(month),
         type: EntryType.expense,
+        accountId: accountId,
         createdAt: now,
         updatedAt: now,
       ),

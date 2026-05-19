@@ -215,10 +215,14 @@ class _AddEditSavingPlanScreenState
         ),
         title: Text(_isEdit ? context.t('sp.edit') : context.t('sp.new')),
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
               _typeSelector(brand),
@@ -358,6 +362,7 @@ class _AddEditSavingPlanScreenState
             ],
           ),
         ),
+      ),
       ),
     );
   }
