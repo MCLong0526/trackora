@@ -1119,7 +1119,7 @@ class _JoinWithCodeSheetState extends ConsumerState<_JoinWithCodeSheet> {
                     color: bg, borderRadius: BorderRadius.circular(14)),
                   child: TextField(
                     controller: _codeCtrl,
-                    autofocus: true,
+                    autofocus: false,
                     textCapitalization: TextCapitalization.characters,
                     maxLength: 8,
                     style: _body(20, weight: 600, color: _inkColor),

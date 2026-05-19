@@ -778,7 +778,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
             child: TextFormField(
               controller: _customNameController,
               textCapitalization: TextCapitalization.words,
-              autofocus: true,
+              autofocus: false,
               style: const TextStyle(fontSize: 15),
               decoration: InputDecoration(
                 hintText: hint,

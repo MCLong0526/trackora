@@ -433,7 +433,8 @@ class _RepaymentHistory extends ConsumerWidget {
               const SizedBox(height: 12),
               TextField(
                 controller: ctrl,
-                autofocus: true,
+                autofocus: false,
+                textInputAction: TextInputAction.done,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(prefixText: '$symbol  '),

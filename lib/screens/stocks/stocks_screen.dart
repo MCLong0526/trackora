@@ -260,13 +260,13 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                CupertinoIcons.plus,
+                                CupertinoIcons.search,
                                 size: 16,
                                 color: Colors.white,
                               ),
                               SizedBox(width: 6),
                               Text(
-                                'Buy stock',
+                                'Search & Add Stock',
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -1651,7 +1651,7 @@ class _EmptyPortfolio extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add your first stock or watch a ticker to get started.',
+              'Search by ticker or company name to add stocks to your portfolio or watchlist.',
               style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.5),
               textAlign: TextAlign.center,
             ),
@@ -1666,14 +1666,21 @@ class _EmptyPortfolio extends StatelessWidget {
                   borderRadius: BorderRadius.circular(22),
                 ),
                 alignment: Alignment.center,
-                child: const Text(
-                  '+ Add Stock',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    letterSpacing: -0.2,
-                  ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.search, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      'Search & Add Stock',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -3283,7 +3290,8 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
-              autofocus: true,
+              autofocus: false,
+              textInputAction: TextInputAction.done,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),

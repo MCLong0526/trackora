@@ -718,7 +718,8 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
               controller: controller,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
+              autofocus: false,
+              textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 prefixText: '$symbol  ',
                 hintText: '0.00',

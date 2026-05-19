@@ -227,7 +227,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
             placeholder: 'Name',
-            autofocus: true,
+            autofocus: false,
+            textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.words,
             onChanged: (v) => name = v,
           ),
@@ -313,7 +314,8 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
           child: CupertinoTextField(
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            autofocus: true,
+            autofocus: false,
+            textInputAction: TextInputAction.done,
             prefix: Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Text(
@@ -489,6 +491,64 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Total bill row — prominently editable
+          GestureDetector(
+            onTap: _editTotalAmount,
+            child: Row(
+              children: [
+                const Text(
+                  'TOTAL BILL',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _kPurple,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _kPurple,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _kPurple.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(_kRoundedPill),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        CupertinoIcons.pencil,
+                        size: 10,
+                        color: _kPurple,
+                      ),
+                      SizedBox(width: 3),
+                      Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _kPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           const Text(
             "YOU'LL BE OWED",
             style: TextStyle(
@@ -498,64 +558,37 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 8),
-          // Tappable amount to edit
-          GestureDetector(
-            onTap: _editTotalAmount,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  widget.currencySymbol,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: _kPurple,
-                    letterSpacing: -0.374,
-                  ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                widget.currencySymbol,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: _kPurple,
+                  letterSpacing: -0.374,
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  _owedAmount.toStringAsFixed(2),
-                  style: const TextStyle(
-                    fontSize: 44,
-                    fontWeight: FontWeight.w600,
-                    color: _kPurple,
-                    letterSpacing: -1.5,
-                  ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _owedAmount.toStringAsFixed(2),
+                style: const TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w600,
+                  color: _kPurple,
+                  letterSpacing: -1.5,
                 ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _kPurple.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(_kRoundedSm),
-                    ),
-                    child: const Text(
-                      'edit',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _kPurple,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
             countOwing > 0
-                ? 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · '
-                      '$countOwing ${countOwing == 1 ? "mate owes" : "mates owe"} you '
+                ? '$countOwing ${countOwing == 1 ? "mate owes" : "mates owe"} you '
                       '${widget.currencySymbol} ${amountEach.toStringAsFixed(2)} each'
-                : 'You paid ${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)} · add mates to split',
+                : 'Add mates to split the bill',
             style: const TextStyle(
               fontSize: 14,
               color: _kPurple,
@@ -1059,6 +1092,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       child: CupertinoTextField(
         controller: ctrl,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textInputAction: TextInputAction.done,
         textAlign: TextAlign.right,
         style: const TextStyle(
           fontSize: 14,
