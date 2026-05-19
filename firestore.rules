@@ -29,45 +29,64 @@ service cloud.firestore {
         request.auth.uid in request.resource.data.memberIds;
     }
 
+    // Helper: caller is an existing member of the travel group.
+    function isMember(ownerId, groupId) {
+      return request.auth.uid in
+        get(/databases/$(database)/documents/users/$(ownerId)/travelGroups/$(groupId))
+          .data.memberIds;
+    }
+
     // ── Trip sub-collections (members, expenses) ──────────────────────────────
 
     match /users/{ownerId}/travelGroups/{groupId}/members/{docId} {
-      // Read: any authenticated user (needed for duplicate-member check on join)
-      allow read: if isAuth();
+      // Read: owner or existing group member only.
+      // Note: the duplicate-member check in joinByCode is wrapped in try/catch,
+      // so a permission denial for non-members is handled gracefully.
+      allow read: if isAuth() &&
+        (request.auth.uid == ownerId || isMember(ownerId, groupId));
 
       // Write: owner, existing member, or self-registration
       allow write: if isAuth() &&
         (request.auth.uid == ownerId ||
-         request.auth.uid in
-           get(/databases/$(database)/documents/users/$(ownerId)/travelGroups/$(groupId))
-             .data.memberIds ||
+         isMember(ownerId, groupId) ||
          request.resource.data.userId == request.auth.uid);
     }
 
     match /users/{ownerId}/travelGroups/{groupId}/expenses/{docId} {
       allow read: if isAuth() &&
-        (request.auth.uid == ownerId ||
-         request.auth.uid in
-           get(/databases/$(database)/documents/users/$(ownerId)/travelGroups/$(groupId))
-             .data.memberIds);
+        (request.auth.uid == ownerId || isMember(ownerId, groupId));
       allow write: if isAuth() &&
-        (request.auth.uid == ownerId ||
-         request.auth.uid in
-           get(/databases/$(database)/documents/users/$(ownerId)/travelGroups/$(groupId))
-             .data.memberIds);
+        (request.auth.uid == ownerId || isMember(ownerId, groupId));
     }
 
     // ── Invite codes ──────────────────────────────────────────────────────────
+    // Read stays open to any authenticated user: the joiner only has the code
+    // string and must look it up to discover the group — this is intentional.
+    // Write is gated to the code creator (ownerId field).
 
     match /travelInviteCodes/{code} {
       allow read: if isAuth();
-      allow write: if isAuth();
+      allow create: if isAuth() &&
+        request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isAuth() &&
+        resource.data.ownerId == request.auth.uid;
     }
 
     // ── Email invites ─────────────────────────────────────────────────────────
+    // Owner creates and may delete. Invitee reads (queried by email) and
+    // deletes their own invite after joining.
 
     match /travelEmailInvites/{docId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth() &&
+        (request.auth.uid == resource.data.ownerId ||
+         request.auth.token.email == resource.data.email);
+      allow create: if isAuth() &&
+        request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAuth() &&
+        request.auth.uid == resource.data.ownerId;
+      allow delete: if isAuth() &&
+        (request.auth.uid == resource.data.ownerId ||
+         request.auth.token.email == resource.data.email);
     }
 
   }
