@@ -120,7 +120,6 @@ final expenseServiceProvider = Provider(
 final installmentServiceProvider = Provider(
   (ref) => InstallmentService(
     repository: ref.read(installmentRepositoryProvider),
-    expenses: ref.read(expenseRepositoryProvider),
   ),
 );
 
