@@ -1348,7 +1348,7 @@ class _Tile extends StatelessWidget {
                 child: Icon(
                   icon,
                   size: 17,
-                  color: destructive ? AppColors.expense : AppColors.ink,
+                  color: destructive ? Colors.white : AppColors.ink,
                 ),
               ),
               const SizedBox(width: 14),
@@ -2545,14 +2545,14 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Handle
           Center(
             child: Container(
               width: 36,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 color: brand.inkSoft.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
@@ -2563,26 +2563,49 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
           if (_step == _DeleteStep.loading) ...[
             const Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
+                padding: EdgeInsets.symmetric(vertical: 48),
                 child: CupertinoActivityIndicator(),
               ),
             ),
           ] else if (_step == _DeleteStep.reauthPassword) ...[
-            // Password re-auth step
+            // Centred icon
+            Center(
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.expense.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.lock_shield_fill,
+                  color: AppColors.expense,
+                  size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
               context.t('settings.deleteAccountReauthTitle'),
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: brand.ink,
+                letterSpacing: -0.374,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               context.t('settings.deleteAccountReauthBody'),
-              style: TextStyle(fontSize: 14, color: brand.inkSoft, height: 1.4),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                color: brand.inkSoft,
+                height: 1.47,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _Field(
               controller: _passwordCtrl,
               label: context.t('settings.deleteAccountPassword'),
@@ -2602,103 +2625,113 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
               const SizedBox(height: 10),
               Text(
                 _error!,
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13, color: AppColors.expense),
               ),
             ],
             const SizedBox(height: 20),
             SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                color: AppColors.expense,
+              height: 50,
+              child: TextButton(
                 onPressed: _reauthPasswordAndDelete,
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.expense,
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                ),
                 child: Text(
                   context.t('settings.deleteAccountVerify'),
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  context.t('common.cancel'),
-                  style: TextStyle(color: brand.inkSoft),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                context.t('common.cancel'),
+                style: TextStyle(
+                  fontSize: 17,
+                  color: brand.inkSoft,
                 ),
               ),
             ),
           ] else ...[
-            // Confirm step
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.expense.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.trash,
-                    color: AppColors.expense,
-                    size: 20,
-                  ),
+            // Confirm step — centred icon + clean typography, no tinted box
+            Center(
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.expense.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  context.t('settings.deleteAccountConfirmTitle'),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
+                child: const Icon(
+                  CupertinoIcons.trash_fill,
+                  color: AppColors.expense,
+                  size: 28,
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.expense.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                context.t('settings.deleteAccountConfirmBody'),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: brand.ink,
-                  height: 1.45,
-                ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.t('settings.deleteAccountConfirmTitle'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: brand.ink,
+                letterSpacing: -0.374,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.t('settings.deleteAccountConfirmBody'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                color: brand.inkSoft,
+                height: 1.47,
               ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(
                 _error!,
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 13, color: AppColors.expense),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                color: AppColors.expense,
+              height: 50,
+              child: TextButton(
                 onPressed: _attemptDelete,
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.expense,
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder(),
+                ),
                 child: Text(
                   context.t('settings.deleteAccountConfirm'),
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  context.t('common.cancel'),
-                  style: TextStyle(color: brand.inkSoft),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                context.t('common.cancel'),
+                style: TextStyle(
+                  fontSize: 17,
+                  color: brand.inkSoft,
                 ),
               ),
             ),
