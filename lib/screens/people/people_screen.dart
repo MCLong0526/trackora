@@ -214,6 +214,7 @@ class _PersonCard extends ConsumerWidget {
               PersonAvatar(
                 name: person.name,
                 colorIndex: person.colorIndex,
+                emoji: person.emoji,
                 size: 48,
               ),
               const SizedBox(width: 14),
@@ -665,6 +666,7 @@ class _PersonOrNamePickerSheetState
                             PersonAvatar(
                               name: p.name,
                               colorIndex: p.colorIndex,
+                              emoji: p.emoji,
                               size: 40,
                             ),
                             const SizedBox(width: 12),
@@ -875,6 +877,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                             PersonAvatar(
                               name: p.name,
                               colorIndex: p.colorIndex,
+                              emoji: p.emoji,
                               size: 40,
                             ),
                             const SizedBox(width: 12),

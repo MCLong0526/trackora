@@ -51,6 +51,7 @@ class BorrowLending {
   final DateTime date;
   final DateTime? dueDate;
   final String? imagePath;
+  final String? currency;
   final List<BorrowLendingRepayment> repayments;
   final bool cancelled;
   final DateTime createdAt;
@@ -65,6 +66,7 @@ class BorrowLending {
     required this.date,
     this.dueDate,
     this.imagePath,
+    this.currency,
     this.repayments = const [],
     this.cancelled = false,
     required this.createdAt,
@@ -86,6 +88,7 @@ class BorrowLending {
       date: _readDate(data['date']),
       dueDate: data['dueDate'] == null ? null : _readDate(data['dueDate']),
       imagePath: data['imagePath'] as String?,
+      currency: data['currency'] as String?,
       repayments: (data['repayments'] as List? ?? const [])
           .whereType<Map>()
           .map((r) => BorrowLendingRepayment.fromMap(
@@ -107,6 +110,7 @@ class BorrowLending {
         'date': date.toIso8601String(),
         'dueDate': dueDate?.toIso8601String(),
         'imagePath': imagePath,
+        'currency': currency,
         'repayments': repayments.map((r) => r.toMap()).toList(),
         'cancelled': cancelled,
         'createdAt': createdAt.toIso8601String(),
@@ -126,6 +130,7 @@ class BorrowLending {
     DateTime? date,
     Object? dueDate = _sentinel,
     Object? imagePath = _sentinel,
+    Object? currency = _sentinel,
     List<BorrowLendingRepayment>? repayments,
     bool? cancelled,
     DateTime? updatedAt,
@@ -143,6 +148,9 @@ class BorrowLending {
       imagePath: identical(imagePath, _sentinel)
           ? this.imagePath
           : imagePath as String?,
+      currency: identical(currency, _sentinel)
+          ? this.currency
+          : currency as String?,
       repayments: repayments ?? this.repayments,
       cancelled: cancelled ?? this.cancelled,
       createdAt: createdAt,
