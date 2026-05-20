@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/person.dart';
@@ -566,217 +567,241 @@ class _PersonOrNamePickerSheetState
               ),
             ),
             const SizedBox(height: 12),
-            if (_showNew) ...[
-              // Name input
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: CupertinoTextField(
-                  controller: _nameCtrl,
-                  placeholder: 'Name',
-                  autofocus: false,
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => setState(() {}),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 13),
-                  decoration: BoxDecoration(
-                    color: brand.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.field),
-                  ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: child,
                 ),
+                child: _showNew
+                    ? _newTabBody(brand)
+                    : _contactsTabBody(brand, async, query),
               ),
-              const SizedBox(height: 10),
-              // Save-to-contacts toggle
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: brand.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.field),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(CupertinoIcons.person_badge_plus,
-                          size: 18, color: brand.inkSoft),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Save to my contacts',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: brand.ink,
-                          ),
-                        ),
-                      ),
-                      CupertinoSwitch(
-                        value: _saveToContacts,
-                        activeTrackColor: brand.accentDark,
-                        onChanged: (v) => setState(() => _saveToContacts = v),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Confirm button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GestureDetector(
-                  onTap: _saving || _nameCtrl.text.trim().isEmpty
-                      ? null
-                      : _submitNew,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: _nameCtrl.text.trim().isEmpty
-                          ? brand.ink.withValues(alpha: 0.15)
-                          : brand.accentDark,
-                      borderRadius: BorderRadius.circular(AppRadius.chip),
-                    ),
-                    alignment: Alignment.center,
-                    child: _saving
-                        ? const CupertinoActivityIndicator()
-                        : Text(
-                            _saveToContacts
-                                ? 'Confirm & Save to Contacts'
-                                : 'Confirm',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: _nameCtrl.text.trim().isEmpty
-                                  ? brand.inkSoft
-                                  : brand.background,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ] else ...[
-              // Contact search
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: CupertinoSearchTextField(
-                  controller: _searchCtrl,
-                  placeholder: 'Search contacts…',
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Contact list
-              async.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CupertinoActivityIndicator(),
-                ),
-                error: (e, _) => Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('Error: $e'),
-                ),
-                data: (all) {
-                  final list = query.isEmpty
-                      ? all
-                      : all
-                          .where((p) =>
-                              p.name.toLowerCase().contains(query) ||
-                              (p.phone?.toLowerCase().contains(query) ??
-                                  false))
-                          .toList();
-                  if (list.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-                      child: Text(
-                        all.isEmpty
-                            ? 'No saved contacts yet.'
-                            : 'No matches.',
-                        style: TextStyle(color: brand.inkSoft, fontSize: 13),
-                      ),
-                    );
-                  }
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.42,
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-                      itemCount: list.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 6),
-                      itemBuilder: (ctx, i) {
-                        final p = list[i];
-                        final isCurrent = widget.currentName == p.name;
-                        return GestureDetector(
-                          onTap: () => Navigator.pop(context, p),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isCurrent
-                                  ? brand.accentDark.withValues(alpha: 0.08)
-                                  : brand.surface,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.card),
-                              border: isCurrent
-                                  ? Border.all(
-                                      color: brand.accentDark, width: 1.5)
-                                  : null,
-                            ),
-                            child: Row(
-                              children: [
-                                PersonAvatar(
-                                  name: p.name,
-                                  colorIndex: p.colorIndex,
-                                  emoji: p.emoji,
-                                  size: 40,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        p.name,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: brand.ink,
-                                          letterSpacing: -0.2,
-                                        ),
-                                      ),
-                                      if (p.phone != null)
-                                        Text(
-                                          p.phone!,
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: brand.inkSoft),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                _TypeBadge(p.type, brand),
-                                if (isCurrent) ...[
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    CupertinoIcons.checkmark_alt,
-                                    size: 16,
-                                    color: brand.accentDark,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _newTabBody(BrandColors brand) {
+    return SizedBox(
+      key: const ValueKey('new'),
+      width: double.infinity,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: CupertinoTextField(
+              controller: _nameCtrl,
+              placeholder: 'Name',
+              autofocus: false,
+              textCapitalization: TextCapitalization.words,
+              onChanged: (_) => setState(() {}),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: brand.surface,
+                borderRadius: BorderRadius.circular(AppRadius.field),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: brand.surface,
+                borderRadius: BorderRadius.circular(AppRadius.field),
+              ),
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.person_badge_plus,
+                      size: 18, color: brand.inkSoft),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Save to my contacts',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: brand.ink,
+                      ),
+                    ),
+                  ),
+                  CupertinoSwitch(
+                    value: _saveToContacts,
+                    activeTrackColor: brand.accentDark,
+                    onChanged: (v) => setState(() => _saveToContacts = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: GestureDetector(
+              onTap: _saving || _nameCtrl.text.trim().isEmpty
+                  ? null
+                  : _submitNew,
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: _nameCtrl.text.trim().isEmpty
+                      ? brand.ink.withValues(alpha: 0.15)
+                      : brand.accentDark,
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                ),
+                alignment: Alignment.center,
+                child: _saving
+                    ? const CupertinoActivityIndicator()
+                    : Text(
+                        _saveToContacts
+                            ? 'Confirm & Save to Contacts'
+                            : 'Confirm',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _nameCtrl.text.trim().isEmpty
+                              ? brand.inkSoft
+                              : brand.background,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _contactsTabBody(
+    BrandColors brand,
+    AsyncValue<List<Person>> async,
+    String query,
+  ) {
+    return SizedBox(
+      key: const ValueKey('contacts'),
+      width: double.infinity,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: CupertinoSearchTextField(
+              controller: _searchCtrl,
+              placeholder: 'Search contacts…',
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(height: 8),
+          async.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(32),
+              child: CupertinoActivityIndicator(),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Error: $e'),
+            ),
+            data: (all) {
+              final list = query.isEmpty
+                  ? all
+                  : all
+                      .where((p) =>
+                          p.name.toLowerCase().contains(query) ||
+                          (p.phone?.toLowerCase().contains(query) ?? false))
+                      .toList();
+              if (list.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                  child: Text(
+                    all.isEmpty ? 'No saved contacts yet.' : 'No matches.',
+                    style: TextStyle(color: brand.inkSoft, fontSize: 13),
+                  ),
+                );
+              }
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.42,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (ctx, i) {
+                    final p = list[i];
+                    final isCurrent = widget.currentName == p.name;
+                    return GestureDetector(
+                      onTap: () => Navigator.pop(context, p),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? brand.accentDark.withValues(alpha: 0.08)
+                              : brand.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.card),
+                          border: isCurrent
+                              ? Border.all(color: brand.accentDark, width: 1.5)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            PersonAvatar(
+                              name: p.name,
+                              colorIndex: p.colorIndex,
+                              emoji: p.emoji,
+                              size: 40,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: brand.ink,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  if (p.phone != null)
+                                    Text(p.phone!,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: brand.inkSoft)),
+                                ],
+                              ),
+                            ),
+                            _TypeBadge(p.type, brand),
+                            if (isCurrent) ...[
+                              const SizedBox(width: 8),
+                              Icon(CupertinoIcons.checkmark_alt,
+                                  size: 16, color: brand.accentDark),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -785,7 +810,10 @@ class _PersonOrNamePickerSheetState
       String label, bool selected, BrandColors brand, VoidCallback onTap) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 8),
