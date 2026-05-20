@@ -62,6 +62,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   late SplitMode _mode;
   late double _totalAmount;
   final _scrollCtrl = ScrollController();
+  String? _justAddedId;
 
   // Per-member controllers
   final Map<String, TextEditingController> _amountCtrls = {};
@@ -237,8 +238,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       return;
     }
 
+    HapticFeedback.mediumImpact();
     setState(() {
       final newId = DateTime.now().microsecondsSinceEpoch.toString();
+      _justAddedId = newId;
       _members.add(
         SplitMember(
           id: newId,
@@ -808,7 +811,11 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           children: [
             for (int i = 0; i < _members.length; i++) ...[
               if (i > 0) hairline,
-              _memberRow(_members[i], brand),
+              _MemberEntranceItem(
+                key: ValueKey(_members[i].id),
+                animate: _members[i].id == _justAddedId,
+                child: _memberRow(_members[i], brand),
+              ),
             ],
           ],
         ),
@@ -1135,6 +1142,61 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Animated entrance wrapper for new member rows ─────────────────────────────
+
+class _MemberEntranceItem extends StatefulWidget {
+  final bool animate;
+  final Widget child;
+  const _MemberEntranceItem({
+    required this.animate,
+    required this.child,
+    super.key,
+  });
+
+  @override
+  State<_MemberEntranceItem> createState() => _MemberEntranceItemState();
+}
+
+class _MemberEntranceItemState extends State<_MemberEntranceItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.25),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    if (widget.animate) {
+      _ctrl.forward();
+    } else {
+      _ctrl.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

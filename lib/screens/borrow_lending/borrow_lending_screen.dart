@@ -112,25 +112,38 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
                 if (records.isEmpty)
                   _EmptyState(onAdd: () => _openAdd(context))
                 else ...[
-                  for (final r in records.where(_matches))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _BorrowSwipeActions(
-                        record: r,
-                        userId: user?.uid,
-                        child: _RecordTile(record: r, symbol: symbol),
-                      ),
-                    ),
-                  if (records.where(_matches).isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Center(
-                        child: Text(
-                          context.t('bl.noMatch'),
-                          style: TextStyle(color: brand.inkSoft),
+                  () {
+                    final filtered = records.where(_matches).toList();
+                    if (filtered.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Center(
+                          child: Text(
+                            context.t('bl.noMatch'),
+                            style: TextStyle(color: brand.inkSoft),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (int i = 0; i < filtered.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _EntranceItem(
+                              key: ValueKey(filtered[i].id),
+                              delay: Duration(milliseconds: i * 45),
+                              child: _BorrowSwipeActions(
+                                record: filtered[i],
+                                userId: user?.uid,
+                                child: _RecordTile(
+                                    record: filtered[i], symbol: symbol),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  }(),
                 ],
               ],
             );
@@ -733,6 +746,52 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg),
+      ),
+    );
+  }
+}
+
+class _EntranceItem extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  const _EntranceItem({required this.child, required this.delay, super.key});
+
+  @override
+  State<_EntranceItem> createState() => _EntranceItemState();
+}
+
+class _EntranceItemState extends State<_EntranceItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    Future.delayed(widget.delay, () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _ctrl,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.12),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic)),
+        child: widget.child,
       ),
     );
   }

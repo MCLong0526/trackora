@@ -197,6 +197,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
                           colorIndex: _colorIndex,
                           emoji: _emoji,
                           size: 88,
+                          animated: _emoji != null,
                         ),
                         Positioned(
                           bottom: 0,
@@ -407,7 +408,7 @@ class _NoteFieldState extends State<_NoteField> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 16, 0, 16),
+            padding: const EdgeInsets.fromLTRB(14, 13, 0, 13),
             child: Icon(
               CupertinoIcons.text_bubble,
               size: 20,
@@ -429,9 +430,10 @@ class _NoteFieldState extends State<_NoteField> {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
+                isDense: true,
                 hintText: 'Note (optional)',
                 hintStyle: TextStyle(color: brand.inkSoft, fontSize: 16),
-                contentPadding: const EdgeInsets.fromLTRB(0, 16, 14, 16),
+                contentPadding: const EdgeInsets.fromLTRB(0, 13, 14, 13),
               ),
             ),
           ),
