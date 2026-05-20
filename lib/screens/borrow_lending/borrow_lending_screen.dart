@@ -9,6 +9,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/person_avatar.dart';
 import 'add_edit_borrow_lending_screen.dart';
 import 'borrow_lending_detail_screen.dart';
 
@@ -398,20 +399,39 @@ class _RecordTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: tint,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        isBorrow
-                            ? CupertinoIcons.arrow_down_left
-                            : CupertinoIcons.arrow_up_right,
-                        color: accent,
-                        size: 22,
-                      ),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        PersonAvatar(
+                          name: record.person.isEmpty
+                              ? '?'
+                              : record.person,
+                          size: 44,
+                        ),
+                        Positioned(
+                          bottom: -2,
+                          right: -4,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: tint,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: brand.surface,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              isBorrow
+                                  ? CupertinoIcons.arrow_down_left
+                                  : CupertinoIcons.arrow_up_right,
+                              color: accent,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(width: 12),
                     Expanded(

@@ -6,18 +6,8 @@ import '../../models/person.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/person_avatar.dart';
 import 'add_edit_person_screen.dart';
-
-const _avatarColors = [
-  AppColors.lilac,
-  AppColors.mint,
-  AppColors.peach,
-  AppColors.butter,
-  AppColors.blush,
-  AppColors.sky,
-  AppColors.sage,
-  AppColors.sand,
-];
 
 class PeopleScreen extends ConsumerStatefulWidget {
   const PeopleScreen({super.key});
@@ -184,7 +174,6 @@ class _PersonCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
-    final avatarBg = _avatarColors[person.colorIndex.clamp(0, _avatarColors.length - 1)];
 
     return Dismissible(
       key: ValueKey(person.id),
@@ -222,23 +211,10 @@ class _PersonCard extends ConsumerWidget {
             ),
           child: Row(
             children: [
-              // Avatar
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: avatarBg,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  person.initials,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
-                ),
+              PersonAvatar(
+                name: person.name,
+                colorIndex: person.colorIndex,
+                size: 48,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -453,6 +429,293 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+/// Person picker that returns either a saved [Person] or a typed [String] name.
+/// Returns null when dismissed without selection.
+class PersonOrNamePickerSheet extends ConsumerStatefulWidget {
+  final String? currentName;
+  const PersonOrNamePickerSheet({super.key, this.currentName});
+
+  @override
+  ConsumerState<PersonOrNamePickerSheet> createState() =>
+      _PersonOrNamePickerSheetState();
+}
+
+class _PersonOrNamePickerSheetState
+    extends ConsumerState<PersonOrNamePickerSheet> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.currentName != null) _ctrl.text = widget.currentName!;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final async = ref.watch(peopleProvider);
+    final query = _ctrl.text.trim();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: brand.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Text(
+                  'Select Person',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                    letterSpacing: -0.374,
+                  ),
+                ),
+                const Spacer(),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: brand.inkSoft),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: CupertinoSearchTextField(
+              controller: _ctrl,
+              placeholder: 'Search or type a name…',
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          if (query.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context, query),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(
+                      color: brand.accentDark.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: brand.divider,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.person_circle_fill,
+                          size: 20,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              query,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: brand.ink,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            Text(
+                              'Use this name',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: brand.inkSoft,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 14,
+                        color: brand.accentDark,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          async.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(32),
+              child: CupertinoActivityIndicator(),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Error: $e'),
+            ),
+            data: (all) {
+              final list = query.isEmpty
+                  ? all
+                  : all
+                      .where(
+                        (p) =>
+                            p.name
+                                .toLowerCase()
+                                .contains(query.toLowerCase()) ||
+                            (p.phone
+                                    ?.toLowerCase()
+                                    .contains(query.toLowerCase()) ??
+                                false),
+                      )
+                      .toList();
+              if (list.isEmpty && all.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+                  child: Column(
+                    children: [
+                      Text(
+                        'No saved people yet.',
+                        style: TextStyle(color: brand.inkSoft, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (_) => const AddEditPersonScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(CupertinoIcons.add, size: 14),
+                        label: const Text('Add Person'),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                );
+              }
+              if (list.isEmpty) return const SizedBox(height: 8);
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.42,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  itemCount: list.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (ctx, i) {
+                    final p = list[i];
+                    final isCurrent = widget.currentName == p.name;
+                    return GestureDetector(
+                      onTap: () => Navigator.pop(context, p),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? brand.accentDark.withValues(alpha: 0.08)
+                              : brand.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.card),
+                          border: isCurrent
+                              ? Border.all(
+                                  color: brand.accentDark, width: 1.5)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            PersonAvatar(
+                              name: p.name,
+                              colorIndex: p.colorIndex,
+                              size: 40,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: brand.ink,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  if (p.phone != null)
+                                    Text(
+                                      p.phone!,
+                                      style: TextStyle(
+                                          fontSize: 11, color: brand.inkSoft),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            _TypeBadge(p.type, brand),
+                            if (isCurrent) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                CupertinoIcons.checkmark_alt,
+                                size: 16,
+                                color: brand.accentDark,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Legacy compact person picker (used by add_edit_expense_screen) ─────────────
+
 /// A compact person picker widget for use in bottom sheets / form fields.
 /// Returns a [Person] when one is tapped, or null if the user dismisses.
 class PersonPickerSheet extends ConsumerStatefulWidget {
@@ -592,8 +855,6 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                   separatorBuilder: (ctx2, idx2) => const SizedBox(height: 6),
                   itemBuilder: (ctx, i) {
                     final p = list[i];
-                    final avatarBg = _avatarColors[
-                        p.colorIndex.clamp(0, _avatarColors.length - 1)];
                     final isCurrent = widget.currentName == p.name;
                     return GestureDetector(
                       onTap: () => Navigator.pop(context, p),
@@ -611,22 +872,10 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: avatarBg,
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                p.initials,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: brand.ink,
-                                ),
-                              ),
+                            PersonAvatar(
+                              name: p.name,
+                              colorIndex: p.colorIndex,
+                              size: 40,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
