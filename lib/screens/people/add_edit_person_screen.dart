@@ -344,7 +344,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
               ),
               const SizedBox(height: 14),
               // Note (optional) — icon top-aligned
-              _NoteField(controller: _noteCtrl, brand: brand),
+              _NoteField(controller: _noteCtrl),
               const SizedBox(height: 40),
             ],
           ),
@@ -367,47 +367,71 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
   }
 }
 
-class _NoteField extends StatelessWidget {
+class _NoteField extends StatefulWidget {
   final TextEditingController controller;
-  final BrandColors brand;
-  const _NoteField({required this.controller, required this.brand});
+  const _NoteField({required this.controller});
+
+  @override
+  State<_NoteField> createState() => _NoteFieldState();
+}
+
+class _NoteFieldState extends State<_NoteField> {
+  final _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() => setState(() => _focused = _focusNode.hasFocus));
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+    final brand = context.brand;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.field),
-        border: Border.all(color: brand.divider.withValues(alpha: 0.5)),
+        border: _focused
+            ? Border.all(color: brand.accentDark, width: 1.5)
+            : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.fromLTRB(14, 16, 0, 16),
             child: Icon(
               CupertinoIcons.text_bubble,
               size: 20,
-              color: brand.inkSoft,
+              color: _focused ? brand.accentDark : brand.inkSoft,
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
-              controller: controller,
-              maxLines: 4,
-              minLines: 2,
+              controller: widget.controller,
+              focusNode: _focusNode,
+              maxLines: 5,
+              minLines: 3,
               autofocus: false,
+              textAlignVertical: TextAlignVertical.top,
+              style: TextStyle(fontSize: 16, color: brand.ink),
               decoration: InputDecoration(
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 hintText: 'Note (optional)',
-                hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
+                hintStyle: TextStyle(color: brand.inkSoft, fontSize: 16),
+                contentPadding: const EdgeInsets.fromLTRB(0, 16, 14, 16),
               ),
             ),
           ),
@@ -492,30 +516,106 @@ class _EmojiPickerSheet extends StatelessWidget {
               itemCount: _kEmojiList.length,
               itemBuilder: (_, i) {
                 final e = _kEmojiList[i];
-                final isSelected = e == selectedEmoji;
-                return GestureDetector(
+                return _EmojiTile(
+                  emoji: e,
+                  isSelected: e == selectedEmoji,
+                  brand: brand,
                   onTap: () => onSelected(e),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? brand.accentDark.withValues(alpha: 0.12)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      border: isSelected
-                          ? Border.all(color: brand.accentDark, width: 1.5)
-                          : null,
-                    ),
-                    child: Center(
-                      child: Text(e, style: const TextStyle(fontSize: 24)),
-                    ),
-                  ),
                 );
               },
             ),
           ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+class _EmojiTile extends StatefulWidget {
+  final String emoji;
+  final bool isSelected;
+  final BrandColors brand;
+  final VoidCallback onTap;
+
+  const _EmojiTile({
+    required this.emoji,
+    required this.isSelected,
+    required this.brand,
+    required this.onTap,
+  });
+
+  @override
+  State<_EmojiTile> createState() => _EmojiTileState();
+}
+
+class _EmojiTileState extends State<_EmojiTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.4)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 35),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.4, end: 0.88)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 30),
+      TweenSequenceItem(
+          tween: Tween(begin: 0.88, end: 1.05)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 20),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.05, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 15),
+    ]).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    _ctrl.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? widget.brand.accentDark.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: widget.isSelected
+              ? Border.all(color: widget.brand.accentDark, width: 1.5)
+              : null,
+        ),
+        child: Center(
+          child: ScaleTransition(
+            scale: _scale,
+            child: Text(
+              widget.emoji,
+              style: const TextStyle(fontSize: 24),
+            ),
+          ),
+        ),
       ),
     );
   }
