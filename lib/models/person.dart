@@ -47,6 +47,7 @@ class Person {
   final PersonType type;
   final String? phone;
   final String? note;
+  final String? emoji;
   final int colorIndex;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -57,6 +58,7 @@ class Person {
     required this.type,
     this.phone,
     this.note,
+    this.emoji,
     this.colorIndex = 0,
     required this.createdAt,
     required this.updatedAt,
@@ -77,6 +79,7 @@ class Person {
       type: PersonTypeX.decode(data['type'] as String?),
       phone: data['phone'] as String?,
       note: data['note'] as String?,
+      emoji: data['emoji'] as String?,
       colorIndex: (data['colorIndex'] as int?) ?? 0,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
@@ -89,6 +92,7 @@ class Person {
         'type': type.encoded,
         'phone': phone,
         'note': note,
+        'emoji': emoji,
         'colorIndex': colorIndex,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -102,6 +106,7 @@ class Person {
     PersonType? type,
     Object? phone = _sentinel,
     Object? note = _sentinel,
+    Object? emoji = _sentinel,
     int? colorIndex,
     DateTime? updatedAt,
   }) {
@@ -111,6 +116,7 @@ class Person {
       type: type ?? this.type,
       phone: identical(phone, _sentinel) ? this.phone : phone as String?,
       note: identical(note, _sentinel) ? this.note : note as String?,
+      emoji: identical(emoji, _sentinel) ? this.emoji : emoji as String?,
       colorIndex: colorIndex ?? this.colorIndex,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

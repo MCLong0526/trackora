@@ -20,6 +20,15 @@ const _avatarColors = [
   AppColors.sand,
 ];
 
+const _kEmojiList = [
+  '😀', '😊', '😎', '🥳', '😍', '🤩', '😇', '🤓',
+  '👩', '👨', '👧', '👦', '👩‍💼', '👨‍💼', '👩‍🎨', '👨‍🎨',
+  '🐶', '🐱', '🦊', '🐼', '🐨', '🦁', '🐸', '🐯',
+  '🌟', '⭐', '🌈', '🔥', '💎', '🎯', '🏆', '🎸',
+  '🍎', '🍓', '🌸', '🌺', '🌻', '🌴', '🍀', '🌙',
+  '🚀', '✈️', '🎮', '⚽', '🏀', '🎵', '📚', '💡',
+];
+
 
 class AddEditPersonScreen extends ConsumerStatefulWidget {
   final Person? person;
@@ -38,6 +47,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
 
   PersonType _type = PersonType.friend;
   int _colorIndex = 0;
+  String? _emoji;
   bool _saving = false;
 
   bool get _isEdit => widget.person != null;
@@ -52,6 +62,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
       _noteCtrl.text = p.note ?? '';
       _type = p.type;
       _colorIndex = p.colorIndex.clamp(0, _avatarColors.length - 1);
+      _emoji = p.emoji;
     }
   }
 
@@ -77,6 +88,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
         type: _type,
         phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        emoji: _emoji,
         colorIndex: _colorIndex,
         createdAt: _isEdit ? widget.person!.createdAt : now,
         updatedAt: now,
@@ -104,179 +116,238 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
     }
   }
 
+  void _showEmojiPicker() {
+    final brand = context.brand;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _EmojiPickerSheet(
+        brand: brand,
+        selectedEmoji: _emoji,
+        onSelected: (e) {
+          setState(() => _emoji = e);
+          Navigator.pop(ctx);
+        },
+        onClear: () {
+          setState(() => _emoji = null);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
 
-    return Scaffold(
-      backgroundColor: brand.background,
-      appBar: AppBar(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
         backgroundColor: brand.background,
-        elevation: 0,
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => Navigator.pop(context),
-          child: Icon(CupertinoIcons.xmark, color: brand.ink, size: 20),
-        ),
-        title: Text(
-          _isEdit ? 'Edit Person' : 'Add Person',
-          style: TextStyle(
-            color: brand.ink,
-            fontWeight: FontWeight.w700,
-            fontSize: 17,
+        appBar: AppBar(
+          backgroundColor: brand.background,
+          elevation: 0,
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => Navigator.pop(context),
+            child: Icon(CupertinoIcons.xmark, color: brand.ink, size: 20),
           ),
-        ),
-        actions: [
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const CupertinoActivityIndicator()
-                : Text(
-                    'Save',
-                    style: TextStyle(
-                      color: brand.accentDark,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+          title: Text(
+            _isEdit ? 'Edit Person' : 'Add Person',
+            style: TextStyle(
+              color: brand.ink,
+              fontWeight: FontWeight.w700,
+              fontSize: 17,
+            ),
           ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // Avatar preview + color picker
-            Center(
-              child: Column(
-                children: [
-                  PersonAvatar(
-                    name: _nameCtrl.text.trim().isEmpty
-                        ? '?'
-                        : _nameCtrl.text.trim(),
-                    colorIndex: _colorIndex,
-                    size: 88,
-                  ),
-                  const SizedBox(height: 20),
-                  // Color swatches
-                  Wrap(
-                    spacing: 10,
-                    children: List.generate(_avatarColors.length, (i) {
-                      final selected = i == _colorIndex;
-                      return GestureDetector(
-                        onTap: () => setState(() => _colorIndex = i),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: _avatarColors[i],
-                            shape: BoxShape.circle,
-                            border: selected
-                                ? Border.all(color: brand.ink, width: 2.5)
-                                : null,
-                          ),
-                          child: selected
-                              ? Icon(
-                                  CupertinoIcons.checkmark,
-                                  size: 14,
-                                  color: brand.ink,
-                                )
-                              : null,
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            // Name
-            TextFormField(
-              controller: _nameCtrl,
-              textCapitalization: TextCapitalization.words,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Name *',
-                hintText: 'e.g. Sarah, John',
-                prefixIcon: Icon(CupertinoIcons.person),
-              ),
-              validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Name is required' : null,
-            ),
-            const SizedBox(height: 14),
-            // Type chips
-            _SectionLabel('Type', brand),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: PersonType.values.map((t) {
-                final selected = t == _type;
-                return GestureDetector(
-                  onTap: () => setState(() => _type = t),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 9,
+          actions: [
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const CupertinoActivityIndicator()
+                  : Text(
+                      'Save',
+                      style: TextStyle(
+                        color: brand.accentDark,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: selected ? brand.accentDark : brand.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.chip),
-                      border: selected
-                          ? null
-                          : Border.all(color: brand.divider),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+            ),
+          ],
+        ),
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(20),
+            children: [
+              // Avatar preview + emoji + color picker
+              Center(
+                child: Column(
+                  children: [
+                    Stack(
                       children: [
-                        Icon(
-                          _typeIcon(t),
-                          size: 14,
-                          color: selected ? brand.background : brand.inkSoft,
+                        PersonAvatar(
+                          name: _nameCtrl.text.trim().isEmpty
+                              ? '?'
+                              : _nameCtrl.text.trim(),
+                          colorIndex: _colorIndex,
+                          emoji: _emoji,
+                          size: 88,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          t.label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: selected ? brand.background : brand.ink,
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: _showEmojiPicker,
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: brand.accentDark,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: brand.background, width: 2),
+                              ),
+                              child: Icon(
+                                _emoji != null
+                                    ? CupertinoIcons.pencil
+                                    : CupertinoIcons.smiley,
+                                size: 13,
+                                color: brand.background,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
-            // Phone (optional)
-            TextFormField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone (optional)',
-                hintText: 'e.g. +60123456789',
-                prefixIcon: Icon(CupertinoIcons.phone),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: _showEmojiPicker,
+                      child: Text(
+                        _emoji != null ? 'Change emoji' : 'Add emoji',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: brand.accentDark,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Color swatches
+                    Wrap(
+                      spacing: 10,
+                      children: List.generate(_avatarColors.length, (i) {
+                        final selected = i == _colorIndex;
+                        return GestureDetector(
+                          onTap: () => setState(() => _colorIndex = i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: _avatarColors[i],
+                              shape: BoxShape.circle,
+                              border: selected
+                                  ? Border.all(color: brand.ink, width: 2.5)
+                                  : null,
+                            ),
+                            child: selected
+                                ? Icon(
+                                    CupertinoIcons.checkmark,
+                                    size: 14,
+                                    color: brand.ink,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            // Note (optional)
-            TextFormField(
-              controller: _noteCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                hintText: 'Any notes about this person…',
-                prefixIcon: Icon(CupertinoIcons.text_bubble),
-                alignLabelWithHint: true,
+              const SizedBox(height: 28),
+              // Name
+              TextFormField(
+                controller: _nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                autofocus: false,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Name *',
+                  hintText: 'e.g. Sarah, John',
+                  prefixIcon: Icon(CupertinoIcons.person),
+                ),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Name is required' : null,
               ),
-            ),
-            const SizedBox(height: 40),
-          ],
+              const SizedBox(height: 14),
+              // Type chips
+              _SectionLabel('Type', brand),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: PersonType.values.map((t) {
+                  final selected = t == _type;
+                  return GestureDetector(
+                    onTap: () => setState(() => _type = t),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected ? brand.accentDark : brand.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.chip),
+                        border: selected
+                            ? null
+                            : Border.all(color: brand.divider),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _typeIcon(t),
+                            size: 14,
+                            color: selected ? brand.background : brand.inkSoft,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            t.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: selected ? brand.background : brand.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              // Phone (optional)
+              TextFormField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                autofocus: false,
+                decoration: const InputDecoration(
+                  labelText: 'Phone (optional)',
+                  hintText: 'e.g. +60123456789',
+                  prefixIcon: Icon(CupertinoIcons.phone),
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Note (optional) — icon top-aligned
+              _NoteField(controller: _noteCtrl, brand: brand),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -293,6 +364,160 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
       case PersonType.other:
         return CupertinoIcons.ellipsis_circle_fill;
     }
+  }
+}
+
+class _NoteField extends StatelessWidget {
+  final TextEditingController controller;
+  final BrandColors brand;
+  const _NoteField({required this.controller, required this.brand});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        border: Border.all(color: brand.divider.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              CupertinoIcons.text_bubble,
+              size: 20,
+              color: brand.inkSoft,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              maxLines: 4,
+              minLines: 2,
+              autofocus: false,
+              decoration: InputDecoration(
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: 'Note (optional)',
+                hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmojiPickerSheet extends StatelessWidget {
+  final BrandColors brand;
+  final String? selectedEmoji;
+  final ValueChanged<String> onSelected;
+  final VoidCallback onClear;
+
+  const _EmojiPickerSheet({
+    required this.brand,
+    required this.selectedEmoji,
+    required this.onSelected,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: brand.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Text(
+                  'Choose Emoji',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const Spacer(),
+                if (selectedEmoji != null)
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: onClear,
+                    child: Text(
+                      'Remove',
+                      style: TextStyle(color: AppColors.expense, fontSize: 14),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+              ),
+              itemCount: _kEmojiList.length,
+              itemBuilder: (_, i) {
+                final e = _kEmojiList[i];
+                final isSelected = e == selectedEmoji;
+                return GestureDetector(
+                  onTap: () => onSelected(e),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? brand.accentDark.withValues(alpha: 0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: isSelected
+                          ? Border.all(color: brand.accentDark, width: 1.5)
+                          : null,
+                    ),
+                    child: Center(
+                      child: Text(e, style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
   }
 }
 

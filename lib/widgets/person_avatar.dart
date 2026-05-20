@@ -29,12 +29,14 @@ Color personAvatarBg(int colorIndex) =>
 class PersonAvatar extends StatelessWidget {
   final String name;
   final int? colorIndex;
+  final String? emoji;
   final double size;
 
   const PersonAvatar({
     super.key,
     required this.name,
     this.colorIndex,
+    this.emoji,
     this.size = 40,
   });
 
@@ -43,7 +45,10 @@ class PersonAvatar extends StatelessWidget {
     final brand = context.brand;
     final idx = colorIndex ?? personColorIndex(name);
     final bg = personAvatarBg(idx);
-    final fs = (size * 0.38).clamp(11.0, 24.0);
+    final hasEmoji = emoji != null && emoji!.isNotEmpty;
+    final fs = hasEmoji
+        ? (size * 0.52).clamp(12.0, 30.0)
+        : (size * 0.38).clamp(11.0, 24.0);
 
     return Container(
       width: size,
@@ -51,10 +56,10 @@ class PersonAvatar extends StatelessWidget {
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: Text(
-        _initials(name),
+        hasEmoji ? emoji! : _initials(name),
         style: TextStyle(
           fontSize: fs,
-          fontWeight: FontWeight.w600,
+          fontWeight: hasEmoji ? FontWeight.normal : FontWeight.w600,
           color: brand.ink,
         ),
       ),

@@ -10,9 +10,11 @@ import '../../models/borrow_lending.dart';
 import '../../models/person.dart';
 import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/currency_picker.dart';
 import '../../widgets/person_avatar.dart';
 import '../../widgets/receipt_preview.dart';
 
@@ -42,6 +44,9 @@ class _AddEditBorrowLendingScreenState
   // Tracks colorIndex when person is selected from picker
   int? _personColorIndex;
 
+  // Currency for this record (null = use app default)
+  String? _currencyCode;
+
   bool get _isEdit => widget.record != null;
 
   @override
@@ -56,6 +61,7 @@ class _AddEditBorrowLendingScreenState
       _date = r.date;
       _dueDate = r.dueDate;
       _existingImagePath = r.imagePath;
+      _currencyCode = r.currency;
     }
   }
 
@@ -184,6 +190,7 @@ class _AddEditBorrowLendingScreenState
           date: _date,
           dueDate: _dueDate,
           imagePath: imagePath,
+          currency: _currencyCode,
           updatedAt: now,
         );
         await svc.update(user.uid, updated);
@@ -199,6 +206,7 @@ class _AddEditBorrowLendingScreenState
             date: _date,
             dueDate: _dueDate,
             imagePath: imagePath,
+            currency: _currencyCode,
             createdAt: now,
             updatedAt: now,
           ),
@@ -225,7 +233,13 @@ class _AddEditBorrowLendingScreenState
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
+    final effectiveCode = _currencyCode ?? mainCode;
+    final symbol = kSupportedCurrencies[effectiveCode] ?? effectiveCode;
+    final isForeign = effectiveCode != mainCode;
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
+
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
@@ -261,24 +275,112 @@ class _AddEditBorrowLendingScreenState
                 const SizedBox(height: 16),
                 _personField(brand),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _amount,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    hintText: context.t('bl.amount'),
-                    prefixText: '$symbol  ',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) {
-                      return context.t('validation.enterAmount');
-                    }
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) {
-                      return context.t('validation.invalidAmount');
-                    }
-                    return null;
-                  },
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: brand.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.field),
+                      ),
+                      child: Row(
+                        children: [
+                          // Currency chip button
+                          GestureDetector(
+                            onTap: () => showCurrencyPickerSheet(
+                              context,
+                              current: effectiveCode,
+                              onPicked: (code) =>
+                                  setState(() => _currencyCode = code == mainCode ? null : code),
+                            ),
+                            child: Container(
+                              margin: const EdgeInsets.only(left: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isForeign
+                                    ? brand.accentDark.withValues(alpha: 0.12)
+                                    : brand.divider.withValues(alpha: 0.5),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.chip),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    effectiveCode,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: isForeign
+                                          ? brand.accentDark
+                                          : brand.ink,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Icon(
+                                    CupertinoIcons.chevron_down,
+                                    size: 11,
+                                    color: isForeign
+                                        ? brand.accentDark
+                                        : brand.inkSoft,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _amount,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                hintText: context.t('bl.amount'),
+                                prefixText: '$symbol  ',
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                focusedErrorBorder: InputBorder.none,
+                                filled: false,
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return context.t('validation.enterAmount');
+                                }
+                                final n = double.tryParse(v);
+                                if (n == null || n <= 0) {
+                                  return context.t('validation.invalidAmount');
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isForeign && converter != null) ...[
+                      const SizedBox(height: 4),
+                      Builder(
+                        builder: (_) {
+                          final amt = double.tryParse(_amount.text) ?? 0;
+                          final converted = converter.toBase(amt, effectiveCode);
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 14),
+                            child: Text(
+                              '≈ $mainSymbol ${converted.toStringAsFixed(2)} $mainCode',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: brand.inkSoft,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
