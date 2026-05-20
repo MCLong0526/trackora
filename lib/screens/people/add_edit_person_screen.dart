@@ -6,6 +6,7 @@ import '../../models/person.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/person_avatar.dart';
 
 /// Avatar background colors (indices 0–7) matching brand pastels.
 const _avatarColors = [
@@ -106,7 +107,6 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final avatarBg = _avatarColors[_colorIndex];
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -151,33 +151,14 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
             Center(
               child: Column(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: avatarBg,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _nameCtrl.text.trim().isEmpty
-                          ? '?'
-                          : Person(
-                              id: '',
-                              name: _nameCtrl.text.trim(),
-                              type: _type,
-                              colorIndex: _colorIndex,
-                              createdAt: DateTime.now(),
-                              updatedAt: DateTime.now(),
-                            ).initials,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        color: brand.ink,
-                      ),
-                    ),
+                  PersonAvatar(
+                    name: _nameCtrl.text.trim().isEmpty
+                        ? '?'
+                        : _nameCtrl.text.trim(),
+                    colorIndex: _colorIndex,
+                    size: 88,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   // Color swatches
                   Wrap(
                     spacing: 10,
@@ -187,8 +168,8 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
                         onTap: () => setState(() => _colorIndex = i),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
-                          width: 32,
-                          height: 32,
+                          width: 34,
+                          height: 34,
                           decoration: BoxDecoration(
                             color: _avatarColors[i],
                             shape: BoxShape.circle,
@@ -196,6 +177,13 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
                                 ? Border.all(color: brand.ink, width: 2.5)
                                 : null,
                           ),
+                          child: selected
+                              ? Icon(
+                                  CupertinoIcons.checkmark,
+                                  size: 14,
+                                  color: brand.ink,
+                                )
+                              : null,
                         ),
                       );
                     }),

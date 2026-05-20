@@ -1,9 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/person.dart';
 import '../../models/split_bill.dart';
+import '../../screens/people/people_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/person_avatar.dart';
 
 // ── Design tokens (DESIGN.md aligned) ─────────────────────────────────────────
 const _kPurple = Color(0xFF6B40A8);
@@ -17,17 +21,7 @@ const _kRoundedLg = 18.0; // {rounded.lg} card radius
 const _kRoundedSm = 8.0; // {rounded.sm} utility radius
 const _kRoundedPill = 999.0; // {rounded.pill}
 
-const _kAvatarColors = [
-  Color(0xFF6B40A8),
-  Color(0xFF2A82B4),
-  Color(0xFFC0833A),
-  Color(0xFF2A8C52),
-  Color(0xFFB23A4A),
-  Color(0xFFE8820E),
-  Color(0xFF5C6ABE),
-];
-
-Color _avatarColor(int i) => _kAvatarColors[i % _kAvatarColors.length];
+// Avatar colors now use brand pastels for visual consistency with the people list.
 
 /// Result returned when user taps "Save & generate bill".
 class SplitBillResult {
@@ -43,7 +37,7 @@ class SplitBillResult {
 }
 
 /// Full-screen sheet for configuring a split bill.
-class SplitBillScreen extends StatefulWidget {
+class SplitBillScreen extends ConsumerStatefulWidget {
   final double totalAmount;
   final String currencySymbol;
   final String expenseTitle;
@@ -60,10 +54,10 @@ class SplitBillScreen extends StatefulWidget {
   });
 
   @override
-  State<SplitBillScreen> createState() => _SplitBillScreenState();
+  ConsumerState<SplitBillScreen> createState() => _SplitBillScreenState();
 }
 
-class _SplitBillScreenState extends State<SplitBillScreen> {
+class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   late List<SplitMember> _members;
   late SplitMode _mode;
   late double _totalAmount;
@@ -218,47 +212,39 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   // ─── Member management ────────────────────────────────────────────────────────
 
   void _addPerson() async {
-    String name = '';
-    await showCupertinoDialog<void>(
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Add person'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: CupertinoTextField(
-            placeholder: 'Name',
-            autofocus: false,
-            textInputAction: TextInputAction.done,
-            textCapitalization: TextCapitalization.words,
-            onChanged: (v) => name = v,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const PersonOrNamePickerSheet(),
     );
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
+
+    String? name;
+    int? colorIdx;
+    if (result is Person) {
+      name = result.name;
+      colorIdx = result.colorIndex;
+    } else if (result is String && result.trim().isNotEmpty) {
+      name = result.trim();
+      colorIdx = personColorIndex(name);
+    }
+    if (name == null) return;
+
+    // Prevent duplicate members
+    if (_members.any((m) => m.name.toLowerCase() == name!.toLowerCase())) {
+      return;
+    }
+
     setState(() {
       final newId = DateTime.now().microsecondsSinceEpoch.toString();
       _members.add(
         SplitMember(
           id: newId,
-          name: trimmed,
-          colorIndex: _members.length % _kAvatarColors.length,
+          name: name!,
+          colorIndex: colorIdx ?? personColorIndex(name),
           amount: 0,
         ),
       );
-      // Re-equalise for new member
       final n = _members.length;
       for (final m in _members) {
         _percents[m.id] = 100.0 / n;
@@ -658,23 +644,10 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
             border: Border.all(color: _kPurple, width: 2),
           ),
           child: Center(
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: _avatarColor(m.colorIndex),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  m.initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
+            child: PersonAvatar(
+              name: m.name,
+              colorIndex: m.colorIndex,
+              size: 50,
             ),
           ),
         ),
@@ -695,23 +668,10 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   Widget _nonPayerAvatar(SplitMember m) {
     return Column(
       children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: _avatarColor(m.colorIndex),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              m.initials,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
-            ),
-          ),
+        PersonAvatar(
+          name: m.name,
+          colorIndex: m.colorIndex,
+          size: 50,
         ),
         const SizedBox(height: 6),
         Text(
@@ -873,24 +833,10 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            // Avatar
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: _avatarColor(m.colorIndex),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  m.initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
+            PersonAvatar(
+              name: m.name,
+              colorIndex: m.colorIndex,
+              size: 42,
             ),
             const SizedBox(width: 14),
             // Name + subtitle

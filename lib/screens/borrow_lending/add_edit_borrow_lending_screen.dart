@@ -7,16 +7,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/borrow_lending.dart';
+import '../../models/person.dart';
+import '../../screens/people/people_screen.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/person_avatar.dart';
 import '../../widgets/receipt_preview.dart';
 
-/// Add or edit a borrow / lending record.
-///
-/// Reuses `StorageService` for the image attachment so receipts and
-/// borrow-proof photos share the same on-disk receipts directory.
 class AddEditBorrowLendingScreen extends ConsumerStatefulWidget {
   final BorrowLending? record;
   const AddEditBorrowLendingScreen({super.key, this.record});
@@ -29,7 +28,7 @@ class AddEditBorrowLendingScreen extends ConsumerStatefulWidget {
 class _AddEditBorrowLendingScreenState
     extends ConsumerState<AddEditBorrowLendingScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _person = TextEditingController();
+  final _personCtrl = TextEditingController();
   final _amount = TextEditingController();
   final _note = TextEditingController();
 
@@ -40,6 +39,9 @@ class _AddEditBorrowLendingScreenState
   String? _existingImagePath;
   bool _saving = false;
 
+  // Tracks colorIndex when person is selected from picker
+  int? _personColorIndex;
+
   bool get _isEdit => widget.record != null;
 
   @override
@@ -48,7 +50,7 @@ class _AddEditBorrowLendingScreenState
     if (_isEdit) {
       final r = widget.record!;
       _type = r.type;
-      _person.text = r.person;
+      _personCtrl.text = r.person;
       _amount.text = r.amount.toStringAsFixed(2);
       _note.text = r.note;
       _date = r.date;
@@ -59,10 +61,33 @@ class _AddEditBorrowLendingScreenState
 
   @override
   void dispose() {
-    _person.dispose();
+    _personCtrl.dispose();
     _amount.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPerson() async {
+    FocusScope.of(context).unfocus();
+    final result = await showModalBottomSheet<dynamic>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PersonOrNamePickerSheet(
+        currentName: _personCtrl.text.isEmpty ? null : _personCtrl.text,
+      ),
+    );
+    if (result is Person) {
+      setState(() {
+        _personCtrl.text = result.name;
+        _personColorIndex = result.colorIndex;
+      });
+    } else if (result is String && result.trim().isNotEmpty) {
+      setState(() {
+        _personCtrl.text = result.trim();
+        _personColorIndex = null;
+      });
+    }
   }
 
   Future<void> _pickImage() async {
@@ -91,8 +116,10 @@ class _AddEditBorrowLendingScreenState
               child: CupertinoDatePicker(
                 mode: CupertinoDatePickerMode.date,
                 initialDateTime: initial,
-                minimumDate: DateTime.now().subtract(const Duration(days: 365 * 10)),
-                maximumDate: DateTime.now().add(const Duration(days: 365 * 10)),
+                minimumDate:
+                    DateTime.now().subtract(const Duration(days: 365 * 10)),
+                maximumDate:
+                    DateTime.now().add(const Duration(days: 365 * 10)),
                 onDateTimeChanged: (d) => temp = d,
               ),
             ),
@@ -125,7 +152,6 @@ class _AddEditBorrowLendingScreenState
       return;
     }
 
-    // Upload image first so a failure aborts before writing Firestore.
     String? imagePath = _existingImagePath;
     if (_newImage != null) {
       try {
@@ -134,7 +160,7 @@ class _AddEditBorrowLendingScreenState
             .saveReceipt(user.uid, _newImage!);
       } catch (uploadError) {
         if (mounted) {
-          final msg = _storageErrorMessage(uploadError);
+          final msg = 'Image upload failed: $uploadError';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
           );
@@ -152,7 +178,7 @@ class _AddEditBorrowLendingScreenState
       if (_isEdit) {
         final updated = widget.record!.copyWith(
           type: _type,
-          person: _person.text.trim(),
+          person: _personCtrl.text.trim(),
           amount: amount,
           note: _note.text.trim(),
           date: _date,
@@ -167,7 +193,7 @@ class _AddEditBorrowLendingScreenState
           BorrowLending(
             id: '',
             type: _type,
-            person: _person.text.trim(),
+            person: _personCtrl.text.trim(),
             amount: amount,
             note: _note.text.trim(),
             date: _date,
@@ -188,15 +214,12 @@ class _AddEditBorrowLendingScreenState
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
+        AppToast.show(context, context.t('common.saveFailed'),
+            type: AppToastType.error);
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  static String _storageErrorMessage(Object e) {
-    return 'Image upload failed: $e';
   }
 
   @override
@@ -206,102 +229,94 @@ class _AddEditBorrowLendingScreenState
     return Scaffold(
       backgroundColor: brand.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.xmark),
+        backgroundColor: brand.background,
+        elevation: 0,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: () => Navigator.pop(context),
+          child: Icon(CupertinoIcons.xmark, color: brand.ink, size: 20),
         ),
-        title: Text(_isEdit ? context.t('bl.edit') : context.t('bl.new')),
+        title: Text(
+          _isEdit ? context.t('bl.edit') : context.t('bl.new'),
+          style: TextStyle(
+            color: brand.ink,
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            letterSpacing: -0.374,
+          ),
+        ),
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
-              _typeToggle(brand),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _person,
-                decoration: InputDecoration(
-                  labelText: context.t('bl.person'),
-                  hintText: context.t('bl.personHint'),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
+                _typeToggle(brand),
+                const SizedBox(height: 16),
+                _personField(brand),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _amount,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    hintText: context.t('bl.amount'),
+                    prefixText: '$symbol  ',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return context.t('validation.enterAmount');
+                    }
+                    final n = double.tryParse(v);
+                    if (n == null || n <= 0) {
+                      return context.t('validation.invalidAmount');
+                    }
+                    return null;
+                  },
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? context.t('bl.personRequired')
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _amount,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: context.t('bl.amount'),
-                  prefixText: '$symbol  ',
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _note,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: context.t('bl.note'),
+                    alignLabelWithHint: true,
+                  ),
                 ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) {
-                    return context.t('validation.enterAmount');
-                  }
-                  final n = double.tryParse(v);
-                  if (n == null || n <= 0) {
-                    return context.t('validation.invalidAmount');
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _note,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: context.t('bl.note'),
-                  hintText: context.t('bl.noteHint'),
+                const SizedBox(height: 16),
+                _dateTile(
+                  icon: CupertinoIcons.calendar,
+                  label: context.t('bl.dateLabel'),
+                  value: DateFormat('MMM d, yyyy').format(_date),
+                  onTap: () => _pickDate(due: false),
                 ),
-              ),
-              const SizedBox(height: 16),
-              _dateTile(
-                label: context.t('bl.dateLabel'),
-                value: DateFormat('MMM d, yyyy').format(_date),
-                onTap: () => _pickDate(due: false),
-              ),
-              const SizedBox(height: 10),
-              _dateTile(
-                label: context.t('bl.dueDateLabel'),
-                value: _dueDate == null
-                    ? context.t('bl.dueDateOptional')
-                    : DateFormat('MMM d, yyyy').format(_dueDate!),
-                onTap: () => _pickDate(due: true),
-                trailingClear: _dueDate != null
-                    ? () => setState(() => _dueDate = null)
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              _imageCard(brand),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(_isEdit
-                        ? context.t('common.update')
-                        : context.t('common.save')),
-              ),
-            ],
+                const SizedBox(height: 10),
+                _dateTile(
+                  icon: CupertinoIcons.calendar_badge_plus,
+                  label: context.t('bl.dueDateLabel'),
+                  value: _dueDate == null
+                      ? context.t('bl.dueDateOptional')
+                      : DateFormat('MMM d, yyyy').format(_dueDate!),
+                  onTap: () => _pickDate(due: true),
+                  trailingClear: _dueDate != null
+                      ? () => setState(() => _dueDate = null)
+                      : null,
+                  valueSoft: _dueDate == null,
+                ),
+                const SizedBox(height: 10),
+                _imageCard(brand),
+                const SizedBox(height: 28),
+                _saveButton(brand),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -324,8 +339,9 @@ class _AddEditBorrowLendingScreenState
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
                 color: selected ? selectedFg : brand.ink,
               ),
             ),
@@ -349,11 +365,104 @@ class _AddEditBorrowLendingScreenState
     );
   }
 
+  Widget _personField(BrandColors brand) {
+    final hasName = _personCtrl.text.trim().isNotEmpty;
+    final name = _personCtrl.text.trim();
+    final colorIdx = _personColorIndex ??
+        (hasName ? personColorIndex(name) : null);
+
+    return FormField<String>(
+      validator: (_) =>
+          !hasName ? context.t('bl.personRequired') : null,
+      builder: (state) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: _pickPerson,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.field),
+                  border: state.hasError
+                      ? Border.all(color: AppColors.expense, width: 1.5)
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    if (hasName)
+                      PersonAvatar(
+                        name: name,
+                        colorIndex: colorIdx,
+                        size: 40,
+                      )
+                    else
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: brand.divider,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          CupertinoIcons.person,
+                          size: 20,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: hasName
+                          ? Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.2,
+                                color: brand.ink,
+                              ),
+                            )
+                          : Text(
+                              context.t('bl.person'),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: brand.inkSoft,
+                              ),
+                            ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 16,
+                      color: brand.inkSoft,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (state.hasError)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 14),
+                child: Text(
+                  state.errorText!,
+                  style: TextStyle(fontSize: 12, color: AppColors.expense),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _dateTile({
+    required IconData icon,
     required String label,
     required String value,
     required VoidCallback onTap,
     VoidCallback? trailingClear,
+    bool valueSoft = false,
   }) {
     final brand = context.brand;
     return Material(
@@ -366,18 +475,25 @@ class _AddEditBorrowLendingScreenState
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
             children: [
-              Icon(CupertinoIcons.calendar, color: brand.ink, size: 18),
+              Icon(icon, color: brand.ink, size: 18),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
+                    color: brand.ink,
                   ),
                 ),
               ),
-              Text(value, style: TextStyle(color: brand.inkSoft)),
+              Text(
+                value,
+                style: TextStyle(
+                  color: valueSoft ? brand.inkSoft : brand.ink,
+                  fontSize: 14,
+                ),
+              ),
               if (trailingClear != null) ...[
                 const SizedBox(width: 6),
                 GestureDetector(
@@ -415,8 +531,14 @@ class _AddEditBorrowLendingScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  hasAny ? context.t('bl.imageAttached') : context.t('bl.attachImage'),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  hasAny
+                      ? context.t('bl.imageAttached')
+                      : context.t('bl.attachImage'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: brand.ink,
+                  ),
                 ),
               ),
               if (!hasAny)
@@ -470,6 +592,40 @@ class _AddEditBorrowLendingScreenState
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _saveButton(BrandColors brand) {
+    return GestureDetector(
+      onTap: _saving ? null : _save,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: _saving
+              ? brand.ink.withValues(alpha: 0.5)
+              : brand.accentDark,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        alignment: Alignment.center,
+        child: _saving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                _isEdit ? context.t('common.update') : context.t('common.save'),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.374,
+                  color: foregroundOn(brand.accentDark),
+                ),
+              ),
       ),
     );
   }
