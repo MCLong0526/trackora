@@ -431,7 +431,8 @@ class _EmptyState extends StatelessWidget {
 }
 
 /// Person picker that returns either a saved [Person] or a typed [String] name.
-/// Returns null when dismissed without selection.
+/// Returns [Person] if a saved contact is picked or saved, [String] for a
+/// one-off name, or null if dismissed.
 class PersonOrNamePickerSheet extends ConsumerStatefulWidget {
   final String? currentName;
   const PersonOrNamePickerSheet({super.key, this.currentName});
@@ -443,274 +444,373 @@ class PersonOrNamePickerSheet extends ConsumerStatefulWidget {
 
 class _PersonOrNamePickerSheetState
     extends ConsumerState<PersonOrNamePickerSheet> {
-  final _ctrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _searchCtrl = TextEditingController();
+  bool _showNew = true;
+  bool _saveToContacts = false;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.currentName != null) _ctrl.text = widget.currentName!;
+    if (widget.currentName != null) _nameCtrl.text = widget.currentName!;
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _nameCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitNew() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    if (_saveToContacts) {
+      setState(() => _saving = true);
+      final user = ref.read(authStateProvider).valueOrNull;
+      if (user != null) {
+        try {
+          final now = DateTime.now();
+          final person = Person(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            name: name,
+            type: PersonType.friend,
+            colorIndex: personColorIndex(name),
+            createdAt: now,
+            updatedAt: now,
+          );
+          await ref.read(personServiceProvider).add(user.uid, person);
+          if (mounted) Navigator.pop(context, person);
+        } catch (_) {
+          if (mounted) setState(() => _saving = false);
+        }
+        return;
+      }
+      setState(() => _saving = false);
+    }
+    if (mounted) Navigator.pop(context, name);
   }
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final async = ref.watch(peopleProvider);
-    final query = _ctrl.text.trim();
+    final query = _searchCtrl.text.trim().toLowerCase();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: brand.divider,
-              borderRadius: BorderRadius.circular(2),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Text(
-                  'Select Person',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
-                    letterSpacing: -0.374,
-                  ),
-                ),
-                const Spacer(),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(color: brand.inkSoft),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: CupertinoSearchTextField(
-              controller: _ctrl,
-              placeholder: 'Search or type a name…',
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-          if (query.isNotEmpty)
+            const SizedBox(height: 16),
+            // Title + Cancel
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context, query),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text(
+                    'Select Person',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
+                      letterSpacing: -0.374,
+                    ),
+                  ),
+                  const Spacer(),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel', style: TextStyle(color: brand.inkSoft)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Tab bar: New | From Contacts
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                ),
+                child: Row(
+                  children: [
+                    _tabChip('New', _showNew, brand,
+                        () => setState(() { _showNew = true; _searchCtrl.clear(); })),
+                    _tabChip('From Contacts', !_showNew, brand,
+                        () => setState(() { _showNew = false; })),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_showNew) ...[
+              // Name input
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: CupertinoTextField(
+                  controller: _nameCtrl,
+                  placeholder: 'Name',
+                  autofocus: false,
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) => setState(() {}),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 13),
                   decoration: BoxDecoration(
                     color: brand.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                    border: Border.all(
-                      color: brand.accentDark.withValues(alpha: 0.25),
-                    ),
+                    borderRadius: BorderRadius.circular(AppRadius.field),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Save-to-contacts toggle
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.field),
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: brand.divider,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          CupertinoIcons.person_circle_fill,
-                          size: 20,
-                          color: brand.inkSoft,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+                      Icon(CupertinoIcons.person_badge_plus,
+                          size: 18, color: brand.inkSoft),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              query,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: brand.ink,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            Text(
-                              'Use this name',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: brand.inkSoft,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Save to my contacts',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: brand.ink,
+                          ),
                         ),
                       ),
-                      Icon(
-                        CupertinoIcons.chevron_right,
-                        size: 14,
-                        color: brand.accentDark,
+                      CupertinoSwitch(
+                        value: _saveToContacts,
+                        activeTrackColor: brand.accentDark,
+                        onChanged: (v) => setState(() => _saveToContacts = v),
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
-          async.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(32),
-              child: CupertinoActivityIndicator(),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('Error: $e'),
-            ),
-            data: (all) {
-              final list = query.isEmpty
-                  ? all
-                  : all
-                      .where(
-                        (p) =>
-                            p.name
-                                .toLowerCase()
-                                .contains(query.toLowerCase()) ||
-                            (p.phone
-                                    ?.toLowerCase()
-                                    .contains(query.toLowerCase()) ??
-                                false),
-                      )
-                      .toList();
-              if (list.isEmpty && all.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
-                  child: Column(
-                    children: [
-                      Text(
-                        'No saved people yet.',
+              const SizedBox(height: 16),
+              // Confirm button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GestureDetector(
+                  onTap: _saving || _nameCtrl.text.trim().isEmpty
+                      ? null
+                      : _submitNew,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: _nameCtrl.text.trim().isEmpty
+                          ? brand.ink.withValues(alpha: 0.15)
+                          : brand.accentDark,
+                      borderRadius: BorderRadius.circular(AppRadius.chip),
+                    ),
+                    alignment: Alignment.center,
+                    child: _saving
+                        ? const CupertinoActivityIndicator()
+                        : Text(
+                            _saveToContacts
+                                ? 'Confirm & Save to Contacts'
+                                : 'Confirm',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _nameCtrl.text.trim().isEmpty
+                                  ? brand.inkSoft
+                                  : brand.background,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ] else ...[
+              // Contact search
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: CupertinoSearchTextField(
+                  controller: _searchCtrl,
+                  placeholder: 'Search contacts…',
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Contact list
+              async.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CupertinoActivityIndicator(),
+                ),
+                error: (e, _) => Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('Error: $e'),
+                ),
+                data: (all) {
+                  final list = query.isEmpty
+                      ? all
+                      : all
+                          .where((p) =>
+                              p.name.toLowerCase().contains(query) ||
+                              (p.phone?.toLowerCase().contains(query) ??
+                                  false))
+                          .toList();
+                  if (list.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                      child: Text(
+                        all.isEmpty
+                            ? 'No saved contacts yet.'
+                            : 'No matches.',
                         style: TextStyle(color: brand.inkSoft, fontSize: 13),
                       ),
-                      const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await Navigator.push(
-                            context,
-                            CupertinoPageRoute(
-                              builder: (_) => const AddEditPersonScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(CupertinoIcons.add, size: 14),
-                        label: const Text('Add Person'),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                );
-              }
-              if (list.isEmpty) return const SizedBox(height: 8);
-              return ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.42,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  itemCount: list.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 6),
-                  itemBuilder: (ctx, i) {
-                    final p = list[i];
-                    final isCurrent = widget.currentName == p.name;
-                    return GestureDetector(
-                      onTap: () => Navigator.pop(context, p),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isCurrent
-                              ? brand.accentDark.withValues(alpha: 0.08)
-                              : brand.surface,
-                          borderRadius: BorderRadius.circular(AppRadius.card),
-                          border: isCurrent
-                              ? Border.all(
-                                  color: brand.accentDark, width: 1.5)
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            PersonAvatar(
-                              name: p.name,
-                              colorIndex: p.colorIndex,
-                              emoji: p.emoji,
-                              size: 40,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    p.name,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: brand.ink,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  if (p.phone != null)
-                                    Text(
-                                      p.phone!,
-                                      style: TextStyle(
-                                          fontSize: 11, color: brand.inkSoft),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            _TypeBadge(p.type, brand),
-                            if (isCurrent) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                CupertinoIcons.checkmark_alt,
-                                size: 16,
-                                color: brand.accentDark,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
                     );
-                  },
-                ),
-              );
-            },
+                  }
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.42,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                      itemCount: list.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 6),
+                      itemBuilder: (ctx, i) {
+                        final p = list[i];
+                        final isCurrent = widget.currentName == p.name;
+                        return GestureDetector(
+                          onTap: () => Navigator.pop(context, p),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isCurrent
+                                  ? brand.accentDark.withValues(alpha: 0.08)
+                                  : brand.surface,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.card),
+                              border: isCurrent
+                                  ? Border.all(
+                                      color: brand.accentDark, width: 1.5)
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                PersonAvatar(
+                                  name: p.name,
+                                  colorIndex: p.colorIndex,
+                                  emoji: p.emoji,
+                                  size: 40,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: brand.ink,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                      if (p.phone != null)
+                                        Text(
+                                          p.phone!,
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: brand.inkSoft),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                _TypeBadge(p.type, brand),
+                                if (isCurrent) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    CupertinoIcons.checkmark_alt,
+                                    size: 16,
+                                    color: brand.accentDark,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tabChip(
+      String label, bool selected, BrandColors brand, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? brand.background : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 4,
+                    )
+                  ]
+                : null,
           ),
-        ],
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected ? brand.ink : brand.inkSoft,
+            ),
+          ),
+        ),
       ),
     );
   }
