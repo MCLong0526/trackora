@@ -62,6 +62,9 @@ dev_dependencies:
   image: ^4.3.0
 
 dependency_overrides:
+  # Pinned to 2.4.4 to avoid the objective_c transitive dep introduced in
+  # 2.5.0+, which embeds a simulator-only native framework and crashes on
+  # real devices with "have iOS-simulator, need iOS".
   path_provider_foundation: 2.4.4
 
 flutter_launcher_icons:
