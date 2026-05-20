@@ -1,14 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/borrow_lending.dart';
+import '../../models/person.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/person_avatar.dart';
 import '../../widgets/receipt_preview.dart';
 import 'add_edit_borrow_lending_screen.dart';
 
@@ -25,8 +29,9 @@ class BorrowLendingDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
-    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
     final async = ref.watch(borrowLendingProvider);
+    final people = ref.watch(peopleProvider).valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -36,62 +41,230 @@ class BorrowLendingDetailScreen extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(context.t('bl.detailTitle')),
+        actions: [
+          async.whenData((records) {
+            final r = records.firstWhere(
+              (x) => x.id == recordId,
+              orElse: () => _missingRecord,
+            );
+            if (identical(r, _missingRecord)) return const SizedBox.shrink();
+            return IconButton(
+              icon: const Icon(CupertinoIcons.ellipsis_circle),
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                _showActions(context, ref, r);
+              },
+            );
+          }).valueOrNull ??
+              const SizedBox.shrink(),
+        ],
       ),
       body: SafeArea(
         child: async.when(
           loading: () => const Center(child: CupertinoActivityIndicator()),
-          error: (e, _) => Center(child: Text('${context.t('common.error')}: $e')),
+          error: (e, _) =>
+              Center(child: Text('${context.t('common.error')}: $e')),
           data: (records) {
             final r = records.firstWhere(
               (x) => x.id == recordId,
               orElse: () => _missingRecord,
             );
             if (identical(r, _missingRecord)) {
-              return Center(
-                child: Text(context.t('bl.recordGone')),
-              );
+              return Center(child: Text(context.t('bl.recordGone')));
             }
+
+            final effectiveCode = r.currency ?? mainCode;
+            final symbol =
+                kSupportedCurrencies[effectiveCode] ?? effectiveCode;
+
+            final matched = people
+                .where((p) =>
+                    p.name.toLowerCase() == r.person.toLowerCase())
+                .firstOrNull;
+
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                _Header(record: r, symbol: symbol),
-                const SizedBox(height: 16),
-                _DetailsCard(record: r, symbol: symbol),
+                _HeroCard(
+                  record: r,
+                  symbol: symbol,
+                  matchedPerson: matched,
+                ),
+                const SizedBox(height: 14),
+                _DetailsCard(record: r),
                 if (r.imagePath != null) ...[
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: brand.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.card),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.t('bl.proofImage'),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        ReceiptPreview(stored: r.imagePath!, size: 96),
-                      ],
-                    ),
-                  ),
+                  _ProofCard(imagePath: r.imagePath!),
                 ],
-                const SizedBox(height: 16),
-                _RepaymentHistory(record: r, symbol: symbol),
-                const SizedBox(height: 22),
-                _ActionRow(record: r, symbol: symbol),
+                const SizedBox(height: 14),
+                _RepaymentCard(record: r, symbol: symbol),
               ],
             );
           },
         ),
       ),
     );
+  }
+
+  void _showActions(
+      BuildContext context, WidgetRef ref, BorrowLending record) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) {
+        return CupertinoActionSheet(
+          actions: [
+            // Edit
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) =>
+                        AddEditBorrowLendingScreen(record: record),
+                  ),
+                );
+              },
+              child: Text(context.t('common.edit')),
+            ),
+            // Mark settled (if active or partial)
+            if (record.status == BorrowLendingStatus.active ||
+                record.status == BorrowLendingStatus.partial)
+              CupertinoActionSheetAction(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  HapticFeedback.mediumImpact();
+                  final user =
+                      ref.read(authStateProvider).valueOrNull;
+                  if (user == null) return;
+                  try {
+                    await ref
+                        .read(borrowLendingServiceProvider)
+                        .markSettled(user.uid, record);
+                    if (context.mounted) {
+                      AppToast.show(context, 'Marked as settled',
+                          type: AppToastType.success);
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      AppToast.show(context, 'Failed to settle',
+                          type: AppToastType.error);
+                    }
+                  }
+                },
+                child: Text(context.t('bl.markSettled')),
+              ),
+            // Cancel / Reactivate
+            if (record.status == BorrowLendingStatus.cancelled)
+              CupertinoActionSheetAction(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  HapticFeedback.mediumImpact();
+                  final user =
+                      ref.read(authStateProvider).valueOrNull;
+                  if (user == null) return;
+                  try {
+                    await ref
+                        .read(borrowLendingServiceProvider)
+                        .setCancelled(user.uid, record, false);
+                    if (context.mounted) {
+                      AppToast.show(context, 'Reactivated',
+                          type: AppToastType.success);
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      AppToast.show(context, 'Failed to reactivate',
+                          type: AppToastType.error);
+                    }
+                  }
+                },
+                child: Text(context.t('inst.reactivate')),
+              )
+            else if (record.status != BorrowLendingStatus.settled)
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  HapticFeedback.mediumImpact();
+                  final user =
+                      ref.read(authStateProvider).valueOrNull;
+                  if (user == null) return;
+                  try {
+                    await ref
+                        .read(borrowLendingServiceProvider)
+                        .setCancelled(user.uid, record, true);
+                    if (context.mounted) {
+                      AppToast.show(context, 'Cancelled',
+                          type: AppToastType.success);
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      AppToast.show(context, 'Failed to cancel',
+                          type: AppToastType.error);
+                    }
+                  }
+                },
+                child: Text(context.t('common.cancel')),
+              ),
+            // Delete
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () async {
+                Navigator.pop(ctx);
+                HapticFeedback.mediumImpact();
+                await _confirmDelete(context, ref, record);
+              },
+              child: Text(context.t('common.delete')),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.t('common.cancel')),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, BorrowLending record) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(context.t('bl.deleteTitle')),
+        content: Text(context.t('bl.deleteMessage')),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.cancel')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('common.delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await ref
+            .read(borrowLendingServiceProvider)
+            .delete(user.uid, record.id);
+        if (context.mounted) {
+          AppToast.show(context, 'Record deleted',
+              type: AppToastType.success);
+          Navigator.pop(context);
+        }
+      } catch (_) {
+        if (context.mounted) {
+          AppToast.show(context, 'Failed to delete',
+              type: AppToastType.error);
+        }
+      }
+    }
   }
 
   static final _missingRecord = BorrowLending(
@@ -105,18 +278,84 @@ class BorrowLendingDetailScreen extends ConsumerWidget {
   );
 }
 
-class _Header extends StatelessWidget {
+// ---------------------------------------------------------------------------
+// _StatusBadge
+// ---------------------------------------------------------------------------
+
+class _StatusBadge extends StatelessWidget {
+  final BorrowLendingStatus status;
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, label) = switch (status) {
+      BorrowLendingStatus.active => (
+          AppColors.mint,
+          AppColors.income,
+          'Active',
+        ),
+      BorrowLendingStatus.partial => (
+          AppColors.butter,
+          const Color(0xFFB36200),
+          'Partial',
+        ),
+      BorrowLendingStatus.settled => (
+          AppColors.mint,
+          AppColors.income,
+          'Settled',
+        ),
+      BorrowLendingStatus.cancelled => (
+          AppColors.blush,
+          AppColors.expense,
+          'Cancelled',
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: fg,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _HeroCard
+// ---------------------------------------------------------------------------
+
+class _HeroCard extends StatelessWidget {
   final BorrowLending record;
   final String symbol;
-  const _Header({required this.record, required this.symbol});
+  final Person? matchedPerson;
+  const _HeroCard({
+    required this.record,
+    required this.symbol,
+    required this.matchedPerson,
+  });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isBorrow = record.type == BorrowLendingType.borrowed;
     final accent = isBorrow ? AppColors.expense : AppColors.income;
+    final directionBg = isBorrow
+        ? AppColors.blush
+        : AppColors.mint;
+    final directionFg = isBorrow ? AppColors.expense : AppColors.income;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -124,80 +363,73 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isBorrow ? context.t('bl.borrowedFrom') : context.t('bl.lentTo'),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: brand.inkSoft,
-              letterSpacing: 0.6,
+          // Direction chip
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: directionBg,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+            ),
+            child: Text(
+              isBorrow
+                  ? context.t('bl.borrowedFrom').toUpperCase()
+                  : context.t('bl.lentTo').toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: directionFg,
+                letterSpacing: 0.8,
+              ),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            record.person.isEmpty ? context.t('bl.unknownPerson') : record.person,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
+          // Avatar + Name + Status
           Row(
             children: [
+              PersonAvatar(
+                name: record.person.isEmpty
+                    ? context.t('bl.unknownPerson')
+                    : record.person,
+                emoji: matchedPerson?.emoji,
+                colorIndex: matchedPerson?.colorIndex,
+                size: 52,
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.t('bl.amount'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: brand.inkSoft,
+                      record.person.isEmpty
+                          ? context.t('bl.unknownPerson')
+                          : record.person,
+                      style: const TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatMoney(symbol, record.amount),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: accent,
-                      ),
-                    ),
+                    const SizedBox(height: 5),
+                    _StatusBadge(status: record.status),
                   ],
-                ),
-              ),
-              Container(width: 1, height: 30, color: brand.divider),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.t('bl.remaining'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: brand.inkSoft,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        formatMoney(symbol, record.remaining),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+          // Large amount
+          Text(
+            formatMoney(symbol, record.amount),
+            style: TextStyle(
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
+              color: accent,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
@@ -207,61 +439,114 @@ class _Header extends StatelessWidget {
               valueColor: AlwaysStoppedAnimation(accent),
             ),
           ),
+          const SizedBox(height: 12),
+          // Remaining row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                context.t('bl.remaining'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                formatMoney(symbol, record.remaining),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// _DetailsCard
+// ---------------------------------------------------------------------------
+
 class _DetailsCard extends StatelessWidget {
   final BorrowLending record;
-  final String symbol;
-  const _DetailsCard({required this.record, required this.symbol});
+  const _DetailsCard({required this.record});
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final rows = <_DetailRow>[
+      _DetailRow(
+        icon: CupertinoIcons.calendar,
+        label: context.t('bl.dateLabel'),
+        value: DateFormat('MMM d, yyyy').format(record.date),
+      ),
+      if (record.dueDate != null)
+        _DetailRow(
+          icon: CupertinoIcons.alarm,
+          label: context.t('bl.dueDateLabel'),
+          value: DateFormat('MMM d, yyyy').format(record.dueDate!),
+        ),
+      if (record.note.isNotEmpty)
+        _DetailRow(
+          icon: CupertinoIcons.text_bubble,
+          label: context.t('bl.note'),
+          value: record.note,
+        ),
+    ];
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         children: [
-          _row(context, context.t('bl.dateLabel'),
-              DateFormat('MMM d, yyyy').format(record.date)),
-          if (record.dueDate != null)
-            _row(context, context.t('bl.dueDateLabel'),
-                DateFormat('MMM d, yyyy').format(record.dueDate!)),
-          if (record.note.isNotEmpty)
-            _row(context, context.t('bl.note'), record.note),
+          for (int i = 0; i < rows.length; i++) ...[
+            _buildRow(context, rows[i]),
+            if (i < rows.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: brand.divider,
+              ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _row(BuildContext context, String label, String value) {
+  Widget _buildRow(BuildContext context, _DetailRow row) {
     final brand = context.brand;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w700,
-              ),
+          Icon(row.icon, size: 16, color: brand.inkSoft),
+          const SizedBox(width: 10),
+          Text(
+            row.label,
+            style: TextStyle(
+              fontSize: 13,
+              color: brand.inkSoft,
+              fontWeight: FontWeight.w500,
             ),
           ),
+          const Spacer(),
           Flexible(
             child: Text(
-              value,
+              row.value,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: brand.ink,
+              ),
             ),
           ),
         ],
@@ -270,16 +555,27 @@ class _DetailsCard extends StatelessWidget {
   }
 }
 
-class _RepaymentHistory extends ConsumerWidget {
-  final BorrowLending record;
-  final String symbol;
-  const _RepaymentHistory({required this.record, required this.symbol});
+class _DetailRow {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _DetailRow(
+      {required this.icon, required this.label, required this.value});
+}
+
+// ---------------------------------------------------------------------------
+// _ProofCard
+// ---------------------------------------------------------------------------
+
+class _ProofCard extends StatelessWidget {
+  final String imagePath;
+  const _ProofCard({required this.imagePath});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final brand = context.brand;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -289,30 +585,89 @@ class _RepaymentHistory extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  context.t('bl.history'),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    letterSpacing: 0.5,
-                  ),
+              Icon(CupertinoIcons.photo, size: 15, color: brand.inkSoft),
+              const SizedBox(width: 8),
+              Text(
+                context.t('bl.proofImage'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
+                  letterSpacing: 0.5,
                 ),
               ),
-              if (record.status != BorrowLendingStatus.cancelled &&
-                  record.status != BorrowLendingStatus.settled)
-                TextButton(
+            ],
+          ),
+          const SizedBox(height: 12),
+          ReceiptPreview(stored: imagePath, size: 96),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _RepaymentCard
+// ---------------------------------------------------------------------------
+
+class _RepaymentCard extends ConsumerWidget {
+  final BorrowLending record;
+  final String symbol;
+  const _RepaymentCard({required this.record, required this.symbol});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final canAddRepayment =
+        record.status != BorrowLendingStatus.cancelled &&
+            record.status != BorrowLendingStatus.settled;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Text(
+                context.t('bl.history').toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  letterSpacing: 0.8,
+                  color: brand.inkSoft,
+                ),
+              ),
+              const Spacer(),
+              if (canAddRepayment)
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
                   onPressed: () => _addRepayment(context, ref),
-                  child: Text(context.t('bl.addRepayment')),
+                  child: Text(
+                    context.t('bl.addRepayment'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
             ],
           ),
+          const SizedBox(height: 8),
+          // Empty state
           if (record.repayments.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
                 context.t('bl.noRepayments'),
-                style: TextStyle(color: brand.inkSoft, fontSize: 13),
+                style:
+                    TextStyle(color: brand.inkSoft, fontSize: 13),
               ),
             )
           else
@@ -334,11 +689,11 @@ class _RepaymentHistory extends ConsumerWidget {
       child: Row(
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: AppColors.mint,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               CupertinoIcons.checkmark,
@@ -353,7 +708,11 @@ class _RepaymentHistory extends ConsumerWidget {
               children: [
                 Text(
                   formatMoney(symbol, r.amount),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: brand.ink,
+                  ),
                 ),
                 Text(
                   r.note.isEmpty
@@ -361,30 +720,35 @@ class _RepaymentHistory extends ConsumerWidget {
                       : '${r.note} · ${DateFormat('MMM d, yyyy').format(r.date)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: brand.inkSoft),
+                  style: TextStyle(
+                      fontSize: 11, color: brand.inkSoft),
                 ),
               ],
             ),
           ),
           GestureDetector(
             onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
+              HapticFeedback.mediumImpact();
+              final user =
+                  ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
               try {
                 await ref
                     .read(borrowLendingServiceProvider)
                     .removeRepayment(user.uid, record, r.id);
                 if (context.mounted) {
-                  AppToast.show(context, 'Repayment removed', type: AppToastType.success);
+                  AppToast.show(context, 'Repayment removed',
+                      type: AppToastType.success);
                 }
               } catch (_) {
                 if (context.mounted) {
-                  AppToast.show(context, 'Failed to remove repayment', type: AppToastType.error);
+                  AppToast.show(context, 'Failed to remove repayment',
+                      type: AppToastType.error);
                 }
               }
             },
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 CupertinoIcons.minus_circle,
                 size: 18,
@@ -400,7 +764,7 @@ class _RepaymentHistory extends ConsumerWidget {
   Future<void> _addRepayment(BuildContext context, WidgetRef ref) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
-    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+    final sym = symbol;
     final ctrl = TextEditingController(
       text: record.remaining.toStringAsFixed(2),
     );
@@ -435,9 +799,10 @@ class _RepaymentHistory extends ConsumerWidget {
                 controller: ctrl,
                 autofocus: false,
                 textInputAction: TextInputAction.done,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(prefixText: '$symbol  '),
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                decoration:
+                    InputDecoration(prefixText: '$sym  '),
               ),
               const SizedBox(height: 16),
               FilledButton(
@@ -464,194 +829,14 @@ class _RepaymentHistory extends ConsumerWidget {
             ),
           );
       if (context.mounted) {
-        AppToast.show(context, 'Repayment added', type: AppToastType.success);
+        AppToast.show(context, 'Repayment added',
+            type: AppToastType.success);
       }
     } catch (_) {
       if (context.mounted) {
-        AppToast.show(context, 'Failed to add repayment', type: AppToastType.error);
+        AppToast.show(context, 'Failed to add repayment',
+            type: AppToastType.error);
       }
     }
-  }
-}
-
-class _ActionRow extends ConsumerWidget {
-  final BorrowLending record;
-  final String symbol;
-  const _ActionRow({required this.record, required this.symbol});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _ActionBtn(
-          icon: CupertinoIcons.pencil,
-          label: context.t('common.edit'),
-          onTap: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => AddEditBorrowLendingScreen(record: record),
-            ),
-          ),
-        ),
-        if (record.status != BorrowLendingStatus.settled &&
-            record.status != BorrowLendingStatus.cancelled)
-          _ActionBtn(
-            icon: CupertinoIcons.check_mark_circled,
-            label: context.t('bl.markSettled'),
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              try {
-                await ref
-                    .read(borrowLendingServiceProvider)
-                    .markSettled(user.uid, record);
-                if (context.mounted) {
-                  AppToast.show(context, 'Marked as settled', type: AppToastType.success);
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  AppToast.show(context, 'Failed to settle', type: AppToastType.error);
-                }
-              }
-            },
-          ),
-        if (record.status == BorrowLendingStatus.cancelled)
-          _ActionBtn(
-            icon: CupertinoIcons.refresh,
-            label: context.t('inst.reactivate'),
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              try {
-                await ref
-                    .read(borrowLendingServiceProvider)
-                    .setCancelled(user.uid, record, false);
-                if (context.mounted) {
-                  AppToast.show(context, 'Reactivated', type: AppToastType.success);
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
-                }
-              }
-            },
-          )
-        else if (record.status != BorrowLendingStatus.settled)
-          _ActionBtn(
-            icon: CupertinoIcons.xmark_circle,
-            label: context.t('common.cancel'),
-            destructive: true,
-            onTap: () async {
-              final user = ref.read(authStateProvider).valueOrNull;
-              if (user == null) return;
-              try {
-                await ref
-                    .read(borrowLendingServiceProvider)
-                    .setCancelled(user.uid, record, true);
-                if (context.mounted) {
-                  AppToast.show(context, 'Cancelled', type: AppToastType.success);
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
-                }
-              }
-            },
-          ),
-        _ActionBtn(
-          icon: CupertinoIcons.trash,
-          label: context.t('common.delete'),
-          destructive: true,
-          onTap: () => _confirmDelete(context, ref),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text(context.t('bl.deleteTitle')),
-        content: Text(context.t('bl.deleteMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.t('common.cancel')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await ref
-            .read(borrowLendingServiceProvider)
-            .delete(user.uid, record.id);
-        if (context.mounted) {
-          AppToast.show(context, 'Record deleted', type: AppToastType.success);
-          Navigator.pop(context);
-        }
-      } catch (_) {
-        if (context.mounted) {
-          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
-        }
-      }
-    }
-  }
-}
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-  const _ActionBtn({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final fg = destructive ? AppColors.expense : brand.ink;
-    final bg = destructive
-        ? AppColors.blush.withValues(alpha: 0.55)
-        : brand.surface;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: fg,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
