@@ -594,6 +594,8 @@ class BudgetScreen extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: context.brand.background,
+      isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -610,18 +612,20 @@ class BudgetScreen extends ConsumerWidget {
             ('travelGroups', context.t('travel.title')),
             ('investments', 'Investments'),
           ];
-          return _VisibilitySheet(
-            title: context.t('money.customizeHub'),
-            footnote: context.t('customize.keepOneVisible'),
-            children: [
-              for (final (id, label) in items)
-                _VisibilitySwitchRow(
-                  label: label,
-                  visible: visible.contains(id),
-                  canHide: visible.length > 1 || !visible.contains(id),
-                  onChanged: (value) => notifier.setVisible(id, value),
-                ),
-            ],
+          return SingleChildScrollView(
+            child: _VisibilitySheet(
+              title: context.t('money.customizeHub'),
+              footnote: context.t('customize.keepOneVisible'),
+              children: [
+                for (final (id, label) in items)
+                  _VisibilitySwitchRow(
+                    label: label,
+                    visible: visible.contains(id),
+                    canHide: visible.length > 1 || !visible.contains(id),
+                    onChanged: (value) => notifier.setVisible(id, value),
+                  ),
+              ],
+            ),
           );
         },
       ),
@@ -711,44 +715,42 @@ class _VisibilitySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: brand.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 14),
+          SectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(children: children),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            footnote,
+            style: TextStyle(
+              fontSize: 12,
+              color: brand.inkSoft,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 12),
-            SectionCard(
-              padding: EdgeInsets.zero,
-              child: Column(children: children),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              footnote,
-              style: TextStyle(
-                fontSize: 12,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -771,7 +773,7 @@ class _VisibilitySwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = context.brand;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(18, 12, 16, 12),
       child: Row(
         children: [
           Expanded(
