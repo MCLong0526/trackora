@@ -156,8 +156,19 @@ class _TravelGroupsEntryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final groupsAsync = ref.watch(travelGroupsProvider);
-    final count = groupsAsync.valueOrNull?.length ?? 0;
+    final groups = ref.watch(travelGroupsProvider).valueOrNull ?? const [];
+
+    final now = DateTime.now();
+    final activeGroups = groups
+        .where((g) => g.endDate == null || g.endDate!.isAfter(now))
+        .toList()
+      ..sort((a, b) => b.startDate.compareTo(a.startDate));
+    final completedCount = groups.length - activeGroups.length;
+    final totalMembers =
+        groups.fold<int>(0, (sum, g) => sum + g.memberIds.length);
+    final featuredTrip = activeGroups.isNotEmpty
+        ? activeGroups.first
+        : (groups.isNotEmpty ? groups.first : null);
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -165,7 +176,7 @@ class _TravelGroupsEntryCard extends ConsumerWidget {
         CupertinoPageRoute(builder: (_) => const TravelGroupsScreen()),
       ),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: brand.surface,
           borderRadius: BorderRadius.circular(18),
@@ -182,13 +193,13 @@ class _TravelGroupsEntryCard extends ConsumerWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: brand.sky,
+                color: const Color(0xFF3478F6).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
                 CupertinoIcons.airplane,
                 color: Color(0xFF3478F6),
-                size: 24,
+                size: 22,
               ),
             ),
             const SizedBox(width: 14),
@@ -196,25 +207,82 @@ class _TravelGroupsEntryCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    context.t('travel.title'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                      letterSpacing: -0.3,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        context.t('travel.title'),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      if (activeGroups.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3478F6).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${activeGroups.length} active',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF3478F6),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    count == 0
-                        ? context.t('travel.empty')
-                        : '$count ${count == 1 ? 'trip' : 'trips'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: brand.inkSoft,
+                  const SizedBox(height: 3),
+                  if (groups.isEmpty)
+                    Text(
+                      context.t('travel.empty'),
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    )
+                  else ...[
+                    if (featuredTrip != null)
+                      Text(
+                        featuredTrip.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(CupertinoIcons.person_2,
+                            size: 11, color: brand.inkSoft),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$totalMembers member${totalMembers == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (completedCount > 0)
+                          Text(
+                            ' · $completedCount completed',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: brand.inkSoft,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
