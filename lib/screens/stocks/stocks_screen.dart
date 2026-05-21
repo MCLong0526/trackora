@@ -98,6 +98,30 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     super.dispose();
   }
 
+  /// Deduplicate stocks by symbol. Prefers non-watchOnly; then highest quantity.
+  List<StockInvestment> _dedupeBySymbol(List<StockInvestment> stocks) {
+    final seen = <String, StockInvestment>{};
+    for (final s in stocks) {
+      final sym = s.symbol.toUpperCase();
+      final existing = seen[sym];
+      if (existing == null) {
+        seen[sym] = s;
+      } else {
+        // Prefer actual holding over watchlist
+        if (!s.watchOnly && existing.watchOnly) {
+          seen[sym] = s;
+        } else if (s.watchOnly == existing.watchOnly && s.quantity > existing.quantity) {
+          seen[sym] = s;
+        } else if (s.watchOnly == existing.watchOnly &&
+            s.quantity == existing.quantity &&
+            s.updatedAt.isAfter(existing.updatedAt)) {
+          seen[sym] = s;
+        }
+      }
+    }
+    return seen.values.toList();
+  }
+
   List<StockInvestment> _applyFilter(List<StockInvestment> stocks) {
     if (_filter == 'All') return stocks;
     if (_filter == 'KLSE') {
@@ -164,12 +188,19 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     final fxAsync = ref.watch(stockFxRateProvider(localIso));
     final usdToLocal = fxAsync.valueOrNull ?? 4.48;
 
-    final filtered = _applySort(_applyFilter(stocks), usdToLocal);
+    final filtered = _applySort(_applyFilter(_dedupeBySymbol(stocks)), usdToLocal);
 
     // Count unique markets
     final markets = stocks.map((s) => s.exchangeDisplay).toSet();
 
-    return Scaffold(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        if (_openSlidableId.value != null) {
+          _openSlidableId.value = null;
+        }
+      },
+      child: Scaffold(
       backgroundColor: brand.background,
       body: SafeArea(
         child: CustomScrollView(
@@ -461,6 +492,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               ),
           ],
         ),
+      ),
       ),
     );
   }

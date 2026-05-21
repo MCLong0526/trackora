@@ -46,6 +46,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       e.category == 'Bills' || e.note.contains('(installment)');
 
   _StatsRange _currentRange(BuildContext context) {
+    final useCustomCycle = ref.watch(useCustomCycleProvider);
+    final cycleDayStart = ref.watch(cycleDayStartProvider);
+
     switch (_period) {
       case _StatsPeriod.week:
         final start = _startOfWeek(_anchor);
@@ -58,6 +61,17 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               '${DateFormat('MMM d').format(end.subtract(const Duration(days: 1)))}',
         );
       case _StatsPeriod.month:
+        if (useCustomCycle && cycleDayStart > 1 && cycleDayStart <= 28) {
+          final cycleStart = DateTime(_anchor.year, _anchor.month, cycleDayStart);
+          final cycleEnd = DateTime(_anchor.year, _anchor.month + 1, cycleDayStart);
+          return _StatsRange(
+            start: cycleStart,
+            endExclusive: cycleEnd,
+            label:
+                '${DateFormat('d MMM').format(cycleStart)} – '
+                '${DateFormat('d MMM').format(cycleEnd.subtract(const Duration(days: 1)))}',
+          );
+        }
         final start = DateTime(_anchor.year, _anchor.month, 1);
         return _StatsRange(
           start: start,
@@ -91,6 +105,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   }
 
   _StatsRange? _prevRange() {
+    final useCustomCycle = ref.watch(useCustomCycleProvider);
+    final cycleDayStart = ref.watch(cycleDayStartProvider);
+
     switch (_period) {
       case _StatsPeriod.week:
         final start = _startOfWeek(_anchor).subtract(const Duration(days: 7));
@@ -100,6 +117,15 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           label: DateFormat('MMM d').format(start),
         );
       case _StatsPeriod.month:
+        if (useCustomCycle && cycleDayStart > 1 && cycleDayStart <= 28) {
+          final prevCycleStart = DateTime(_anchor.year, _anchor.month - 1, cycleDayStart);
+          final prevCycleEnd = DateTime(_anchor.year, _anchor.month, cycleDayStart);
+          return _StatsRange(
+            start: prevCycleStart,
+            endExclusive: prevCycleEnd,
+            label: DateFormat('d MMM').format(prevCycleStart),
+          );
+        }
         final start = DateTime(_anchor.year, _anchor.month - 1, 1);
         final end = DateTime(_anchor.year, _anchor.month, 1);
         return _StatsRange(

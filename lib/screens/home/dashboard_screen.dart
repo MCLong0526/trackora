@@ -38,25 +38,47 @@ class DashboardScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
 
+    final cycleRange = ref.watch(cycleDateRangeProvider);
+
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final monthExpenseOnly = monthExpenses
         .where((e) => e.type == EntryType.expense)
         .toList();
-    final monthSpent = monthExpenseOnly.fold<double>(
+
+    // If custom cycle is active, filter allExpenses by cycle range for totals.
+    final List<Expense> cycleExpenseOnly;
+    if (cycleRange != null) {
+      cycleExpenseOnly = allExpenses.where((e) {
+        if (e.type != EntryType.expense) return false;
+        final d = DateTime(e.date.year, e.date.month, e.date.day);
+        return !d.isBefore(cycleRange.start) && d.isBefore(cycleRange.endExclusive);
+      }).toList();
+    } else {
+      cycleExpenseOnly = monthExpenseOnly;
+    }
+
+    final monthSpent = cycleExpenseOnly.fold<double>(
       0,
       (s, e) => s + e.convertedAmount,
     );
-    final hasForeignExpense = monthExpenseOnly.any(
+    final hasForeignExpense = cycleExpenseOnly.any(
       (e) => e.baseCurrencyAmount != null,
     );
 
-    final monthIncome = monthExpenses
+    final List<Expense> cycleAll = cycleRange != null
+        ? allExpenses.where((e) {
+            final d = DateTime(e.date.year, e.date.month, e.date.day);
+            return !d.isBefore(cycleRange.start) && d.isBefore(cycleRange.endExclusive);
+          }).toList()
+        : monthExpenses;
+
+    final monthIncome = cycleAll
         .where((e) => e.type.isInflow)
         .fold<double>(0, (s, e) => s + e.convertedAmount);
 
-    final budgetableSpent = monthExpenses
+    final budgetableSpent = cycleAll
         .where(
           (e) =>
               e.type == EntryType.expense &&
@@ -141,7 +163,7 @@ class DashboardScreen extends ConsumerWidget {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              padding: EdgeInsets.fromLTRB(20, 10, 20, cycleRange != null ? 4 : 12),
               child: _HomeOverviewCard(
                 balance: totalBalance,
                 symbol: symbol,
@@ -154,6 +176,30 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ),
           ),
+
+          if (cycleRange != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Cycle: ${DateFormat('d MMM').format(cycleRange.start)} – ${DateFormat('d MMM').format(cycleRange.endExclusive.subtract(const Duration(days: 1)))}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: brand.inkSoft,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           SliverToBoxAdapter(
             child: Padding(
