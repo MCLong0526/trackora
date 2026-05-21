@@ -13,6 +13,7 @@ class PrefsService {
   static const _kHomeCardsVisible = 'home_cards_visible';
   static const _kHomeCardOrder = 'home_card_order';
   static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
+  static const _kMoneyHubSeenModules = 'money_hub_seen_modules';
   static const _kMoneyHubOrder = 'money_hub_order';
   static const _kStatsSectionsVisible = 'stats_sections_visible';
   static const _kLiveActivityEnabled = 'live_activity_enabled';
@@ -120,10 +121,16 @@ class PrefsService {
   Future<Set<String>> visibleMoneyHubModules() async {
     final p = await _prefsOrNull();
     if (p == null) return defaultMoneyHubModules.toSet();
-    return _decodeVisibleSet(
-      p.getStringList(_kMoneyHubModulesVisible),
-      defaultMoneyHubModules,
-    );
+    final rawVisible = p.getStringList(_kMoneyHubModulesVisible);
+    if (rawVisible == null) return defaultMoneyHubModules.toSet();
+    var visible = _decodeVisibleSet(rawVisible, defaultMoneyHubModules);
+    // Auto-show any newly added modules (not previously seen by the user).
+    final seen = p.getStringList(_kMoneyHubSeenModules)?.toSet() ?? {};
+    for (final id in defaultMoneyHubModules) {
+      if (!seen.contains(id)) visible = {...visible, id};
+    }
+    await p.setStringList(_kMoneyHubSeenModules, defaultMoneyHubModules);
+    return visible;
   }
 
   Future<void> setVisibleMoneyHubModules(Set<String> ids) async {
