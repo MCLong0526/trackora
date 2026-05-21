@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../models/borrow_lending.dart';
 import '../../models/expense.dart';
 import '../../models/installment.dart';
+import '../../models/person.dart';
 import '../../models/precious_metal.dart';
 import '../../models/saving_plan.dart';
 import '../../models/stock_investment.dart';
@@ -23,6 +24,7 @@ import '../installments/installments_screen.dart';
 import '../investments/investment_screen.dart';
 import '../people/people_screen.dart';
 import '../savings/saving_plans_screen.dart';
+import '../travel/travel_groups_screen.dart';
 
 bool _isDiscretionary(Expense e) =>
     e.type == EntryType.expense &&
@@ -297,6 +299,8 @@ class BudgetScreen extends ConsumerWidget {
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
     final people = ref.watch(peopleProvider).valueOrNull ?? const [];
+    final travelGroups =
+        ref.watch(travelGroupsProvider).valueOrNull ?? const [];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -340,6 +344,39 @@ class BudgetScreen extends ConsumerWidget {
 
     final budgetLeft = budget - discretionarySpent;
     final budgetOverspent = budgetLeft < 0;
+
+    // ── People breakdown ──────────────────────────────────────────────────────
+    final friendCount =
+        people.where((p) => p.type == PersonType.friend).length;
+    final familyCount =
+        people.where((p) => p.type == PersonType.family).length;
+    final coworkerCount =
+        people.where((p) => p.type == PersonType.coworker).length;
+    final peopleParts = <String>[
+      if (friendCount > 0)
+        '$friendCount friend${friendCount > 1 ? 's' : ''}',
+      if (familyCount > 0) '$familyCount family',
+      if (coworkerCount > 0) '$coworkerCount work',
+    ];
+    final peopleSubInfo = peopleParts.take(2).join(' · ');
+
+    // ── Travel breakdown ──────────────────────────────────────────────────────
+    final now = DateTime.now();
+    final activeTrips = travelGroups
+        .where((t) => t.endDate == null || t.endDate!.isAfter(now))
+        .length;
+    final totalTripMembers =
+        travelGroups.fold<int>(0, (s, t) => s + t.memberIds.length);
+
+    // ── Investment totals ─────────────────────────────────────────────────────
+    double metalsTotalValue = 0;
+    for (final m in metals) {
+      metalsTotalValue +=
+          m.action == MetalAction.buy ? m.totalAmount : -m.totalAmount;
+    }
+    if (metalsTotalValue < 0) metalsTotalValue = 0;
+    final stocksCostBasis =
+        stocks.fold<double>(0, (s, e) => s + e.totalCost);
 
     return SafeArea(
       child: ListView(
@@ -517,12 +554,41 @@ class BudgetScreen extends ConsumerWidget {
                         mainValueSub: people.isEmpty
                             ? null
                             : people.length == 1
-                            ? context.t('budget.personSaved')
-                            : context.t('budget.peopleSaved'),
+                            ? 'contact'
+                            : 'contacts',
                         footer: people.isEmpty
                             ? context.t('budget.tapToAddPeople')
-                            : context.t('budget.peopleSubtitle'),
+                            : peopleSubInfo.isNotEmpty
+                                ? peopleSubInfo
+                                : '${activeBorrowLending.length} record${activeBorrowLending.length == 1 ? '' : 's'}',
                         onTap: () => _push(context, const PeopleScreen()),
+                      ),
+                    ),
+                  if (visibleModules.contains('travelGroups'))
+                    SizedBox(
+                      width: cardWidth,
+                      height: 186,
+                      child: _PremiumManagementCard(
+                        badgeLabel: context.t('travel.title'),
+                        badgeColor: AppColors.sky,
+                        badgeTextColor: const Color(0xFF3478F6),
+                        icon: CupertinoIcons.airplane,
+                        iconBgColor: const Color(0xFF3478F6),
+                        mainValue: travelGroups.isEmpty
+                            ? '—'
+                            : '${travelGroups.length}',
+                        mainValueSub: travelGroups.isEmpty
+                            ? null
+                            : activeTrips == travelGroups.length
+                            ? 'all active'
+                            : '$activeTrips active',
+                        footer: travelGroups.isEmpty
+                            ? context.t('travel.empty')
+                            : totalTripMembers > 0
+                                ? '$totalTripMembers member${totalTripMembers == 1 ? '' : 's'} total'
+                                : context.t('travel.title'),
+                        onTap: () =>
+                            _push(context, const TravelGroupsScreen()),
                       ),
                     ),
                 ],
@@ -533,11 +599,57 @@ class BudgetScreen extends ConsumerWidget {
           const SizedBox(height: 20),
           _GroupHeader(label: 'Investments'),
           const SizedBox(height: 10),
-          _InvestmentHubCard(
-            metals: metals,
-            stocks: stocks,
-            symbol: symbol,
-            onTap: () => _push(context, const InvestmentScreen()),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final w = (constraints.maxWidth - 12) / 2;
+              return Row(
+                children: [
+                  SizedBox(
+                    width: w,
+                    height: 186,
+                    child: _PremiumManagementCard(
+                      badgeLabel: 'METALS',
+                      badgeColor: const Color(0xFFFFF3CD),
+                      badgeTextColor: const Color(0xFFC8860A),
+                      icon: CupertinoIcons.sparkles,
+                      iconBgColor: const Color(0xFFC8860A),
+                      mainValue: metals.isEmpty
+                          ? '—'
+                          : formatMoney(symbol, metalsTotalValue),
+                      mainValueSub: metals.isEmpty
+                          ? null
+                          : '${metals.length} txn${metals.length == 1 ? '' : 's'}',
+                      footer: metals.isEmpty
+                          ? 'Gold, silver & more'
+                          : 'precious metals',
+                      onTap: () => _push(context, const InvestmentScreen()),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: w,
+                    height: 186,
+                    child: _PremiumManagementCard(
+                      badgeLabel: 'STOCKS',
+                      badgeColor: const Color(0xFFEBEAFF),
+                      badgeTextColor: const Color(0xFF5856D6),
+                      icon: CupertinoIcons.chart_bar_square_fill,
+                      iconBgColor: const Color(0xFF5856D6),
+                      mainValue: stocks.isEmpty ? '—' : '${stocks.length}',
+                      mainValueSub: stocks.isEmpty
+                          ? null
+                          : stocks.length == 1
+                          ? 'position'
+                          : 'positions',
+                      footer: stocks.isEmpty
+                          ? 'Start tracking stocks'
+                          : formatMoney(symbol, stocksCostBasis),
+                      onTap: () => _push(context, const InvestmentScreen()),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -566,6 +678,7 @@ class BudgetScreen extends ConsumerWidget {
             ('savingPlans', context.t('tools.savingPlans')),
             ('monthlyBudget', context.t('home.budget')),
             ('people', 'People'),
+            ('travelGroups', context.t('travel.title')),
           ];
           return _VisibilitySheet(
             title: context.t('money.customizeHub'),
@@ -952,9 +1065,7 @@ class _CircleProgress extends StatelessWidget {
   }
 }
 
-
-// ── Investment hub card ─────────────────────────────────────────────────────────
-
+// ignore: unused_element - replaced by _PremiumManagementCard instances
 class _InvestmentHubCard extends StatelessWidget {
   final List<PreciousMetal> metals;
   final List<StockInvestment> stocks;
