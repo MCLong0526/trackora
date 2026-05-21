@@ -13,6 +13,7 @@ class PrefsService {
   static const _kHomeCardsVisible = 'home_cards_visible';
   static const _kHomeCardOrder = 'home_card_order';
   static const _kMoneyHubModulesVisible = 'money_hub_modules_visible';
+  static const _kMoneyHubOrder = 'money_hub_order';
   static const _kStatsSectionsVisible = 'stats_sections_visible';
   static const _kLiveActivityEnabled = 'live_activity_enabled';
   static const _kFirstLaunchDone = 'first_launch_done';
@@ -33,6 +34,17 @@ class PrefsService {
     'monthlyBudget',
     'people',
     'travelGroups',
+    'investments',
+  ];
+
+  static const defaultMoneyHubOrder = <String>[
+    'monthlyBudget',
+    'savingPlans',
+    'borrowLending',
+    'installments',
+    'people',
+    'travelGroups',
+    'investments',
   ];
 
   static const defaultStatsSections = <String>[
@@ -121,6 +133,25 @@ class PrefsService {
       _kMoneyHubModulesVisible,
       _sanitizeVisibleSet(ids, defaultMoneyHubModules).toList(),
     );
+  }
+
+  Future<List<String>> moneyHubOrder() async {
+    final p = await _prefsOrNull();
+    if (p == null) return defaultMoneyHubOrder;
+    final saved = p.getStringList(_kMoneyHubOrder);
+    if (saved == null) return defaultMoneyHubOrder;
+    final all = defaultMoneyHubOrder.toSet();
+    final result = saved.where(all.contains).toList();
+    for (final id in defaultMoneyHubOrder) {
+      if (!result.contains(id)) result.add(id);
+    }
+    return result;
+  }
+
+  Future<void> setMoneyHubOrder(List<String> order) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setStringList(_kMoneyHubOrder, order);
   }
 
   Future<Set<String>> visibleStatsSections() async {

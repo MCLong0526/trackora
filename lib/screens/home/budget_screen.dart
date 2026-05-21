@@ -345,6 +345,20 @@ class BudgetScreen extends ConsumerWidget {
     final budgetLeft = budget - discretionarySpent;
     final budgetOverspent = budgetLeft < 0;
 
+    final savingTarget = trackedPlans.fold<double>(0, (s, p) => s + p.targetAmount);
+    final budgetProgress = budget > 0
+        ? (discretionarySpent / budget).clamp(0.0, 1.0)
+        : null;
+    final savingProgress = savingTarget > 0
+        ? (saved / savingTarget).clamp(0.0, 1.0)
+        : null;
+    final budgetUsagePct = budget > 0
+        ? (discretionarySpent / budget * 100).clamp(0, 999).round()
+        : 0;
+    final savingUsagePct = savingTarget > 0
+        ? (saved / savingTarget * 100).clamp(0, 100).round()
+        : 0;
+
     // ── People breakdown ──────────────────────────────────────────────────────
     final friendCount =
         people.where((p) => p.type == PersonType.friend).length;
@@ -377,6 +391,154 @@ class BudgetScreen extends ConsumerWidget {
     if (metalsTotalValue < 0) metalsTotalValue = 0;
     final stocksCostBasis =
         stocks.fold<double>(0, (s, e) => s + e.totalCost);
+    final portfolioTotal = metalsTotalValue + stocksCostBasis;
+    final hasAnyInvestment = metals.isNotEmpty || stocks.isNotEmpty;
+
+    final cardOrder = ref.watch(moneyHubOrderProvider);
+
+    final cardWidgets = <String, Widget>{
+      if (visibleModules.contains('monthlyBudget'))
+        'monthlyBudget': _PremiumManagementCard(
+          badgeLabel: context.t('budget.badgeBudget'),
+          badgeColor: AppColors.lilac,
+          badgeTextColor: kCategoryStyles['Shopping']!.accent,
+          icon: CupertinoIcons.chart_pie_fill,
+          iconBgColor: kCategoryStyles['Shopping']!.accent,
+          mainValue: budget <= 0
+              ? context.t('budget.monthlyNotSet')
+              : formatMoney(symbol, budgetLeft.abs()),
+          mainValueSub: budget <= 0
+              ? null
+              : budgetOverspent
+              ? context.t('budget.overBudget')
+              : context.t('budget.leftThisMonth'),
+          progress: budgetProgress,
+          progressLabel: budget <= 0
+              ? context.t('budget.setAction')
+              : '$budgetUsagePct% used',
+          progressColor: budgetOverspent ? AppColors.expense : null,
+          onTap: () => showMonthlyBudgetDetails(
+            context,
+            ref,
+            budget: budget,
+            spent: discretionarySpent,
+            symbol: symbol,
+            userId: user?.uid,
+            month: month,
+          ),
+        ),
+      if (visibleModules.contains('savingPlans'))
+        'savingPlans': _PremiumManagementCard(
+          badgeLabel: context.t('budget.badgeSavings'),
+          badgeColor: AppColors.mint,
+          badgeTextColor: kCategoryStyles['Groceries']!.accent,
+          icon: CupertinoIcons.flag_fill,
+          iconBgColor: kCategoryStyles['Groceries']!.accent,
+          mainValue: formatMoney(symbol, saved),
+          mainValueSub: savingTarget > 0
+              ? 'of ${formatMoney(symbol, savingTarget)} goal'
+              : '${trackedPlans.length} plans',
+          progress: savingProgress,
+          progressLabel: savingTarget > 0 ? '$savingUsagePct% saved' : null,
+          onTap: () => _push(context, const SavingPlansScreen()),
+        ),
+      if (visibleModules.contains('borrowLending'))
+        'borrowLending': _PremiumManagementCard(
+          badgeLabel: context.t('budget.badgeLending'),
+          badgeColor: AppColors.sky,
+          badgeTextColor: kCategoryStyles['Transport']!.accent,
+          icon: CupertinoIcons.arrow_up_arrow_down,
+          iconBgColor: kCategoryStyles['Transport']!.accent,
+          mainValue: net == 0
+              ? formatMoney(symbol, 0)
+              : '${net > 0 ? '+' : '-'}${formatMoney(symbol, net.abs())}',
+          mainValueSub: context.t('budget.netPosition'),
+          mainValueColor: net < 0
+              ? AppColors.expense
+              : net > 0
+              ? AppColors.income
+              : null,
+          footer: '↑ ${formatMoney(symbol, lent)} · ↓ ${formatMoney(symbol, borrowed)}',
+          onTap: () => _push(context, const BorrowLendingScreen()),
+        ),
+      if (visibleModules.contains('installments'))
+        'installments': _PremiumManagementCard(
+          badgeLabel: context.t('budget.badgeInstallments'),
+          badgeColor: AppColors.peach,
+          badgeTextColor: kCategoryStyles['Food']!.accent,
+          icon: CupertinoIcons.calendar_today,
+          iconBgColor: kCategoryStyles['Food']!.accent,
+          mainValue: activeInstallments.isEmpty
+              ? '—'
+              : formatMoney(symbol, installmentsMonthly),
+          mainValueSub: activeInstallments.isEmpty
+              ? null
+              : context.t('budget.dueThisMonth'),
+          footer: activeInstallments.isEmpty
+              ? context.t('budget.noneActive')
+              : context.t('budget.activePlans').replaceAll('{count}', '${activeInstallments.length}'),
+          onTap: () => _push(context, const InstallmentsScreen()),
+        ),
+      if (visibleModules.contains('people'))
+        'people': _PremiumManagementCard(
+          badgeLabel: context.t('budget.badgePeople'),
+          badgeColor: AppColors.lilac,
+          badgeTextColor: kCategoryStyles['Shopping']!.accent,
+          icon: CupertinoIcons.person_2_fill,
+          iconBgColor: kCategoryStyles['Shopping']!.accent,
+          mainValue: people.isEmpty ? '—' : '${people.length}',
+          mainValueSub: people.isEmpty
+              ? null
+              : people.length == 1
+              ? 'contact'
+              : 'contacts',
+          footer: people.isEmpty
+              ? context.t('budget.tapToAddPeople')
+              : peopleSubInfo.isNotEmpty
+                  ? peopleSubInfo
+                  : '${activeBorrowLending.length} record${activeBorrowLending.length == 1 ? '' : 's'}',
+          onTap: () => _push(context, const PeopleScreen()),
+        ),
+      if (visibleModules.contains('travelGroups'))
+        'travelGroups': _PremiumManagementCard(
+          badgeLabel: context.t('travel.title'),
+          badgeColor: AppColors.sky,
+          badgeTextColor: const Color(0xFF3478F6),
+          icon: CupertinoIcons.airplane,
+          iconBgColor: const Color(0xFF3478F6),
+          mainValue: travelGroups.isEmpty ? '—' : '${travelGroups.length}',
+          mainValueSub: travelGroups.isEmpty
+              ? null
+              : activeTrips == travelGroups.length
+              ? 'all active'
+              : '$activeTrips active',
+          footer: travelGroups.isEmpty
+              ? context.t('travel.empty')
+              : totalTripMembers > 0
+                  ? '$totalTripMembers member${totalTripMembers == 1 ? '' : 's'} total'
+                  : context.t('travel.title'),
+          onTap: () => _push(context, const TravelGroupsScreen()),
+        ),
+      if (visibleModules.contains('investments'))
+        'investments': _PremiumManagementCard(
+          badgeLabel: 'PORTFOLIO',
+          badgeColor: const Color(0xFFEBEAFF),
+          badgeTextColor: const Color(0xFF5856D6),
+          icon: CupertinoIcons.chart_bar_square_fill,
+          iconBgColor: const Color(0xFF5856D6),
+          mainValue: hasAnyInvestment ? formatMoney(symbol, portfolioTotal) : '—',
+          mainValueSub: hasAnyInvestment
+              ? [
+                  if (metals.isNotEmpty)
+                    '${metals.length} metal${metals.length == 1 ? '' : 's'}',
+                  if (stocks.isNotEmpty)
+                    '${stocks.length} stock${stocks.length == 1 ? '' : 's'}',
+                ].join(' · ')
+              : null,
+          footer: hasAnyInvestment ? 'cost basis' : 'Gold, silver & stocks',
+          onTap: () => _push(context, const InvestmentScreen()),
+        ),
+    };
 
     return SafeArea(
       child: ListView(
@@ -412,244 +574,11 @@ class BudgetScreen extends ConsumerWidget {
           // ── Management cards ──────────────────────────────
           _GroupHeader(label: context.t('budget.management')),
           const SizedBox(height: 10),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final cardWidth = (constraints.maxWidth - 12) / 2;
-              final savingTarget = trackedPlans.fold<double>(
-                0,
-                (s, p) => s + p.targetAmount,
-              );
-              final budgetProgress = budget > 0
-                  ? (discretionarySpent / budget).clamp(0.0, 1.0)
-                  : null;
-              final savingProgress = savingTarget > 0
-                  ? (saved / savingTarget).clamp(0.0, 1.0)
-                  : null;
-              final budgetUsagePct = budget > 0
-                  ? (discretionarySpent / budget * 100).clamp(0, 999).round()
-                  : 0;
-              final savingUsagePct = savingTarget > 0
-                  ? (saved / savingTarget * 100).clamp(0, 100).round()
-                  : 0;
-
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  if (visibleModules.contains('monthlyBudget'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('budget.badgeBudget'),
-                        badgeColor: AppColors.lilac,
-                        badgeTextColor: kCategoryStyles['Shopping']!.accent,
-                        icon: CupertinoIcons.chart_pie_fill,
-                        iconBgColor: kCategoryStyles['Shopping']!.accent,
-                        mainValue: budget <= 0
-                            ? context.t('budget.monthlyNotSet')
-                            : formatMoney(symbol, budgetLeft.abs()),
-                        mainValueSub: budget <= 0
-                            ? null
-                            : budgetOverspent
-                            ? context.t('budget.overBudget')
-                            : context.t('budget.leftThisMonth'),
-                        progress: budgetProgress,
-                        progressLabel: budget <= 0
-                            ? context.t('budget.setAction')
-                            : '$budgetUsagePct% used',
-                        progressColor: budgetOverspent
-                            ? AppColors.expense
-                            : null,
-                        onTap: () => showMonthlyBudgetDetails(
-                          context,
-                          ref,
-                          budget: budget,
-                          spent: discretionarySpent,
-                          symbol: symbol,
-                          userId: user?.uid,
-                          month: month,
-                        ),
-                      ),
-                    ),
-                  if (visibleModules.contains('savingPlans'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('budget.badgeSavings'),
-                        badgeColor: AppColors.mint,
-                        badgeTextColor: kCategoryStyles['Groceries']!.accent,
-                        icon: CupertinoIcons.flag_fill,
-                        iconBgColor: kCategoryStyles['Groceries']!.accent,
-                        mainValue: formatMoney(symbol, saved),
-                        mainValueSub: savingTarget > 0
-                            ? 'of ${formatMoney(symbol, savingTarget)} goal'
-                            : '${trackedPlans.length} plans',
-                        progress: savingProgress,
-                        progressLabel: savingTarget > 0
-                            ? '$savingUsagePct% saved'
-                            : null,
-                        onTap: () => _push(context, const SavingPlansScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('borrowLending'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('budget.badgeLending'),
-                        badgeColor: AppColors.sky,
-                        badgeTextColor: kCategoryStyles['Transport']!.accent,
-                        icon: CupertinoIcons.arrow_up_arrow_down,
-                        iconBgColor: kCategoryStyles['Transport']!.accent,
-                        mainValue: net == 0
-                            ? formatMoney(symbol, 0)
-                            : '${net > 0 ? '+' : '-'}${formatMoney(symbol, net.abs())}',
-                        mainValueSub: context.t('budget.netPosition'),
-                        mainValueColor: net < 0
-                            ? AppColors.expense
-                            : net > 0
-                            ? AppColors.income
-                            : null,
-                        footer:
-                            '↑ ${formatMoney(symbol, lent)} · ↓ ${formatMoney(symbol, borrowed)}',
-                        onTap: () =>
-                            _push(context, const BorrowLendingScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('installments'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('budget.badgeInstallments'),
-                        badgeColor: AppColors.peach,
-                        badgeTextColor: kCategoryStyles['Food']!.accent,
-                        icon: CupertinoIcons.calendar_today,
-                        iconBgColor: kCategoryStyles['Food']!.accent,
-                        mainValue: activeInstallments.isEmpty
-                            ? '—'
-                            : formatMoney(symbol, installmentsMonthly),
-                        mainValueSub: activeInstallments.isEmpty
-                            ? null
-                            : context.t('budget.dueThisMonth'),
-                        footer: activeInstallments.isEmpty
-                            ? context.t('budget.noneActive')
-                            : context.t('budget.activePlans').replaceAll('{count}', '${activeInstallments.length}'),
-                        onTap: () => _push(context, const InstallmentsScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('people'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('budget.badgePeople'),
-                        badgeColor: AppColors.lilac,
-                        badgeTextColor: kCategoryStyles['Shopping']!.accent,
-                        icon: CupertinoIcons.person_2_fill,
-                        iconBgColor: kCategoryStyles['Shopping']!.accent,
-                        mainValue: people.isEmpty ? '—' : '${people.length}',
-                        mainValueSub: people.isEmpty
-                            ? null
-                            : people.length == 1
-                            ? 'contact'
-                            : 'contacts',
-                        footer: people.isEmpty
-                            ? context.t('budget.tapToAddPeople')
-                            : peopleSubInfo.isNotEmpty
-                                ? peopleSubInfo
-                                : '${activeBorrowLending.length} record${activeBorrowLending.length == 1 ? '' : 's'}',
-                        onTap: () => _push(context, const PeopleScreen()),
-                      ),
-                    ),
-                  if (visibleModules.contains('travelGroups'))
-                    SizedBox(
-                      width: cardWidth,
-                      height: 186,
-                      child: _PremiumManagementCard(
-                        badgeLabel: context.t('travel.title'),
-                        badgeColor: AppColors.sky,
-                        badgeTextColor: const Color(0xFF3478F6),
-                        icon: CupertinoIcons.airplane,
-                        iconBgColor: const Color(0xFF3478F6),
-                        mainValue: travelGroups.isEmpty
-                            ? '—'
-                            : '${travelGroups.length}',
-                        mainValueSub: travelGroups.isEmpty
-                            ? null
-                            : activeTrips == travelGroups.length
-                            ? 'all active'
-                            : '$activeTrips active',
-                        footer: travelGroups.isEmpty
-                            ? context.t('travel.empty')
-                            : totalTripMembers > 0
-                                ? '$totalTripMembers member${totalTripMembers == 1 ? '' : 's'} total'
-                                : context.t('travel.title'),
-                        onTap: () =>
-                            _push(context, const TravelGroupsScreen()),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          // ── Investments section ───────────────────────────────
-          const SizedBox(height: 20),
-          _GroupHeader(label: 'Investments'),
-          const SizedBox(height: 10),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final w = (constraints.maxWidth - 12) / 2;
-              return Row(
-                children: [
-                  SizedBox(
-                    width: w,
-                    height: 186,
-                    child: _PremiumManagementCard(
-                      badgeLabel: 'METALS',
-                      badgeColor: const Color(0xFFFFF3CD),
-                      badgeTextColor: const Color(0xFFC8860A),
-                      icon: CupertinoIcons.sparkles,
-                      iconBgColor: const Color(0xFFC8860A),
-                      mainValue: metals.isEmpty
-                          ? '—'
-                          : formatMoney(symbol, metalsTotalValue),
-                      mainValueSub: metals.isEmpty
-                          ? null
-                          : '${metals.length} txn${metals.length == 1 ? '' : 's'}',
-                      footer: metals.isEmpty
-                          ? 'Gold, silver & more'
-                          : 'precious metals',
-                      onTap: () => _push(context, const InvestmentScreen()),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: w,
-                    height: 186,
-                    child: _PremiumManagementCard(
-                      badgeLabel: 'STOCKS',
-                      badgeColor: const Color(0xFFEBEAFF),
-                      badgeTextColor: const Color(0xFF5856D6),
-                      icon: CupertinoIcons.chart_bar_square_fill,
-                      iconBgColor: const Color(0xFF5856D6),
-                      mainValue: stocks.isEmpty ? '—' : '${stocks.length}',
-                      mainValueSub: stocks.isEmpty
-                          ? null
-                          : stocks.length == 1
-                          ? 'position'
-                          : 'positions',
-                      footer: stocks.isEmpty
-                          ? 'Start tracking stocks'
-                          : formatMoney(symbol, stocksCostBasis),
-                      onTap: () => _push(context, const InvestmentScreen()),
-                    ),
-                  ),
-                ],
-              );
-            },
+          _DragReorderGrid(
+            order: cardOrder,
+            cards: cardWidgets,
+            onReorder: (order) =>
+                ref.read(moneyHubOrderProvider.notifier).setOrder(order),
           ),
         ],
       ),
@@ -679,6 +608,7 @@ class BudgetScreen extends ConsumerWidget {
             ('monthlyBudget', context.t('home.budget')),
             ('people', 'People'),
             ('travelGroups', context.t('travel.title')),
+            ('investments', 'Investments'),
           ];
           return _VisibilitySheet(
             title: context.t('money.customizeHub'),
@@ -1065,171 +995,128 @@ class _CircleProgress extends StatelessWidget {
   }
 }
 
-// ignore: unused_element - replaced by _PremiumManagementCard instances
-class _InvestmentHubCard extends StatelessWidget {
-  final List<PreciousMetal> metals;
-  final List<StockInvestment> stocks;
-  final String symbol;
-  final VoidCallback onTap;
+// ── Drag-reorder grid ──────────────────────────────────────────────────────────
 
-  const _InvestmentHubCard({
-    required this.metals,
-    required this.stocks,
-    required this.symbol,
-    required this.onTap,
+class _DragReorderGrid extends StatefulWidget {
+  final List<String> order;
+  final Map<String, Widget> cards;
+  final void Function(List<String>) onReorder;
+
+  const _DragReorderGrid({
+    required this.order,
+    required this.cards,
+    required this.onReorder,
   });
 
-  double _metalsTotalValue() {
-    double total = 0;
-    for (final m in metals) {
-      total += m.action == MetalAction.buy ? m.totalAmount : -m.totalAmount;
+  @override
+  State<_DragReorderGrid> createState() => _DragReorderGridState();
+}
+
+class _DragReorderGridState extends State<_DragReorderGrid> {
+  late List<String> _order;
+  String? _dragging;
+  String? _hoverTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = List.from(widget.order);
+  }
+
+  @override
+  void didUpdateWidget(_DragReorderGrid old) {
+    super.didUpdateWidget(old);
+    if (_dragging == null) {
+      _order = List.from(widget.order);
     }
-    return total < 0 ? 0 : total;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final brand = context.brand;
-    final metalValue = _metalsTotalValue();
-    final hasMetals = metals.isNotEmpty;
-    final hasStocks = stocks.isNotEmpty;
-    final hasAny = hasMetals || hasStocks;
-
-    const goldColor = Color(0xFFD4AF37);
-    const stockColor = Color(0xFF5856D6);
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        const h = 186.0;
+        const gap = 12.0;
+        final w = (constraints.maxWidth - gap) / 2;
+        final visible =
+            _order.where((id) => widget.cards.containsKey(id)).toList();
+        if (visible.isEmpty) return const SizedBox.shrink();
+        final rows = (visible.length / 2).ceil();
+        final height = rows * h + (rows - 1) * gap;
+        return SizedBox(
+          height: height,
+          child: Stack(
+            children: [
+              for (int i = 0; i < visible.length; i++)
+                _buildCell(i, visible[i], w, h, gap),
+            ],
+          ),
+        );
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A28) : const Color(0xFFF8F8FF),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(
-            color: stockColor.withValues(alpha: isDark ? 0.18 : 0.14),
-            width: 1,
+    );
+  }
+
+  Widget _buildCell(int idx, String id, double w, double h, double gap) {
+    final card = widget.cards[id]!;
+    final left = (idx % 2) * (w + gap);
+    final top = (idx ~/ 2) * (h + gap);
+    final isDragging = _dragging == id;
+
+    return AnimatedPositioned(
+      key: ValueKey(id),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      left: left,
+      top: top,
+      width: w,
+      height: h,
+      child: LongPressDraggable<String>(
+        data: id,
+        delay: const Duration(milliseconds: 350),
+        onDragStarted: () {
+          HapticFeedback.mediumImpact();
+          setState(() {
+            _dragging = id;
+            _hoverTarget = null;
+          });
+        },
+        onDragEnd: (_) {
+          final newOrder = _order.toList();
+          widget.onReorder(newOrder);
+          setState(() {
+            _dragging = null;
+            _hoverTarget = null;
+          });
+        },
+        feedback: Material(
+          color: Colors.transparent,
+          child: SizedBox(
+            width: w,
+            height: h,
+            child: Transform.scale(scale: 1.06, child: card),
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: stockColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                CupertinoIcons.chart_bar_square_fill,
-                size: 22,
-                color: stockColor,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Investments',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF1D1D40),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: stockColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'PORTFOLIO',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: stockColor,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  if (hasAny) ...[
-                    if (hasMetals)
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: goldColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            '${metals.length} metal txn${metals.length == 1 ? '' : 's'} · ${formatMoney(symbol, metalValue)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    if (hasStocks)
-                      Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: stockColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            '${stocks.length} stock${stocks.length == 1 ? '' : 's'} tracked',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                  ] else
-                    Text(
-                      'Track precious metals & stocks',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_right,
-              size: 14,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.4)
-                  : stockColor.withValues(alpha: 0.5),
-            ),
-          ],
+        childWhenDragging: Opacity(opacity: 0.0, child: card),
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (details) {
+            if (details.data == id || _hoverTarget == id) return false;
+            final fromIdx = _order.indexOf(details.data);
+            final toIdx = _order.indexOf(id);
+            if (fromIdx == -1 || toIdx == -1 || fromIdx == toIdx) return false;
+            HapticFeedback.selectionClick();
+            setState(() {
+              _hoverTarget = id;
+              final item = _order.removeAt(fromIdx);
+              _order.insert(toIdx, item);
+            });
+            return false;
+          },
+          builder: (ctx, candidateData, rejectedData) => AnimatedScale(
+            scale: isDragging ? 1.0 : (_dragging != null ? 0.96 : 1.0),
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: card,
+          ),
         ),
       ),
     );

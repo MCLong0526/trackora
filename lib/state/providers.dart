@@ -547,6 +547,28 @@ final homeCardOrderProvider =
       (ref) => HomeCardOrderNotifier(ref.read(prefsServiceProvider)),
     );
 
+class MoneyHubOrderNotifier extends StateNotifier<List<String>> {
+  final PrefsService _prefs;
+
+  MoneyHubOrderNotifier(this._prefs) : super(PrefsService.defaultMoneyHubOrder) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = await _prefs.moneyHubOrder();
+  }
+
+  Future<void> setOrder(List<String> order) async {
+    state = order;
+    await _prefs.setMoneyHubOrder(order);
+  }
+}
+
+final moneyHubOrderProvider =
+    StateNotifierProvider<MoneyHubOrderNotifier, List<String>>(
+      (ref) => MoneyHubOrderNotifier(ref.read(prefsServiceProvider)),
+    );
+
 final homeCardVisibilityProvider =
     StateNotifierProvider<VisibilitySetNotifier, Set<String>>(
       (ref) => VisibilitySetNotifier(
