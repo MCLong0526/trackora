@@ -16,6 +16,8 @@ class PrefsService {
   static const _kStatsSectionsVisible = 'stats_sections_visible';
   static const _kLiveActivityEnabled = 'live_activity_enabled';
   static const _kFirstLaunchDone = 'first_launch_done';
+  static const _kUseCustomCycle = 'use_custom_cycle';
+  static const _kCycleDayStart = 'cycle_day_start';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -167,6 +169,30 @@ class PrefsService {
     if (p == null) return;
     await p.setString(_kCurrencyCode, code);
     await p.setString(_kCurrency, symbol);
+  }
+
+  Future<bool> useCustomCycle() async {
+    final p = await _prefsOrNull();
+    if (p == null) return false;
+    return p.getBool(_kUseCustomCycle) ?? false;
+  }
+
+  Future<void> setUseCustomCycle(bool value) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setBool(_kUseCustomCycle, value);
+  }
+
+  Future<int> cycleDayStart() async {
+    final p = await _prefsOrNull();
+    if (p == null) return 1;
+    return p.getInt(_kCycleDayStart) ?? 1;
+  }
+
+  Future<void> setCycleDayStart(int day) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setInt(_kCycleDayStart, day.clamp(1, 28));
   }
 
   Future<bool> liveActivityEnabled() async {

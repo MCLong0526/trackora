@@ -622,6 +622,63 @@ final travelGroupExpensesProvider = StreamProvider.autoDispose
       return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
     });
 
+// ── Custom Expense Cycle ──────────────────────────────────────────────────────
+
+class UseCustomCycleNotifier extends StateNotifier<bool> {
+  UseCustomCycleNotifier(this._prefs) : super(false) {
+    _load();
+  }
+  final PrefsService _prefs;
+  Future<void> _load() async { state = await _prefs.useCustomCycle(); }
+  Future<void> set(bool value) async {
+    state = value;
+    await _prefs.setUseCustomCycle(value);
+  }
+}
+
+final useCustomCycleProvider = StateNotifierProvider<UseCustomCycleNotifier, bool>(
+  (ref) => UseCustomCycleNotifier(ref.read(prefsServiceProvider)),
+);
+
+class CycleDayStartNotifier extends StateNotifier<int> {
+  CycleDayStartNotifier(this._prefs) : super(1) {
+    _load();
+  }
+  final PrefsService _prefs;
+  Future<void> _load() async { state = await _prefs.cycleDayStart(); }
+  Future<void> set(int day) async {
+    state = day.clamp(1, 28);
+    await _prefs.setCycleDayStart(day);
+  }
+}
+
+final cycleDayStartProvider = StateNotifierProvider<CycleDayStartNotifier, int>(
+  (ref) => CycleDayStartNotifier(ref.read(prefsServiceProvider)),
+);
+
+/// Date range for the current custom expense cycle.
+/// Returns null when custom cycle is disabled (calendar month is used).
+class CycleDateRange {
+  final DateTime start;
+  final DateTime endExclusive;
+  const CycleDateRange({required this.start, required this.endExclusive});
+}
+
+final cycleDateRangeProvider = Provider.autoDispose<CycleDateRange?>((ref) {
+  final useCustom = ref.watch(useCustomCycleProvider);
+  if (!useCustom) return null;
+  final startDay = ref.watch(cycleDayStartProvider).clamp(1, 28);
+  final now = DateTime.now();
+  final DateTime cycleStart;
+  if (now.day >= startDay) {
+    cycleStart = DateTime(now.year, now.month, startDay);
+  } else {
+    cycleStart = DateTime(now.year, now.month - 1, startDay);
+  }
+  final cycleEnd = DateTime(cycleStart.year, cycleStart.month + 1, startDay);
+  return CycleDateRange(start: cycleStart, endExclusive: cycleEnd);
+});
+
 // ── Stock Investments ─────────────────────────────────────────────────────────
 
 final stockInvestmentRepositoryProvider = Provider<StockInvestmentRepository>((

@@ -144,6 +144,16 @@ class SettingsScreen extends ConsumerWidget {
 
             const SizedBox(height: 22),
 
+            // ── Expense Cycle ────────────────────────────────────
+            _GroupHeader(label: 'Expense Cycle'),
+            _GroupCard(
+              children: [
+                const _ExpenseCycleSection(),
+              ],
+            ),
+
+            const SizedBox(height: 22),
+
             // ── Display ─────────────────────────────────────────
             _GroupHeader(label: context.t('settings.display')),
             _GroupCard(
@@ -1409,6 +1419,222 @@ class _Tile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Expense Cycle Section ─────────────────────────────────────────────────────
+
+class _ExpenseCycleSection extends ConsumerWidget {
+  const _ExpenseCycleSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final useCustom = ref.watch(useCustomCycleProvider);
+    final cycleDay = ref.watch(cycleDayStartProvider);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.butter,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  CupertinoIcons.calendar_badge_plus,
+                  size: 16,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Custom Expense Cycle',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: brand.ink,
+                      ),
+                    ),
+                    Text(
+                      'Use salary cycle instead of calendar month',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              CupertinoSwitch(
+                value: useCustom,
+                activeTrackColor: AppColors.income,
+                onChanged: (v) {
+                  HapticFeedback.selectionClick();
+                  ref.read(useCustomCycleProvider.notifier).set(v);
+                },
+              ),
+            ],
+          ),
+        ),
+        if (useCustom) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 60),
+            child: Container(height: 0.5, color: brand.divider),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _pickCycleDay(context, ref, cycleDay),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.mint,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.number,
+                        size: 16,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Cycle starts on day',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$cycleDay',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: brand.inkSoft,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickCycleDay(BuildContext context, WidgetRef ref, int current) async {
+    final brand = context.brand;
+    int selected = current;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (ctx) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: brand.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Cycle starts on day',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: brand.ink,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Text(
+                          'Done',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0066CC),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 200,
+                  child: StatefulBuilder(
+                    builder: (context, setLocal) {
+                      return CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                          initialItem: selected - 1,
+                        ),
+                        itemExtent: 40,
+                        onSelectedItemChanged: (i) {
+                          selected = i + 1;
+                          ref.read(cycleDayStartProvider.notifier).set(selected);
+                        },
+                        children: List.generate(
+                          28,
+                          (i) => Center(
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                fontSize: 20,
+                                color: brand.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
