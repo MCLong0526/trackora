@@ -99,6 +99,9 @@ class DashboardScreen extends ConsumerWidget {
       return !inst.isPaidIn(cycleMonthDate);
     }).toList();
     final unpaidTotal = unpaidInstallments.fold<double>(0, (s, e) => s + e.amount);
+    final totalInstallmentAmount = allInstallments
+        .where((inst) => inst.status == InstallmentStatus.active)
+        .fold<double>(0, (s, e) => s + e.amount);
     final todayStart = DateTime(now.year, now.month, now.day);
     final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
     double todaySpent = 0;
@@ -202,6 +205,8 @@ class DashboardScreen extends ConsumerWidget {
                 budgetSpent: budgetableSpent,
                 selectedMonth: selectedMonth,
                 hasForeignExpense: hasForeignExpense,
+                unpaidInstallmentTotal: unpaidTotal,
+                totalInstallmentAmount: totalInstallmentAmount,
               ),
             ),
           ),
@@ -225,69 +230,6 @@ class DashboardScreen extends ConsumerWidget {
                         color: brand.inkSoft,
                       ),
                     ),
-                  ),
-                ),
-              ),
-            ),
-
-          if (unpaidInstallments.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: brand.surface,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.expense.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.creditcard,
-                          size: 17,
-                          color: AppColors.expense,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${unpaidInstallments.length} unpaid this month',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: brand.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${unpaidInstallments.length == 1 ? 'installment' : 'installments'} due',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: brand.inkSoft,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        formatMoney(symbol, unpaidTotal),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.expense,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -579,6 +521,8 @@ class _HomeOverviewCard extends ConsumerWidget {
   final double budgetSpent;
   final DateTime selectedMonth;
   final bool hasForeignExpense;
+  final double unpaidInstallmentTotal;
+  final double totalInstallmentAmount;
 
   const _HomeOverviewCard({
     required this.balance,
@@ -589,6 +533,8 @@ class _HomeOverviewCard extends ConsumerWidget {
     required this.budgetSpent,
     required this.selectedMonth,
     required this.hasForeignExpense,
+    required this.unpaidInstallmentTotal,
+    required this.totalInstallmentAmount,
   });
 
   @override
@@ -665,6 +611,8 @@ class _HomeOverviewCard extends ConsumerWidget {
           brand: brand,
           shadows: cardShadow,
           isDark: isDark,
+          unpaidInstallmentTotal: unpaidInstallmentTotal,
+          totalInstallmentAmount: totalInstallmentAmount,
         ),
       ],
     );
@@ -1004,6 +952,8 @@ class _BudgetOverviewCard extends StatelessWidget {
   final BrandColors brand;
   final List<BoxShadow> shadows;
   final bool isDark;
+  final double unpaidInstallmentTotal;
+  final double totalInstallmentAmount;
 
   const _BudgetOverviewCard({
     required this.visible,
@@ -1020,6 +970,8 @@ class _BudgetOverviewCard extends StatelessWidget {
     required this.brand,
     required this.shadows,
     required this.isDark,
+    required this.unpaidInstallmentTotal,
+    required this.totalInstallmentAmount,
   });
 
   @override
@@ -1162,6 +1114,18 @@ class _BudgetOverviewCard extends StatelessWidget {
                   ? AppColors.income
                   : null,
             ),
+            if (totalInstallmentAmount > 0) ...[
+              const SizedBox(height: 12),
+              _DottedDivider(color: brand.divider),
+              const SizedBox(height: 12),
+              _InstallmentProgressRow(
+                visible: visible,
+                symbol: symbol,
+                paidAmount: totalInstallmentAmount - unpaidInstallmentTotal,
+                totalAmount: totalInstallmentAmount,
+                brand: brand,
+              ),
+            ],
           ] else
             SizedBox(
               height: 219,
@@ -1329,6 +1293,100 @@ class _DailyStat extends StatelessWidget {
             fontWeight: FontWeight.w700,
             color: valueColor ?? brand.ink,
             height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InstallmentProgressRow extends StatelessWidget {
+  final bool visible;
+  final String symbol;
+  final double paidAmount;
+  final double totalAmount;
+  final BrandColors brand;
+
+  const _InstallmentProgressRow({
+    required this.visible,
+    required this.symbol,
+    required this.paidAmount,
+    required this.totalAmount,
+    required this.brand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = totalAmount > 0
+        ? (paidAmount / totalAmount).clamp(0.0, 1.0)
+        : 0.0;
+    final allPaid = paidAmount >= totalAmount;
+    final barColor = allPaid ? AppColors.income : AppColors.expense;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: barColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Installments',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: brand.ink,
+                  fontWeight: FontWeight.w500,
+                  height: 1.1,
+                ),
+              ),
+            ),
+            Text(
+              visible
+                  ? '${formatMoney(symbol, paidAmount)} / ${formatMoney(symbol, totalAmount)}'
+                  : '$symbol **** / ****',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: allPaid ? AppColors.income : AppColors.expense,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: progress),
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.easeOutCubic,
+          builder: (context, animatedProgress, _) => ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Stack(
+              children: [
+                Container(
+                  height: 5,
+                  width: double.infinity,
+                  color: barColor.withValues(alpha: 0.15),
+                ),
+                FractionallySizedBox(
+                  widthFactor: animatedProgress,
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: barColor,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
