@@ -448,6 +448,10 @@ final balanceVisibleProvider =
       (ref) => BalanceVisibilityNotifier(ref.read(prefsServiceProvider)),
     );
 
+/// When true, installments are excluded from the liabilities total in the
+/// net worth card. Toggled via the liabilities breakdown sheet.
+final excludeInstallmentsProvider = StateProvider<bool>((_) => false);
+
 class VisibilitySetNotifier extends StateNotifier<Set<String>> {
   VisibilitySetNotifier({
     required PrefsService prefs,

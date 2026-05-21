@@ -39,7 +39,7 @@ class DashboardScreen extends ConsumerWidget {
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
 
     final cycleRange = ref.watch(cycleDateRangeProvider);
-
+    final visible = ref.watch(balanceVisibleProvider);
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
@@ -151,6 +151,26 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   Row(
                     children: [
+                      GestureDetector(
+                        onTap: () =>
+                            ref.read(balanceVisibleProvider.notifier).toggle(),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: brand.surface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            visible
+                                ? CupertinoIcons.eye
+                                : CupertinoIcons.eye_slash,
+                            size: 17,
+                            color: brand.inkSoft,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       const FxRateButton(),
                       const SizedBox(width: 10),
                       const ProfileAvatarButton(),

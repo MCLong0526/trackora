@@ -32,6 +32,7 @@ class PrefsService {
     'savingPlans',
     'monthlyBudget',
     'people',
+    'travelGroups',
   ];
 
   static const defaultStatsSections = <String>[
