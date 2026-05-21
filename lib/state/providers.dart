@@ -449,8 +449,48 @@ final balanceVisibleProvider =
     );
 
 /// When true, installments are excluded from the liabilities total in the
-/// net worth card. Toggled via the liabilities breakdown sheet.
-final excludeInstallmentsProvider = StateProvider<bool>((_) => false);
+/// net worth card. Setting is persisted to Firestore users/{uid}/settings/general.
+class ExcludeInstallmentsNotifier extends StateNotifier<bool> {
+  ExcludeInstallmentsNotifier(this._db, this._userId) : super(false) {
+    if (_userId != null) _load();
+  }
+
+  final FirebaseFirestore? _db;
+  final String? _userId;
+
+  DocumentReference<Map<String, dynamic>>? get _doc => _userId == null
+      ? null
+      : _db!
+            .collection('users')
+            .doc(_userId)
+            .collection('settings')
+            .doc('general');
+
+  Future<void> _load() async {
+    try {
+      final snap = await _doc!.get();
+      if (snap.exists && mounted) {
+        state = (snap.data()?['excludeInstallments'] as bool?) ?? false;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    try {
+      await _doc?.set({'excludeInstallments': value}, SetOptions(merge: true));
+    } catch (_) {}
+  }
+}
+
+final excludeInstallmentsProvider =
+    StateNotifierProvider.autoDispose<ExcludeInstallmentsNotifier, bool>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  return ExcludeInstallmentsNotifier(
+    user != null ? FirebaseFirestore.instance : null,
+    user?.uid,
+  );
+});
 
 class VisibilitySetNotifier extends StateNotifier<Set<String>> {
   VisibilitySetNotifier({

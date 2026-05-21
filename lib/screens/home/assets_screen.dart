@@ -309,7 +309,7 @@ class _Header extends ConsumerWidget {
 
 // ── Net Worth Hero Card ───────────────────────────────────────────────────────
 
-class _NetWorthCard extends StatefulWidget {
+class _NetWorthCard extends ConsumerStatefulWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
@@ -325,10 +325,10 @@ class _NetWorthCard extends StatefulWidget {
   });
 
   @override
-  State<_NetWorthCard> createState() => _NetWorthCardState();
+  ConsumerState<_NetWorthCard> createState() => _NetWorthCardState();
 }
 
-class _NetWorthCardState extends State<_NetWorthCard>
+class _NetWorthCardState extends ConsumerState<_NetWorthCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _fade;
@@ -362,7 +362,12 @@ class _NetWorthCardState extends State<_NetWorthCard>
     final bg = brand.surface;
     final ink = brand.ink;
     final soft = brand.inkSoft;
-    final netWorth = widget.snapshot.netWorth;
+    final excludeInstallments = ref.watch(excludeInstallmentsProvider);
+    final installmentAdj = excludeInstallments
+        ? (widget.snapshot.installmentLiability ?? 0)
+        : 0.0;
+    final adjLiabilities = widget.snapshot.totalLiabilities - installmentAdj;
+    final netWorth = widget.snapshot.totalAssets - adjLiabilities;
     final netColor = netWorth < 0 ? AppColors.expense : ink;
 
     return FadeTransition(
@@ -438,7 +443,10 @@ class _NetWorthCardState extends State<_NetWorthCard>
               ),
               const SizedBox(height: 12),
               // Asset/liability split bar
-              _AssetLiabilityBar(snapshot: widget.snapshot),
+              _AssetLiabilityBar(
+                totalAssets: widget.snapshot.totalAssets,
+                totalLiabilities: adjLiabilities,
+              ),
               const SizedBox(height: 6),
               // Split labels
               Row(
@@ -521,7 +529,7 @@ class _NetWorthCardState extends State<_NetWorthCard>
                   Expanded(
                     child: _WorthTile(
                       label: context.t('asset.liabilities'),
-                      value: widget.snapshot.totalLiabilities,
+                      value: adjLiabilities,
                       symbol: widget.symbol,
                       visible: widget.visible,
                       color: AppColors.expense,
@@ -550,13 +558,17 @@ class _NetWorthCardState extends State<_NetWorthCard>
 }
 
 class _AssetLiabilityBar extends StatelessWidget {
-  final _AssetSnapshot snapshot;
-  const _AssetLiabilityBar({required this.snapshot});
+  final double totalAssets;
+  final double totalLiabilities;
+  const _AssetLiabilityBar({
+    required this.totalAssets,
+    required this.totalLiabilities,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final total = snapshot.totalAssets + snapshot.totalLiabilities;
-    final assetRatio = total > 0 ? (snapshot.totalAssets / total).clamp(0.0, 1.0) : 1.0;
+    final total = totalAssets + totalLiabilities;
+    final assetRatio = total > 0 ? (totalAssets / total).clamp(0.0, 1.0) : 1.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         return ClipRRect(
@@ -1561,7 +1573,7 @@ void _showBreakdown(
   );
 }
 
-class _BreakdownSheet extends StatefulWidget {
+class _BreakdownSheet extends ConsumerStatefulWidget {
   final String title;
   final Color color;
   final IconData icon;
@@ -1581,20 +1593,19 @@ class _BreakdownSheet extends StatefulWidget {
   });
 
   @override
-  State<_BreakdownSheet> createState() => _BreakdownSheetState();
+  ConsumerState<_BreakdownSheet> createState() => _BreakdownSheetState();
 }
 
-class _BreakdownSheetState extends State<_BreakdownSheet> {
-  bool _excludeInstallments = false;
-
+class _BreakdownSheetState extends ConsumerState<_BreakdownSheet> {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final excludeInstallments = ref.watch(excludeInstallmentsProvider);
 
     final hasInstallments =
         widget.items.any((i) => i.type == 'Installments');
-    final displayItems = _excludeInstallments
+    final displayItems = excludeInstallments
         ? widget.items.where((i) => i.type != 'Installments').toList()
         : widget.items;
     final displayTotal =
@@ -1691,9 +1702,10 @@ class _BreakdownSheetState extends State<_BreakdownSheet> {
                           ),
                         ),
                         CupertinoSwitch(
-                          value: _excludeInstallments,
-                          onChanged: (v) =>
-                              setState(() => _excludeInstallments = v),
+                          value: excludeInstallments,
+                          onChanged: (v) => ref
+                              .read(excludeInstallmentsProvider.notifier)
+                              .set(v),
                         ),
                       ],
                     ),

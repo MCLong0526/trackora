@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/expense.dart';
+import '../../models/installment.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../repositories/local_split_bill_repository.dart';
 import '../../services/i18n.dart';
@@ -89,7 +90,15 @@ class DashboardScreen extends ConsumerWidget {
 
     final totalBalance = ref.watch(totalAccountBalanceProvider);
 
+    // Unpaid installments for current cycle month
+    final allInstallments = ref.watch(installmentsProvider).valueOrNull ?? [];
     final now = DateTime.now();
+    final cycleMonthDate = cycleRange?.start ?? DateTime(now.year, now.month, 1);
+    final unpaidInstallments = allInstallments.where((inst) {
+      if (inst.status != InstallmentStatus.active) return false;
+      return !inst.isPaidIn(cycleMonthDate);
+    }).toList();
+    final unpaidTotal = unpaidInstallments.fold<double>(0, (s, e) => s + e.amount);
     final todayStart = DateTime(now.year, now.month, now.day);
     final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
     double todaySpent = 0;
@@ -109,7 +118,7 @@ class DashboardScreen extends ConsumerWidget {
           monthSpent: monthSpent,
           monthBudget: budget,
           savings: totalBalance,
-          upcomingInstallments: 0,
+          upcomingInstallments: unpaidInstallments.length.toDouble(),
           budgetableSpent: budgetableSpent,
           localeCode: appLocale.encode(),
           todaySpent: todaySpent,
@@ -216,6 +225,69 @@ class DashboardScreen extends ConsumerWidget {
                         color: brand.inkSoft,
                       ),
                     ),
+                  ),
+                ),
+              ),
+            ),
+
+          if (unpaidInstallments.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.expense.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.creditcard,
+                          size: 17,
+                          color: AppColors.expense,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${unpaidInstallments.length} unpaid this month',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: brand.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${unpaidInstallments.length == 1 ? 'installment' : 'installments'} due',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: brand.inkSoft,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        formatMoney(symbol, unpaidTotal),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.expense,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

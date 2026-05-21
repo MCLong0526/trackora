@@ -1133,14 +1133,20 @@ class _LineChartCardState extends State<_LineChartCard>
         return _LineSeries(values: values, labels: labels, denseLabels: true);
       case _StatsPeriod.month:
         final start = range.start!;
-        final daysInMonth = DateTime(start.year, start.month + 1, 0).day;
-        final values = List<double>.filled(daysInMonth, 0);
+        final end = range.endExclusive!;
+        final totalDays = end.difference(start).inDays;
+        final values = List<double>.filled(totalDays, 0);
         for (final e in expenses) {
-          if (e.date.year == start.year && e.date.month == start.month) {
-            values[e.date.day - 1] += e.convertedAmount;
+          final d = DateTime(e.date.year, e.date.month, e.date.day);
+          if (!d.isBefore(start) && d.isBefore(end)) {
+            final idx = d.difference(start).inDays;
+            if (idx >= 0 && idx < totalDays) values[idx] += e.convertedAmount;
           }
         }
-        final labels = [for (int i = 0; i < daysInMonth; i++) '${i + 1}'];
+        final labels = [
+          for (int i = 0; i < totalDays; i++)
+            '${start.add(Duration(days: i)).day}',
+        ];
         return _LineSeries(values: values, labels: labels, denseLabels: false);
       case _StatsPeriod.sixMonth:
         final start = range.start!;
