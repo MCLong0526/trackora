@@ -145,7 +145,7 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 22),
 
             // ── Expense Cycle ────────────────────────────────────
-            _GroupHeader(label: 'Expense Cycle'),
+            _GroupHeader(label: context.t('settings.expenseCycle')),
             _GroupCard(
               children: [
                 const _ExpenseCycleSection(),
@@ -1459,7 +1459,7 @@ class _ExpenseCycleSection extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Custom Expense Cycle',
+                      context.t('settings.customExpenseCycle'),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1467,7 +1467,7 @@ class _ExpenseCycleSection extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      'Use salary cycle instead of calendar month',
+                      context.t('settings.customExpenseCycleSub'),
                       style: TextStyle(
                         fontSize: 12,
                         color: brand.inkSoft,
@@ -1517,7 +1517,7 @@ class _ExpenseCycleSection extends ConsumerWidget {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        'Cycle starts on day',
+                        context.t('settings.cycleStartsOnDay'),
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1578,7 +1578,7 @@ class _ExpenseCycleSection extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Cycle starts on day',
+                          context.t('settings.cycleStartsOnDay'),
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
@@ -1589,7 +1589,7 @@ class _ExpenseCycleSection extends ConsumerWidget {
                       GestureDetector(
                         onTap: () => Navigator.pop(ctx),
                         child: Text(
-                          'Done',
+                          context.t('common.done'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

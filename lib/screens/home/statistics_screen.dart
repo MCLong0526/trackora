@@ -1425,7 +1425,7 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
       if (widget.showDonut)
         _ChartPage(
           id: 'donut',
-          label: 'By Category',
+          label: context.t('stats.byCategory'),
           icon: CupertinoIcons.chart_pie_fill,
           builder: (_) => _CategoryCard(
             expenses: widget.rangedExpenses,
@@ -1437,7 +1437,7 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
       if (widget.showLine)
         _ChartPage(
           id: 'line',
-          label: 'Trend',
+          label: context.t('stats.trend'),
           icon: CupertinoIcons.chart_bar,
           builder: (_) => _LineChartCard(
             expenses: widget.allExpenses,

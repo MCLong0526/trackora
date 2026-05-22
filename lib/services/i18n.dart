@@ -126,6 +126,10 @@ class AppStrings {
     'home.lent': 'Lent',
     'home.allBills': 'All Bills',
     'home.dragToReorder': 'Drag rows to reorder',
+    'home.createEntry': 'Create Entry',
+    'home.scanReceipt': 'Scan Receipt',
+    'home.avgDailySpending': 'Averaged daily spending',
+    'home.remainingDaily': 'Remaining daily',
 
     // Common buttons / actions.
     'common.save': 'Save',
@@ -145,6 +149,9 @@ class AppStrings {
     'common.entries': 'entries',
     'common.saveFailed': 'Failed to save',
     'common.cannotBeUndone': 'This cannot be undone.',
+    'common.expenses': 'Expenses',
+    'common.net': 'Net',
+    'common.searchCurrency': 'Search currency…',
 
     // Validation / auth.
     'validation.enterAmount': 'Enter an amount',
@@ -213,6 +220,7 @@ class AppStrings {
 
     // Stats.
     'stats.title': 'Statistics',
+    'stats.trend': 'Trend',
     'stats.weeklySpend': 'Weekly spend',
     'stats.byCategory': 'By category',
     'stats.calendar': 'Calendar',
@@ -408,6 +416,10 @@ class AppStrings {
 
     // Settings / profile.
     'settings.profile': 'Profile',
+    'settings.expenseCycle': 'Expense Cycle',
+    'settings.customExpenseCycle': 'Custom Expense Cycle',
+    'settings.customExpenseCycleSub': 'Use salary cycle instead of calendar month',
+    'settings.cycleStartsOnDay': 'Cycle starts on day',
     'settings.preferences': 'Preferences',
     'settings.account': 'Account',
     'settings.display': 'Display',
@@ -953,6 +965,10 @@ class AppStrings {
     'home.lent': '借出',
     'home.allBills': '全部账单',
     'home.dragToReorder': '拖动行以重新排序',
+    'home.createEntry': '创建记录',
+    'home.scanReceipt': '扫描收据',
+    'home.avgDailySpending': '日均消费',
+    'home.remainingDaily': '每日剩余',
 
     'common.save': '保存',
     'common.cancel': '取消',
@@ -971,6 +987,9 @@ class AppStrings {
     'common.entries': '记录',
     'common.saveFailed': '保存失败',
     'common.cannotBeUndone': '此操作无法撤销。',
+    'common.expenses': '支出',
+    'common.net': '净额',
+    'common.searchCurrency': '搜索货币…',
 
     'validation.enterAmount': '请输入金额',
     'validation.invalidAmount': '金额无效',
@@ -1032,6 +1051,7 @@ class AppStrings {
     'quickAdd.title': '快速添加',
 
     'stats.title': '统计',
+    'stats.trend': '趋势',
     'stats.weeklySpend': '每周支出',
     'stats.byCategory': '按类别',
     'stats.calendar': '日历',
@@ -1213,6 +1233,10 @@ class AppStrings {
     'inst.detailOriginalAmount': '原始金额',
 
     'settings.profile': '我的',
+    'settings.expenseCycle': '消费周期',
+    'settings.customExpenseCycle': '自定义消费周期',
+    'settings.customExpenseCycleSub': '使用薪资周期而非自然月',
+    'settings.cycleStartsOnDay': '周期开始日',
     'settings.preferences': '偏好设置',
     'settings.account': '账户',
     'settings.display': '显示',
@@ -1748,6 +1772,10 @@ class AppStrings {
     'home.lent': 'Dipinjamkan',
     'home.allBills': 'Semua Bil',
     'home.dragToReorder': 'Seret untuk susun semula',
+    'home.createEntry': 'Buat Rekod',
+    'home.scanReceipt': 'Imbas Resit',
+    'home.avgDailySpending': 'Purata perbelanjaan harian',
+    'home.remainingDaily': 'Baki harian',
 
     'common.save': 'Simpan',
     'common.cancel': 'Batal',
@@ -1766,6 +1794,9 @@ class AppStrings {
     'common.entries': 'rekod',
     'common.saveFailed': 'Gagal simpan',
     'common.cannotBeUndone': 'Tindakan ini tidak boleh dibuat asal.',
+    'common.expenses': 'Perbelanjaan',
+    'common.net': 'Bersih',
+    'common.searchCurrency': 'Cari mata wang…',
 
     'validation.enterAmount': 'Masukkan jumlah',
     'validation.invalidAmount': 'Jumlah tidak sah',
@@ -1829,6 +1860,7 @@ class AppStrings {
     'quickAdd.title': 'Tambah pantas',
 
     'stats.title': 'Statistik',
+    'stats.trend': 'Trend',
     'stats.weeklySpend': 'Belanja mingguan',
     'stats.byCategory': 'Mengikut kategori',
     'stats.calendar': 'Kalendar',
@@ -2024,6 +2056,10 @@ class AppStrings {
     'inst.detailOriginalAmount': 'Jumlah asal',
 
     'settings.profile': 'Profil',
+    'settings.expenseCycle': 'Kitaran Perbelanjaan',
+    'settings.customExpenseCycle': 'Kitaran Perbelanjaan Tersuai',
+    'settings.customExpenseCycleSub': 'Guna kitaran gaji bukan bulan kalendar',
+    'settings.cycleStartsOnDay': 'Kitaran bermula pada hari',
     'settings.preferences': 'Pilihan',
     'settings.account': 'Akaun',
     'settings.display': 'Paparan',

@@ -1095,14 +1095,14 @@ class _BudgetOverviewCard extends StatelessWidget {
             _DottedDivider(color: brand.divider),
             const SizedBox(height: 12),
             _DailyStat(
-              label: 'Averaged daily spending',
+              label: context.t('home.avgDailySpending'),
               value: visible ? formatMoney('', avgDaily).trim() : '****',
               brand: brand,
               dotColor: const Color(0xFFE89A14),
             ),
             const SizedBox(height: 8),
             _DailyStat(
-              label: 'Remaining daily',
+              label: context.t('home.remainingDaily'),
               value: visible
                   ? (daysRemaining > 0
                         ? formatMoney('', remainingDaily).trim()

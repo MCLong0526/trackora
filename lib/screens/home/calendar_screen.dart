@@ -799,7 +799,7 @@ class _MonthSummary extends StatelessWidget {
         children: [
           Expanded(
             child: _SummaryTile(
-              label: 'Expenses',
+              label: context.t('common.expenses'),
               amount: formatMoney(symbol, totalExpense),
               color: AppColors.expense,
               icon: CupertinoIcons.arrow_down_circle_fill,
@@ -808,7 +808,7 @@ class _MonthSummary extends StatelessWidget {
           Container(width: 1, height: 40, color: brand.divider),
           Expanded(
             child: _SummaryTile(
-              label: 'Income',
+              label: context.t('expense.income'),
               amount: formatMoney(symbol, totalIncome),
               color: AppColors.income,
               icon: CupertinoIcons.arrow_up_circle_fill,
@@ -817,7 +817,7 @@ class _MonthSummary extends StatelessWidget {
           Container(width: 1, height: 40, color: brand.divider),
           Expanded(
             child: _SummaryTile(
-              label: 'Net',
+              label: context.t('common.net'),
               amount: formatMoney(symbol, totalIncome - totalExpense,
                   forceSign: true),
               color: totalIncome >= totalExpense
