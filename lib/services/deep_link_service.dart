@@ -21,6 +21,7 @@ import '../screens/expenses/quick_add_sheet.dart';
 /// - `trackora://import-receipt` → ImportReceiptScreen (Share Extension).
 class DeepLinkService {
   static const _shareChannel = MethodChannel('trackora/share_import');
+  static const _initialLinkChannel = MethodChannel('trackora/initial_link');
 
   static StreamSubscription<Uri?>? _clickSub;
 
@@ -29,6 +30,19 @@ class DeepLinkService {
 
   static void attach(GlobalKey<NavigatorState> navKey) {
     if (_clickSub != null) return;
+
+    // Listen for URLs pushed from native (app brought to foreground via widget/live activity)
+    _initialLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onLink') {
+        final urlStr = call.arguments as String?;
+        if (urlStr != null) _handle(Uri.tryParse(urlStr), navKey);
+      }
+    });
+
+    // Check for a URL captured by native before Flutter was ready (cold start case)
+    _initialLinkChannel.invokeMethod<String?>('getInitialLink').then((urlStr) {
+      if (urlStr != null) _handle(Uri.tryParse(urlStr), navKey);
+    }).catchError((_) {});
 
     // Must be set up before the iOS platform check so we handle the channel
     // on all platforms gracefully (no-op on Android / web).

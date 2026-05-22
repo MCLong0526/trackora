@@ -13,11 +13,19 @@ import WatchConnectivity
   private var _liveActivityService: LiveActivityService?
   // Buffered trigger: import URL/notification arrived before engine was ready.
   private var _pendingShareImport = false
+  // Buffered deep link captured before Flutter is ready (cold start case).
+  private var _pendingDeepLink: String?
+  private var _deepLinkChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Capture widget/live activity URL from cold launch before plugins register
+    if let url = launchOptions?[UIApplication.LaunchOptionsKey.url] as? URL,
+       url.scheme == "trackora", url.host != "import-receipt" {
+      _pendingDeepLink = url.absoluteString
+    }
     let center = UNUserNotificationCenter.current()
     // Receive notification taps (share import) even when app is in foreground.
     center.delegate = self
@@ -38,6 +46,7 @@ import WatchConnectivity
     installWatchUserInfoBridge(messenger: nsMessenger)
     installShareImportService(messenger: nsMessenger)
     installLiveActivityService(messenger: nsMessenger)
+    installDeepLinkChannel(messenger: nsMessenger)
   }
 
   /// Wraps the watch_connectivity plugin's WCSession delegate to add
@@ -78,6 +87,19 @@ import WatchConnectivity
     print("[LIVE_ACTIVITY] LiveActivityService installed")
   }
 
+  private func installDeepLinkChannel(messenger: NSObject & FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "trackora/initial_link", binaryMessenger: messenger)
+    _deepLinkChannel = channel
+    channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "getInitialLink" {
+        result(self?._pendingDeepLink)
+        self?._pendingDeepLink = nil
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
   // MARK: - URL scheme (trackora://import-receipt from Share Extension)
 
   override func application(
@@ -88,6 +110,11 @@ import WatchConnectivity
     if url.scheme == "trackora" && url.host == "import-receipt" {
       triggerShareImport()
       return true
+    }
+    // Store the URL for Dart to consume on startup or live delivery
+    if url.scheme == "trackora" {
+      _pendingDeepLink = url.absoluteString
+      _deepLinkChannel?.invokeMethod("onLink", arguments: url.absoluteString)
     }
     return super.application(app, open: url, options: options)
   }

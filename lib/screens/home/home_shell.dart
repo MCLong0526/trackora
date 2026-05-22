@@ -405,7 +405,7 @@ class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
                                 opacity: _fadeLeft,
                                 child: _HorizDialPill(
                                   icon: CupertinoIcons.add,
-                                  label: 'Create Entry',
+                                  label: context.t('home.createEntry'),
                                   isPrimary: true,
                                   isDark: isDark,
                                   onTap: widget.onManualEntry,
@@ -427,7 +427,7 @@ class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
                                 opacity: _fadeRight,
                                 child: _HorizDialPill(
                                   icon: CupertinoIcons.camera_fill,
-                                  label: 'Scan Receipt',
+                                  label: context.t('home.scanReceipt'),
                                   isPrimary: false,
                                   isDark: isDark,
                                   onTap: widget.onScanReceipt,
@@ -817,7 +817,7 @@ class _BottomBarState extends State<_BottomBar>
                             const SizedBox(width: _fabGap),
                             _NavItem(
                               icon: CupertinoIcons.creditcard,
-                              label: 'Funds',
+                              label: context.t('tab.money'),
                               selected: activeIndex == 2,
                               onTap: () => widget.onTap(2),
                             ),
@@ -1015,7 +1015,7 @@ class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
                               style: TextStyle(
                                   fontSize: 15, color: brand.ink),
                               decoration: InputDecoration(
-                                hintText: 'Search currency…',
+                                hintText: context.t('common.searchCurrency'),
                                 hintStyle: TextStyle(
                                   color: brand.inkSoft,
                                   fontSize: 15,
