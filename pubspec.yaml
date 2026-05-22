@@ -53,6 +53,8 @@ dependencies:
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^6.1.4
   sensors_plus: ^7.0.0
+  qr_flutter: ^4.1.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,7 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
+import '../group/group_dashboard_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
@@ -137,8 +138,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
             child: KeyedSubtree(
-              key: ValueKey(_index),
-              child: _screens[_index],
+              key: ValueKey('${_index}_${ref.watch(homeModeProvider)}'),
+              child: _index == 0 &&
+                      ref.watch(homeModeProvider) == HomeMode.group
+                  ? const GroupDashboardScreen()
+                  : _screens[_index],
             ),
           ),
           // Full-screen backdrop — dims content when speed-dial is open

@@ -22,6 +22,7 @@ import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import '../../widgets/personal_group_toggle.dart';
 import 'calendar_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -190,6 +191,13 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: PersonalGroupToggle(brand: brand),
             ),
           ),
 

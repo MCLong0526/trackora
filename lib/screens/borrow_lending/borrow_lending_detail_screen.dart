@@ -764,56 +764,190 @@ class _RepaymentCard extends ConsumerWidget {
   Future<void> _addRepayment(BuildContext context, WidgetRef ref) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    HapticFeedback.selectionClick();
     final sym = symbol;
+    final remaining = record.remaining;
     final ctrl = TextEditingController(
-      text: record.remaining.toStringAsFixed(2),
+      text: remaining.toStringAsFixed(2),
     );
     final amount = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.brand.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                context.t('bl.addRepayment'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+        final brand = ctx.brand;
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            return Container(
+              decoration: BoxDecoration(
+                color: brand.background,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                autofocus: false,
-                textInputAction: TextInputAction.done,
-                keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true),
-                decoration:
-                    InputDecoration(prefixText: '$sym  '),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
               ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  final v = double.tryParse(ctrl.text);
-                  Navigator.pop(ctx, v);
-                },
-                child: Text(context.t('common.save')),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: brand.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  // Title + person row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.t('bl.addRepayment'),
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${context.t('bl.remaining')}: $sym ${remaining.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: brand.inkSoft,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Amount input – large, prominent
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: brand.divider,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          sym,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: brand.inkSoft,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: ctrl,
+                            autofocus: true,
+                            textInputAction: TextInputAction.done,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w700,
+                              color: brand.ink,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onChanged: (_) => setSheet(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Quick-fill chip
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          ctrl.text = remaining.toStringAsFixed(2);
+                          setSheet(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: brand.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: brand.divider),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.bolt_fill,
+                                  size: 11, color: brand.accentDark),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Full remaining · $sym ${remaining.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: brand.accentDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Save button
+                  FilledButton(
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      final v = double.tryParse(ctrl.text);
+                      Navigator.pop(ctx, v);
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      context.t('common.save'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
