@@ -86,10 +86,11 @@ class GroupDashboardScreen extends ConsumerWidget {
           ),
 
           // ── Segmented control ─────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: PersonalGroupToggle(brand: brand),
-          ),
+          if (groups.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              child: PersonalGroupToggle(brand: brand),
+            ),
 
           // ── Scrollable body ───────────────────────────────────
           Expanded(

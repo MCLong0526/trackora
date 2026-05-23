@@ -171,6 +171,19 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
       newMembers.add(_coerceStringKeyedMap(m));
     }
 
+    // No members remain — delete the group entirely so the Firestore stream
+    // emits immediately and the settings toggle flips to off.
+    if (newMembers.isEmpty) {
+      try {
+        await _deleteCollection(_expensesRef(groupId));
+        await docRef.delete();
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found' || e.code == 'permission-denied') return;
+        rethrow;
+      }
+      return;
+    }
+
     try {
       await docRef.update({
         'members': newMembers,
