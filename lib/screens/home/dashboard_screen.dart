@@ -39,6 +39,7 @@ class DashboardScreen extends ConsumerWidget {
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final hasGroups = (ref.watch(myGroupsProvider).valueOrNull ?? const []).isNotEmpty;
 
     final cycleRange = ref.watch(cycleDateRangeProvider);
     final visible = ref.watch(balanceVisibleProvider);
@@ -194,12 +195,13 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: PersonalGroupToggle(brand: brand),
+          if (hasGroups)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: PersonalGroupToggle(brand: brand),
+              ),
             ),
-          ),
 
           SliverToBoxAdapter(
             child: Padding(

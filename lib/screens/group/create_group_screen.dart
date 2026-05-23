@@ -25,7 +25,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     setState(() => _creating = true);
     try {
       final service = ref.read(expenseGroupServiceProvider);
-      final currency = await ref.read(prefsServiceProvider).currencyCode();
+      // Use the already-loaded currency provider — avoids an extra async call
+      final currency = ref.read(currencyCodeProvider).valueOrNull ?? 'USD';
       final id = await service.createGroup(
         userId: user.uid,
         displayName: user.email?.split('@').first ?? 'You',
@@ -53,7 +54,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         );
       }
     } catch (e) {
-      if (mounted) AppToast.show(context, 'Failed to create group');
+      if (mounted) {
+        // Show specific error to help diagnose (permission-denied = deploy Firestore rules)
+        final msg = e.toString().contains('permission-denied')
+            ? 'Permission denied — please deploy Firestore rules'
+            : 'Failed to create group: $e';
+        AppToast.show(context, msg);
+      }
     } finally {
       if (mounted) setState(() => _creating = false);
     }

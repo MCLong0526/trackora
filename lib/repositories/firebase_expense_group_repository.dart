@@ -29,11 +29,15 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
   Stream<List<ExpenseGroup>> getGroups(String userId) {
     return _groupsRef
         .where('memberUids', arrayContains: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs
-            .map((d) => ExpenseGroup.fromMap(d.data(), id: d.id))
-            .toList());
+        .map((s) {
+          final groups = s.docs
+              .map((d) => ExpenseGroup.fromMap(d.data(), id: d.id))
+              .toList();
+          // Sort client-side to avoid requiring a composite Firestore index
+          groups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return groups;
+        });
   }
 
   @override

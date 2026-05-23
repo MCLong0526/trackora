@@ -6,6 +6,7 @@ import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import 'qr_scanner_screen.dart';
 
 class JoinGroupScreen extends ConsumerStatefulWidget {
   const JoinGroupScreen({super.key});
@@ -63,6 +64,23 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       if (limited.length == 6) {
         _join();
       }
+    }
+  }
+
+  Future<void> _scanQR() async {
+    final code = await Navigator.push<String>(
+      context,
+      CupertinoPageRoute(builder: (_) => const QRScannerScreen()),
+    );
+    if (code != null && code.length == 6 && mounted) {
+      setState(() {
+        _entered = code;
+        _hiddenController.value = TextEditingValue(
+          text: code,
+          selection: TextSelection.collapsed(offset: code.length),
+        );
+      });
+      _join();
     }
   }
 
@@ -203,58 +221,61 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                     const SizedBox(height: 32),
 
                     // Scan QR card
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A6CFF)
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
+                    GestureDetector(
+                      onTap: _scanQR,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A6CFF)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                CupertinoIcons.qrcode,
+                                color: Color(0xFF1A6CFF),
+                                size: 22,
+                              ),
                             ),
-                            child: const Icon(
-                              CupertinoIcons.qrcode,
-                              color: Color(0xFF1A6CFF),
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Scan QR instead',
-                                  style: TextStyle(
-                                    color: brand.ink,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Scan QR instead',
+                                    style: TextStyle(
+                                      color: brand.ink,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  'Use your camera to scan their code',
-                                  style: TextStyle(
-                                    color: brand.inkSoft,
-                                    fontSize: 13,
+                                  Text(
+                                    'Use your camera to scan their code',
+                                    style: TextStyle(
+                                      color: brand.inkSoft,
+                                      fontSize: 13,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Icon(
-                            CupertinoIcons.chevron_right,
-                            color: brand.inkSoft,
-                            size: 16,
-                          ),
-                        ],
+                            Icon(
+                              CupertinoIcons.chevron_right,
+                              color: brand.inkSoft,
+                              size: 16,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 

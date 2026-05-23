@@ -31,7 +31,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   final _fabKey = GlobalKey<_AddFabState>();
 
   static const _screens = <Widget>[
-    DashboardScreen(),
+    _HomeTabWrapper(),
     StatisticsScreen(),
     BudgetScreen(),
     AssetsScreen(),
@@ -138,11 +138,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               );
             },
             child: KeyedSubtree(
-              key: ValueKey('${_index}_${ref.watch(homeModeProvider)}'),
-              child: _index == 0 &&
-                      ref.watch(homeModeProvider) == HomeMode.group
-                  ? const GroupDashboardScreen()
-                  : _screens[_index],
+              key: ValueKey(_index),
+              child: _screens[_index],
             ),
           ),
           // Full-screen backdrop — dims content when speed-dial is open
@@ -1142,6 +1139,34 @@ class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Home tab wrapper ─────────────────────────────────────────────────────────
+// Crossfades only the content when switching Personal ↔ Group — no full-screen
+// page swap. Tab transitions still use the outer AnimatedSwitcher in HomeShell.
+
+class _HomeTabWrapper extends ConsumerWidget {
+  const _HomeTabWrapper();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(homeModeProvider);
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final isGroupMode = mode == HomeMode.group && groups.isNotEmpty;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: isGroupMode
+          ? const GroupDashboardScreen(key: ValueKey('group'))
+          : const DashboardScreen(key: ValueKey('personal')),
     );
   }
 }
