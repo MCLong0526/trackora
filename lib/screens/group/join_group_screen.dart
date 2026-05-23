@@ -47,9 +47,10 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
   }
 
   void _onTextChanged() {
-    final text = _hiddenController.text
-        .toUpperCase()
-        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final text = _hiddenController.text.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
     final limited = text.length > 6 ? text.substring(0, 6) : text;
     if (limited != _entered) {
       setState(() => _entered = limited);
@@ -96,25 +97,31 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
     setState(() => _joining = true);
     try {
       final service = ref.read(expenseGroupServiceProvider);
-      await service.joinGroup(
+      final groupId = await service.joinGroup(
         rawCode: raw,
         userId: user.uid,
         displayName: user.email?.split('@').first ?? 'Someone',
       );
       if (mounted) {
+        ref.read(removedExpenseGroupIdsProvider.notifier).state =
+            const <String>{};
+        ref.read(activeGroupIdProvider.notifier).state = groupId;
         ref.read(homeModeProvider.notifier).state = HomeMode.group;
-        AppToast.show(context, 'Joined group!');
-        Navigator.pop(context);
+        Navigator.popUntil(context, (r) => r.isFirst);
       }
     } catch (e) {
       if (mounted) {
         final msg = e.toString().contains('expired')
             ? 'Invite code expired'
             : e.toString().contains('used')
-                ? 'Invite code already used'
-                : 'Invalid or expired code';
+            ? 'Invite code already used'
+            : 'Invalid or expired code';
         AppToast.show(context, msg);
-        setState(() { _entered = ''; _hiddenController.clear(); _joining = false; });
+        setState(() {
+          _entered = '';
+          _hiddenController.clear();
+          _joining = false;
+        });
       }
     } finally {
       if (mounted) setState(() => _joining = false);
@@ -207,9 +214,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                               ),
                             ),
                           _InputBox(
-                            char: i < _entered.length
-                                ? _entered[i]
-                                : null,
+                            char: i < _entered.length ? _entered[i] : null,
                             isActive: i == _entered.length && !_joining,
                             cursorVisible: _cursorVisible,
                           ),
@@ -225,7 +230,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                       onTap: _scanQR,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(18),
@@ -236,8 +243,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1A6CFF)
-                                    .withValues(alpha: 0.1),
+                                color: const Color(
+                                  0xFF1A6CFF,
+                                ).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -293,10 +301,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         const SizedBox(width: 6),
                         Text(
                           'Codes are private & expire in 10 minutes',
-                          style: TextStyle(
-                            color: brand.inkSoft,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: brand.inkSoft, fontSize: 13),
                         ),
                       ],
                     ),

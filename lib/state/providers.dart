@@ -124,9 +124,8 @@ final expenseServiceProvider = Provider(
   (ref) => ExpenseService(ref.read(expenseRepositoryProvider)),
 );
 final installmentServiceProvider = Provider(
-  (ref) => InstallmentService(
-    repository: ref.read(installmentRepositoryProvider),
-  ),
+  (ref) =>
+      InstallmentService(repository: ref.read(installmentRepositoryProvider)),
 );
 
 final borrowLendingRepositoryProvider = Provider<BorrowLendingRepository>((_) {
@@ -491,12 +490,12 @@ class ExcludeInstallmentsNotifier extends StateNotifier<bool> {
 
 final excludeInstallmentsProvider =
     StateNotifierProvider.autoDispose<ExcludeInstallmentsNotifier, bool>((ref) {
-  final user = ref.watch(authStateProvider).valueOrNull;
-  return ExcludeInstallmentsNotifier(
-    user != null ? FirebaseFirestore.instance : null,
-    user?.uid,
-  );
-});
+      final user = ref.watch(authStateProvider).valueOrNull;
+      return ExcludeInstallmentsNotifier(
+        user != null ? FirebaseFirestore.instance : null,
+        user?.uid,
+      );
+    });
 
 class VisibilitySetNotifier extends StateNotifier<Set<String>> {
   VisibilitySetNotifier({
@@ -556,7 +555,8 @@ final homeCardOrderProvider =
 class MoneyHubOrderNotifier extends StateNotifier<List<String>> {
   final PrefsService _prefs;
 
-  MoneyHubOrderNotifier(this._prefs) : super(PrefsService.defaultMoneyHubOrder) {
+  MoneyHubOrderNotifier(this._prefs)
+    : super(PrefsService.defaultMoneyHubOrder) {
     _load();
   }
 
@@ -701,23 +701,30 @@ class UseCustomCycleNotifier extends StateNotifier<bool> {
     _load();
   }
   final PrefsService _prefs;
-  Future<void> _load() async { state = await _prefs.useCustomCycle(); }
+  Future<void> _load() async {
+    state = await _prefs.useCustomCycle();
+  }
+
   Future<void> set(bool value) async {
     state = value;
     await _prefs.setUseCustomCycle(value);
   }
 }
 
-final useCustomCycleProvider = StateNotifierProvider<UseCustomCycleNotifier, bool>(
-  (ref) => UseCustomCycleNotifier(ref.read(prefsServiceProvider)),
-);
+final useCustomCycleProvider =
+    StateNotifierProvider<UseCustomCycleNotifier, bool>(
+      (ref) => UseCustomCycleNotifier(ref.read(prefsServiceProvider)),
+    );
 
 class CycleDayStartNotifier extends StateNotifier<int> {
   CycleDayStartNotifier(this._prefs) : super(1) {
     _load();
   }
   final PrefsService _prefs;
-  Future<void> _load() async { state = await _prefs.cycleDayStart(); }
+  Future<void> _load() async {
+    state = await _prefs.cycleDayStart();
+  }
+
   Future<void> set(int day) async {
     state = day.clamp(1, 28);
     await _prefs.setCycleDayStart(day);
@@ -777,6 +784,10 @@ final homeModeProvider = StateProvider<HomeMode>((_) => HomeMode.personal);
 
 final activeGroupIdProvider = StateProvider<String?>((_) => null);
 
+final removedExpenseGroupIdsProvider = StateProvider<Set<String>>(
+  (_) => const <String>{},
+);
+
 final expenseGroupRepositoryProvider = Provider<ExpenseGroupRepository>((_) {
   switch (storageMode) {
     case StorageMode.local:
@@ -792,8 +803,16 @@ final expenseGroupServiceProvider = Provider<ExpenseGroupService>((ref) {
 
 final myGroupsProvider = StreamProvider.autoDispose<List<ExpenseGroup>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
+  final removedGroupIds = ref.watch(removedExpenseGroupIdsProvider);
   if (user == null) return Stream.value(const []);
-  return ref.read(expenseGroupServiceProvider).getGroups(user.uid);
+  return ref
+      .read(expenseGroupServiceProvider)
+      .getGroups(user.uid)
+      .map(
+        (groups) => groups
+            .where((group) => !removedGroupIds.contains(group.id))
+            .toList(),
+      );
 });
 
 final activeGroupProvider = StreamProvider.autoDispose<ExpenseGroup?>((ref) {
@@ -808,7 +827,7 @@ final activeGroupProvider = StreamProvider.autoDispose<ExpenseGroup?>((ref) {
   );
 });
 
-final groupExpensesProvider = StreamProvider.autoDispose
-    .family<List<GroupExpenseItem>, String>((ref, groupId) {
-  return ref.read(expenseGroupServiceProvider).getExpenses(groupId);
-});
+final groupExpensesProvider =
+    StreamProvider.family<List<GroupExpenseItem>, String>((ref, groupId) {
+      return ref.read(expenseGroupServiceProvider).getExpenses(groupId);
+    });

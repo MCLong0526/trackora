@@ -51,9 +51,20 @@ class DashboardScreen extends ConsumerWidget {
       orElse: () => groups.isNotEmpty ? groups.first : null,
     );
 
-    if (activeGroupId == null && groups.isNotEmpty) {
+    if (groups.isEmpty && mode == HomeMode.group) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = null;
+        ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+      });
+    } else if (activeGroupId == null && groups.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeGroupIdProvider.notifier).state = groups.first.id;
+      });
+    } else if (activeGroupId != null &&
+        groups.isNotEmpty &&
+        activeGroup?.id != activeGroupId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = activeGroup?.id;
       });
     }
 

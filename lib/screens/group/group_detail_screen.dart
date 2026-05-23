@@ -35,8 +35,11 @@ class GroupDetailScreen extends ConsumerWidget {
             leading: CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: () => Navigator.pop(context),
-              child: Icon(CupertinoIcons.chevron_back,
-                  color: AppActionBlue.color, size: 20),
+              child: Icon(
+                CupertinoIcons.chevron_back,
+                color: AppActionBlue.color,
+                size: 20,
+              ),
             ),
             title: Text(
               group.name,
@@ -51,8 +54,11 @@ class GroupDetailScreen extends ConsumerWidget {
               CupertinoButton(
                 padding: const EdgeInsets.only(right: 8),
                 onPressed: () => _showOptions(context, ref, brand, user?.uid),
-                child: Icon(CupertinoIcons.ellipsis_circle,
-                    color: AppActionBlue.color, size: 22),
+                child: Icon(
+                  CupertinoIcons.ellipsis_circle,
+                  color: AppActionBlue.color,
+                  size: 22,
+                ),
               ),
             ],
           ),
@@ -63,17 +69,20 @@ class GroupDetailScreen extends ConsumerWidget {
             ),
             error: (e, _) => SliverFillRemaining(
               child: Center(
-                child: Text('Error loading expenses',
-                    style: TextStyle(color: brand.inkSoft)),
+                child: Text(
+                  'Error loading expenses',
+                  style: TextStyle(color: brand.inkSoft),
+                ),
               ),
             ),
             data: (expenses) {
               final service = ref.read(expenseGroupServiceProvider);
-              final balances =
-                  service.computeBalances(group.members, expenses);
+              final balances = service.computeBalances(group.members, expenses);
               final settlements = service.computeSettlement(balances);
               final totalSpent = expenses.fold<double>(
-                  0, (s, e) => s + e.amount);
+                0,
+                (s, e) => s + e.amount,
+              );
 
               return SliverList(
                 delegate: SliverChildListDelegate([
@@ -88,23 +97,28 @@ class GroupDetailScreen extends ConsumerWidget {
 
                   // Members section
                   _SectionHeader(
-                      brand: brand, title: context.t('group.members')),
+                    brand: brand,
+                    title: context.t('group.members'),
+                  ),
                   _MembersSection(
-                      brand: brand,
-                      balances: balances,
-                      symbol: symbol,
-                      userId: user?.uid),
+                    brand: brand,
+                    balances: balances,
+                    symbol: symbol,
+                    userId: user?.uid,
+                  ),
 
                   // Settlement
                   if (settlements.isNotEmpty) ...[
                     _SectionHeader(
-                        brand: brand,
-                        title: context.t('travel.settlement')),
+                      brand: brand,
+                      title: context.t('travel.settlement'),
+                    ),
                     _SettlementSection(
-                        brand: brand,
-                        settlements: settlements,
-                        symbol: symbol,
-                        userId: user?.uid),
+                      brand: brand,
+                      settlements: settlements,
+                      symbol: symbol,
+                      userId: user?.uid,
+                    ),
                   ],
 
                   // Expenses
@@ -113,24 +127,30 @@ class GroupDetailScreen extends ConsumerWidget {
                     title: context.t('travel.expenses'),
                     action: TextButton.icon(
                       onPressed: () => _addExpense(context, ref),
-                      icon: const Icon(CupertinoIcons.add,
-                          color: AppActionBlue.color, size: 16),
+                      icon: const Icon(
+                        CupertinoIcons.add,
+                        color: AppActionBlue.color,
+                        size: 16,
+                      ),
                       label: Text(
                         context.t('group.addExpense'),
                         style: const TextStyle(
-                            color: AppActionBlue.color, fontSize: 14),
+                          color: AppActionBlue.color,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),
                   if (expenses.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 24),
+                        horizontal: 16,
+                        vertical: 24,
+                      ),
                       child: Center(
                         child: Text(
                           context.t('travel.noExpenses'),
-                          style: TextStyle(
-                              color: brand.inkSoft, fontSize: 14),
+                          style: TextStyle(color: brand.inkSoft, fontSize: 14),
                         ),
                       ),
                     )
@@ -165,9 +185,7 @@ class GroupDetailScreen extends ConsumerWidget {
   void _addExpense(BuildContext context, WidgetRef ref) {
     Navigator.push(
       context,
-      CupertinoPageRoute(
-        builder: (_) => AddGroupExpenseScreen(group: group),
-      ),
+      CupertinoPageRoute(builder: (_) => AddGroupExpenseScreen(group: group)),
     );
   }
 
@@ -175,14 +193,16 @@ class GroupDetailScreen extends ConsumerWidget {
     Navigator.push(
       context,
       CupertinoPageRoute(
-        builder: (_) =>
-            AddGroupExpenseScreen(group: group, existing: expense),
+        builder: (_) => AddGroupExpenseScreen(group: group, existing: expense),
       ),
     );
   }
 
   Future<void> _deleteExpense(
-      BuildContext context, WidgetRef ref, GroupExpenseItem expense) async {
+    BuildContext context,
+    WidgetRef ref,
+    GroupExpenseItem expense,
+  ) async {
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (_) => CupertinoAlertDialog(
@@ -204,7 +224,8 @@ class GroupDetailScreen extends ConsumerWidget {
     );
     if (confirmed == true) {
       try {
-        await ref.read(expenseGroupServiceProvider)
+        await ref
+            .read(expenseGroupServiceProvider)
             .deleteExpense(expense.groupId, expense.id);
         if (context.mounted) AppToast.show(context, 'Expense deleted');
       } catch (e) {
@@ -214,7 +235,11 @@ class GroupDetailScreen extends ConsumerWidget {
   }
 
   void _showOptions(
-      BuildContext context, WidgetRef ref, BrandColors brand, String? userId) {
+    BuildContext context,
+    WidgetRef ref,
+    BrandColors brand,
+    String? userId,
+  ) {
     showCupertinoModalPopup(
       context: context,
       builder: (_) => CupertinoActionSheet(
@@ -241,7 +266,8 @@ class GroupDetailScreen extends ConsumerWidget {
                   builder: (_) => CupertinoAlertDialog(
                     title: Text(context.t('group.deleteGroup')),
                     content: const Text(
-                        'This will remove all expenses. This cannot be undone.'),
+                      'This will remove all expenses. This cannot be undone.',
+                    ),
                     actions: [
                       CupertinoDialogAction(
                         isDefaultAction: true,
@@ -261,6 +287,10 @@ class GroupDetailScreen extends ConsumerWidget {
                     await ref
                         .read(expenseGroupServiceProvider)
                         .deleteGroup(group.id);
+                    ref.read(removedExpenseGroupIdsProvider.notifier).state = {
+                      ...ref.read(removedExpenseGroupIdsProvider),
+                      group.id,
+                    };
                     ref.read(activeGroupIdProvider.notifier).state = null;
                     ref.read(homeModeProvider.notifier).state =
                         HomeMode.personal;
@@ -306,9 +336,9 @@ class _SummaryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myBalance = balances.cast<dynamic>().firstWhere(
-          (b) => b.uid == userId,
-          orElse: () => null,
-        );
+      (b) => b.uid == userId,
+      orElse: () => null,
+    );
     final myNet = myBalance?.net as double? ?? 0;
 
     return Container(
@@ -326,8 +356,7 @@ class _SummaryHeader extends StatelessWidget {
               children: [
                 Text(
                   context.t('group.totalSpent'),
-                  style: TextStyle(
-                      color: brand.inkSoft, fontSize: 12),
+                  style: TextStyle(color: brand.inkSoft, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -354,8 +383,7 @@ class _SummaryHeader extends StatelessWidget {
                 children: [
                   Text(
                     myNet >= 0 ? 'You\'re owed' : context.t('group.youOwe'),
-                    style: TextStyle(
-                        color: brand.inkSoft, fontSize: 12),
+                    style: TextStyle(color: brand.inkSoft, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -381,11 +409,7 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final Widget? action;
 
-  const _SectionHeader({
-    required this.brand,
-    required this.title,
-    this.action,
-  });
+  const _SectionHeader({required this.brand, required this.title, this.action});
 
   @override
   Widget build(BuildContext context) {
@@ -436,10 +460,11 @@ class _MembersSection extends StatelessWidget {
           for (int i = 0; i < balances.length; i++) ...[
             if (i > 0)
               Divider(
-                  height: 1,
-                  thickness: 0.5,
-                  indent: 16,
-                  color: brand.divider),
+                height: 1,
+                thickness: 0.5,
+                indent: 16,
+                color: brand.divider,
+              ),
             _MemberRow(
               brand: brand,
               balance: balances[i],
@@ -469,8 +494,7 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final net = balance.net as double;
-    final name =
-        (balance.displayName as String) + (isMe ? ' (you)' : '');
+    final name = (balance.displayName as String) + (isMe ? ' (you)' : '');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -485,9 +509,7 @@ class _MemberRow extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                (balance.displayName as String)
-                    .substring(0, 1)
-                    .toUpperCase(),
+                (balance.displayName as String).substring(0, 1).toUpperCase(),
                 style: const TextStyle(
                   color: AppActionBlue.color,
                   fontWeight: FontWeight.w700,
@@ -501,17 +523,17 @@ class _MemberRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: TextStyle(
-                      color: brand.ink,
-                      fontSize: 15,
-                      fontWeight:
-                          isMe ? FontWeight.w600 : FontWeight.w400,
-                    )),
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: brand.ink,
+                    fontSize: 15,
+                    fontWeight: isMe ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
                 Text(
                   'Paid $symbol${(balance.totalPaid as double).toStringAsFixed(2)}',
-                  style: TextStyle(
-                      color: brand.inkSoft, fontSize: 12),
+                  style: TextStyle(color: brand.inkSoft, fontSize: 12),
                 ),
               ],
             ),
@@ -520,14 +542,14 @@ class _MemberRow extends StatelessWidget {
             net == 0
                 ? context.t('group.settled')
                 : net > 0
-                    ? '+$symbol${net.toStringAsFixed(2)}'
-                    : '-$symbol${net.abs().toStringAsFixed(2)}',
+                ? '+$symbol${net.toStringAsFixed(2)}'
+                : '-$symbol${net.abs().toStringAsFixed(2)}',
             style: TextStyle(
               color: net == 0
                   ? brand.inkSoft
                   : net > 0
-                      ? Colors.green
-                      : Colors.red,
+                  ? Colors.green
+                  : Colors.red,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -589,15 +611,13 @@ class _SettlementSection extends StatelessWidget {
                   Expanded(
                     child: Text.rich(
                       TextSpan(
-                        style: TextStyle(
-                            color: brand.ink, fontSize: 14),
+                        style: TextStyle(color: brand.ink, fontSize: 14),
                         children: [
                           TextSpan(
                             text: tx.fromUid == userId
                                 ? 'You'
                                 : tx.fromName as String,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const TextSpan(text: ' → '),
                           TextSpan(
@@ -666,10 +686,11 @@ class _ExpensesCard extends StatelessWidget {
           for (int i = 0; i < expenses.length; i++) ...[
             if (i > 0)
               Divider(
-                  height: 1,
-                  thickness: 0.5,
-                  indent: 16,
-                  color: brand.divider),
+                height: 1,
+                thickness: 0.5,
+                indent: 16,
+                color: brand.divider,
+              ),
             _ExpenseRow(
               brand: brand,
               expense: expenses[i],
@@ -749,8 +770,7 @@ class _ExpenseRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '$dateStr · Paid by ${isMine ? 'you' : paidByName}',
-                    style: TextStyle(
-                        color: brand.inkSoft, fontSize: 12),
+                    style: TextStyle(color: brand.inkSoft, fontSize: 12),
                   ),
                 ],
               ),
@@ -769,8 +789,7 @@ class _ExpenseRow extends StatelessWidget {
                 if (expense.splitBetween.isNotEmpty)
                   Text(
                     '$symbol${perPerson.toStringAsFixed(2)}/each',
-                    style: TextStyle(
-                        color: brand.inkSoft, fontSize: 11),
+                    style: TextStyle(color: brand.inkSoft, fontSize: 11),
                   ),
               ],
             ),
