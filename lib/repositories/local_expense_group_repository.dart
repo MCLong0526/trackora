@@ -27,10 +27,12 @@ class LocalExpenseGroupRepository implements ExpenseGroupRepository {
   List<ExpenseGroup> _readGroups(String userId) {
     return _groups.values
         .whereType<Map>()
-        .map((m) => ExpenseGroup.fromMap(
-              Map<String, dynamic>.from(m),
-              id: m['id'] as String,
-            ))
+        .map(
+          (m) => ExpenseGroup.fromMap(
+            Map<String, dynamic>.from(m),
+            id: m['id'] as String,
+          ),
+        )
         .where((g) => g.memberUids.contains(userId))
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -53,13 +55,13 @@ class LocalExpenseGroupRepository implements ExpenseGroupRepository {
   @override
   Future<void> deleteGroup(String groupId) async {
     await LocalStorage.init();
-    await _groups.delete(groupId);
     final keys = _items.keys
         .where((k) => k.toString().startsWith('${groupId}_'))
         .toList();
     for (final k in keys) {
       await _items.delete(k);
     }
+    await _groups.delete(groupId);
   }
 
   // ── Expenses ─────────────────────────────────────────────────────────────────

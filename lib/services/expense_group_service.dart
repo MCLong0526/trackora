@@ -124,7 +124,7 @@ class ExpenseGroupService {
     return data['groupId'] as String?;
   }
 
-  Future<void> joinGroup({
+  Future<String> joinGroup({
     required String rawCode,
     required String userId,
     required String displayName,
@@ -144,6 +144,7 @@ class ExpenseGroupService {
     );
     await _repo.addMemberToGroup(groupId, member);
     await _repo.markInviteUsed(hashed);
+    return groupId;
   }
 
   // ── Expenses ─────────────────────────────────────────────────────────────────

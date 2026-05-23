@@ -33,14 +33,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         groupName: 'Our Group',
         currency: currency,
       );
+      ref.read(removedExpenseGroupIdsProvider.notifier).state = {
+        ...ref.read(removedExpenseGroupIdsProvider),
+      }..remove(id);
       ref.read(activeGroupIdProvider.notifier).state = id;
       ref.read(homeModeProvider.notifier).state = HomeMode.group;
       // Find the newly created group
       final groups = ref.read(myGroupsProvider).valueOrNull ?? [];
       final group = groups.cast<dynamic>().firstWhere(
-            (g) => g.id == id,
-            orElse: () => null,
-          );
+        (g) => g.id == id,
+        orElse: () => null,
+      );
       if (!mounted) return;
       if (group != null) {
         Navigator.pushReplacement(
@@ -245,7 +248,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
@@ -282,8 +287,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   borderRadius: BorderRadius.circular(18),
                   onPressed: _creating ? null : _createInvite,
                   child: _creating
-                      ? const CupertinoActivityIndicator(
-                          color: Colors.white)
+                      ? const CupertinoActivityIndicator(color: Colors.white)
                       : const Text(
                           'Create invite',
                           style: TextStyle(
@@ -372,10 +376,7 @@ class _FeaturePill extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: dotColor,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
         ),
         const SizedBox(width: 10),
         Expanded(

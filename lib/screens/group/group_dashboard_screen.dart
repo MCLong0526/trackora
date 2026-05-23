@@ -31,7 +31,12 @@ class GroupDashboardScreen extends ConsumerWidget {
     final groups = groupsAsync.valueOrNull ?? const [];
 
     // Auto-select first group if active is null
-    if (activeGroupId == null && groups.isNotEmpty) {
+    if (groups.isEmpty && ref.watch(homeModeProvider) == HomeMode.group) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = null;
+        ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+      });
+    } else if (activeGroupId == null && groups.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeGroupIdProvider.notifier).state = groups.first.id;
       });
@@ -41,6 +46,13 @@ class GroupDashboardScreen extends ConsumerWidget {
       (g) => g?.id == activeGroupId,
       orElse: () => groups.isNotEmpty ? groups.first : null,
     );
+    if (activeGroupId != null &&
+        groups.isNotEmpty &&
+        activeGroup?.id != activeGroupId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = activeGroup?.id;
+      });
+    }
 
     return SafeArea(
       child: Column(
@@ -124,8 +136,10 @@ class GroupAvatarPill extends StatelessWidget {
     final me = group?.members.where((m) => m.uid == userId).firstOrNull;
     final partner = group?.members.where((m) => m.uid != userId).firstOrNull;
     final myInitial = (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
-    final partnerInitial = (partner?.displayName.substring(0, 1) ?? 'J')
-        .toUpperCase();
+    final hasPartner = partner != null;
+    final partnerInitial = hasPartner
+        ? partner.displayName.substring(0, 1).toUpperCase()
+        : null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
@@ -143,35 +157,42 @@ class GroupAvatarPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Overlapping avatars
-          SizedBox(
-            width: 46,
-            height: 28,
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 0,
-                  child: _MiniAvatar(
-                    letter: myInitial,
-                    bg: const Color(0xFFEAE3F8),
-                    fg: const Color(0xFF5A4AAB),
-                    size: 28,
+          if (hasPartner)
+            SizedBox(
+              width: 46,
+              height: 28,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    child: _MiniAvatar(
+                      letter: myInitial,
+                      bg: const Color(0xFFEAE3F8),
+                      fg: const Color(0xFF5A4AAB),
+                      size: 28,
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: 18,
-                  child: _MiniAvatar(
-                    letter: partnerInitial,
-                    bg: const Color(0xFFD7F4E5),
-                    fg: const Color(0xFF1FBE71),
-                    size: 28,
+                  Positioned(
+                    left: 18,
+                    child: _MiniAvatar(
+                      letter: partnerInitial!,
+                      bg: const Color(0xFFD7F4E5),
+                      fg: const Color(0xFF1FBE71),
+                      size: 28,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            )
+          else
+            _MiniAvatar(
+              letter: myInitial,
+              bg: const Color(0xFFEAE3F8),
+              fg: const Color(0xFF5A4AAB),
+              size: 28,
             ),
-          ),
           const SizedBox(width: 6),
-          Icon(
+          const Icon(
             CupertinoIcons.chevron_down,
             size: 13,
             color: const Color(0xFF8E8E96),
@@ -1286,13 +1307,11 @@ class _GroupMenuSheet extends ConsumerWidget {
                     actions: [
                       CupertinoDialogAction(
                         isDestructiveAction: true,
-                        onPressed: () =>
-                            Navigator.pop(dialogCtx, true),
+                        onPressed: () => Navigator.pop(dialogCtx, true),
                         child: const Text('Leave'),
                       ),
                       CupertinoDialogAction(
-                        onPressed: () =>
-                            Navigator.pop(dialogCtx, false),
+                        onPressed: () => Navigator.pop(dialogCtx, false),
                         child: const Text('Cancel'),
                       ),
                     ],
@@ -1300,10 +1319,15 @@ class _GroupMenuSheet extends ConsumerWidget {
                 );
                 if (confirmed == true && userId != null) {
                   void clearGroupState() {
+                    ref.read(removedExpenseGroupIdsProvider.notifier).state = {
+                      ...ref.read(removedExpenseGroupIdsProvider),
+                      group.id,
+                    };
                     ref.read(activeGroupIdProvider.notifier).state = null;
                     ref.read(homeModeProvider.notifier).state =
                         HomeMode.personal;
                   }
+
                   try {
                     final service = ref.read(expenseGroupServiceProvider);
                     await service.leaveGroup(group.id, userId!);
@@ -1362,13 +1386,11 @@ class _GroupMenuSheet extends ConsumerWidget {
                       actions: [
                         CupertinoDialogAction(
                           isDestructiveAction: true,
-                          onPressed: () =>
-                              Navigator.pop(dialogCtx, true),
+                          onPressed: () => Navigator.pop(dialogCtx, true),
                           child: const Text('Delete'),
                         ),
                         CupertinoDialogAction(
-                          onPressed: () =>
-                              Navigator.pop(dialogCtx, false),
+                          onPressed: () => Navigator.pop(dialogCtx, false),
                           child: const Text('Cancel'),
                         ),
                       ],
@@ -1377,12 +1399,16 @@ class _GroupMenuSheet extends ConsumerWidget {
                   if (confirmed == true) {
                     void clearGroupState() {
                       ref
-                          .read(activeGroupIdProvider.notifier)
-                          .state = null;
-                      ref
-                          .read(homeModeProvider.notifier)
-                          .state = HomeMode.personal;
+                          .read(removedExpenseGroupIdsProvider.notifier)
+                          .state = {
+                        ...ref.read(removedExpenseGroupIdsProvider),
+                        group.id,
+                      };
+                      ref.read(activeGroupIdProvider.notifier).state = null;
+                      ref.read(homeModeProvider.notifier).state =
+                          HomeMode.personal;
                     }
+
                     try {
                       final service = ref.read(expenseGroupServiceProvider);
                       await service.deleteGroup(group.id);

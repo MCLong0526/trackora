@@ -150,11 +150,7 @@ class SettingsScreen extends ConsumerWidget {
 
             // ── Expense Cycle ────────────────────────────────────
             _GroupHeader(label: context.t('settings.expenseCycle')),
-            _GroupCard(
-              children: [
-                const _ExpenseCycleSection(),
-              ],
-            ),
+            _GroupCard(children: [const _ExpenseCycleSection()]),
 
             const SizedBox(height: 22),
 
@@ -253,10 +249,13 @@ class SettingsScreen extends ConsumerWidget {
                       backgroundColor: Colors.transparent,
                       builder: (_) => _DeleteAccountSheet(
                         authService: ref.read(authServiceProvider),
-                        onDeleted: () => rootNavKey.currentState?.pushAndRemoveUntil(
-                          CupertinoPageRoute(builder: (_) => const WelcomeScreen()),
-                          (route) => false,
-                        ),
+                        onDeleted: () =>
+                            rootNavKey.currentState?.pushAndRemoveUntil(
+                              CupertinoPageRoute(
+                                builder: (_) => const WelcomeScreen(),
+                              ),
+                              (route) => false,
+                            ),
                       ),
                     ),
                   ),
@@ -1538,7 +1537,11 @@ class _ExpenseCycleSection extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 14,
+                      color: brand.inkSoft,
+                    ),
                   ],
                 ),
               ),
@@ -1549,7 +1552,11 @@ class _ExpenseCycleSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickCycleDay(BuildContext context, WidgetRef ref, int current) async {
+  Future<void> _pickCycleDay(
+    BuildContext context,
+    WidgetRef ref,
+    int current,
+  ) async {
     final brand = context.brand;
     int selected = current;
     await showModalBottomSheet<void>(
@@ -1615,17 +1622,16 @@ class _ExpenseCycleSection extends ConsumerWidget {
                         itemExtent: 40,
                         onSelectedItemChanged: (i) {
                           selected = i + 1;
-                          ref.read(cycleDayStartProvider.notifier).set(selected);
+                          ref
+                              .read(cycleDayStartProvider.notifier)
+                              .set(selected);
                         },
                         children: List.generate(
                           28,
                           (i) => Center(
                             child: Text(
                               '${i + 1}',
-                              style: TextStyle(
-                                fontSize: 20,
-                                color: brand.ink,
-                              ),
+                              style: TextStyle(fontSize: 20, color: brand.ink),
                             ),
                           ),
                         ),
@@ -1791,10 +1797,14 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return context.t('settings.justNow');
     if (diff.inMinutes < 60) {
-      return context.t('settings.minutesAgo').replaceAll('{m}', '${diff.inMinutes}');
+      return context
+          .t('settings.minutesAgo')
+          .replaceAll('{m}', '${diff.inMinutes}');
     }
     if (diff.inHours < 24) {
-      return context.t('settings.hoursAgo').replaceAll('{h}', '${diff.inHours}');
+      return context
+          .t('settings.hoursAgo')
+          .replaceAll('{h}', '${diff.inHours}');
     }
     return context.t('settings.daysAgo').replaceAll('{d}', '${diff.inDays}');
   }
@@ -2639,7 +2649,10 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
   }
 
   Future<void> _attemptDelete() async {
-    setState(() { _step = _DeleteStep.loading; _error = null; });
+    setState(() {
+      _step = _DeleteStep.loading;
+      _error = null;
+    });
     try {
       await widget.authService.deleteAccount();
       if (mounted) {
@@ -2731,7 +2744,10 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
   Future<void> _reauthPasswordAndDelete() async {
     final password = _passwordCtrl.text;
     if (password.isEmpty) return;
-    setState(() { _step = _DeleteStep.loading; _error = null; });
+    setState(() {
+      _step = _DeleteStep.loading;
+      _error = null;
+    });
     try {
       await widget.authService.reauthWithPassword(password);
       await widget.authService.deleteAccount();
@@ -2883,10 +2899,7 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
               onPressed: () => Navigator.pop(context),
               child: Text(
                 context.t('common.cancel'),
-                style: TextStyle(
-                  fontSize: 17,
-                  color: brand.inkSoft,
-                ),
+                style: TextStyle(fontSize: 17, color: brand.inkSoft),
               ),
             ),
           ] else ...[
@@ -2959,10 +2972,7 @@ class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
               onPressed: () => Navigator.pop(context),
               child: Text(
                 context.t('common.cancel'),
-                style: TextStyle(
-                  fontSize: 17,
-                  color: brand.inkSoft,
-                ),
+                style: TextStyle(fontSize: 17, color: brand.inkSoft),
               ),
             ),
           ],
@@ -3120,17 +3130,16 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                         builder: (dialogCtx) => CupertinoAlertDialog(
                           title: const Text('Leave Group?'),
                           content: const Text(
-                              'You will leave your shared group expenses.'),
+                            'You will leave your shared group expenses.',
+                          ),
                           actions: [
                             CupertinoDialogAction(
                               isDestructiveAction: true,
-                              onPressed: () =>
-                                  Navigator.pop(dialogCtx, true),
+                              onPressed: () => Navigator.pop(dialogCtx, true),
                               child: const Text('Leave'),
                             ),
                             CupertinoDialogAction(
-                              onPressed: () =>
-                                  Navigator.pop(dialogCtx, false),
+                              onPressed: () => Navigator.pop(dialogCtx, false),
                               child: const Text('Cancel'),
                             ),
                           ],
@@ -3141,12 +3150,16 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                         if (u == null || groups.isEmpty) return;
                         void clearGroupState() {
                           ref
-                              .read(activeGroupIdProvider.notifier)
-                              .state = null;
-                          ref
-                              .read(homeModeProvider.notifier)
-                              .state = HomeMode.personal;
+                              .read(removedExpenseGroupIdsProvider.notifier)
+                              .state = {
+                            ...ref.read(removedExpenseGroupIdsProvider),
+                            groups.first.id,
+                          };
+                          ref.read(activeGroupIdProvider.notifier).state = null;
+                          ref.read(homeModeProvider.notifier).state =
+                              HomeMode.personal;
                         }
+
                         try {
                           await ref
                               .read(expenseGroupServiceProvider)
@@ -3166,8 +3179,7 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                             }
                           } else {
                             if (context.mounted) {
-                              AppToast.show(
-                                  context, 'Failed to leave group');
+                              AppToast.show(context, 'Failed to leave group');
                             }
                           }
                         } catch (_) {
@@ -3185,10 +3197,7 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
         ),
         // Expanded partner card when connected
         if (isConnected)
-          _GroupPartnerTile(
-            group: groups.first,
-            userId: user?.uid,
-          ),
+          _GroupPartnerTile(group: groups.first, userId: user?.uid),
       ],
     );
   }
@@ -3208,26 +3217,23 @@ class _GroupPartnerTile extends ConsumerWidget {
         ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? const [];
     final expenseCount = expenses.length;
 
-    final partner =
-        group.members.where((m) => m.uid != userId).firstOrNull;
+    final partner = group.members.where((m) => m.uid != userId).firstOrNull;
     final partnerName = partner?.displayName ?? 'Partner';
-    final partnerInitial =
-        partnerName.isNotEmpty ? partnerName[0].toUpperCase() : 'P';
+    final partnerInitial = partnerName.isNotEmpty
+        ? partnerName[0].toUpperCase()
+        : 'P';
 
-    final userMember =
-        group.members.where((m) => m.uid == userId).firstOrNull;
-    final userInitial =
-        (userMember?.displayName.isNotEmpty == true)
-            ? userMember!.displayName[0].toUpperCase()
-            : 'Y';
+    final userMember = group.members.where((m) => m.uid == userId).firstOrNull;
+    final userInitial = (userMember?.displayName.isNotEmpty == true)
+        ? userMember!.displayName[0].toUpperCase()
+        : 'Y';
 
     final sinceDate = DateFormat('MMM d').format(group.createdAt);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFFF7F7FA),
           borderRadius: BorderRadius.circular(16),
@@ -3251,8 +3257,7 @@ class _GroupPartnerTile extends ConsumerWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: Colors.white, width: 1.5),
+                        border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       child: _SettingsAvatar(
                         initial: partnerInitial,
@@ -3281,10 +3286,7 @@ class _GroupPartnerTile extends ConsumerWidget {
                   Text(
                     'Since $sinceDate · $expenseCount shared '
                     '${expenseCount == 1 ? 'expense' : 'expenses'}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: brand.inkSoft,
-                    ),
+                    style: TextStyle(fontSize: 12, color: brand.inkSoft),
                   ),
                 ],
               ),
@@ -3293,14 +3295,14 @@ class _GroupPartnerTile extends ConsumerWidget {
             GestureDetector(
               onTap: () {
                 ref.read(activeGroupIdProvider.notifier).state = group.id;
-                ref.read(homeModeProvider.notifier).state =
-                    HomeMode.group;
-                Navigator.of(context)
-                    .popUntil((route) => route.isFirst);
+                ref.read(homeModeProvider.notifier).state = HomeMode.group;
+                Navigator.of(context).popUntil((route) => route.isFirst);
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 7),
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
@@ -3333,8 +3335,11 @@ class _SettingsAvatar extends StatelessWidget {
   final String initial;
   final Color bg;
   final Color fg;
-  const _SettingsAvatar(
-      {required this.initial, required this.bg, required this.fg});
+  const _SettingsAvatar({
+    required this.initial,
+    required this.bg,
+    required this.fg,
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -137,11 +137,7 @@ class _AddGroupExpenseScreenState
       AppToast.show(context, context.t('validation.invalidAmount'));
       return;
     }
-    final desc = _descCtrl.text.trim();
-    if (desc.isEmpty) {
-      AppToast.show(context, 'Enter a description');
-      return;
-    }
+    final desc = _descCtrl.text.trim().isEmpty ? _category : _descCtrl.text.trim();
     if (_paidByUid == null) {
       AppToast.show(context, 'Select who paid');
       return;
