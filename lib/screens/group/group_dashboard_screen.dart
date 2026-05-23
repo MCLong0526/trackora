@@ -1346,6 +1346,85 @@ class _GroupMenuSheet extends ConsumerWidget {
               ),
             ),
           ),
+          // Delete group button — owner only
+          if (userId == group.createdBy) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFFFFEEEE),
+                borderRadius: BorderRadius.circular(14),
+                onPressed: () async {
+                  final confirmed = await showCupertinoDialog<bool>(
+                    context: context,
+                    builder: (dialogCtx) => CupertinoAlertDialog(
+                      title: const Text('Delete group?'),
+                      content: const Text(
+                        'This will permanently delete the group and all its expenses for everyone.',
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          onPressed: () =>
+                              Navigator.pop(dialogCtx, true),
+                          child: const Text('Delete'),
+                        ),
+                        CupertinoDialogAction(
+                          onPressed: () =>
+                              Navigator.pop(dialogCtx, false),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    if (context.mounted) Navigator.pop(context);
+                    void clearGroupState() {
+                      ref
+                          .read(activeGroupIdProvider.notifier)
+                          .state = null;
+                      ref
+                          .read(homeModeProvider.notifier)
+                          .state = HomeMode.personal;
+                    }
+                    try {
+                      final service = ref.read(expenseGroupServiceProvider);
+                      await service.deleteGroup(group.id);
+                      clearGroupState();
+                      if (context.mounted) {
+                        AppToast.show(context, 'Group deleted');
+                      }
+                    } on FirebaseException catch (e) {
+                      if (e.code == 'not-found' ||
+                          e.code == 'permission-denied') {
+                        clearGroupState();
+                        if (context.mounted) {
+                          AppToast.show(context, 'Group deleted');
+                        }
+                      } else {
+                        if (context.mounted) {
+                          AppToast.show(context, 'Failed to delete group');
+                        }
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        AppToast.show(context, 'Failed to delete group');
+                      }
+                    }
+                  }
+                },
+                child: const Text(
+                  'Delete group',
+                  style: TextStyle(
+                    color: Color(0xFFD93025),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
