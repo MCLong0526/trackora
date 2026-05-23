@@ -71,6 +71,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   final Map<String, double> _percents = {}; // raw percent values 0-100
   final Map<String, double> _shares = {}; // raw share counts
 
+  /// IDs of members whose value was manually typed — they are never
+  /// overwritten when another member's value changes.
+  final Set<String> _lockedIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -178,21 +182,45 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     }
   }
 
-  /// When user edits one member's percent, distribute the remainder equally
-  /// among all other members and refresh their controllers.
+  /// When user edits one member's amount, lock that member and distribute
+  /// the remainder only among unlocked members.
+  void _onAmountChanged(SplitMember edited, double newAmount) {
+    setState(() {
+      _lockedIds.add(edited.id);
+      edited.amount = newAmount.clamp(0, double.infinity);
+      final free = _members
+          .where((m) => m.id != edited.id && !_lockedIds.contains(m.id))
+          .toList();
+      if (free.isEmpty) return;
+      final lockedSum = _members
+          .where((m) => _lockedIds.contains(m.id))
+          .fold<double>(0, (s, m) => s + m.amount);
+      final remaining = (_totalAmount - lockedSum).clamp(0.0, double.infinity);
+      final each = remaining / free.length;
+      for (final m in free) {
+        m.amount = each;
+        _amountCtrls[m.id]?.text = each.toStringAsFixed(2);
+      }
+    });
+  }
+
   void _onPercentChanged(SplitMember edited, double newPct) {
     setState(() {
+      _lockedIds.add(edited.id);
       _percents[edited.id] = newPct;
       edited.amount = _totalAmount * (newPct / 100.0);
-
-      final others = _members.where((m) => m.id != edited.id).toList();
-      if (others.isEmpty) return;
-      final remaining = (100.0 - newPct).clamp(0.0, 100.0);
-      final each = remaining / others.length;
-      for (final m in others) {
+      final free = _members
+          .where((m) => m.id != edited.id && !_lockedIds.contains(m.id))
+          .toList();
+      if (free.isEmpty) return;
+      final lockedSum = _members
+          .where((m) => _lockedIds.contains(m.id))
+          .fold<double>(0, (s, m) => s + (_percents[m.id] ?? 0));
+      final remaining = (100.0 - lockedSum).clamp(0.0, 100.0);
+      final each = remaining / free.length;
+      for (final m in free) {
         _percents[m.id] = each;
         m.amount = _totalAmount * (each / 100.0);
-        // Refresh controller text
         _percentCtrls[m.id]?.text = each.toStringAsFixed(1);
       }
     });
@@ -224,12 +252,15 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
 
     String? name;
     int? colorIdx;
+    String? emoji;
     if (result is Person) {
       name = result.name;
       colorIdx = result.colorIndex;
+      emoji = result.emoji;
     } else if (result is Map<String, dynamic>) {
       name = result['name'] as String?;
       colorIdx = result['colorIndex'] as int?;
+      emoji = result['emoji'] as String?;
     }
     if (name == null || name.trim().isEmpty) return;
 
@@ -247,13 +278,18 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           id: newId,
           name: name!,
           colorIndex: colorIdx ?? personColorIndex(name),
+          emoji: emoji,
           amount: 0,
         ),
       );
+      _lockedIds.clear();
       final n = _members.length;
+      final each = _totalAmount / n;
       for (final m in _members) {
+        m.amount = each;
         _percents[m.id] = 100.0 / n;
         _shares[m.id] = 1.0;
+        _amountCtrls[m.id]?.text = each.toStringAsFixed(2);
         _percentCtrls[m.id]?.text = (100.0 / n).toStringAsFixed(1);
         _sharesCtrls[m.id]?.text = '1';
       }
@@ -269,13 +305,17 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       _sharesCtrls.remove(m.id)?.dispose();
       _percents.remove(m.id);
       _shares.remove(m.id);
+      _lockedIds.remove(m.id);
       _members.remove(m);
-      // Re-equalise after removal
+      _lockedIds.clear();
       final n = _members.length;
       if (n > 0) {
+        final each = _totalAmount / n;
         for (final member in _members) {
+          member.amount = each;
           _percents[member.id] = 100.0 / n;
           _shares[member.id] = 1.0;
+          _amountCtrls[member.id]?.text = each.toStringAsFixed(2);
           _percentCtrls[member.id]?.text = (100.0 / n).toStringAsFixed(1);
           _sharesCtrls[member.id]?.text = '1';
         }
@@ -621,15 +661,9 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
         child: Row(
           children: _members.map((m) {
             final isPayer = m.isPayer;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                _setPayer(m);
-              },
-              child: Padding(
-                padding: const EdgeInsets.only(right: 20),
-                child: isPayer ? _payerCard(m) : _nonPayerAvatar(m),
-              ),
+            return Padding(
+              padding: const EdgeInsets.only(right: 20),
+              child: isPayer ? _payerCard(m) : _nonPayerAvatarWithActions(m),
             );
           }).toList(),
         ),
@@ -652,6 +686,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             child: PersonAvatar(
               name: m.name,
               colorIndex: m.colorIndex,
+              emoji: m.emoji,
               size: 50,
             ),
           ),
@@ -670,13 +705,55 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     );
   }
 
-  Widget _nonPayerAvatar(SplitMember m) {
+  Widget _nonPayerAvatarWithActions(SplitMember m) {
     return Column(
       children: [
-        PersonAvatar(
-          name: m.name,
-          colorIndex: m.colorIndex,
-          size: 50,
+        SizedBox(
+          width: 58,
+          height: 58,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 4,
+                top: 4,
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _setPayer(m);
+                  },
+                  child: PersonAvatar(
+                    name: m.name,
+                    colorIndex: m.colorIndex,
+                    emoji: m.emoji,
+                    size: 50,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _removeMember(m);
+                  },
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.xmark,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -751,6 +828,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                 FocusScope.of(context).unfocus();
                 setState(() {
                   _mode = modes[i];
+                  _lockedIds.clear();
                   _recalculate();
                 });
               },
@@ -845,6 +923,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             PersonAvatar(
               name: m.name,
               colorIndex: m.colorIndex,
+              emoji: m.emoji,
               size: 42,
             ),
             const SizedBox(width: 14),
@@ -966,7 +1045,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           prefix: widget.currencySymbol,
           onChanged: (v) {
             final val = double.tryParse(v) ?? 0;
-            setState(() => m.amount = val);
+            _onAmountChanged(m, val);
           },
         );
 

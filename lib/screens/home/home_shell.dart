@@ -30,7 +30,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   final _fabKey = GlobalKey<_AddFabState>();
 
   static const _screens = <Widget>[
-    DashboardScreen(),
+    _HomeTabWrapper(),
     StatisticsScreen(),
     BudgetScreen(),
     AssetsScreen(),
@@ -1139,5 +1139,18 @@ class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
         ),
       ),
     );
+  }
+}
+
+// ── Home tab wrapper ─────────────────────────────────────────────────────────
+// Crossfades only the content when switching Personal ↔ Group — no full-screen
+// page swap. Tab transitions still use the outer AnimatedSwitcher in HomeShell.
+
+class _HomeTabWrapper extends ConsumerWidget {
+  const _HomeTabWrapper();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return const DashboardScreen();
   }
 }

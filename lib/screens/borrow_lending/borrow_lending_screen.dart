@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/borrow_lending.dart';
+import '../../models/person.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
@@ -67,6 +68,7 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final async = ref.watch(borrowLendingProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final people = ref.watch(peopleProvider).valueOrNull ?? const [];
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -137,7 +139,14 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
                                 record: filtered[i],
                                 userId: user?.uid,
                                 child: _RecordTile(
-                                    record: filtered[i], symbol: symbol),
+                                  record: filtered[i],
+                                  symbol: symbol,
+                                  matchedPerson: people
+                                      .where((p) =>
+                                          p.name.toLowerCase() ==
+                                          filtered[i].person.toLowerCase())
+                                      .firstOrNull,
+                                ),
                               ),
                             ),
                           ),
@@ -381,7 +390,12 @@ class _FilterChips extends StatelessWidget {
 class _RecordTile extends StatelessWidget {
   final BorrowLending record;
   final String symbol;
-  const _RecordTile({required this.record, required this.symbol});
+  final Person? matchedPerson;
+  const _RecordTile({
+    required this.record,
+    required this.symbol,
+    this.matchedPerson,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -416,9 +430,9 @@ class _RecordTile extends StatelessWidget {
                       clipBehavior: Clip.none,
                       children: [
                         PersonAvatar(
-                          name: record.person.isEmpty
-                              ? '?'
-                              : record.person,
+                          name: record.person.isEmpty ? '?' : record.person,
+                          emoji: matchedPerson?.emoji,
+                          colorIndex: matchedPerson?.colorIndex,
                           size: 44,
                         ),
                         Positioned(

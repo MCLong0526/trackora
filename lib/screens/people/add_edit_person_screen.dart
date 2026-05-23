@@ -205,7 +205,6 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
                           colorIndex: _colorIndex,
                           emoji: _emoji,
                           size: 88,
-                          animated: _emoji != null,
                         ),
                         Positioned(
                           bottom: 0,

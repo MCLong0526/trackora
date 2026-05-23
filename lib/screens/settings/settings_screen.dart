@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/expense_group.dart';
 import '../../services/auth_service.dart';
 import '../../services/currency_converter.dart';
 import '../../services/export_service.dart';
@@ -26,6 +27,7 @@ import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
+import '../group/create_group_screen.dart';
 import '../../main.dart' show rootNavKey;
 
 enum _CsvExportRangeMode { month, all }
@@ -129,6 +131,8 @@ class SettingsScreen extends ConsumerWidget {
                   _GroupDivider(),
                   _LiveActivityToggleTile(currency: symbol),
                 ],
+                _GroupDivider(),
+                const _GroupExpensesToggleTile(),
                 if (email.isNotEmpty && email != localUserEmail) ...[
                   _GroupDivider(),
                   _Tile(
@@ -3031,6 +3035,323 @@ class _Field extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Group Expenses Toggle ─────────────────────────────────────────────────────
+
+class _GroupExpensesToggleTile extends ConsumerWidget {
+  const _GroupExpensesToggleTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final isConnected = groups.isNotEmpty;
+    final user = ref.watch(authStateProvider).valueOrNull;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(14, 12, 14, isConnected ? 8 : 12),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAE3F8),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  CupertinoIcons.person_2_fill,
+                  size: 16,
+                  color: Color(0xFF5A4AAB),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Group Expenses',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: brand.ink,
+                      ),
+                    ),
+                    Text(
+                      isConnected
+                          ? 'Connected · 1 partner'
+                          : 'Track expenses together with a partner',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isConnected
+                            ? const Color(0xFF1FBE71)
+                            : brand.inkSoft,
+                        fontWeight: isConnected
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              CupertinoSwitch(
+                value: isConnected,
+                activeTrackColor: const Color(0xFF1FBE71),
+                onChanged: (value) {
+                  HapticFeedback.selectionClick();
+                  if (value) {
+                    Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => const CreateGroupScreen(),
+                      ),
+                    );
+                  } else {
+                    if (isConnected) {
+                      showCupertinoDialog<bool>(
+                        context: context,
+                        builder: (dialogCtx) => CupertinoAlertDialog(
+                          title: const Text('Leave Group?'),
+                          content: const Text(
+                              'You will leave your shared group expenses.'),
+                          actions: [
+                            CupertinoDialogAction(
+                              isDestructiveAction: true,
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, true),
+                              child: const Text('Leave'),
+                            ),
+                            CupertinoDialogAction(
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, false),
+                              child: const Text('Cancel'),
+                            ),
+                          ],
+                        ),
+                      ).then((confirmed) async {
+                        if (confirmed != true) return;
+                        final u = ref.read(authStateProvider).valueOrNull;
+                        if (u == null || groups.isEmpty) return;
+                        void clearGroupState() {
+                          ref
+                              .read(activeGroupIdProvider.notifier)
+                              .state = null;
+                          ref
+                              .read(homeModeProvider.notifier)
+                              .state = HomeMode.personal;
+                        }
+                        try {
+                          await ref
+                              .read(expenseGroupServiceProvider)
+                              .leaveGroup(groups.first.id, u.uid);
+                          clearGroupState();
+                          if (context.mounted) {
+                            AppToast.show(context, 'Left group');
+                          }
+                        } on FirebaseException catch (e) {
+                          // Treat cache-only ghost groups or stale-rule
+                          // denials as a successful local leave.
+                          if (e.code == 'not-found' ||
+                              e.code == 'permission-denied') {
+                            clearGroupState();
+                            if (context.mounted) {
+                              AppToast.show(context, 'Left group');
+                            }
+                          } else {
+                            if (context.mounted) {
+                              AppToast.show(
+                                  context, 'Failed to leave group');
+                            }
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to leave group');
+                          }
+                        }
+                      });
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        // Expanded partner card when connected
+        if (isConnected)
+          _GroupPartnerTile(
+            group: groups.first,
+            userId: user?.uid,
+          ),
+      ],
+    );
+  }
+}
+
+// ── Partner info tile shown below toggle when connected ───────────────────────
+
+class _GroupPartnerTile extends ConsumerWidget {
+  final ExpenseGroup group;
+  final String? userId;
+  const _GroupPartnerTile({required this.group, this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final expenses =
+        ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? const [];
+    final expenseCount = expenses.length;
+
+    final partner =
+        group.members.where((m) => m.uid != userId).firstOrNull;
+    final partnerName = partner?.displayName ?? 'Partner';
+    final partnerInitial =
+        partnerName.isNotEmpty ? partnerName[0].toUpperCase() : 'P';
+
+    final userMember =
+        group.members.where((m) => m.uid == userId).firstOrNull;
+    final userInitial =
+        (userMember?.displayName.isNotEmpty == true)
+            ? userMember!.displayName[0].toUpperCase()
+            : 'Y';
+
+    final sinceDate = DateFormat('MMM d').format(group.createdAt);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F7FA),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            // Overlapping avatar pair
+            SizedBox(
+              width: 46,
+              height: 32,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _SettingsAvatar(
+                    initial: userInitial,
+                    bg: const Color(0xFFEAE3F8),
+                    fg: const Color(0xFF5A4AAB),
+                  ),
+                  Positioned(
+                    left: 18,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: _SettingsAvatar(
+                        initial: partnerInitial,
+                        bg: const Color(0xFFD7F4E5),
+                        fg: const Color(0xFF1FBE71),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'You & $partnerName',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: brand.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Since $sinceDate · $expenseCount shared '
+                    '${expenseCount == 1 ? 'expense' : 'expenses'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                ref.read(activeGroupIdProvider.notifier).state = group.id;
+                ref.read(homeModeProvider.notifier).state =
+                    HomeMode.group;
+                Navigator.of(context)
+                    .popUntil((route) => route.isFirst);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'Manage',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsAvatar extends StatelessWidget {
+  final String initial;
+  final Color bg;
+  final Color fg;
+  const _SettingsAvatar(
+      {required this.initial, required this.bg, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: fg,
+          ),
+        ),
+      ),
     );
   }
 }

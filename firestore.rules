@@ -89,5 +89,54 @@ service cloud.firestore {
          request.auth.token.email == resource.data.email);
     }
 
+    // ── Expense Groups ────────────────────────────────────────────────────────
+
+    match /groups/{groupId} {
+      // Any authenticated member can read the group document.
+      allow read: if isAuth() &&
+        request.auth.uid in resource.data.memberUids;
+
+      // Only the creator can create the group.
+      allow create: if isAuth() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.auth.uid in request.resource.data.memberUids;
+
+      // Members can update (e.g. adding new members, changing name).
+      // A new joiner is not yet in memberUids, so also allow self-join updates
+      // that only affect members/memberUids/updatedAt.
+      allow update: if isAuth() && (
+        request.auth.uid in resource.data.memberUids ||
+        (request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['members', 'memberUids', 'updatedAt']) &&
+         request.auth.uid in request.resource.data.memberUids)
+      );
+
+      // Only the creator can delete.
+      allow delete: if isAuth() &&
+        resource.data.createdBy == request.auth.uid;
+
+      match /expenses/{expenseId} {
+        allow read, write: if isAuth() &&
+          request.auth.uid in
+            get(/databases/$(database)/documents/groups/$(groupId)).data.memberUids;
+      }
+    }
+
+    // ── Group invite codes (hashed) ───────────────────────────────────────────
+
+    match /groupInvites/{hashedCode} {
+      // Any authenticated user can read (to validate the code).
+      allow read: if isAuth();
+      // Only creator can create.
+      allow create: if isAuth() &&
+        request.resource.data.createdBy == request.auth.uid;
+      // Allow marking used by any authenticated user (the joiner).
+      allow update: if isAuth() &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(['used']);
+      allow delete: if isAuth() &&
+        resource.data.createdBy == request.auth.uid;
+    }
+
   }
 }

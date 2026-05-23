@@ -6,6 +6,7 @@ class SplitMember {
   final String id;
   final String name;
   final int colorIndex;
+  final String? emoji;
   double amount;
   bool isPayer;
   SplitMemberStatus status;
@@ -15,6 +16,7 @@ class SplitMember {
     required this.id,
     required this.name,
     required this.colorIndex,
+    this.emoji,
     required this.amount,
     this.isPayer = false,
     this.status = SplitMemberStatus.pending,
@@ -31,6 +33,7 @@ class SplitMember {
         'id': id,
         'name': name,
         'colorIndex': colorIndex,
+        'emoji': emoji,
         'amount': amount,
         'isPayer': isPayer,
         'status': status.name,
@@ -41,6 +44,7 @@ class SplitMember {
         id: m['id'] as String? ?? '',
         name: m['name'] as String? ?? '',
         colorIndex: (m['colorIndex'] as num?)?.toInt() ?? 0,
+        emoji: m['emoji'] as String?,
         amount: (m['amount'] as num?)?.toDouble() ?? 0.0,
         isPayer: m['isPayer'] as bool? ?? false,
         status: SplitMemberStatus.values.firstWhere(
@@ -61,6 +65,7 @@ class SplitMember {
         id: id,
         name: name ?? this.name,
         colorIndex: colorIndex,
+        emoji: emoji,
         amount: amount ?? this.amount,
         isPayer: isPayer ?? this.isPayer,
         status: status ?? this.status,
