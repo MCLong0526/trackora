@@ -111,9 +111,13 @@ service cloud.firestore {
          request.auth.uid in request.resource.data.memberUids)
       );
 
-      // Only the creator can delete.
-      allow delete: if isAuth() &&
-        resource.data.createdBy == request.auth.uid;
+      // Creator can always delete; last remaining member can also delete
+      // so they aren't stuck with an orphaned group if the creator left first.
+      allow delete: if isAuth() && (
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.memberUids.size() == 1 &&
+         request.auth.uid in resource.data.memberUids)
+      );
 
       match /expenses/{expenseId} {
         allow read, write: if isAuth() &&

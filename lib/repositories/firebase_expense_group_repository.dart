@@ -58,8 +58,13 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
 
   @override
   Future<void> deleteGroup(String groupId) async {
-    await _deleteCollection(_expensesRef(groupId));
-    await _groupsRef.doc(groupId).delete();
+    try {
+      await _deleteCollection(_expensesRef(groupId));
+      await _groupsRef.doc(groupId).delete();
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found' || e.code == 'permission-denied') return;
+      rethrow;
+    }
   }
 
   // ── Expenses ─────────────────────────────────────────────────────────────────
@@ -171,17 +176,22 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
       newMembers.add(_coerceStringKeyedMap(m));
     }
 
-    // No members remain — delete the group entirely so the Firestore stream
-    // emits immediately and the settings toggle flips to off.
+    // No members remain — delete the group so the stream emits empty immediately.
+    // Only the creator can delete per Firestore rules; non-creators fall through
+    // to the memberUids update so the query stops matching and they leave cleanly.
     if (newMembers.isEmpty) {
-      try {
-        await _deleteCollection(_expensesRef(groupId));
-        await docRef.delete();
-      } on FirebaseException catch (e) {
-        if (e.code == 'not-found' || e.code == 'permission-denied') return;
-        rethrow;
+      final isCreator = (data['createdBy'] as String?) == userId;
+      if (isCreator) {
+        try {
+          await _deleteCollection(_expensesRef(groupId));
+          await docRef.delete();
+        } on FirebaseException catch (e) {
+          if (e.code == 'not-found' || e.code == 'permission-denied') return;
+          rethrow;
+        }
+        return;
       }
-      return;
+      // Non-creator: fall through to memberUids update so query stops matching.
     }
 
     try {

@@ -34,6 +34,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         currency: currency,
       );
       ref.read(activeGroupIdProvider.notifier).state = id;
+      ref.read(homeModeProvider.notifier).state = HomeMode.group;
       // Find the newly created group
       final groups = ref.read(myGroupsProvider).valueOrNull ?? [];
       final group = groups.cast<dynamic>().firstWhere(
