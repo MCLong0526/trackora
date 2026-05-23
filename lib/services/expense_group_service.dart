@@ -81,6 +81,9 @@ class ExpenseGroupService {
 
   Future<void> deleteGroup(String groupId) => _repo.deleteGroup(groupId);
 
+  Future<void> leaveGroup(String groupId, String userId) =>
+      _repo.removeMemberFromGroup(groupId, userId);
+
   // ── Invite codes ─────────────────────────────────────────────────────────────
 
   /// Generates a 6-char raw code like `A3X8B2`.

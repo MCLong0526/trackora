@@ -21,4 +21,5 @@ abstract class ExpenseGroupRepository {
   Future<Map<String, dynamic>?> resolveInvite(String hashedCode);
   Future<void> markInviteUsed(String hashedCode);
   Future<void> addMemberToGroup(String groupId, GroupMember member);
+  Future<void> removeMemberFromGroup(String groupId, String userId);
 }

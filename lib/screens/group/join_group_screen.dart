@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -109,12 +108,13 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppToast.show(context, context.t('group.invalidCode'));
-        setState(() {
-          _entered = '';
-          _hiddenController.clear();
-          _joining = false;
-        });
+        final msg = e.toString().contains('expired')
+            ? 'Invite code expired'
+            : e.toString().contains('used')
+                ? 'Invite code already used'
+                : 'Invalid or expired code';
+        AppToast.show(context, msg);
+        setState(() { _entered = ''; _hiddenController.clear(); _joining = false; });
       }
     } finally {
       if (mounted) setState(() => _joining = false);

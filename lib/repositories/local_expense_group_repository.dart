@@ -144,4 +144,22 @@ class LocalExpenseGroupRepository implements ExpenseGroupRepository {
     data['updatedAt'] = DateTime.now().toIso8601String();
     await _groups.put(groupId, data);
   }
+
+  @override
+  Future<void> removeMemberFromGroup(String groupId, String userId) async {
+    await LocalStorage.init();
+    final raw = _groups.get(groupId);
+    if (raw == null) return;
+    final data = Map<String, dynamic>.from(raw as Map);
+    final members = (data['members'] as List? ?? [])
+        .where((m) => (m as Map)['uid'] != userId)
+        .map((m) => Map<String, dynamic>.from(m as Map))
+        .toList();
+    final uids = List<String>.from(data['memberUids'] as List? ?? [])
+      ..remove(userId);
+    data['members'] = members;
+    data['memberUids'] = uids;
+    data['updatedAt'] = DateTime.now().toIso8601String();
+    await _groups.put(groupId, data);
+  }
 }

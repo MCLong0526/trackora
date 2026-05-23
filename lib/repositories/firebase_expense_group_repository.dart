@@ -137,6 +137,22 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
     });
   }
 
+  @override
+  Future<void> removeMemberFromGroup(String groupId, String userId) async {
+    final doc = await _groupsRef.doc(groupId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final members = (data['members'] as List? ?? [])
+        .where((m) => (m as Map)['uid'] != userId)
+        .map((m) => Map<String, dynamic>.from(m as Map))
+        .toList();
+    await _groupsRef.doc(groupId).update({
+      'members': members,
+      'memberUids': FieldValue.arrayRemove([userId]),
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   Map<String, dynamic> _toFirestoreMap(Map<String, dynamic> map) {

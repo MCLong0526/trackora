@@ -8,11 +8,12 @@ import '../../models/group_expense_item.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/personal_group_toggle.dart';
 import 'add_group_expense_screen.dart';
 import 'create_group_screen.dart';
-import 'group_detail_screen.dart';
 import 'group_invite_screen.dart';
+import 'group_receipt_screen.dart';
 import 'join_group_screen.dart';
 
 class GroupDashboardScreen extends ConsumerWidget {
@@ -74,10 +75,10 @@ class GroupDashboardScreen extends ConsumerWidget {
                   ],
                 ),
                 // Group avatar pair pill
-                if (activeGroup != null)
-                  _GroupAvatarPill(group: activeGroup, userId: user?.uid)
-                else
-                  _GroupAvatarPill(group: null, userId: user?.uid),
+                GestureDetector(
+                  onTap: () => _showGroupMenu(context, ref, activeGroup, user?.uid),
+                  child: _GroupAvatarPill(group: activeGroup, userId: user?.uid),
+                ),
               ],
             ),
           ),
@@ -533,23 +534,6 @@ class _GroupBody extends ConsumerWidget {
                     ],
                   ),
                 )
-              else if (totalSpent > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD7F4E5),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Text(
-                    'All settled up',
-                    style: TextStyle(
-                      color: Color(0xFF1FBE71),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -608,7 +592,7 @@ class _GroupBody extends ConsumerWidget {
                   onTap: () => Navigator.push(
                     context,
                     CupertinoPageRoute(
-                      builder: (_) => GroupDetailScreen(group: group!),
+                      builder: (_) => GroupReceiptScreen(group: group!),
                     ),
                   ),
                   child: Container(
@@ -619,7 +603,7 @@ class _GroupBody extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      CupertinoIcons.calendar,
+                      CupertinoIcons.doc_text,
                       color: brand.inkSoft,
                       size: 16,
                     ),
@@ -875,6 +859,173 @@ class _ActivityRow extends StatelessWidget {
 }
 
 // ── Helper widgets ───────────────────────────────────────────────────────────
+
+// ── Group menu ───────────────────────────────────────────────────────────────
+
+void _showGroupMenu(BuildContext context, WidgetRef ref, ExpenseGroup? group, String? userId) {
+  if (group == null) return;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _GroupMenuSheet(group: group, userId: userId),
+  );
+}
+
+class _GroupMenuSheet extends ConsumerWidget {
+  final ExpenseGroup group;
+  final String? userId;
+  const _GroupMenuSheet({required this.group, required this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final me = group.members.where((m) => m.uid == userId).firstOrNull;
+    final partner = group.members.where((m) => m.uid != userId).firstOrNull;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Group name
+          Text(group.name,
+            style: TextStyle(
+              color: brand.ink, fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+            style: TextStyle(color: brand.inkSoft, fontSize: 13)),
+          const SizedBox(height: 20),
+          // Member list
+          if (me != null) _MemberRow(member: me, isYou: true),
+          if (partner != null) ...[
+            const SizedBox(height: 8),
+            _MemberRow(member: partner, isYou: false),
+          ],
+          const SizedBox(height: 20),
+          // Leave group button
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              color: const Color(0xFFFFEEEE),
+              borderRadius: BorderRadius.circular(14),
+              onPressed: () async {
+                Navigator.pop(context);
+                final confirmed = await showCupertinoDialog<bool>(
+                  context: context,
+                  builder: (_) => CupertinoAlertDialog(
+                    title: const Text('Leave group?'),
+                    content: const Text('You will lose access to this group\'s expenses.'),
+                    actions: [
+                      CupertinoDialogAction(
+                        isDestructiveAction: true,
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Leave'),
+                      ),
+                      CupertinoDialogAction(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true && userId != null) {
+                  try {
+                    final service = ref.read(expenseGroupServiceProvider);
+                    await service.leaveGroup(group.id, userId!);
+                    ref.read(activeGroupIdProvider.notifier).state = null;
+                    ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+                    if (context.mounted) AppToast.show(context, 'Left group');
+                  } catch (e) {
+                    if (context.mounted) AppToast.show(context, 'Failed to leave group');
+                  }
+                }
+              },
+              child: const Text('Leave group',
+                style: TextStyle(color: Color(0xFFD93025), fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberRow extends StatelessWidget {
+  final GroupMember member;
+  final bool isYou;
+  const _MemberRow({required this.member, required this.isYou});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Row(
+      children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            color: isYou ? const Color(0xFFEAE3F8) : const Color(0xFFD7F4E5),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              member.displayName.substring(0, 1).toUpperCase(),
+              style: TextStyle(
+                color: isYou ? const Color(0xFF5A4AAB) : const Color(0xFF1FBE71),
+                fontSize: 16, fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(member.displayName,
+                    style: TextStyle(color: brand.ink, fontSize: 15, fontWeight: FontWeight.w600)),
+                  if (isYou) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAE3F8),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text('You',
+                        style: TextStyle(color: Color(0xFF5A4AAB), fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ],
+              ),
+              Text('Joined ${DateFormat('MMM d, yyyy').format(member.joinedAt)}',
+                style: TextStyle(color: brand.inkSoft, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Pill button ───────────────────────────────────────────────────────────────
 
 class _PillButton extends StatelessWidget {
   final String label;
