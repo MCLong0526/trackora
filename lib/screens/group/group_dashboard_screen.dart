@@ -37,9 +37,9 @@ class GroupDashboardScreen extends ConsumerWidget {
     }
 
     final activeGroup = groups.cast<ExpenseGroup?>().firstWhere(
-          (g) => g?.id == activeGroupId,
-          orElse: () => groups.isNotEmpty ? groups.first : null,
-        );
+      (g) => g?.id == activeGroupId,
+      orElse: () => groups.isNotEmpty ? groups.first : null,
+    );
 
     return SafeArea(
       child: Column(
@@ -76,8 +76,9 @@ class GroupDashboardScreen extends ConsumerWidget {
                 ),
                 // Group avatar pair pill
                 GestureDetector(
-                  onTap: () => _showGroupMenu(context, ref, activeGroup, user?.uid),
-                  child: _GroupAvatarPill(group: activeGroup, userId: user?.uid),
+                  onTap: () =>
+                      showGroupMenu(context, ref, activeGroup, user?.uid),
+                  child: GroupAvatarPill(group: activeGroup, userId: user?.uid),
                 ),
               ],
             ),
@@ -94,13 +95,13 @@ class GroupDashboardScreen extends ConsumerWidget {
             child: groupsAsync.isLoading
                 ? const Center(child: CupertinoActivityIndicator())
                 : groups.isEmpty
-                    ? _IntroView(brand: brand)
-                    : _GroupBody(
-                        brand: brand,
-                        group: activeGroup,
-                        symbol: symbol,
-                        userId: user?.uid,
-                      ),
+                ? _IntroView(brand: brand)
+                : GroupDashboardContent(
+                    brand: brand,
+                    group: activeGroup,
+                    symbol: symbol,
+                    userId: user?.uid,
+                  ),
           ),
         ],
       ),
@@ -110,21 +111,19 @@ class GroupDashboardScreen extends ConsumerWidget {
 
 // ── Group avatar pair pill ───────────────────────────────────────────────────
 
-class _GroupAvatarPill extends StatelessWidget {
+class GroupAvatarPill extends StatelessWidget {
   final ExpenseGroup? group;
   final String? userId;
 
-  const _GroupAvatarPill({required this.group, required this.userId});
+  const GroupAvatarPill({super.key, required this.group, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final me = group?.members.where((m) => m.uid == userId).firstOrNull;
-    final partner =
-        group?.members.where((m) => m.uid != userId).firstOrNull;
-    final myInitial =
-        (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
-    final partnerInitial =
-        (partner?.displayName.substring(0, 1) ?? 'J').toUpperCase();
+    final partner = group?.members.where((m) => m.uid != userId).firstOrNull;
+    final myInitial = (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
+    final partnerInitial = (partner?.displayName.substring(0, 1) ?? 'J')
+        .toUpperCase();
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
@@ -239,8 +238,11 @@ class _IntroView extends StatelessWidget {
                 color: const Color(0xFF1A6CFF).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.person_2_fill,
-                  color: Color(0xFF1A6CFF), size: 28),
+              child: const Icon(
+                CupertinoIcons.person_2_fill,
+                color: Color(0xFF1A6CFF),
+                size: 28,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -267,7 +269,8 @@ class _IntroView extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     CupertinoPageRoute(
-                        builder: (_) => const CreateGroupScreen()),
+                      builder: (_) => const CreateGroupScreen(),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -276,8 +279,7 @@ class _IntroView extends StatelessWidget {
                   icon: CupertinoIcons.arrow_right_circle,
                   onTap: () => Navigator.push(
                     context,
-                    CupertinoPageRoute(
-                        builder: (_) => const JoinGroupScreen()),
+                    CupertinoPageRoute(builder: (_) => const JoinGroupScreen()),
                   ),
                 ),
               ],
@@ -291,13 +293,14 @@ class _IntroView extends StatelessWidget {
 
 // ── Group body (has group) ───────────────────────────────────────────────────
 
-class _GroupBody extends ConsumerWidget {
+class GroupDashboardContent extends ConsumerWidget {
   final BrandColors brand;
   final ExpenseGroup? group;
   final String symbol;
   final String? userId;
 
-  const _GroupBody({
+  const GroupDashboardContent({
+    super.key,
     required this.brand,
     required this.group,
     required this.symbol,
@@ -314,22 +317,22 @@ class _GroupBody extends ConsumerWidget {
     final expenses = expensesAsync.valueOrNull ?? const [];
     final service = ref.read(expenseGroupServiceProvider);
     final balances = service.computeBalances(group!.members, expenses);
-    final myBalance = balances
-        .cast<dynamic>()
-        .firstWhere((b) => b.uid == userId, orElse: () => null);
-    final partnerBalance = balances
-        .cast<dynamic>()
-        .firstWhere((b) => b.uid != userId, orElse: () => null);
+    final myBalance = balances.cast<dynamic>().firstWhere(
+      (b) => b.uid == userId,
+      orElse: () => null,
+    );
+    final partnerBalance = balances.cast<dynamic>().firstWhere(
+      (b) => b.uid != userId,
+      orElse: () => null,
+    );
     final myNet = myBalance?.net as double? ?? 0;
     final totalSpent = expenses.fold<double>(0, (s, e) => s + e.amount);
 
     final me = group!.members.where((m) => m.uid == userId).firstOrNull;
-    final partner =
-        group!.members.where((m) => m.uid != userId).firstOrNull;
-    final myInitial =
-        (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
-    final partnerInitial =
-        (partner?.displayName.substring(0, 1) ?? 'J').toUpperCase();
+    final partner = group!.members.where((m) => m.uid != userId).firstOrNull;
+    final myInitial = (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
+    final partnerInitial = (partner?.displayName.substring(0, 1) ?? 'J')
+        .toUpperCase();
     final partnerName = partner?.displayName ?? 'Partner';
     final myPaid = myBalance?.totalPaid as double? ?? 0;
     final partnerPaid = partnerBalance?.totalPaid as double? ?? 0;
@@ -499,7 +502,9 @@ class _GroupBody extends ConsumerWidget {
               if (myNet.abs() > 0.005)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: myNet > 0
                         ? const Color(0xFFD7F4E5)
@@ -533,7 +538,7 @@ class _GroupBody extends ConsumerWidget {
                       ),
                     ],
                   ),
-                )
+                ),
             ],
           ),
         ),
@@ -564,7 +569,9 @@ class _GroupBody extends ConsumerWidget {
                   ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A6CFF),
                       borderRadius: BorderRadius.circular(20),
@@ -572,8 +579,11 @@ class _GroupBody extends ConsumerWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(CupertinoIcons.plus,
-                            color: Colors.white, size: 14),
+                        Icon(
+                          CupertinoIcons.plus,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'Add',
@@ -589,23 +599,34 @@ class _GroupBody extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => GroupReceiptScreen(group: group!),
-                    ),
-                  ),
+                  onTap: () => showGroupReceiptPicker(context, group!),
                   child: Container(
-                    width: 34,
-                    height: 34,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      CupertinoIcons.doc_text,
-                      color: brand.inkSoft,
-                      size: 16,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.doc_text,
+                          color: brand.inkSoft,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Generate Receipt',
+                          style: TextStyle(
+                            color: brand.ink,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -627,8 +648,11 @@ class _GroupBody extends ConsumerWidget {
             child: Center(
               child: Column(
                 children: [
-                  Icon(CupertinoIcons.square_list,
-                      color: brand.inkSoft, size: 32),
+                  Icon(
+                    CupertinoIcons.square_list,
+                    color: brand.inkSoft,
+                    size: 32,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'No expenses yet',
@@ -691,8 +715,11 @@ class _GroupBody extends ConsumerWidget {
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(CupertinoIcons.person_badge_plus,
-                      color: Color(0xFF1A6CFF), size: 16),
+                  Icon(
+                    CupertinoIcons.person_badge_plus,
+                    color: Color(0xFF1A6CFF),
+                    size: 16,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Invite partner',
@@ -736,7 +763,8 @@ class _ActivityRow extends StatelessWidget {
     }
   }
 
-  String _memberInitial(String uid) => _memberName(uid).substring(0, 1).toUpperCase();
+  String _memberInitial(String uid) =>
+      _memberName(uid).substring(0, 1).toUpperCase();
 
   Color _categoryColor(String cat) {
     return switch (cat) {
@@ -784,8 +812,11 @@ class _ActivityRow extends StatelessWidget {
               color: catColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(_categoryIcon(expense.category),
-                color: catColor, size: 20),
+            child: Icon(
+              _categoryIcon(expense.category),
+              color: catColor,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 14),
           // Description + payer
@@ -835,10 +866,7 @@ class _ActivityRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${isMine ? 'You' : _memberName(expense.paidBy)} paid · $dateStr',
-                  style: TextStyle(
-                    color: brand.inkSoft,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: brand.inkSoft, fontSize: 12),
                 ),
               ],
             ),
@@ -862,13 +890,325 @@ class _ActivityRow extends StatelessWidget {
 
 // ── Group menu ───────────────────────────────────────────────────────────────
 
-void _showGroupMenu(BuildContext context, WidgetRef ref, ExpenseGroup? group, String? userId) {
+void showGroupMenu(
+  BuildContext context,
+  WidgetRef ref,
+  ExpenseGroup? group,
+  String? userId,
+) {
   if (group == null) return;
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     builder: (_) => _GroupMenuSheet(group: group, userId: userId),
   );
+}
+
+void showGroupReceiptPicker(BuildContext context, ExpenseGroup group) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _ReceiptPickerSheet(group: group),
+  );
+}
+
+class _ReceiptPickerSheet extends StatefulWidget {
+  final ExpenseGroup group;
+
+  const _ReceiptPickerSheet({required this.group});
+
+  @override
+  State<_ReceiptPickerSheet> createState() => _ReceiptPickerSheetState();
+}
+
+class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
+  GroupReceiptPeriod _period = GroupReceiptPeriod.month;
+  DateTime _selectedDate = DateTime.now();
+
+  DateTime get _selectedMonth =>
+      DateTime(_selectedDate.year, _selectedDate.month);
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final months = List.generate(24, (i) => DateTime(now.year, now.month - i));
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: context.brand.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          itemBuilder: (_, i) {
+            final month = months[i];
+            final selected =
+                month.year == _selectedMonth.year &&
+                month.month == _selectedMonth.month;
+            return ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              tileColor: selected ? const Color(0xFFE4ECFE) : Colors.white,
+              title: Text(
+                DateFormat('MMMM yyyy').format(month),
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              trailing: selected
+                  ? const Icon(
+                      CupertinoIcons.check_mark_circled_solid,
+                      color: Color(0xFF1A6CFF),
+                    )
+                  : null,
+              onTap: () => Navigator.pop(ctx, month),
+            );
+          },
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemCount: months.length,
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  void _generate() {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => GroupReceiptScreen(
+          group: widget.group,
+          period: _period,
+          selectedDate: _period == GroupReceiptPeriod.day
+              ? _selectedDate
+              : _selectedMonth,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDaily = _period == GroupReceiptPeriod.day;
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 34),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Generate receipt',
+              style: TextStyle(
+                color: brand.ink,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.4,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Choose a daily or monthly group receipt.',
+              style: TextStyle(color: brand.inkSoft, fontSize: 14),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  _PeriodTab(
+                    label: 'Daily',
+                    selected: isDaily,
+                    onTap: () =>
+                        setState(() => _period = GroupReceiptPeriod.day),
+                  ),
+                  _PeriodTab(
+                    label: 'Month',
+                    selected: !isDaily,
+                    onTap: () =>
+                        setState(() => _period = GroupReceiptPeriod.month),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: isDaily ? _pickDate : _pickMonth,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE4ECFE),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.calendar,
+                        color: Color(0xFF1A6CFF),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isDaily ? 'Receipt date' : 'Receipt month',
+                            style: TextStyle(
+                              color: brand.inkSoft,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isDaily
+                                ? DateFormat(
+                                    'd MMMM yyyy',
+                                  ).format(_selectedDate)
+                                : DateFormat(
+                                    'MMMM yyyy',
+                                  ).format(_selectedMonth),
+                            style: TextStyle(
+                              color: brand.ink,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_down,
+                      color: brand.inkSoft,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                color: const Color(0xFF1A6CFF),
+                borderRadius: BorderRadius.circular(18),
+                onPressed: _generate,
+                child: const Text(
+                  'Generate receipt',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PeriodTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PeriodTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(13),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : const [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected
+                  ? const Color(0xFF0B0B0F)
+                  : const Color(0xFF8E8E96),
+              fontSize: 15,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _GroupMenuSheet extends ConsumerWidget {
@@ -895,7 +1235,8 @@ class _GroupMenuSheet extends ConsumerWidget {
           Center(
             child: Container(
               margin: const EdgeInsets.only(bottom: 16),
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: brand.divider,
                 borderRadius: BorderRadius.circular(2),
@@ -903,12 +1244,19 @@ class _GroupMenuSheet extends ConsumerWidget {
             ),
           ),
           // Group name
-          Text(group.name,
+          Text(
+            group.name,
             style: TextStyle(
-              color: brand.ink, fontSize: 17, fontWeight: FontWeight.w700)),
+              color: brand.ink,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('${group.members.length} member${group.members.length == 1 ? '' : 's'}',
-            style: TextStyle(color: brand.inkSoft, fontSize: 13)),
+          Text(
+            '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+            style: TextStyle(color: brand.inkSoft, fontSize: 13),
+          ),
           const SizedBox(height: 20),
           // Member list
           if (me != null) _MemberRow(member: me, isYou: true),
@@ -930,7 +1278,9 @@ class _GroupMenuSheet extends ConsumerWidget {
                   context: context,
                   builder: (_) => CupertinoAlertDialog(
                     title: const Text('Leave group?'),
-                    content: const Text('You will lose access to this group\'s expenses.'),
+                    content: const Text(
+                      'You will lose access to this group\'s expenses.',
+                    ),
                     actions: [
                       CupertinoDialogAction(
                         isDestructiveAction: true,
@@ -949,15 +1299,24 @@ class _GroupMenuSheet extends ConsumerWidget {
                     final service = ref.read(expenseGroupServiceProvider);
                     await service.leaveGroup(group.id, userId!);
                     ref.read(activeGroupIdProvider.notifier).state = null;
-                    ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+                    ref.read(homeModeProvider.notifier).state =
+                        HomeMode.personal;
                     if (context.mounted) AppToast.show(context, 'Left group');
                   } catch (e) {
-                    if (context.mounted) AppToast.show(context, 'Failed to leave group');
+                    if (context.mounted) {
+                      AppToast.show(context, 'Failed to leave group');
+                    }
                   }
                 }
               },
-              child: const Text('Leave group',
-                style: TextStyle(color: Color(0xFFD93025), fontSize: 15, fontWeight: FontWeight.w600)),
+              child: const Text(
+                'Leave group',
+                style: TextStyle(
+                  color: Color(0xFFD93025),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
@@ -977,7 +1336,8 @@ class _MemberRow extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 40, height: 40,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: isYou ? const Color(0xFFEAE3F8) : const Color(0xFFD7F4E5),
             shape: BoxShape.circle,
@@ -986,8 +1346,11 @@ class _MemberRow extends StatelessWidget {
             child: Text(
               member.displayName.substring(0, 1).toUpperCase(),
               style: TextStyle(
-                color: isYou ? const Color(0xFF5A4AAB) : const Color(0xFF1FBE71),
-                fontSize: 16, fontWeight: FontWeight.w700,
+                color: isYou
+                    ? const Color(0xFF5A4AAB)
+                    : const Color(0xFF1FBE71),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -999,24 +1362,41 @@ class _MemberRow extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(member.displayName,
-                    style: TextStyle(color: brand.ink, fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(
+                    member.displayName,
+                    style: TextStyle(
+                      color: brand.ink,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   if (isYou) ...[
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFEAE3F8),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text('You',
-                        style: TextStyle(color: Color(0xFF5A4AAB), fontSize: 11, fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'You',
+                        style: TextStyle(
+                          color: Color(0xFF5A4AAB),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ],
               ),
-              Text('Joined ${DateFormat('MMM d, yyyy').format(member.joinedAt)}',
-                style: TextStyle(color: brand.inkSoft, fontSize: 12)),
+              Text(
+                'Joined ${DateFormat('MMM d, yyyy').format(member.joinedAt)}',
+                style: TextStyle(color: brand.inkSoft, fontSize: 12),
+              ),
             ],
           ),
         ),

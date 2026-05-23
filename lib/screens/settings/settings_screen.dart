@@ -3122,7 +3122,17 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                           isDestructiveAction: true,
                           onPressed: () {
                             Navigator.pop(context);
-                            // Turn off group mode
+                            // Leave the group (works offline — queued)
+                            final user =
+                                ref.read(authStateProvider).valueOrNull;
+                            if (user != null && groups.isNotEmpty) {
+                              ref
+                                  .read(expenseGroupServiceProvider)
+                                  .leaveGroup(groups.first.id, user.uid)
+                                  .catchError((_) {});
+                            }
+                            ref.read(activeGroupIdProvider.notifier).state =
+                                null;
                             ref.read(homeModeProvider.notifier).state =
                                 HomeMode.personal;
                           },

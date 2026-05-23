@@ -11,7 +11,6 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
-import '../group/group_dashboard_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
@@ -1152,21 +1151,6 @@ class _HomeTabWrapper extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(homeModeProvider);
-    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
-    final isGroupMode = mode == HomeMode.group && groups.isNotEmpty;
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 240),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: child,
-      ),
-      child: isGroupMode
-          ? const GroupDashboardScreen(key: ValueKey('group'))
-          : const DashboardScreen(key: ValueKey('personal')),
-    );
+    return const DashboardScreen();
   }
 }
