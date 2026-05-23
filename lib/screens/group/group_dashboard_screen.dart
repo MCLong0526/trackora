@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1299,16 +1300,35 @@ class _GroupMenuSheet extends ConsumerWidget {
                 if (confirmed == true && userId != null) {
                   // Close the bottom sheet after confirmation
                   if (context.mounted) Navigator.pop(context);
-                  try {
-                    final service = ref.read(expenseGroupServiceProvider);
-                    await service.leaveGroup(group.id, userId!);
+                  // Helper: flip out of group mode locally.
+                  void clearGroupState() {
                     ref.read(activeGroupIdProvider.notifier).state = null;
                     ref.read(homeModeProvider.notifier).state =
                         HomeMode.personal;
+                  }
+                  try {
+                    final service = ref.read(expenseGroupServiceProvider);
+                    await service.leaveGroup(group.id, userId!);
+                    clearGroupState();
                     if (context.mounted) {
                       AppToast.show(context, 'Left group');
                     }
-                  } catch (e) {
+                  } on FirebaseException catch (e) {
+                    // Group is gone server-side (cache-only ghost) or rules
+                    // disagree with cached state — still let the user leave
+                    // locally so they aren't stuck.
+                    if (e.code == 'not-found' ||
+                        e.code == 'permission-denied') {
+                      clearGroupState();
+                      if (context.mounted) {
+                        AppToast.show(context, 'Left group');
+                      }
+                    } else {
+                      if (context.mounted) {
+                        AppToast.show(context, 'Failed to leave group');
+                      }
+                    }
+                  } catch (_) {
                     if (context.mounted) {
                       AppToast.show(context, 'Failed to leave group');
                     }

@@ -140,7 +140,18 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
   @override
   Future<void> removeMemberFromGroup(String groupId, String userId) async {
     final docRef = _groupsRef.doc(groupId);
-    final doc = await docRef.get();
+
+    // Try to read the doc. If the read itself fails (offline + no cache, or
+    // permission-denied because the doc is gone server-side and stale rules),
+    // treat it as a soft success — the group no longer exists from the user's
+    // perspective, so "leaving" is effectively done.
+    DocumentSnapshot<Map<String, dynamic>> doc;
+    try {
+      doc = await docRef.get();
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found' || e.code == 'permission-denied') return;
+      rethrow;
+    }
     if (!doc.exists) return;
     final data = doc.data();
     if (data == null) return;
@@ -160,11 +171,19 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
       newMembers.add(_coerceStringKeyedMap(m));
     }
 
-    await docRef.update({
-      'members': newMembers,
-      'memberUids': FieldValue.arrayRemove([userId]),
-      'updatedAt': Timestamp.now(),
-    });
+    try {
+      await docRef.update({
+        'members': newMembers,
+        'memberUids': FieldValue.arrayRemove([userId]),
+        'updatedAt': Timestamp.now(),
+      });
+    } on FirebaseException catch (e) {
+      // If the server doc is gone (cache-only ghost) or our rule check fails
+      // because memberUids is already stale, swallow the error so the caller
+      // can still clear local state and the user perceives a successful leave.
+      if (e.code == 'not-found' || e.code == 'permission-denied') return;
+      rethrow;
+    }
   }
 
   /// Recursively converts a [Map] (possibly with non-String keys, as some

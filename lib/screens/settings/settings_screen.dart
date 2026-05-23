@@ -3139,18 +3139,36 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                         if (confirmed != true) return;
                         final u = ref.read(authStateProvider).valueOrNull;
                         if (u == null || groups.isEmpty) return;
-                        try {
-                          await ref
-                              .read(expenseGroupServiceProvider)
-                              .leaveGroup(groups.first.id, u.uid);
+                        void clearGroupState() {
                           ref
                               .read(activeGroupIdProvider.notifier)
                               .state = null;
                           ref
                               .read(homeModeProvider.notifier)
                               .state = HomeMode.personal;
+                        }
+                        try {
+                          await ref
+                              .read(expenseGroupServiceProvider)
+                              .leaveGroup(groups.first.id, u.uid);
+                          clearGroupState();
                           if (context.mounted) {
                             AppToast.show(context, 'Left group');
+                          }
+                        } on FirebaseException catch (e) {
+                          // Treat cache-only ghost groups or stale-rule
+                          // denials as a successful local leave.
+                          if (e.code == 'not-found' ||
+                              e.code == 'permission-denied') {
+                            clearGroupState();
+                            if (context.mounted) {
+                              AppToast.show(context, 'Left group');
+                            }
+                          } else {
+                            if (context.mounted) {
+                              AppToast.show(
+                                  context, 'Failed to leave group');
+                            }
                           }
                         } catch (_) {
                           if (context.mounted) {

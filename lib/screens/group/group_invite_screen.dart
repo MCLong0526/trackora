@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +32,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
   DateTime? _expiresAt;
   bool _loading = true;
   String? _error;
+  String? _errorDetail;
   Timer? _timer;
 
   String get _effectiveGroupId => widget.group?.id ?? widget.groupId!;
@@ -53,15 +56,39 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _errorDetail = null;
       _rawCode = null;
       _expiresAt = null;
     });
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) {
-      if (mounted) setState(() { _loading = false; _error = 'Not signed in'; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Not signed in';
+        });
+      }
       return;
     }
     try {
+      // Verify the group exists on the server before issuing an invite.
+      // A cache-only group (deleted server-side, or created offline and never
+      // synced) cannot meaningfully be invited to.
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(_effectiveGroupId)
+          .get(const GetOptions(source: Source.server));
+      if (!groupDoc.exists) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error =
+                'Your group is not synced yet. Make sure you\'re online and the group was created while online.';
+          });
+        }
+        return;
+      }
+
       final service = ref.read(expenseGroupServiceProvider);
       final raw = service.generateRawCode();
       await service.createInvite(
@@ -76,11 +103,38 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
           _loading = false;
         });
       }
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        String message;
+        switch (e.code) {
+          case 'permission-denied':
+            message = 'You need to be online to generate a code.';
+            break;
+          case 'unavailable':
+          case 'deadline-exceeded':
+            message =
+                'Network unavailable. Check your connection and try again.';
+            break;
+          case 'not-found':
+            message =
+                'Your group is not synced yet. Make sure you\'re online and the group was created while online.';
+            break;
+          default:
+            message = 'Could not generate invite code. Tap to retry.';
+        }
+        setState(() {
+          _loading = false;
+          _error = message;
+          _errorDetail =
+              kDebugMode ? '[${e.code}] ${e.message ?? ''}' : null;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
           _loading = false;
           _error = 'Could not generate invite code. Tap to retry.';
+          _errorDetail = kDebugMode ? e.toString() : null;
         });
       }
     }
@@ -182,12 +236,24 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Check your connection and try again.',
+                            _error!,
                             style: TextStyle(
                                 fontSize: 14,
                                 color: context.brand.inkSoft),
                             textAlign: TextAlign.center,
                           ),
+                          if (_errorDetail != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _errorDetail!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFB0B0B8),
+                                fontFamily: 'monospace',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           CupertinoButton.filled(
                             onPressed: _generateCode,
