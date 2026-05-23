@@ -1299,9 +1299,6 @@ class _GroupMenuSheet extends ConsumerWidget {
                   ),
                 );
                 if (confirmed == true && userId != null) {
-                  // Close the bottom sheet after confirmation
-                  if (context.mounted) Navigator.pop(context);
-                  // Helper: flip out of group mode locally.
                   void clearGroupState() {
                     ref.read(activeGroupIdProvider.notifier).state = null;
                     ref.read(homeModeProvider.notifier).state =
@@ -1312,16 +1309,15 @@ class _GroupMenuSheet extends ConsumerWidget {
                     await service.leaveGroup(group.id, userId!);
                     clearGroupState();
                     if (context.mounted) {
+                      Navigator.pop(context);
                       AppToast.show(context, 'Left group');
                     }
                   } on FirebaseException catch (e) {
-                    // Group is gone server-side (cache-only ghost) or rules
-                    // disagree with cached state — still let the user leave
-                    // locally so they aren't stuck.
                     if (e.code == 'not-found' ||
                         e.code == 'permission-denied') {
                       clearGroupState();
                       if (context.mounted) {
+                        Navigator.pop(context);
                         AppToast.show(context, 'Left group');
                       }
                     } else {
@@ -1379,7 +1375,6 @@ class _GroupMenuSheet extends ConsumerWidget {
                     ),
                   );
                   if (confirmed == true) {
-                    if (context.mounted) Navigator.pop(context);
                     void clearGroupState() {
                       ref
                           .read(activeGroupIdProvider.notifier)
@@ -1393,6 +1388,7 @@ class _GroupMenuSheet extends ConsumerWidget {
                       await service.deleteGroup(group.id);
                       clearGroupState();
                       if (context.mounted) {
+                        Navigator.pop(context);
                         AppToast.show(context, 'Group deleted');
                       }
                     } on FirebaseException catch (e) {
@@ -1400,6 +1396,7 @@ class _GroupMenuSheet extends ConsumerWidget {
                           e.code == 'permission-denied') {
                         clearGroupState();
                         if (context.mounted) {
+                          Navigator.pop(context);
                           AppToast.show(context, 'Group deleted');
                         }
                       } else {
