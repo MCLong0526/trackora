@@ -437,12 +437,12 @@ class _AddGroupExpenseScreenState
                                 Text(
                                   symbol,
                                   style: const TextStyle(
-                                    fontSize: 32,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w600,
                                     color: _kGroupInk,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Expanded(
                                   child: TextField(
                                     controller: _amountCtrl,
@@ -452,7 +452,7 @@ class _AddGroupExpenseScreenState
                                             .numberWithOptions(
                                                 decimal: true),
                                     style: TextStyle(
-                                      fontSize: 56,
+                                      fontSize: 44,
                                       fontWeight: FontWeight.w700,
                                       color: amount > 0
                                           ? _kGroupInk
@@ -463,9 +463,12 @@ class _AddGroupExpenseScreenState
                                     ),
                                     decoration: const InputDecoration(
                                       border: InputBorder.none,
+                                      // Override theme-level fill
+                                      filled: false,
+                                      fillColor: Colors.transparent,
                                       hintText: '0.00',
                                       hintStyle: TextStyle(
-                                        fontSize: 56,
+                                        fontSize: 44,
                                         fontWeight: FontWeight.w600,
                                         color: Color(0x516B4FB2),
                                         letterSpacing: -1.5,
@@ -621,6 +624,8 @@ class _AddGroupExpenseScreenState
                             ),
                             decoration: const InputDecoration(
                               border: InputBorder.none,
+                              filled: false,
+                              fillColor: Colors.transparent,
                               hintText: 'What\'s this for?',
                               hintStyle: TextStyle(
                                 fontSize: 17,

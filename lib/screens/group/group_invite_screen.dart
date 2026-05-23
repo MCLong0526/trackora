@@ -29,6 +29,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
   String? _rawCode;
   DateTime? _expiresAt;
   bool _loading = true;
+  String? _error;
   Timer? _timer;
 
   String get _effectiveGroupId => widget.group?.id ?? widget.groupId!;
@@ -49,8 +50,17 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
   }
 
   Future<void> _generateCode() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _rawCode = null;
+      _expiresAt = null;
+    });
     final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() { _loading = false; _error = 'Not signed in'; });
+      return;
+    }
     try {
       final service = ref.read(expenseGroupServiceProvider);
       final raw = service.generateRawCode();
@@ -67,7 +77,12 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not generate invite code. Tap to retry.';
+        });
+      }
     }
   }
 
@@ -146,7 +161,43 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CupertinoActivityIndicator())
-            : SingleChildScrollView(
+            : _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.wifi_slash,
+                              size: 44, color: Color(0xFF8E8E96)),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Could not generate invite code',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: context.brand.ink,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Check your connection and try again.',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: context.brand.inkSoft),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          CupertinoButton.filled(
+                            onPressed: _generateCode,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
                 child: Column(
                   children: [

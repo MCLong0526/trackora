@@ -1273,10 +1273,10 @@ class _GroupMenuSheet extends ConsumerWidget {
               color: const Color(0xFFFFEEEE),
               borderRadius: BorderRadius.circular(14),
               onPressed: () async {
-                Navigator.pop(context);
+                // Show dialog FIRST while sheet context is still valid
                 final confirmed = await showCupertinoDialog<bool>(
                   context: context,
-                  builder: (_) => CupertinoAlertDialog(
+                  builder: (dialogCtx) => CupertinoAlertDialog(
                     title: const Text('Leave group?'),
                     content: const Text(
                       'You will lose access to this group\'s expenses.',
@@ -1284,24 +1284,30 @@ class _GroupMenuSheet extends ConsumerWidget {
                     actions: [
                       CupertinoDialogAction(
                         isDestructiveAction: true,
-                        onPressed: () => Navigator.pop(context, true),
+                        onPressed: () =>
+                            Navigator.pop(dialogCtx, true),
                         child: const Text('Leave'),
                       ),
                       CupertinoDialogAction(
-                        onPressed: () => Navigator.pop(context, false),
+                        onPressed: () =>
+                            Navigator.pop(dialogCtx, false),
                         child: const Text('Cancel'),
                       ),
                     ],
                   ),
                 );
                 if (confirmed == true && userId != null) {
+                  // Close the bottom sheet after confirmation
+                  if (context.mounted) Navigator.pop(context);
                   try {
                     final service = ref.read(expenseGroupServiceProvider);
                     await service.leaveGroup(group.id, userId!);
                     ref.read(activeGroupIdProvider.notifier).state = null;
                     ref.read(homeModeProvider.notifier).state =
                         HomeMode.personal;
-                    if (context.mounted) AppToast.show(context, 'Left group');
+                    if (context.mounted) {
+                      AppToast.show(context, 'Left group');
+                    }
                   } catch (e) {
                     if (context.mounted) {
                       AppToast.show(context, 'Failed to leave group');
