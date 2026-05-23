@@ -3115,41 +3115,49 @@ class _GroupExpensesToggleTile extends ConsumerWidget {
                     );
                   } else {
                     if (isConnected) {
-                      showCupertinoDialog<void>(
+                      showCupertinoDialog<bool>(
                         context: context,
-                        builder: (_) => CupertinoAlertDialog(
+                        builder: (dialogCtx) => CupertinoAlertDialog(
                           title: const Text('Leave Group?'),
                           content: const Text(
                               'You will leave your shared group expenses.'),
                           actions: [
                             CupertinoDialogAction(
                               isDestructiveAction: true,
-                              onPressed: () {
-                                Navigator.pop(context);
-                                final u =
-                                    ref.read(authStateProvider).valueOrNull;
-                                if (u != null && groups.isNotEmpty) {
-                                  ref
-                                      .read(expenseGroupServiceProvider)
-                                      .leaveGroup(groups.first.id, u.uid)
-                                      .catchError((_) {});
-                                }
-                                ref
-                                    .read(activeGroupIdProvider.notifier)
-                                    .state = null;
-                                ref
-                                    .read(homeModeProvider.notifier)
-                                    .state = HomeMode.personal;
-                              },
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, true),
                               child: const Text('Leave'),
                             ),
                             CupertinoDialogAction(
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, false),
                               child: const Text('Cancel'),
                             ),
                           ],
                         ),
-                      );
+                      ).then((confirmed) async {
+                        if (confirmed != true) return;
+                        final u = ref.read(authStateProvider).valueOrNull;
+                        if (u == null || groups.isEmpty) return;
+                        try {
+                          await ref
+                              .read(expenseGroupServiceProvider)
+                              .leaveGroup(groups.first.id, u.uid);
+                          ref
+                              .read(activeGroupIdProvider.notifier)
+                              .state = null;
+                          ref
+                              .read(homeModeProvider.notifier)
+                              .state = HomeMode.personal;
+                          if (context.mounted) {
+                            AppToast.show(context, 'Left group');
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.show(context, 'Failed to leave group');
+                          }
+                        }
+                      });
                     }
                   }
                 },

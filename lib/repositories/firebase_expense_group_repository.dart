@@ -139,18 +139,51 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
 
   @override
   Future<void> removeMemberFromGroup(String groupId, String userId) async {
-    final doc = await _groupsRef.doc(groupId).get();
+    final docRef = _groupsRef.doc(groupId);
+    final doc = await docRef.get();
     if (!doc.exists) return;
-    final data = doc.data()!;
-    final members = (data['members'] as List? ?? [])
-        .where((m) => (m as Map)['uid'] != userId)
-        .map((m) => Map<String, dynamic>.from(m as Map))
-        .toList();
-    await _groupsRef.doc(groupId).update({
-      'members': members,
+    final data = doc.data();
+    if (data == null) return;
+
+    // Defensively rebuild the members list: nested maps can come back as
+    // either Map<String, dynamic> or Map<Object?, Object?> depending on the
+    // platform/codec, and joinedAt may be a Timestamp (set via addGroup's
+    // _toFirestoreMap) or an ISO string (set via addMemberToGroup's
+    // arrayUnion). We preserve whatever value is there and just drop the
+    // leaver's entry by matching uid.
+    final rawMembers = (data['members'] as List?) ?? const [];
+    final newMembers = <Map<String, dynamic>>[];
+    for (final m in rawMembers) {
+      if (m is! Map) continue;
+      final uid = m['uid'];
+      if (uid is String && uid == userId) continue;
+      newMembers.add(_coerceStringKeyedMap(m));
+    }
+
+    await docRef.update({
+      'members': newMembers,
       'memberUids': FieldValue.arrayRemove([userId]),
       'updatedAt': Timestamp.now(),
     });
+  }
+
+  /// Recursively converts a [Map] (possibly with non-String keys, as some
+  /// Firestore codecs return) into a Firestore-writable [Map<String, dynamic>].
+  Map<String, dynamic> _coerceStringKeyedMap(Map source) {
+    final out = <String, dynamic>{};
+    source.forEach((k, v) {
+      final key = k is String ? k : k.toString();
+      if (v is Map) {
+        out[key] = _coerceStringKeyedMap(v);
+      } else if (v is List) {
+        out[key] = v
+            .map((e) => e is Map ? _coerceStringKeyedMap(e) : e)
+            .toList();
+      } else {
+        out[key] = v;
+      }
+    });
+    return out;
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
