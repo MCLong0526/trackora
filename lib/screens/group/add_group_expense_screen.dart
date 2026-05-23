@@ -57,9 +57,9 @@ class AddGroupExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddGroupExpenseScreenState
-    extends ConsumerState<AddGroupExpenseScreen> {
+    extends ConsumerState<AddGroupExpenseScreen>
+    with TickerProviderStateMixin {
   final _amountCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _amountFocus = FocusNode();
 
@@ -69,6 +69,10 @@ class _AddGroupExpenseScreenState
   late Set<String> _splitBetween;
   _SplitMode _splitMode = _SplitMode.even;
   bool _saving = false;
+  bool _saveSuccess = false;
+
+  late AnimationController _saveBtnCtrl;
+  late Animation<double> _saveBtnBounce;
 
   bool get _isEdit => widget.existing != null;
   double get _parsedAmount =>
@@ -77,6 +81,16 @@ class _AddGroupExpenseScreenState
   @override
   void initState() {
     super.initState();
+    _saveBtnCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 460),
+    );
+    _saveBtnBounce = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.07), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 1.07, end: 0.95), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _saveBtnCtrl, curve: Curves.easeOut));
+
     final user = ref.read(authStateProvider).valueOrNull;
     _paidByUid = widget.existing?.paidBy ?? user?.uid;
     _splitBetween = widget.existing != null
@@ -86,7 +100,6 @@ class _AddGroupExpenseScreenState
     if (widget.existing != null) {
       final e = widget.existing!;
       _amountCtrl.text = e.amount.toStringAsFixed(2);
-      _descCtrl.text = e.description;
       _notesCtrl.text = e.notes ?? '';
       _category = e.category;
       _date = e.date;
@@ -104,9 +117,9 @@ class _AddGroupExpenseScreenState
   @override
   void dispose() {
     _amountCtrl.dispose();
-    _descCtrl.dispose();
     _notesCtrl.dispose();
     _amountFocus.dispose();
+    _saveBtnCtrl.dispose();
     super.dispose();
   }
 
@@ -137,7 +150,6 @@ class _AddGroupExpenseScreenState
       AppToast.show(context, context.t('validation.invalidAmount'));
       return;
     }
-    final desc = _descCtrl.text.trim().isEmpty ? _category : _descCtrl.text.trim();
     if (_paidByUid == null) {
       AppToast.show(context, 'Select who paid');
       return;
@@ -146,6 +158,10 @@ class _AddGroupExpenseScreenState
       AppToast.show(context, 'Select at least one person to split with');
       return;
     }
+
+    final desc = _isEdit && widget.existing!.description.isNotEmpty
+        ? widget.existing!.description
+        : _category;
 
     setState(() => _saving = true);
     try {
@@ -172,11 +188,73 @@ class _AddGroupExpenseScreenState
       } else {
         await service.addExpense(expense);
       }
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _saving = false;
+          _saveSuccess = true;
+        });
+        await _saveBtnCtrl.forward(from: 0);
+        if (mounted) {
+          AppToast.show(
+            context,
+            _isEdit ? 'Entry updated' : 'Entry saved',
+            type: AppToastType.success,
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 480));
+        if (mounted) Navigator.pop(context, true);
+      }
     } catch (e) {
-      if (mounted) AppToast.show(context, context.t('common.saveFailed'));
+      if (mounted) {
+        AppToast.show(
+          context,
+          context.t('common.saveFailed'),
+          type: AppToastType.error,
+        );
+      }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && !_saveSuccess) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete expense?'),
+        content: const Text('This will permanently remove this expense.'),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref
+          .read(expenseGroupServiceProvider)
+          .deleteExpense(widget.group.id, widget.existing!.id);
+      if (mounted) {
+        AppToast.show(context, 'Entry deleted', type: AppToastType.success);
+        await Future.delayed(const Duration(milliseconds: 480));
+        if (mounted) Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(
+          context,
+          'Failed to delete entry',
+          type: AppToastType.error,
+        );
+      }
     }
   }
 
@@ -314,15 +392,34 @@ class _AddGroupExpenseScreenState
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Text(
-                    _isEdit ? context.t('common.edit') : 'New entry',
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0B0B0F),
-                      letterSpacing: -0.5,
+                  Expanded(
+                    child: Text(
+                      _isEdit ? context.t('common.edit') : 'New entry',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0B0B0F),
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ),
+                  if (_isEdit)
+                    GestureDetector(
+                      onTap: _delete,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFEEEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.delete,
+                          color: Color(0xFFD93025),
+                          size: 18,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -606,31 +703,6 @@ class _AddGroupExpenseScreenState
                               ),
                             ),
                           ],
-
-                          // Description text field
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: _descCtrl,
-                            textCapitalization:
-                                TextCapitalization.sentences,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: _kGroupInk,
-                            ),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              filled: false,
-                              fillColor: Colors.transparent,
-                              hintText: 'What\'s this for?',
-                              hintStyle: TextStyle(
-                                fontSize: 17,
-                                color: _kGroupInkSoft,
-                              ),
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
 
                           const SizedBox(height: 22),
 
@@ -976,53 +1048,104 @@ class _AddGroupExpenseScreenState
                   const SizedBox(width: 10),
                   // Pill save button
                   Expanded(
-                    child: GestureDetector(
-                      onTap: _saving ? null : _save,
-                      child: Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black
-                                  .withValues(alpha: 0.06),
-                              blurRadius: 14,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: _saving
-                              ? const CupertinoActivityIndicator()
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 22,
-                                      height: 22,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF0B0B0F),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                          CupertinoIcons
-                                              .checkmark_alt,
+                    child: AnimatedBuilder(
+                      animation: _saveBtnBounce,
+                      builder: (context, child) => Transform.scale(
+                        scale: _saveSuccess ? _saveBtnBounce.value : 1.0,
+                        child: child,
+                      ),
+                      child: GestureDetector(
+                        onTap: (_saving || _saveSuccess) ? null : _save,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: _saveSuccess
+                                ? const Color(0xFF1FBE71)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black
+                                    .withValues(alpha: 0.06),
+                                blurRadius: 14,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, anim) =>
+                                  ScaleTransition(
+                                scale: anim,
+                                child: FadeTransition(
+                                    opacity: anim, child: child),
+                              ),
+                              child: _saveSuccess
+                                  ? Row(
+                                      key: const ValueKey('success'),
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          CupertinoIcons.checkmark_alt,
                                           color: Colors.white,
-                                          size: 13),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    const Text(
-                                      'Save entry',
-                                      style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0B0B0F),
-                                        letterSpacing: -0.2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          _isEdit
+                                              ? 'Entry updated'
+                                              : 'Entry saved',
+                                          style: const TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : _saving
+                                      ? const CupertinoActivityIndicator(
+                                          key: ValueKey('loading'),
+                                        )
+                                      : Row(
+                                          key: const ValueKey('idle'),
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 22,
+                                              height: 22,
+                                              decoration:
+                                                  const BoxDecoration(
+                                                color: Color(0xFF0B0B0F),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                CupertinoIcons
+                                                    .checkmark_alt,
+                                                color: Colors.white,
+                                                size: 13,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            const Text(
+                                              'Save entry',
+                                              style: TextStyle(
+                                                fontSize: 17,
+                                                fontWeight:
+                                                    FontWeight.w700,
+                                                color: Color(0xFF0B0B0F),
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                            ),
+                          ),
                         ),
                       ),
                     ),

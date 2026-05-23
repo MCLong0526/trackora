@@ -11,6 +11,7 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/personal_group_toggle.dart';
+import '../../widgets/profile_avatar_button.dart';
 import 'add_group_expense_screen.dart';
 import 'create_group_screen.dart';
 import 'group_invite_screen.dart';
@@ -75,11 +76,19 @@ class GroupDashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                // Group avatar pair pill
-                GestureDetector(
-                  onTap: () =>
-                      showGroupMenu(context, ref, activeGroup, user?.uid),
-                  child: GroupAvatarPill(group: activeGroup, userId: user?.uid),
+                // Group avatar pill + profile button
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () =>
+                          showGroupMenu(context, ref, activeGroup, user?.uid),
+                      child: GroupAvatarPill(
+                          group: activeGroup, userId: user?.uid),
+                    ),
+                    const SizedBox(width: 8),
+                    const ProfileAvatarButton(),
+                  ],
                 ),
               ],
             ),
@@ -696,6 +705,15 @@ class GroupDashboardContent extends ConsumerWidget {
                     members: group!.members,
                     symbol: symbol,
                     userId: userId,
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (_) => AddGroupExpenseScreen(
+                          group: group!,
+                          existing: expenses[i],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -757,6 +775,7 @@ class _ActivityRow extends StatelessWidget {
   final List<GroupMember> members;
   final String symbol;
   final String? userId;
+  final VoidCallback? onTap;
 
   const _ActivityRow({
     required this.brand,
@@ -764,6 +783,7 @@ class _ActivityRow extends StatelessWidget {
     required this.members,
     required this.symbol,
     required this.userId,
+    this.onTap,
   });
 
   String _memberName(String uid) {
@@ -777,41 +797,18 @@ class _ActivityRow extends StatelessWidget {
   String _memberInitial(String uid) =>
       _memberName(uid).substring(0, 1).toUpperCase();
 
-  Color _categoryColor(String cat) {
-    return switch (cat) {
-      'Food' => const Color(0xFFF0A33A),
-      'Groceries' => const Color(0xFF1FBE71),
-      'Transport' => const Color(0xFF1A6CFF),
-      'Shopping' => const Color(0xFFF47A85),
-      'Entertainment' => const Color(0xFF9F8DDB),
-      'Health' => const Color(0xFFFF6B6B),
-      'Bills' => const Color(0xFF8E8E96),
-      _ => const Color(0xFF1A6CFF),
-    };
-  }
-
-  IconData _categoryIcon(String cat) {
-    return switch (cat) {
-      'Food' => CupertinoIcons.flame_fill,
-      'Groceries' => CupertinoIcons.cart_fill,
-      'Transport' => CupertinoIcons.car_fill,
-      'Shopping' => CupertinoIcons.bag_fill,
-      'Entertainment' => CupertinoIcons.tv_fill,
-      'Health' => CupertinoIcons.heart_fill,
-      'Bills' => CupertinoIcons.doc_fill,
-      _ => CupertinoIcons.money_dollar_circle_fill,
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final isMine = expense.paidBy == userId;
     final dateStr = DateFormat('MMM d').format(expense.date);
-    final catColor = _categoryColor(expense.category);
+    final catStyle = styleFor(expense.category);
     final payerInitial = _memberInitial(expense.paidBy);
     final payerIsMine = expense.paidBy == userId;
 
-    return Padding(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
@@ -820,12 +817,12 @@ class _ActivityRow extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: catColor.withValues(alpha: 0.12),
+              color: catStyle.background,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              _categoryIcon(expense.category),
-              color: catColor,
+              catStyle.icon,
+              color: catStyle.accent,
               size: 20,
             ),
           ),
@@ -893,6 +890,7 @@ class _ActivityRow extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
