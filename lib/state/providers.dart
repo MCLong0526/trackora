@@ -58,6 +58,12 @@ import '../models/stock_investment.dart';
 import '../repositories/stock_investment_repository.dart';
 import '../repositories/firebase_stock_investment_repository.dart';
 import '../services/stock_service.dart';
+import '../models/expense_group.dart';
+import '../models/group_expense_item.dart';
+import '../repositories/expense_group_repository.dart';
+import '../repositories/firebase_expense_group_repository.dart';
+import '../repositories/local_expense_group_repository.dart';
+import '../services/expense_group_service.dart';
 
 // ── Network connectivity ──────────────────────────────────────────────────────
 
@@ -761,3 +767,47 @@ final stockInvestmentsProvider =
       if (user == null) return Stream.value(const []);
       return ref.read(stockInvestmentRepositoryProvider).getAll(user.uid);
     });
+
+// ── Expense Groups ────────────────────────────────────────────────────────────
+
+enum HomeMode { personal, group }
+
+final homeModeProvider = StateProvider<HomeMode>((_) => HomeMode.personal);
+
+final activeGroupIdProvider = StateProvider<String?>((_) => null);
+
+final expenseGroupRepositoryProvider = Provider<ExpenseGroupRepository>((_) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalExpenseGroupRepository();
+    case StorageMode.firebase:
+      return FirebaseExpenseGroupRepository();
+  }
+});
+
+final expenseGroupServiceProvider = Provider<ExpenseGroupService>((ref) {
+  return ExpenseGroupService(ref.read(expenseGroupRepositoryProvider));
+});
+
+final myGroupsProvider = StreamProvider.autoDispose<List<ExpenseGroup>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  return ref.read(expenseGroupServiceProvider).getGroups(user.uid);
+});
+
+final activeGroupProvider = StreamProvider.autoDispose<ExpenseGroup?>((ref) {
+  final groupId = ref.watch(activeGroupIdProvider);
+  if (groupId == null) return Stream.value(null);
+  final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+  return Stream.value(
+    groups.cast<ExpenseGroup?>().firstWhere(
+      (g) => g?.id == groupId,
+      orElse: () => null,
+    ),
+  );
+});
+
+final groupExpensesProvider = StreamProvider.autoDispose
+    .family<List<GroupExpenseItem>, String>((ref, groupId) {
+  return ref.read(expenseGroupServiceProvider).getExpenses(groupId);
+});
