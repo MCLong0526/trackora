@@ -83,12 +83,12 @@ class ExpenseGroupService {
 
   // ── Invite codes ─────────────────────────────────────────────────────────────
 
-  /// Generates a human-readable code like `TRK·A3X8`.
+  /// Generates a 6-char raw code like `A3X8B2`.
+  /// Display splits it into `ABC·DEF` grouping.
   String generateRawCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random.secure();
-    final part = List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
-    return 'TRK·$part';
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   String hashInviteCode(String rawCode) {

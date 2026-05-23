@@ -26,6 +26,7 @@ import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
+import '../group/create_group_screen.dart';
 import '../../main.dart' show rootNavKey;
 
 enum _CsvExportRangeMode { month, all }
@@ -129,6 +130,8 @@ class SettingsScreen extends ConsumerWidget {
                   _GroupDivider(),
                   _LiveActivityToggleTile(currency: symbol),
                 ],
+                _GroupDivider(),
+                const _GroupExpensesToggleTile(),
                 if (email.isNotEmpty && email != localUserEmail) ...[
                   _GroupDivider(),
                   _Tile(
@@ -3031,6 +3034,113 @@ class _Field extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Group Expenses Toggle ─────────────────────────────────────────────────────
+
+class _GroupExpensesToggleTile extends ConsumerWidget {
+  const _GroupExpensesToggleTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final isConnected = groups.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAE3F8),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(
+              CupertinoIcons.person_2_fill,
+              size: 16,
+              color: Color(0xFF5A4AAB),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Group Expenses',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+                Text(
+                  isConnected
+                      ? 'Connected · 1 partner'
+                      : 'Track expenses together with a partner',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isConnected
+                        ? const Color(0xFF1FBE71)
+                        : brand.inkSoft,
+                    fontWeight: isConnected
+                        ? FontWeight.w500
+                        : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CupertinoSwitch(
+            value: isConnected,
+            activeTrackColor: const Color(0xFF1FBE71),
+            onChanged: (value) {
+              HapticFeedback.selectionClick();
+              if (value) {
+                Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const CreateGroupScreen(),
+                  ),
+                );
+              } else {
+                // Show confirmation if group exists
+                if (isConnected) {
+                  showCupertinoDialog<void>(
+                    context: context,
+                    builder: (_) => CupertinoAlertDialog(
+                      title: const Text('Leave Group?'),
+                      content: const Text(
+                          'You will leave your shared group expenses.'),
+                      actions: [
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          onPressed: () {
+                            Navigator.pop(context);
+                            // Turn off group mode
+                            ref.read(homeModeProvider.notifier).state =
+                                HomeMode.personal;
+                          },
+                          child: const Text('Leave'),
+                        ),
+                        CupertinoDialogAction(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }
