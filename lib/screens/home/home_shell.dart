@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/expense_group.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
+import '../group/add_group_expense_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
@@ -112,9 +114,28 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     action();
   }
 
+  void _openGroupExpense(ExpenseGroup group) {
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddGroupExpenseScreen(group: group),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final homeMode = ref.watch(homeModeProvider);
+    final activeGroupId = ref.watch(activeGroupIdProvider);
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final activeGroup = groups.cast<ExpenseGroup?>().firstWhere(
+      (g) => g?.id == activeGroupId,
+      orElse: () => groups.isNotEmpty ? groups.first : null,
+    );
+    final isGroupMode =
+        _index == 0 && homeMode == HomeMode.group && activeGroup != null;
+
     return Scaffold(
       backgroundColor: brand.background,
       body: Stack(
@@ -154,12 +175,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ),
             ),
           ),
-          _SpeedDialOverlay(
-            open: _fabOpen,
-            onManualEntry: () => _runAddAction(_openManualEntry),
-            onScanReceipt: () => _runAddAction(_openCameraOcr),
-            onGroupTrip: () => _runAddAction(_openGroupTrip),
-          ),
+          if (!isGroupMode)
+            _SpeedDialOverlay(
+              open: _fabOpen,
+              onManualEntry: () => _runAddAction(_openManualEntry),
+              onScanReceipt: () => _runAddAction(_openCameraOcr),
+              onGroupTrip: () => _runAddAction(_openGroupTrip),
+            ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -167,6 +189,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         key: _fabKey,
         brand: brand,
         onOpenChanged: (v) => setState(() => _fabOpen = v),
+        isGroupMode: isGroupMode,
+        onGroupAdd: isGroupMode ? () => _openGroupExpense(activeGroup!) : null,
       ),
       bottomNavigationBar: _BottomBar(
         index: _index,
@@ -182,8 +206,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 class _AddFab extends StatefulWidget {
   final BrandColors brand;
   final ValueChanged<bool>? onOpenChanged;
+  final bool isGroupMode;
+  final VoidCallback? onGroupAdd;
 
-  const _AddFab({super.key, required this.brand, this.onOpenChanged});
+  const _AddFab({
+    super.key,
+    required this.brand,
+    this.onOpenChanged,
+    this.isGroupMode = false,
+    this.onGroupAdd,
+  });
 
   @override
   State<_AddFab> createState() => _AddFabState();
@@ -196,6 +228,10 @@ class _AddFabState extends State<_AddFab> {
   static const double _stackH = 80;
 
   void _toggle() {
+    if (widget.isGroupMode) {
+      widget.onGroupAdd?.call();
+      return;
+    }
     if (_open) {
       _close();
     } else {
@@ -239,12 +275,28 @@ class _AddFabState extends State<_AddFab> {
         ),
       ),
       const SizedBox(height: 4),
-      Text(
-        'Add',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: widget.brand.inkSoft,
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.4),
+              end: Offset.zero,
+            ).animate(anim),
+            child: child,
+          ),
+        ),
+        child: Text(
+          widget.isGroupMode ? 'Group' : 'Add',
+          key: ValueKey(widget.isGroupMode),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: widget.brand.inkSoft,
+          ),
         ),
       ),
     ],
