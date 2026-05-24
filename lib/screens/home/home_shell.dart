@@ -13,7 +13,6 @@ import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
 import '../group/add_group_expense_screen.dart';
-import '../group/group_dashboard_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
@@ -1198,19 +1197,12 @@ class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
 }
 
 // ── Home tab wrapper ─────────────────────────────────────────────────────────
-// Renders GroupDashboardScreen when in group mode (groups exist), otherwise
-// the personal DashboardScreen.
+// Always renders DashboardScreen — it handles both personal and group mode
+// in-place via PersonalGroupToggle, keeping the header stable.
 
-class _HomeTabWrapper extends ConsumerWidget {
+class _HomeTabWrapper extends StatelessWidget {
   const _HomeTabWrapper();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final homeMode = ref.watch(homeModeProvider);
-    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
-    if (homeMode == HomeMode.group && groups.isNotEmpty) {
-      return const GroupDashboardScreen();
-    }
-    return const DashboardScreen();
-  }
+  Widget build(BuildContext context) => const DashboardScreen();
 }

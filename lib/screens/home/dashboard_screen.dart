@@ -220,7 +220,7 @@ class DashboardScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       const FxRateButton(),
                       const SizedBox(width: 10),
-                      if (isGroupMode)
+                      if (isGroupMode) ...[
                         GestureDetector(
                           onTap: () => showGroupMenu(
                             context,
@@ -232,8 +232,10 @@ class DashboardScreen extends ConsumerWidget {
                             group: activeGroup,
                             userId: user?.uid,
                           ),
-                        )
-                      else
+                        ),
+                        const SizedBox(width: 8),
+                        const ProfileAvatarButton(),
+                      ] else
                         const ProfileAvatarButton(),
                     ],
                   ),
