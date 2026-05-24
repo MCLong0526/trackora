@@ -10,6 +10,7 @@ import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/personal_group_toggle.dart';
 import '../../widgets/profile_avatar_button.dart';
 import 'add_group_expense_screen.dart';
@@ -30,6 +31,7 @@ class GroupDashboardScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull;
 
     final groups = groupsAsync.valueOrNull ?? const [];
+    final visible = ref.watch(balanceVisibleProvider);
 
     // Auto-select first group if active is null
     if (activeGroupId == null && groups.isNotEmpty) {
@@ -76,10 +78,33 @@ class GroupDashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                // Group avatar pill + profile button
+                // Eye + currency + group pill + profile
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    GestureDetector(
+                      onTap: () => ref
+                          .read(balanceVisibleProvider.notifier)
+                          .toggle(),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          visible
+                              ? CupertinoIcons.eye
+                              : CupertinoIcons.eye_slash,
+                          size: 17,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const FxRateButton(),
+                    const SizedBox(width: 10),
                     GestureDetector(
                       onTap: () =>
                           showGroupMenu(context, ref, activeGroup, user?.uid),
