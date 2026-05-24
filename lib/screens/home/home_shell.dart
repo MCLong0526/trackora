@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
 import '../group/add_group_expense_screen.dart';
+import '../group/group_dashboard_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
@@ -31,11 +32,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   bool _fabOpen = false;
   final _fabKey = GlobalKey<_AddFabState>();
 
-  static const _screens = <Widget>[
-    _HomeTabWrapper(),
-    StatisticsScreen(),
-    BudgetScreen(),
-    AssetsScreen(),
+  List<Widget> get _screens => [
+    _HomeTabWrapper(onSwipeOffLeft: _onHomeSwipedLeft),
+    const StatisticsScreen(),
+    const BudgetScreen(),
+    const AssetsScreen(),
   ];
 
   static const _navPurple = AppActionBlue.color;
@@ -123,6 +124,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
+  void _onHomeSwipedLeft() {
+    if (_index == 0 && _index < 3) setState(() => _index = 1);
+  }
+
+  void _onSwipeLeft() {
+    if (_index < 3) setState(() => _index = _index + 1);
+  }
+
+  void _onSwipeRight() {
+    if (_index > 0) setState(() => _index = _index - 1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -138,7 +151,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     return Scaffold(
       backgroundColor: brand.background,
-      body: Stack(
+      body: GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
+        onHorizontalDragEnd: _index != 0
+            ? (d) {
+                final vx = d.velocity.pixelsPerSecond.dx;
+                if (vx < -300) _onSwipeLeft();
+                if (vx > 300) _onSwipeRight();
+              }
+            : null,
+        child: Stack(
         children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 260),
@@ -183,6 +205,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               onGroupTrip: () => _runAddAction(_openGroupTrip),
             ),
         ],
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: _AddFab(
@@ -190,7 +213,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         brand: brand,
         onOpenChanged: (v) => setState(() => _fabOpen = v),
         isGroupMode: isGroupMode,
-        onGroupAdd: isGroupMode ? () => _openGroupExpense(activeGroup!) : null,
+        onGroupAdd: isGroupMode
+            ? () => _openGroupExpense(activeGroup)
+            : null,
       ),
       bottomNavigationBar: _BottomBar(
         index: _index,
@@ -1195,14 +1220,97 @@ class _FirstLaunchCurrencySheetState extends State<_FirstLaunchCurrencySheet> {
 }
 
 // ── Home tab wrapper ─────────────────────────────────────────────────────────
-// Crossfades only the content when switching Personal ↔ Group — no full-screen
-// page swap. Tab transitions still use the outer AnimatedSwitcher in HomeShell.
+// Shows Personal or Group dashboard. Swipe left/right switches between them;
+// swiping left from Group calls onSwipeOffLeft to navigate to the next tab.
 
-class _HomeTabWrapper extends ConsumerWidget {
-  const _HomeTabWrapper();
+class _HomeTabWrapper extends ConsumerStatefulWidget {
+  final VoidCallback? onSwipeOffLeft;
+
+  const _HomeTabWrapper({super.key, this.onSwipeOffLeft});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const DashboardScreen();
+  ConsumerState<_HomeTabWrapper> createState() => _HomeTabWrapperState();
+}
+
+class _HomeTabWrapperState extends ConsumerState<_HomeTabWrapper> {
+  late final PageController _pageCtrl;
+  double _dragStartX = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = ref.read(homeModeProvider) == HomeMode.group ? 1 : 0;
+    _pageCtrl = PageController(initialPage: initial);
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  void _goToPage(int page) {
+    _pageCtrl.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final hasGroup = groups.isNotEmpty;
+
+    // Sync page controller when homeModeProvider changes externally.
+    ref.listen(homeModeProvider, (prev, next) {
+      if (!mounted) return;
+      final target = next == HomeMode.group ? 1 : 0;
+      if ((_pageCtrl.page?.round() ?? 0) != target) _goToPage(target);
+    });
+
+    if (!hasGroup) {
+      return const DashboardScreen();
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (d) => _dragStartX = d.globalPosition.dx,
+      onHorizontalDragEnd: (d) {
+        final vx = d.velocity.pixelsPerSecond.dx;
+        final dx = d.globalPosition.dx - _dragStartX;
+        final isLeft = vx < -300 || (vx.abs() < 200 && dx < -50);
+        final isRight = vx > 300 || (vx.abs() < 200 && dx > 50);
+        final currentPage = _pageCtrl.page?.round() ?? 0;
+
+        if (isLeft) {
+          if (currentPage == 0) {
+            ref.read(homeModeProvider.notifier).state = HomeMode.group;
+            _goToPage(1);
+          } else {
+            widget.onSwipeOffLeft?.call();
+          }
+        } else if (isRight) {
+          if (currentPage == 1) {
+            ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+            _goToPage(0);
+          }
+        }
+      },
+      child: PageView(
+        controller: _pageCtrl,
+        physics: const NeverScrollableScrollPhysics(),
+        onPageChanged: (page) {
+          final mode = page == 1 ? HomeMode.group : HomeMode.personal;
+          if (ref.read(homeModeProvider) != mode) {
+            ref.read(homeModeProvider.notifier).state = mode;
+          }
+        },
+        children: const [
+          DashboardScreen(),
+          GroupDashboardScreen(),
+        ],
+      ),
+    );
   }
 }

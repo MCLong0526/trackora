@@ -782,6 +782,8 @@ enum HomeMode { personal, group }
 
 final homeModeProvider = StateProvider<HomeMode>((_) => HomeMode.personal);
 
+final mainTabIndexProvider = StateProvider<int>((_) => 0);
+
 final activeGroupIdProvider = StateProvider<String?>((_) => null);
 
 final removedExpenseGroupIdsProvider = StateProvider<Set<String>>(
