@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -13,6 +14,13 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/person_avatar.dart';
 import 'add_edit_borrow_lending_screen.dart';
 import 'borrow_lending_detail_screen.dart';
+
+// Coordinates open/close state across all swipe rows.
+class _BlCoordinator extends ValueNotifier<String?> {
+  _BlCoordinator() : super(null);
+  void openRow(String id) => value = id;
+  void closeAll() => value = null;
+}
 
 /// Borrow & Lending list screen.
 ///
@@ -35,10 +43,12 @@ enum _Filter { all, borrowed, lent, active, settled }
 class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
   _Filter _filter = _Filter.all;
   final _searchCtrl = TextEditingController();
+  final _coordinator = _BlCoordinator();
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _coordinator.dispose();
     super.dispose();
   }
 
@@ -90,7 +100,10 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: _coordinator.closeAll,
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
         child: async.when(
           loading: () => const Center(child: CupertinoActivityIndicator()),
           error: (e, _) =>
@@ -138,6 +151,7 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
                               child: _BorrowSwipeActions(
                                 record: filtered[i],
                                 userId: user?.uid,
+                                coordinator: _coordinator,
                                 child: _RecordTile(
                                   record: filtered[i],
                                   symbol: symbol,
@@ -157,6 +171,7 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
               ],
             );
           },
+        ),
         ),
       ),
     );
@@ -557,98 +572,152 @@ class _RecordTile extends StatelessWidget {
   }
 }
 
-class _BorrowSwipeActions extends ConsumerWidget {
+// ── Swipe actions (matches installment / saving-plan pattern) ─────────────────
+
+class _BorrowSwipeActions extends ConsumerStatefulWidget {
   final BorrowLending record;
   final String? userId;
   final Widget child;
+  final _BlCoordinator coordinator;
 
   const _BorrowSwipeActions({
     required this.record,
     required this.userId,
     required this.child,
+    required this.coordinator,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Dismissible(
-      key: ValueKey('borrow-swipe-${record.id}'),
-      direction: DismissDirection.horizontal,
-      background: _SwipeActionBackground(
-        icon: CupertinoIcons.pencil,
-        label: context.t('common.edit'),
-        alignment: Alignment.centerLeft,
-        color: AppColors.mint,
-      ),
-      secondaryBackground: _SwipeActionBackground(
-        icon: CupertinoIcons.ellipsis,
-        label: context.t('common.actions'),
-        alignment: Alignment.centerRight,
-        color: AppColors.blush,
-      ),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => AddEditBorrowLendingScreen(record: record),
-            ),
-          );
-        } else {
-          await _showMoreActions(context, ref);
-        }
-        return false;
-      },
-      child: child,
+  ConsumerState<_BorrowSwipeActions> createState() =>
+      _BorrowSwipeActionsState();
+}
+
+class _BorrowSwipeActionsState extends ConsumerState<_BorrowSwipeActions>
+    with SingleTickerProviderStateMixin {
+  // Right panel: settle + delete = 2 × 88 = 176; left panel: 88.
+  static const double _rightPanelW = 176.0;
+  static const double _leftPanelW = 88.0;
+
+  late final AnimationController _ctrl;
+  late final CurvedAnimation _curve;
+  double _offset = 0;
+  double _animStart = 0;
+  double _animTarget = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _ctrl.addListener(_onTick);
+    widget.coordinator.addListener(_onCoordinatorChange);
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChange);
+    _ctrl.dispose();
+    _curve.dispose();
+    super.dispose();
+  }
+
+  void _onCoordinatorChange() {
+    if (widget.coordinator.value != widget.record.id && _offset != 0) {
+      _springAnimate(0);
+    }
+  }
+
+  void _onTick() {
+    setState(
+      () => _offset = _animStart + (_animTarget - _animStart) * _curve.value,
     );
   }
 
-  Future<void> _showMoreActions(BuildContext context, WidgetRef ref) async {
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(
-          record.person.isEmpty ? context.t('bl.unknownPerson') : record.person,
-        ),
-        actions: [
-          if (record.status != BorrowLendingStatus.settled &&
-              record.status != BorrowLendingStatus.cancelled)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await ref
-                      .read(borrowLendingServiceProvider)
-                      .markSettled(userId!, record);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Marked as settled', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to settle', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('bl.markSettled')),
-            ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _confirmDelete(context, ref);
-            },
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.t('common.cancel')),
-        ),
+  void _springAnimate(double target) {
+    _ctrl.stop();
+    _animStart = _offset;
+    _animTarget = target;
+    _ctrl
+      ..reset()
+      ..forward();
+  }
+
+  void _close() => _springAnimate(0);
+
+  void _onDragStart(DragStartDetails _) {
+    _ctrl.stop();
+    widget.coordinator.openRow(widget.record.id);
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() {
+      _offset = (_offset + d.delta.dx).clamp(-_rightPanelW, _leftPanelW);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (_offset < 0) {
+      (_offset < -_rightPanelW * 0.35 || v < -500)
+          ? _springAnimate(-_rightPanelW)
+          : _springAnimate(0);
+    } else {
+      (_offset > _leftPanelW * 0.35 || v > 500)
+          ? _handleEditSwipe()
+          : _springAnimate(0);
+    }
+  }
+
+  Future<void> _handleEditSwipe() async {
+    HapticFeedback.selectionClick();
+    _springAnimate(_leftPanelW);
+    await Future.delayed(const Duration(milliseconds: 280));
+    if (!mounted) return;
+    _springAnimate(0);
+    await Future.delayed(const Duration(milliseconds: 160));
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddEditBorrowLendingScreen(record: widget.record),
       ),
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _settleRecord() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
+    if (userId == null) return;
+    if (widget.record.status == BorrowLendingStatus.settled ||
+        widget.record.status == BorrowLendingStatus.cancelled) {
+      if (mounted) {
+        AppToast.show(context, 'Already settled or cancelled',
+            type: AppToastType.error);
+      }
+      return;
+    }
+    try {
+      await ref
+          .read(borrowLendingServiceProvider)
+          .markSettled(userId, widget.record);
+      if (mounted) {
+        AppToast.show(context, 'Marked as settled', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed to settle', type: AppToastType.error);
+      }
+    }
+  }
+
+  Future<void> _deleteRecord() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
     if (userId == null) return;
     final ok = await showCupertinoDialog<bool>(
       context: context,
@@ -668,56 +737,164 @@ class _BorrowSwipeActions extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) {
+    if (ok == true && mounted) {
       try {
-        await ref.read(borrowLendingServiceProvider).delete(userId!, record.id);
-        if (context.mounted) {
+        await ref
+            .read(borrowLendingServiceProvider)
+            .delete(userId, widget.record.id);
+        if (mounted) {
           AppToast.show(context, 'Record deleted', type: AppToastType.success);
         }
       } catch (_) {
-        if (context.mounted) {
+        if (mounted) {
           AppToast.show(context, 'Failed to delete', type: AppToastType.error);
         }
       }
     }
   }
-}
-
-class _SwipeActionBackground extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Alignment alignment;
-  final Color color;
-
-  const _SwipeActionBackground({
-    required this.icon,
-    required this.label,
-    required this.alignment,
-    required this.color,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+    final revealRight = (-_offset / _rightPanelW).clamp(0.0, 1.0);
+    final revealLeft = (_offset / _leftPanelW).clamp(0.0, 1.0);
+    final isOpen = _offset != 0;
+    final canSettle = widget.record.status != BorrowLendingStatus.settled &&
+        widget.record.status != BorrowLendingStatus.cancelled;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: GestureDetector(
+        onHorizontalDragStart: _onDragStart,
+        onHorizontalDragUpdate: _onDragUpdate,
+        onHorizontalDragEnd: _onDragEnd,
+        child: Stack(
+          children: [
+            // Right panel (swipe left): Settle / Delete
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: _rightPanelW,
+              child: Row(
+                children: [
+                  if (canSettle)
+                    Expanded(
+                      child: _BlSwipeAction(
+                        label: context.t('bl.markSettled'),
+                        icon: CupertinoIcons.checkmark_circle_fill,
+                        color: const Color.fromARGB(200, 52, 199, 89),
+                        reveal: canSettle
+                            ? (revealRight * 2).clamp(0.0, 1.0)
+                            : revealRight,
+                        onTap: _settleRecord,
+                      ),
+                    ),
+                  Expanded(
+                    child: _BlSwipeAction(
+                      label: context.t('common.delete'),
+                      icon: CupertinoIcons.trash_fill,
+                      color: const Color.fromARGB(200, 255, 69, 58),
+                      reveal: canSettle
+                          ? (revealRight * 2 - 0.3).clamp(0.0, 1.0)
+                          : revealRight,
+                      onTap: _deleteRecord,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Left panel (swipe right): Edit
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _leftPanelW,
+              child: _BlSwipeAction(
+                label: context.t('common.edit'),
+                icon: CupertinoIcons.pencil,
+                color: const Color.fromARGB(200, 0, 122, 255),
+                reveal: revealLeft,
+                onTap: _handleEditSwipe,
+              ),
+            ),
+            // Main content
+            Transform.translate(
+              offset: Offset(_offset, 0),
+              child: isOpen
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _close,
+                      child: AbsorbPointer(child: widget.child),
+                    )
+                  : widget.child,
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppColors.ink, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w600,
+    );
+  }
+}
+
+class _BlSwipeAction extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final double reveal;
+  final VoidCallback onTap;
+
+  const _BlSwipeAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.reveal,
+    required this.onTap,
+  });
+
+  @override
+  State<_BlSwipeAction> createState() => _BlSwipeActionState();
+}
+
+class _BlSwipeActionState extends State<_BlSwipeAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        width: double.infinity,
+        height: double.infinity,
+        color: _pressed
+            ? widget.color.withValues(alpha: widget.color.a * 0.7)
+            : widget.color,
+        child: Transform.scale(
+          scale: 0.7 + 0.3 * widget.reveal,
+          child: Opacity(
+            opacity: widget.reveal.clamp(0.0, 1.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(widget.icon, color: Colors.white, size: 22),
+                const SizedBox(height: 4),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

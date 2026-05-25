@@ -90,11 +90,15 @@ class _AddEditSavingPlanScreenState
   void _onContributionChanged() {
     if (_isUpdating) return;
     if (_contribution.text.trim().isEmpty) {
-      _contribIsAuto = true;
-    } else {
+      // User cleared the field — reset flags but do NOT auto-refill it.
       _contribIsAuto = false;
-      _periodsIsAuto = true;
+      _periodsIsAuto = false;
+      setState(() => _endDate = null);
+      return;
     }
+    // User typed a value — periods will now be auto-computed.
+    _contribIsAuto = false;
+    _periodsIsAuto = true;
     _recalculateFixed();
   }
 
@@ -102,10 +106,13 @@ class _AddEditSavingPlanScreenState
     if (_isUpdating) return;
     if (_periodsCtrl.text.trim().isEmpty) {
       _periodsIsAuto = true;
-    } else {
-      _periodsIsAuto = false;
-      _contribIsAuto = true;
+      _contribIsAuto = false;
+      setState(() => _endDate = null);
+      return;
     }
+    // User typed periods — contribution will now be auto-computed.
+    _periodsIsAuto = false;
+    _contribIsAuto = true;
     _recalculateFixed();
   }
 
@@ -122,15 +129,19 @@ class _AddEditSavingPlanScreenState
       if (_periodsIsAuto &&
           target != null && target > 0 &&
           contribution != null && contribution > 0) {
+        // Compute periods from target ÷ contribution.
         final p = (target / contribution).ceil();
         _periodsCtrl.text = '$p';
         newEndDate = _computeEndDate(p);
       } else if (_contribIsAuto &&
           target != null && target > 0 &&
           periods != null && periods > 0) {
+        // Compute contribution from target ÷ periods.
         _contribution.text = (target / periods).toStringAsFixed(2);
         newEndDate = _computeEndDate(periods);
-      } else if (periods != null && periods > 0) {
+      } else if (periods != null && periods > 0 &&
+          contribution != null && contribution > 0) {
+        // Both user-entered — just keep end date in sync.
         newEndDate = _computeEndDate(periods);
       }
 
