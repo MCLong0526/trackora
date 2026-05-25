@@ -73,60 +73,73 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                   onSelected: (f) => setState(() => _filter = f),
                 ),
                 const SizedBox(height: 18),
-                if (plans.isEmpty)
-                  _EmptyState(
-                    onAdd: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => const AddEditSavingPlanScreen(),
-                      ),
-                    ),
-                  )
-                else ...[
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 10),
-                    child: Text(
-                      'PLANS',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF8E8E93),
-                        letterSpacing: 0.8,
-                      ),
-                    ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: child,
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: context.brand.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Column(
-                        children: [
-                          for (int i = 0; i < filtered.length; i++) ...[
-                            _SavingPlanSwipeActions(
-                              plan: filtered[i],
-                              symbol: symbol,
-                              userId: user?.uid,
-                              child: _PlanRow(
-                                plan: filtered[i],
-                                symbol: symbol,
+                  child: plans.isEmpty
+                      ? _EmptyState(
+                          onAdd: () => Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (_) => const AddEditSavingPlanScreen(),
+                            ),
+                          ),
+                        )
+                      : Column(
+                          key: ValueKey(_filter),
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                'PLANS',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF8E8E93),
+                                  letterSpacing: 0.8,
+                                ),
                               ),
                             ),
-                            if (i < filtered.length - 1)
-                              Divider(
-                                height: 1,
-                                color: context.brand.divider,
-                                indent: 16,
-                                endIndent: 0,
+                            Container(
+                              decoration: BoxDecoration(
+                                color: context.brand.surface,
+                                borderRadius: BorderRadius.circular(20),
                               ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Column(
+                                  children: [
+                                    for (int i = 0; i < filtered.length; i++) ...[
+                                      _SavingPlanSwipeActions(
+                                        plan: filtered[i],
+                                        symbol: symbol,
+                                        userId: user?.uid,
+                                        child: _PlanRow(
+                                          plan: filtered[i],
+                                          symbol: symbol,
+                                        ),
+                                      ),
+                                      if (i < filtered.length - 1)
+                                        Divider(
+                                          height: 1,
+                                          color: context.brand.divider,
+                                          indent: 16,
+                                          endIndent: 0,
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                        ),
+                ),
               ],
             );
           },
@@ -321,41 +334,71 @@ class _FilterSegment extends StatelessWidget {
       (_Filter.completed, context.t('sp.filterCompleted')),
       (_Filter.cancelled, context.t('sp.filterCancelled')),
     ];
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: brand.divider,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          for (final (f, label) in filters)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(f),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  alignment: Alignment.center,
+    final selectedIdx = filters.indexWhere((f) => f.$1 == selected);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final pillW = (constraints.maxWidth - 8) / 4;
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.divider,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: selectedIdx * pillW,
+                top: 0,
+                bottom: 0,
+                width: pillW,
+                child: Container(
                   decoration: BoxDecoration(
-                    color: f == selected ? brand.surface : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: f == selected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: f == selected ? brand.ink : brand.inkSoft,
-                    ),
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
+              Row(
+                children: [
+                  for (final (f, label) in filters)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => onSelected(f),
+                        child: Container(
+                          alignment: Alignment.center,
+                          color: Colors.transparent,
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: f == selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: f == selected ? brand.ink : brand.inkSoft,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

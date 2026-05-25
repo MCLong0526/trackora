@@ -40,6 +40,7 @@ class _AddEditSavingPlanScreenState
   DateTime _startDate = DateTime.now();
   DateTime? _endDate;
   bool _saving = false;
+  bool _success = false;
 
   bool get _isEdit => widget.plan != null;
 
@@ -186,19 +187,20 @@ class _AddEditSavingPlanScreenState
         );
       }
       if (mounted) {
+        setState(() { _saving = false; _success = true; });
         AppToast.show(
           context,
           _isEdit ? 'Plan updated' : 'Plan created',
           type: AppToastType.success,
         );
-        Navigator.pop(context);
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (mounted) Navigator.pop(context);
       }
     } catch (_) {
       if (mounted) {
         AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
+        setState(() => _saving = false);
       }
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -258,68 +260,80 @@ class _AddEditSavingPlanScreenState
                 },
               ),
               const SizedBox(height: 12),
-              if (_type == SavingPlanType.fixed) ...[
-                TextFormField(
-                  controller: _contribution,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: context.t('sp.fieldContribution'),
-                    prefixText: '$symbol  ',
-                  ),
-                  validator: (v) {
-                    if (_type != SavingPlanType.fixed) return null;
-                    if (v == null || v.isEmpty) {
-                      return context.t('validation.enterAmount');
-                    }
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) {
-                      return context.t('validation.invalidAmount');
-                    }
-                    return null;
-                  },
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: Column(
+                  key: ValueKey(_type),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_type == SavingPlanType.fixed) ...[
+                      TextFormField(
+                        controller: _contribution,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: context.t('sp.fieldContribution'),
+                          prefixText: '$symbol  ',
+                        ),
+                        validator: (v) {
+                          if (_type != SavingPlanType.fixed) return null;
+                          if (v == null || v.isEmpty) {
+                            return context.t('validation.enterAmount');
+                          }
+                          final n = double.tryParse(v);
+                          if (n == null || n <= 0) {
+                            return context.t('validation.invalidAmount');
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _frequencyPicker(brand),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_type == SavingPlanType.daysChallenge) ...[
+                      TextFormField(
+                        controller: _totalDays,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: context.t('sp.fieldDays'),
+                          hintText: '30',
+                        ),
+                        validator: (v) {
+                          if (_type != SavingPlanType.daysChallenge) return null;
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0) {
+                            return context.t('sp.invalidDays');
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_type == SavingPlanType.weeksChallenge) ...[
+                      TextFormField(
+                        controller: _totalWeeks,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: context.t('sp.fieldWeeks'),
+                          hintText: '12',
+                        ),
+                        validator: (v) {
+                          if (_type != SavingPlanType.weeksChallenge) return null;
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0) {
+                            return context.t('sp.invalidWeeks');
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 12),
-                _frequencyPicker(brand),
-                const SizedBox(height: 12),
-              ],
-              if (_type == SavingPlanType.daysChallenge)
-                TextFormField(
-                  controller: _totalDays,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: context.t('sp.fieldDays'),
-                    hintText: '30',
-                  ),
-                  validator: (v) {
-                    if (_type != SavingPlanType.daysChallenge) return null;
-                    final n = int.tryParse((v ?? '').trim());
-                    if (n == null || n <= 0) {
-                      return context.t('sp.invalidDays');
-                    }
-                    return null;
-                  },
-                ),
-              if (_type == SavingPlanType.weeksChallenge)
-                TextFormField(
-                  controller: _totalWeeks,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: context.t('sp.fieldWeeks'),
-                    hintText: '12',
-                  ),
-                  validator: (v) {
-                    if (_type != SavingPlanType.weeksChallenge) return null;
-                    final n = int.tryParse((v ?? '').trim());
-                    if (n == null || n <= 0) {
-                      return context.t('sp.invalidWeeks');
-                    }
-                    return null;
-                  },
-                ),
-              if (_type == SavingPlanType.daysChallenge ||
-                  _type == SavingPlanType.weeksChallenge)
-                const SizedBox(height: 12),
+              ),
               _dateTile(
                 label: context.t('sp.fieldStartDate'),
                 value: DateFormat('MMM d, yyyy').format(_startDate),
@@ -344,20 +358,45 @@ class _AddEditSavingPlanScreenState
                 ),
               ),
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(_isEdit
-                        ? context.t('common.update')
-                        : context.t('common.save')),
+              TweenAnimationBuilder<Color?>(
+                tween: ColorTween(
+                  begin: _success ? Theme.of(context).colorScheme.primary : null,
+                  end: _success
+                      ? const Color(0xFF34C759)
+                      : Theme.of(context).colorScheme.primary,
+                ),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                builder: (ctx, color, _) => FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: color),
+                  onPressed: (_saving || _success) ? null : _save,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: _success
+                        ? const Icon(
+                            CupertinoIcons.checkmark_alt,
+                            size: 20,
+                            color: Colors.white,
+                            key: ValueKey('success'),
+                          )
+                        : _saving
+                            ? const SizedBox(
+                                key: ValueKey('loading'),
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                _isEdit
+                                    ? context.t('common.update')
+                                    : context.t('common.save'),
+                                key: const ValueKey('label'),
+                              ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -369,53 +408,87 @@ class _AddEditSavingPlanScreenState
 
   Widget _typeSelector(BrandColors brand) {
     final selectedFg = foregroundOn(brand.accentDark);
-    Widget opt(SavingPlanType type, String label, IconData icon) {
-      final selected = _type == type;
-      return GestureDetector(
-        onTap: () => setState(() => _type = type),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    final types = <(SavingPlanType, String, IconData)>[
+      (SavingPlanType.fixed, context.t('sp.typeFixed'),
+          CupertinoIcons.calendar_badge_plus),
+      (SavingPlanType.flexible, context.t('sp.typeFlexible'),
+          CupertinoIcons.drop_fill),
+      (SavingPlanType.daysChallenge, context.t('sp.typeDays'),
+          CupertinoIcons.number_circle),
+    ];
+    final selectedIdx = types.indexWhere((t) => t.$1 == _type);
+
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final segW = (constraints.maxWidth - 8) / 3;
+        return Container(
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: selected ? brand.accentDark : brand.surface,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
             children: [
-              Icon(
-                icon,
-                size: 14,
-                color: selected ? selectedFg : brand.ink,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? selectedFg : brand.ink,
+              if (selectedIdx >= 0)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  left: selectedIdx * segW,
+                  top: 0,
+                  bottom: 0,
+                  width: segW,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: brand.accentDark,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                  ),
                 ),
+              Row(
+                children: [
+                  for (final (type, label, icon) in types)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _type = type),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  icon,
+                                  key: ValueKey(type == _type),
+                                  size: 18,
+                                  color:
+                                      type == _type ? selectedFg : brand.ink,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeInOut,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color:
+                                      type == _type ? selectedFg : brand.ink,
+                                ),
+                                child: Text(label),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
-        ),
-      );
-    }
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        opt(SavingPlanType.fixed, context.t('sp.typeFixed'),
-            CupertinoIcons.calendar_badge_plus),
-        opt(SavingPlanType.flexible, context.t('sp.typeFlexible'),
-            CupertinoIcons.drop_fill),
-        opt(SavingPlanType.daysChallenge, context.t('sp.typeDays'),
-            CupertinoIcons.number_circle),
-        opt(SavingPlanType.weeksChallenge, context.t('sp.typeWeeks'),
-            CupertinoIcons.calendar),
-      ],
+        );
+      },
     );
   }
 

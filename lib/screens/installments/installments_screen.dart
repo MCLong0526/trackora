@@ -14,11 +14,38 @@ import '../../widgets/section_card.dart';
 import 'add_edit_installment_screen.dart';
 import 'installment_detail_screen.dart';
 
-class InstallmentsScreen extends ConsumerWidget {
+// Coordinates open/close state across all swipe rows so only one can be open at a time.
+class _SwipeCoordinator extends ValueNotifier<String?> {
+  _SwipeCoordinator() : super(null);
+
+  void openRow(String id) => value = id;
+  void closeAll() => value = null;
+}
+
+class InstallmentsScreen extends ConsumerStatefulWidget {
   const InstallmentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InstallmentsScreen> createState() => _InstallmentsScreenState();
+}
+
+class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
+  final _coordinator = _SwipeCoordinator();
+
+  @override
+  void dispose() {
+    _coordinator.dispose();
+    super.dispose();
+  }
+
+  static int _statusRank(InstallmentStatus s) => switch (s) {
+        InstallmentStatus.active => 0,
+        InstallmentStatus.completed => 1,
+        InstallmentStatus.cancelled => 2,
+      };
+
+  @override
+  Widget build(BuildContext context) {
     final brand = context.brand;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final installmentsAsync = ref.watch(installmentsProvider);
@@ -44,105 +71,104 @@ class InstallmentsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: installmentsAsync.when(
-          loading: () => const Center(child: CupertinoActivityIndicator()),
-          error: (e, _) =>
-              Center(child: Text('${context.t('common.error')}: $e')),
-          data: (items) {
-            if (items.isEmpty) return _Empty();
-            final sorted = [...items]
-              ..sort((a, b) {
-                final aRank = _statusRank(a.status);
-                final bRank = _statusRank(b.status);
-                if (aRank != bRank) return aRank.compareTo(bRank);
-                return a.dayOfMonth.compareTo(b.dayOfMonth);
-              });
+      body: GestureDetector(
+        onTap: _coordinator.closeAll,
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
+          child: installmentsAsync.when(
+            loading: () => const Center(child: CupertinoActivityIndicator()),
+            error: (e, _) =>
+                Center(child: Text('${context.t('common.error')}: $e')),
+            data: (items) {
+              if (items.isEmpty) return _Empty();
+              final sorted = [...items]
+                ..sort((a, b) {
+                  final aRank = _statusRank(a.status);
+                  final bRank = _statusRank(b.status);
+                  if (aRank != bRank) return aRank.compareTo(bRank);
+                  return a.dayOfMonth.compareTo(b.dayOfMonth);
+                });
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              children: [
-                _SummaryCard(items: items, symbol: symbol),
-                const SizedBox(height: 20),
-                // Section header
-                Row(
-                  children: [
-                    Text(
-                      context.t('inst.all').toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF8E8E93),
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {},
-                      child: const Text(
-                        'Filter',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppActionBlue.color,
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                children: [
+                  _SummaryCard(items: items, symbol: symbol),
+                  const SizedBox(height: 20),
+                  // Section header
+                  Row(
+                    children: [
+                      Text(
+                        context.t('inst.all').toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF8E8E93),
+                          letterSpacing: 0.8,
                         ),
                       ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () {},
+                        child: const Text(
+                          'Filter',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppActionBlue.color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Grouped card with all installments
+                  Container(
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                // Grouped card with all installments
-                Container(
-                  decoration: BoxDecoration(
-                    color: brand.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Column(
-                      children: [
-                        for (int i = 0; i < sorted.length; i++) ...[
-                          _InstallmentSwipeActions(
-                            installment: sorted[i],
-                            userId: user?.uid,
-                            child: _InstallmentRow(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < sorted.length; i++) ...[
+                            _InstallmentSwipeActions(
                               installment: sorted[i],
-                              symbol: symbol,
-                              onTap: () => Navigator.push(
-                                context,
-                                CupertinoPageRoute(
-                                  builder: (_) => InstallmentDetailScreen(
-                                    installmentId: sorted[i].id,
+                              userId: user?.uid,
+                              coordinator: _coordinator,
+                              child: _InstallmentRow(
+                                installment: sorted[i],
+                                symbol: symbol,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => InstallmentDetailScreen(
+                                      installmentId: sorted[i].id,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (i < sorted.length - 1)
-                            Divider(
-                              height: 1,
-                              color: brand.divider,
-                              indent: 16,
-                              endIndent: 0,
-                            ),
+                            if (i < sorted.length - 1)
+                              Divider(
+                                height: 1,
+                                color: brand.divider,
+                                indent: 16,
+                                endIndent: 0,
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
-
-  static int _statusRank(InstallmentStatus s) => switch (s) {
-        InstallmentStatus.active => 0,
-        InstallmentStatus.completed => 1,
-        InstallmentStatus.cancelled => 2,
-      };
 }
 
 // ── Summary card ──────────────────────────────────────────────
@@ -191,7 +217,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(20),
-        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -508,227 +534,386 @@ class _InstallmentRow extends StatelessWidget {
   }
 }
 
-// ── Swipe actions (unchanged functionality) ───────────────────
+// ── Swipe actions ─────────────────────────────────────────────
 
-class _InstallmentSwipeActions extends ConsumerWidget {
+class _InstallmentSwipeActions extends ConsumerStatefulWidget {
   final Installment installment;
   final String? userId;
   final Widget child;
+  final _SwipeCoordinator coordinator;
 
   const _InstallmentSwipeActions({
     required this.installment,
     required this.userId,
     required this.child,
+    required this.coordinator,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Dismissible(
-      key: ValueKey('installment-swipe-${installment.id}'),
-      direction: DismissDirection.horizontal,
-      background: _SwipeBg(
-        icon: CupertinoIcons.pencil,
-        label: context.t('common.edit'),
-        alignment: Alignment.centerLeft,
-        color: AppColors.mint,
-      ),
-      secondaryBackground: _SwipeBg(
-        icon: CupertinoIcons.ellipsis,
-        label: context.t('common.actions'),
-        alignment: Alignment.centerRight,
-        color: AppColors.blush,
-      ),
-      confirmDismiss: (direction) async {
-        HapticFeedback.selectionClick();
-        if (direction == DismissDirection.startToEnd) {
-          Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) =>
-                  AddEditInstallmentScreen(installment: installment),
-            ),
-          );
-        } else {
-          await _showMoreActions(context, ref);
-        }
-        return false;
-      },
-      child: child,
+  ConsumerState<_InstallmentSwipeActions> createState() =>
+      _InstallmentSwipeActionsState();
+}
+
+class _InstallmentSwipeActionsState
+    extends ConsumerState<_InstallmentSwipeActions>
+    with SingleTickerProviderStateMixin {
+  static const double _rightPanelW = 240.0; // 3 × 80
+  static const double _leftPanelW = 88.0;
+
+  late final AnimationController _ctrl;
+  late final CurvedAnimation _curve;
+  double _offset = 0;
+  double _animStart = 0;
+  double _animTarget = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _ctrl.addListener(_onTick);
+    widget.coordinator.addListener(_onCoordinatorChange);
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChange);
+    _ctrl.dispose();
+    _curve.dispose();
+    super.dispose();
+  }
+
+  void _onCoordinatorChange() {
+    final openId = widget.coordinator.value;
+    if (openId != widget.installment.id && _offset != 0) {
+      _springAnimate(0);
+    }
+  }
+
+  void _onTick() {
+    setState(
+      () => _offset = _animStart + (_animTarget - _animStart) * _curve.value,
     );
   }
 
-  Future<void> _showMoreActions(BuildContext context, WidgetRef ref) async {
-    final svc = ref.read(installmentServiceProvider);
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(installment.name),
-        actions: [
-          if (installment.status == InstallmentStatus.active)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await svc.markCompleted(userId!, installment);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Marked as completed', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to complete', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('inst.markCompleted')),
-            ),
-          if (installment.status == InstallmentStatus.cancelled)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await svc.reactivate(userId!, installment);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Reactivated', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('inst.reactivate')),
-            )
-          else
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await _confirmCancel(context, ref);
-              },
-              child: Text(context.t('inst.cancel')),
-            ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _confirmDelete(context, ref);
-            },
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.t('common.cancel')),
-        ),
+  void _springAnimate(double target) {
+    _ctrl.stop();
+    _animStart = _offset;
+    _animTarget = target;
+    _ctrl
+      ..reset()
+      ..forward();
+  }
+
+  void _close() => _springAnimate(0);
+
+  void _onDragStart(DragStartDetails _) {
+    _ctrl.stop();
+    widget.coordinator.openRow(widget.installment.id);
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() {
+      _offset = (_offset + d.delta.dx).clamp(-_rightPanelW, _leftPanelW);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (_offset < 0) {
+      (_offset < -_rightPanelW * 0.35 || v < -500)
+          ? _springAnimate(-_rightPanelW)
+          : _springAnimate(0);
+    } else {
+      (_offset > _leftPanelW * 0.35 || v > 500)
+          ? _handleEditSwipe()
+          : _springAnimate(0);
+    }
+  }
+
+  Future<void> _handleEditSwipe() async {
+    HapticFeedback.selectionClick();
+    _springAnimate(_leftPanelW);
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    _springAnimate(0);
+    await Future.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) =>
+            AddEditInstallmentScreen(installment: widget.installment),
       ),
     );
   }
 
-  Future<void> _confirmCancel(BuildContext context, WidgetRef ref) async {
+  Future<void> _markPaid() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
+    if (userId == null) return;
+    if (widget.installment.isPaidIn(DateTime.now())) {
+      if (mounted) {
+        AppToast.show(
+          context,
+          'Already paid this month',
+          type: AppToastType.success,
+        );
+      }
+      return;
+    }
+    try {
+      await ref
+          .read(installmentServiceProvider)
+          .markPaid(userId, widget.installment, DateTime.now());
+      if (mounted) {
+        AppToast.show(context, 'Marked as paid', type: AppToastType.success);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, 'Failed', type: AppToastType.error);
+      }
+    }
+  }
+
+  Future<void> _cancelInstallment() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
     if (userId == null) return;
     final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (dctx) => CupertinoAlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: Text(context.t('inst.cancelTitle')),
         content: Text(context.t('inst.cancelMessage')),
         actions: [
           CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
+            onPressed: () => Navigator.pop(ctx, false),
             child: Text(context.t('inst.keep')),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.t('inst.cancelIt')),
           ),
         ],
       ),
     );
-    if (ok == true) {
+    if (ok == true && mounted) {
       try {
         await ref
             .read(installmentServiceProvider)
-            .setCancelled(userId!, installment, true);
-        if (context.mounted) {
-          AppToast.show(context, 'Installment cancelled', type: AppToastType.success);
+            .setCancelled(userId, widget.installment, true);
+        if (mounted) {
+          AppToast.show(
+            context,
+            'Installment cancelled',
+            type: AppToastType.success,
+          );
         }
       } catch (_) {
-        if (context.mounted) {
+        if (mounted) {
           AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
         }
       }
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _deleteInstallment() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
     if (userId == null) return;
     final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (dctx) => CupertinoAlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: Text(context.t('inst.deleteTitle')),
         content: Text(context.t('inst.deleteMessage')),
         actions: [
           CupertinoDialogAction(
-            onPressed: () => Navigator.pop(dctx, false),
+            onPressed: () => Navigator.pop(ctx, false),
             child: Text(context.t('common.cancel')),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
-            onPressed: () => Navigator.pop(dctx, true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.t('common.delete')),
           ),
         ],
       ),
     );
-    if (ok == true) {
+    if (ok == true && mounted) {
       try {
-        await ref.read(installmentServiceProvider).delete(userId!, installment.id);
-        if (context.mounted) {
-          AppToast.show(context, 'Installment deleted', type: AppToastType.success);
+        await ref
+            .read(installmentServiceProvider)
+            .delete(userId, widget.installment.id);
+        if (mounted) {
+          AppToast.show(
+            context,
+            'Installment deleted',
+            type: AppToastType.success,
+          );
         }
       } catch (_) {
-        if (context.mounted) {
+        if (mounted) {
           AppToast.show(context, 'Failed to delete', type: AppToastType.error);
         }
       }
     }
   }
-}
-
-class _SwipeBg extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Alignment alignment;
-  final Color color;
-
-  const _SwipeBg({
-    required this.icon,
-    required this.label,
-    required this.alignment,
-    required this.color,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      color: color,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppColors.ink, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w600,
+    final brand = context.brand;
+    final revealRight = (-_offset / _rightPanelW).clamp(0.0, 1.0);
+    final revealLeft = (_offset / _leftPanelW).clamp(0.0, 1.0);
+    final isOpen = _offset != 0;
+
+    return ClipRect(
+      child: GestureDetector(
+        onHorizontalDragStart: _onDragStart,
+        onHorizontalDragUpdate: _onDragUpdate,
+        onHorizontalDragEnd: _onDragEnd,
+        child: Stack(
+          children: [
+            // Right panel (swipe left): Paid / Cancel / Delete — full height via Positioned
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: _rightPanelW,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _SwipeAction(
+                      label: 'Paid',
+                      icon: CupertinoIcons.checkmark_circle_fill,
+                      color: const Color(0xFF34C759),
+                      reveal: (revealRight * 3).clamp(0.0, 1.0),
+                      onTap: _markPaid,
+                    ),
+                  ),
+                  Expanded(
+                    child: _SwipeAction(
+                      label: 'Cancel',
+                      icon: CupertinoIcons.xmark_circle_fill,
+                      color: const Color(0xFFFF9500),
+                      reveal: (revealRight * 3 - 0.25).clamp(0.0, 1.0),
+                      onTap: _cancelInstallment,
+                    ),
+                  ),
+                  Expanded(
+                    child: _SwipeAction(
+                      label: 'Delete',
+                      icon: CupertinoIcons.trash_fill,
+                      color: const Color(0xFFFF3B30),
+                      reveal: (revealRight * 3 - 0.5).clamp(0.0, 1.0),
+                      onTap: _deleteInstallment,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Left panel (swipe right): Edit — full height via Positioned
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _leftPanelW,
+              child: _SwipeAction(
+                label: 'Edit',
+                icon: CupertinoIcons.pencil,
+                color: const Color(0xFF007AFF),
+                reveal: revealLeft,
+                onTap: _handleEditSwipe,
+              ),
+            ),
+            // Main content (translates with drag); absorbs taps when open to close row
+            Transform.translate(
+              offset: Offset(_offset, 0),
+              child: isOpen
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _close,
+                      child: AbsorbPointer(
+                        child: Container(
+                          color: brand.surface,
+                          child: widget.child,
+                        ),
+                      ),
+                    )
+                  : Container(color: brand.surface, child: widget.child),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SwipeAction extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final double reveal; // 0 = hidden, 1 = fully visible
+  final VoidCallback onTap;
+
+  const _SwipeAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.reveal,
+    required this.onTap,
+  });
+
+  @override
+  State<_SwipeAction> createState() => _SwipeActionState();
+}
+
+class _SwipeActionState extends State<_SwipeAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        width: double.infinity,
+        height: double.infinity,
+        color: _pressed
+            ? widget.color.withValues(alpha: 0.72)
+            : widget.color,
+        child: Transform.scale(
+          scale: 0.7 + 0.3 * widget.reveal,
+          child: Opacity(
+            opacity: widget.reveal.clamp(0.0, 1.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(widget.icon, color: Colors.white, size: 22),
+                const SizedBox(height: 4),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
