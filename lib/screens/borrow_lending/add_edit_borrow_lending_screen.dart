@@ -424,46 +424,108 @@ class _AddEditBorrowLendingScreenState
   }
 
   Widget _typeToggle(BrandColors brand) {
-    final selectedFg = foregroundOn(brand.accentDark);
-    Widget chip(BorrowLendingType type, String label) {
-      final selected = _type == type;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => setState(() => _type = type),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: selected ? brand.accentDark : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.2,
-                color: selected ? selectedFg : brand.ink,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    const types = [BorrowLendingType.borrowed, BorrowLendingType.lent];
+    const icons = [CupertinoIcons.arrow_down_left, CupertinoIcons.arrow_up_right];
+    // Color the pill to match the semantic: red for borrowed, green for lent.
+    final pillColors = [
+      AppColors.expense.withValues(alpha: 0.18),
+      AppColors.income.withValues(alpha: 0.18),
+    ];
+    final fgColors = [AppColors.expense, AppColors.income];
+    final selectedIdx = types.indexOf(_type);
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Row(
-        children: [
-          chip(BorrowLendingType.borrowed, context.t('bl.typeBorrowed')),
-          chip(BorrowLendingType.lent, context.t('bl.typeLent')),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final pillW = (constraints.maxWidth - 8) / 2;
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              // Sliding background pill
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: selectedIdx * pillW,
+                top: 0,
+                bottom: 0,
+                width: pillW,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  decoration: BoxDecoration(
+                    color: pillColors[selectedIdx],
+                    borderRadius: BorderRadius.circular(AppRadius.chip - 2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (int i = 0; i < types.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _type = types[i]),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                transitionBuilder: (child, anim) =>
+                                    ScaleTransition(
+                                  scale: Tween(begin: 0.7, end: 1.0).animate(
+                                    CurvedAnimation(
+                                      parent: anim,
+                                      curve: Curves.easeOutBack,
+                                    ),
+                                  ),
+                                  child: FadeTransition(
+                                    opacity: anim,
+                                    child: child,
+                                  ),
+                                ),
+                                child: Icon(
+                                  icons[i],
+                                  key: ValueKey(types[i] == _type),
+                                  size: 15,
+                                  color: types[i] == _type
+                                      ? fgColors[i]
+                                      : brand.inkSoft,
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeInOut,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.2,
+                                  color: types[i] == _type
+                                      ? fgColors[i]
+                                      : brand.ink,
+                                ),
+                                child: Text(
+                                  i == 0
+                                      ? context.t('bl.typeBorrowed')
+                                      : context.t('bl.typeLent'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
