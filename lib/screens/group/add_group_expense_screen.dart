@@ -4,8 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../repositories/local_expense_group_repository.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
@@ -185,8 +187,30 @@ class _AddGroupExpenseScreenState
       );
       if (_isEdit) {
         await service.updateExpense(expense);
+        // Mirror update to local cache so offline stream reflects change immediately.
+        if (storageMode == StorageMode.firebase) {
+          await LocalExpenseGroupRepository().updateExpense(expense);
+        }
       } else {
-        await service.addExpense(expense);
+        final savedId = await service.addExpense(expense);
+        // Write to local cache with the real ID so offline stream updates instantly.
+        if (storageMode == StorageMode.firebase) {
+          final cached = GroupExpenseItem(
+            id: savedId,
+            groupId: expense.groupId,
+            description: expense.description,
+            amount: expense.amount,
+            paidBy: expense.paidBy,
+            splitBetween: expense.splitBetween,
+            category: expense.category,
+            date: expense.date,
+            createdBy: expense.createdBy,
+            notes: expense.notes,
+            createdAt: expense.createdAt,
+            updatedAt: expense.updatedAt,
+          );
+          await LocalExpenseGroupRepository().addExpense(cached);
+        }
       }
       if (mounted) {
         HapticFeedback.mediumImpact();
@@ -242,6 +266,11 @@ class _AddGroupExpenseScreenState
       await ref
           .read(expenseGroupServiceProvider)
           .deleteExpense(widget.group.id, widget.existing!.id);
+      // Mirror delete to local cache so the stream removes it immediately.
+      if (storageMode == StorageMode.firebase) {
+        await LocalExpenseGroupRepository()
+            .deleteExpense(widget.group.id, widget.existing!.id);
+      }
       if (mounted) {
         AppToast.show(context, 'Entry deleted', type: AppToastType.success);
         await Future.delayed(const Duration(milliseconds: 480));
@@ -1047,7 +1076,7 @@ class _AddGroupExpenseScreenState
                         color: catMeta.color, size: 22),
                   ),
                   const SizedBox(width: 10),
-                  // Pill save button
+                  // Pill save button — matches personal expense button style
                   Expanded(
                     child: AnimatedBuilder(
                       animation: _saveBtnBounce,
@@ -1056,23 +1085,23 @@ class _AddGroupExpenseScreenState
                         child: child,
                       ),
                       child: GestureDetector(
-                        onTap: (_saving || _saveSuccess) ? null : _save,
+                        onTap: (_saving || _saveSuccess)
+                            ? null
+                            : () {
+                                HapticFeedback.mediumImpact();
+                                _save();
+                              },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOutCubic,
                           height: 56,
                           decoration: BoxDecoration(
                             color: _saveSuccess
                                 ? const Color(0xFF1FBE71)
-                                : Colors.white,
+                                : (_saving || _parsedAmount > 0)
+                                    ? _kGroupInk
+                                    : Colors.white,
                             borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black
-                                    .withValues(alpha: 0.06),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
                           ),
                           child: Center(
                             child: AnimatedSwitcher(
@@ -1095,52 +1124,57 @@ class _AddGroupExpenseScreenState
                                           color: Colors.white,
                                           size: 20,
                                         ),
-                                        const SizedBox(width: 10),
+                                        const SizedBox(width: 9),
                                         Text(
                                           _isEdit
                                               ? 'Entry updated'
                                               : 'Entry saved',
                                           style: const TextStyle(
-                                            fontSize: 17,
+                                            fontSize: 15,
                                             fontWeight: FontWeight.w700,
                                             color: Colors.white,
-                                            letterSpacing: -0.2,
+                                            letterSpacing: 0.1,
                                           ),
                                         ),
                                       ],
                                     )
                                   : _saving
-                                      ? const CupertinoActivityIndicator(
+                                      ? const SizedBox(
                                           key: ValueKey('loading'),
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            color: Colors.white,
+                                          ),
                                         )
                                       : Row(
                                           key: const ValueKey('idle'),
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Container(
-                                              width: 22,
-                                              height: 22,
-                                              decoration:
-                                                  const BoxDecoration(
-                                                color: Color(0xFF0B0B0F),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(
-                                                CupertinoIcons
-                                                    .checkmark_alt,
-                                                color: Colors.white,
-                                                size: 13,
-                                              ),
+                                            Icon(
+                                              CupertinoIcons
+                                                  .checkmark_circle_fill,
+                                              color: _parsedAmount > 0
+                                                  ? Colors.white
+                                                  : const Color(
+                                                      0xFF8E8E96),
+                                              size: 20,
                                             ),
-                                            const SizedBox(width: 10),
-                                            const Text(
-                                              'Save entry',
+                                            const SizedBox(width: 9),
+                                            Text(
+                                              _isEdit
+                                                  ? 'Update entry'
+                                                  : 'Save entry',
                                               style: TextStyle(
-                                                fontSize: 17,
+                                                fontSize: 15,
                                                 fontWeight:
                                                     FontWeight.w700,
-                                                color: Color(0xFF0B0B0F),
-                                                letterSpacing: -0.2,
+                                                color: _parsedAmount > 0
+                                                    ? Colors.white
+                                                    : const Color(
+                                                        0xFF8E8E96),
+                                                letterSpacing: 0.1,
                                               ),
                                             ),
                                           ],

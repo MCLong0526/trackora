@@ -827,7 +827,24 @@ final activeGroupProvider = StreamProvider.autoDispose<ExpenseGroup?>((ref) {
   );
 });
 
+// Always stream from local Hive — works offline and updates instantly on save.
 final groupExpensesProvider =
     StreamProvider.family<List<GroupExpenseItem>, String>((ref, groupId) {
-      return ref.read(expenseGroupServiceProvider).getExpenses(groupId);
+      return LocalExpenseGroupRepository().getExpenses(groupId);
+    });
+
+// Background sync: pushes Firestore data into local Hive so partners'
+// expenses become visible without restarting the app.
+final groupExpenseSyncProvider =
+    StreamProvider.family.autoDispose<void, String>((ref, groupId) {
+      if (storageMode != StorageMode.firebase) return Stream.value(null);
+      final firebaseRepo = FirebaseExpenseGroupRepository();
+      final localRepo = LocalExpenseGroupRepository();
+      return firebaseRepo.getExpenses(groupId).asyncMap((expenses) async {
+        for (final e in expenses) {
+          try {
+            await localRepo.addExpense(e);
+          } catch (_) {}
+        }
+      });
     });

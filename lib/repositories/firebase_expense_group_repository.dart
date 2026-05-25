@@ -71,13 +71,14 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
 
   @override
   Stream<List<GroupExpenseItem>> getExpenses(String groupId) {
-    return _expensesRef(groupId)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map((s) => s.docs
-            .map((d) =>
-                GroupExpenseItem.fromMap(d.data(), id: d.id, groupId: groupId))
-            .toList());
+    return _expensesRef(groupId).snapshots().map((s) {
+      final items = s.docs
+          .map((d) =>
+              GroupExpenseItem.fromMap(d.data(), id: d.id, groupId: groupId))
+          .toList();
+      items.sort((a, b) => b.date.compareTo(a.date));
+      return items;
+    });
   }
 
   @override

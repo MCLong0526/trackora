@@ -345,6 +345,9 @@ class GroupDashboardContent extends ConsumerWidget {
       return _IntroView(brand: brand);
     }
 
+    // Keep Firestore → local sync alive while this screen is visible.
+    ref.watch(groupExpenseSyncProvider(group!.id));
+
     final expensesAsync = ref.watch(groupExpensesProvider(group!.id));
     final expenses = expensesAsync.valueOrNull ?? const [];
     final service = ref.read(expenseGroupServiceProvider);
