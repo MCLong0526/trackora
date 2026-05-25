@@ -45,6 +45,8 @@ class _AddEditInstallmentScreenState
   DateTime _start = DateTime.now();
   bool _lifetime = false;
   bool _saving = false;
+  bool _success = false;
+  bool _currentMonthPaid = false;
 
   bool get _isEdit => widget.installment != null;
 
@@ -68,6 +70,7 @@ class _AddEditInstallmentScreenState
         _principal.text = i.originalPrincipal!.toStringAsFixed(2);
       }
       if (i.paidCount > 0) _alreadyPaid.text = i.paidMonthsAtStart.toString();
+      _currentMonthPaid = i.isPaidIn(DateTime.now());
       // In edit mode, existing values are user-entered, not auto
       _principalIsAuto = false;
       _remainingIsAuto = false;
@@ -163,7 +166,16 @@ class _AddEditInstallmentScreenState
     double? remainingOverride,
   })?
   _resolvePlan() {
-    final inAppPaid = widget.installment?.paidInApp ?? 0;
+    final currentKey = Installment.monthKey(DateTime.now());
+    final existingPaidMonths = widget.installment?.paidMonths ?? const <String>[];
+    final currentMonthWasPaid = existingPaidMonths.contains(currentKey);
+
+    // Compute how many in-app paid months there will be AFTER save, accounting
+    // for the current-month toggle adding or removing one entry.
+    int inAppPaid = widget.installment?.paidInApp ?? 0;
+    if (_currentMonthPaid && !currentMonthWasPaid) inAppPaid += 1;
+    if (!_currentMonthPaid && currentMonthWasPaid) inAppPaid -= 1;
+
     final remainingOverride = double.tryParse(_remainingBalance.text.trim());
     if (remainingOverride != null && remainingOverride < 0) return null;
 
@@ -186,17 +198,13 @@ class _AddEditInstallmentScreenState
 
     if (leftInput != null && leftInput < 0) return null;
 
-    // Derive effective paid months. In the new form there's no "months paid
-    // before tracking" input for non-lifetime, so effectivePaid is always
-    // derived from total - left (or from the existing paidCount on edit).
+    // Derive effective paid months from total - left (or existing paidCount).
     int effectivePaid = 0;
     if (total != null && leftInput != null) {
       effectivePaid = (total - leftInput).clamp(0, total);
     } else if (total != null) {
-      // Only total provided: no known paid count
       effectivePaid = 0;
     } else if (leftInput != null) {
-      // Only months left provided — we don't know total, so total = left
       total = leftInput;
       effectivePaid = 0;
     } else if (remainingOverride != null && amount > 0) {
@@ -242,6 +250,16 @@ class _AddEditInstallmentScreenState
     final svc = ref.read(installmentServiceProvider);
 
     try {
+      final currentKey = Installment.monthKey(DateTime.now());
+      final basePaidMonths = List<String>.from(
+        widget.installment?.paidMonths ?? const <String>[],
+      );
+      if (_currentMonthPaid && !basePaidMonths.contains(currentKey)) {
+        basePaidMonths.add(currentKey);
+      } else if (!_currentMonthPaid && basePaidMonths.contains(currentKey)) {
+        basePaidMonths.remove(currentKey);
+      }
+
       final i = Installment(
         id: widget.installment?.id ?? '',
         name: _name.text.trim(),
@@ -249,7 +267,7 @@ class _AddEditInstallmentScreenState
         dayOfMonth: _day,
         category: _category,
         startDate: _start,
-        paidMonths: widget.installment?.paidMonths ?? const [],
+        paidMonths: basePaidMonths,
         totalMonths: resolved.totalMonths,
         cancelled: widget.installment?.cancelled ?? false,
         paidMonthsAtStart: resolved.paidAtStart,
@@ -262,19 +280,21 @@ class _AddEditInstallmentScreenState
         await svc.add(user.uid, i);
       }
       if (mounted) {
+        setState(() { _saving = false; _success = true; });
         AppToast.show(
           context,
           _isEdit ? 'Installment updated' : 'Installment added',
           type: AppToastType.success,
         );
-        Navigator.pop(context);
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (mounted) Navigator.pop(context);
       }
     } catch (_) {
       if (mounted) {
         AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && !_success) setState(() => _saving = false);
     }
   }
 
@@ -489,10 +509,18 @@ class _AddEditInstallmentScreenState
         body: SafeArea(
           child: Form(
             key: _formKey,
-            child: ListView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+            child: Stack(
               children: [
+                ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    8,
+                    20,
+                    80 + MediaQuery.of(context).padding.bottom,
+                  ),
+                  children: [
                 // Status summary (edit mode only)
                 if (_isEdit && status != null && existing != null)
                   Padding(
@@ -511,7 +539,7 @@ class _AddEditInstallmentScreenState
                         child: TextFormField(
                           controller: _name,
                           focusNode: _nameFocus,
-                          autofocus: !_isEdit,
+                          autofocus: false,
                           textCapitalization: TextCapitalization.sentences,
                           decoration: InputDecoration(
                             hintText: context.t('inst.nameHint'),
@@ -573,7 +601,22 @@ class _AddEditInstallmentScreenState
                   }),
                 ),
                 const SizedBox(height: 8),
-                SectionCard(
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: SectionCard(
+                  key: ValueKey(_lifetime),
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
@@ -673,8 +716,60 @@ class _AddEditInstallmentScreenState
                           ),
                         ),
                       ),
+                      _Divider(brand: brand),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                        child: Row(
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 350),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                    scale: CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.elasticOut,
+                                    ),
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
+                                  ),
+                              child: _currentMonthPaid
+                                  ? const Icon(
+                                      CupertinoIcons.checkmark_seal_fill,
+                                      key: ValueKey(true),
+                                      size: 20,
+                                      color: Color(0xFF34C759),
+                                    )
+                                  : Icon(
+                                      CupertinoIcons.checkmark_seal,
+                                      key: ValueKey(false),
+                                      size: 20,
+                                      color: brand.inkSoft,
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                context.t('inst.currentMonthPaid'),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            CupertinoSwitch(
+                              value: _currentMonthPaid,
+                              activeTrackColor: const Color(0xFF34C759),
+                              onChanged: (v) =>
+                                  setState(() => _currentMonthPaid = v),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
+                ),
                 ),
 
                 const SizedBox(height: 24),
@@ -822,25 +917,44 @@ class _AddEditInstallmentScreenState
                   }).toList(),
                 ),
 
-                const SizedBox(height: 32),
-
-                // ── Save ─────────────────────────────────────────────
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(
-                          _isEdit ? context.t('common.update') : context.t('inst.save'),
-                        ),
+              ],
                 ),
 
+                // ── Floating Save Button ──────────────────────────────
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20 + MediaQuery.of(context).padding.bottom,
+                  child: FilledButton(
+                    onPressed: (_saving || _success) ? null : _save,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _success
+                          ? const Icon(
+                              CupertinoIcons.checkmark_alt,
+                              size: 20,
+                              key: ValueKey('check'),
+                            )
+                          : _saving
+                              ? SizedBox(
+                                  key: const ValueKey('loading'),
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color:
+                                        Theme.of(context).colorScheme.onPrimary,
+                                  ),
+                                )
+                              : Text(
+                                  _isEdit
+                                      ? context.t('common.update')
+                                      : context.t('inst.save'),
+                                  key: const ValueKey('label'),
+                                ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -918,29 +1032,29 @@ class _PlanTypeSelector extends StatelessWidget {
       return Expanded(
         child: GestureDetector(
           onTap: () => onChanged(lifetime),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+          child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 11),
-            decoration: BoxDecoration(
-              color: selected ? brand.accentDark : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: selected ? selectedFg : brand.inkSoft,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    icon,
+                    key: ValueKey(selected),
+                    size: 14,
+                    color: selected ? selectedFg : brand.inkSoft,
+                  ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  label,
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: selected ? selectedFg : brand.ink,
                   ),
+                  child: Text(label),
                 ),
               ],
             ),
@@ -949,18 +1063,50 @@ class _PlanTypeSelector extends StatelessWidget {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Row(
-        children: [
-          option(false, CupertinoIcons.calendar, context.t('inst.fixedTermShort')),
-          option(true, CupertinoIcons.infinite, context.t('inst.lifetimeShort')),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final pillW = (constraints.maxWidth - 8) / 2;
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: isLifetime ? pillW : 0,
+                top: 0,
+                bottom: 0,
+                width: pillW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: brand.accentDark,
+                    borderRadius: BorderRadius.circular(AppRadius.chip),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  option(
+                    false,
+                    CupertinoIcons.calendar,
+                    context.t('inst.fixedTermShort'),
+                  ),
+                  option(
+                    true,
+                    CupertinoIcons.infinite,
+                    context.t('inst.lifetimeShort'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

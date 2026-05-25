@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import 'currency_picker.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
+import 'app_toast.dart';
 
 const _kCustomLabel = 'Other / Custom';
 
@@ -205,6 +206,7 @@ class _AccountCarouselState extends State<_AccountCarousel>
   bool _isFlipped = false;
   late final AnimationController _flipCtrl;
   late final Animation<double> _flipAnim;
+  String? _focusAccountId;
 
   static const double _cardW = 280.0;
   static const double _cardH = 184.0;
@@ -223,6 +225,26 @@ class _AccountCarouselState extends State<_AccountCarousel>
       parent: _flipCtrl,
       curve: Curves.easeInOutQuart,
     );
+  }
+
+  @override
+  void didUpdateWidget(_AccountCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_focusAccountId != null) {
+      final idx = widget.accounts.indexWhere((a) => a.id == _focusAccountId);
+      if (idx >= 0) {
+        _activeIndex = idx;
+        _focusAccountId = null;
+      }
+    }
+    if (widget.accounts.isNotEmpty &&
+        _activeIndex >= widget.accounts.length) {
+      _activeIndex = widget.accounts.length - 1;
+      if (_isFlipped) {
+        _flipCtrl.reverse();
+        _isFlipped = false;
+      }
+    }
   }
 
   @override
@@ -409,12 +431,24 @@ class _AccountCarouselState extends State<_AccountCarousel>
               fanDeg: fanDeg,
               recentTxns: recentTxns.take(3).toList(),
               onClose: _unflip,
-              onEdit: () => Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => AddEditAccountScreen(account: account),
-                ),
-              ),
+              onEdit: () async {
+                final accountId = account.id;
+                await Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => AddEditAccountScreen(account: account),
+                  ),
+                );
+                if (!mounted) return;
+                setState(() {
+                  final idx = widget.accounts.indexWhere((a) => a.id == accountId);
+                  if (idx >= 0) {
+                    _activeIndex = idx;
+                  } else {
+                    _focusAccountId = accountId;
+                  }
+                });
+              },
             ),
           ),
         ),
@@ -1226,15 +1260,6 @@ const _kOtherTypes = [
   ),
 ];
 
-// Colors for swatches (mapped to AccountType)
-const _kSwatchTypes = [
-  AccountType.bank,
-  AccountType.eWallet,
-  AccountType.cash,
-  AccountType.loan,
-  AccountType.creditCard,
-];
-
 const _kConfettiColors = [
   AppActionBlue.color,
   Color(0xFF33B07A),
@@ -1390,6 +1415,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
           _success = true;
         });
         _confettiCtrl.forward(from: 0);
+        AppToast.show(context, 'Account added', type: AppToastType.success);
         await Future.delayed(const Duration(milliseconds: 1400));
         if (mounted) Navigator.of(context).pop();
       }
@@ -1464,9 +1490,9 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
               children: [
                 Expanded(
                   child: Container(
-                    height: 4,
+                    height: 3,
                     decoration: BoxDecoration(
-                      color: AppActionBlue.color,
+                      color: brand.accent,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1475,11 +1501,11 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 320),
-                    height: 4,
+                    height: 3,
                     decoration: BoxDecoration(
                       color: _step >= 1
-                          ? AppActionBlue.color
-                          : brand.inkSoft.withValues(alpha: 0.18),
+                          ? brand.accent
+                          : brand.inkSoft.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -2225,14 +2251,24 @@ class _Step2State extends State<_Step2> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Live preview card (no background on create) ───
+          // ── Live preview card ─────────────────────────────
           AnimatedContainer(
             duration: const Duration(milliseconds: 360),
             height: 168,
             decoration: BoxDecoration(
-              color: Colors.transparent,
+              gradient: LinearGradient(
+                colors: [widget.pal.a, widget.pal.b],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: brand.divider, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.pal.b.withValues(alpha: 0.55),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             clipBehavior: Clip.hardEdge,
             child: Stack(
@@ -2272,7 +2308,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
-                          color: brand.inkSoft,
+                          color: widget.pal.ink.withValues(alpha: 0.60),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2282,7 +2318,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: brand.ink,
+                          color: widget.pal.ink,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2293,7 +2329,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
-                          color: brand.inkSoft,
+                          color: widget.pal.ink.withValues(alpha: 0.60),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2315,7 +2351,7 @@ class _Step2State extends State<_Step2> {
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
-                                  color: brand.ink,
+                                  color: widget.pal.ink,
                                   letterSpacing: -0.4,
                                 ),
                               ),
@@ -2332,7 +2368,7 @@ class _Step2State extends State<_Step2> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: brand.inkSoft,
+                                    color: widget.pal.ink.withValues(alpha: 0.55),
                                   ),
                                 );
                               }),
@@ -2607,100 +2643,6 @@ class _Step2State extends State<_Step2> {
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // ── Color picker ─────────────────────────────────
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            decoration: BoxDecoration(
-              color: brand.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t('account.cardColor'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 0.5,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: _kSwatchTypes.map((t) {
-                    final sp = _paletteForAccountType(t);
-                    final isSelected = widget.swatchColor == t;
-                    return GestureDetector(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        widget.onSwatchChanged(t);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 280),
-                        curve: const Cubic(0.34, 1.56, 0.64, 1.0),
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                              colors: [sp.a, sp.b],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight),
-                          shape: BoxShape.circle,
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black
-                                        .withValues(alpha: 0.18),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                  const BoxShadow(
-                                    color: Colors.white,
-                                    spreadRadius: 3,
-                                  ),
-                                  BoxShadow(
-                                    color: sp.accent,
-                                    spreadRadius: 5,
-                                  ),
-                                ]
-                              : [
-                                  BoxShadow(
-                                    color: Colors.black
-                                        .withValues(alpha: 0.08),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                        ),
-                        transform: isSelected
-                            ? (Matrix4.identity()..scaleByDouble(1.12, 1.12, 1.0, 1.0))
-                            : Matrix4.identity(),
-                        child: isSelected
-                            ? Center(
-                                child: TweenAnimationBuilder<double>(
-                                  tween: Tween(begin: 0.0, end: 1.0),
-                                  duration: const Duration(milliseconds: 300),
-                                  builder: (ctx, v, _) => CustomPaint(
-                                    size: const Size(20, 20),
-                                    painter: _TickPainter(
-                                        progress: v,
-                                        color: Colors.white),
-                                  ),
-                                ),
-                              )
-                            : null,
-                      ),
-                    );
-                  }).toList(),
                 ),
               ],
             ),

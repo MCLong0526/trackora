@@ -98,11 +98,36 @@ final accountRepositoryProvider = Provider<AccountRepository>((_) {
   }
 });
 
-/// Stream of all accounts for the active user.
+const _kAccountTypeOrder = {
+  AccountType.bank: 0,
+  AccountType.eWallet: 1,
+  AccountType.cash: 2,
+  AccountType.investment: 3,
+  AccountType.savings: 4,
+  AccountType.crypto: 5,
+  AccountType.forex: 6,
+  AccountType.creditCard: 7,
+  AccountType.loan: 8,
+  AccountType.mortgage: 9,
+  AccountType.bnpl: 10,
+  AccountType.otherLiability: 11,
+};
+
+int _compareAccounts(Account a, Account b) {
+  final ta = _kAccountTypeOrder[a.type] ?? 99;
+  final tb = _kAccountTypeOrder[b.type] ?? 99;
+  if (ta != tb) return ta.compareTo(tb);
+  return a.createdAt.compareTo(b.createdAt);
+}
+
+/// Stream of all accounts for the active user, sorted by type then createdAt.
 final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(accountRepositoryProvider).getAll(user.uid);
+  return ref.read(accountRepositoryProvider).getAll(user.uid).map((list) {
+    final sorted = list.toList()..sort(_compareAccounts);
+    return sorted;
+  });
 });
 final expenseRepositoryProvider = Provider<ExpenseRepository>((_) {
   switch (storageMode) {

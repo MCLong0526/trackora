@@ -496,7 +496,7 @@ class _InstallmentRow extends StatelessWidget {
         if (i.isLifetime) {
           final next = i.nextDueDate();
           if (next != null) {
-            return '${context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next))}';
+            return context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next));
           }
           return context.t('inst.statusLifetime');
         }

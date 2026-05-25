@@ -14,14 +14,12 @@ class FirebaseAccountRepository implements AccountRepository {
 
   @override
   Stream<List<Account>> getAll(String userId) {
-    return _col(userId)
-        .orderBy('createdAt')
-        .snapshots()
-        .map(
-          (s) => s.docs
-              .map((d) => Account.fromMap(d.data(), id: d.id))
-              .toList(),
-        );
+    return _col(userId).snapshots().map((s) => s.docs.map((d) {
+          final data = Map<String, dynamic>.from(d.data());
+          final ts = data['createdAt'];
+          if (ts is Timestamp) data['createdAt'] = ts.toDate();
+          return Account.fromMap(data, id: d.id);
+        }).toList());
   }
 
   @override
@@ -36,7 +34,13 @@ class FirebaseAccountRepository implements AccountRepository {
 
   @override
   Future<void> update(String userId, Account account) async {
-    await _col(userId).doc(account.id).update(_toMap(account));
+    // Deliberately excludes createdAt to preserve stable sort order.
+    await _col(userId).doc(account.id).update({
+      'name': account.name,
+      'type': account.type.encode,
+      'openingBalance': account.openingBalance,
+      if (account.currencyCode != null) 'currencyCode': account.currencyCode,
+    });
   }
 
   Future<void> upsert(String userId, Account account) async {
