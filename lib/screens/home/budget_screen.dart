@@ -1035,6 +1035,7 @@ class _DragReorderGridState extends State<_DragReorderGrid> {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return LayoutBuilder(
       builder: (ctx, constraints) {
         const h = 186.0;
@@ -1045,14 +1046,41 @@ class _DragReorderGridState extends State<_DragReorderGrid> {
         if (visible.isEmpty) return const SizedBox.shrink();
         final rows = (visible.length / 2).ceil();
         final height = rows * h + (rows - 1) * gap;
-        return SizedBox(
-          height: height,
-          child: Stack(
-            children: [
-              for (int i = 0; i < visible.length; i++)
-                _buildCell(i, visible[i], w, h, gap),
-            ],
-          ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: height,
+              child: Stack(
+                children: [
+                  for (int i = 0; i < visible.length; i++)
+                    _buildCell(i, visible[i], w, h, gap),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    CupertinoIcons.hand_draw,
+                    size: 13,
+                    color: brand.inkSoft.withValues(alpha: 0.55),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Hold & drag to reorder',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand.inkSoft.withValues(alpha: 0.55),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );

@@ -35,6 +35,21 @@ class LocalAccountRepository implements AccountRepository {
     await _box.delete(_key(userId, accountId));
   }
 
+  static const _kTypeOrder = {
+    AccountType.bank: 0,
+    AccountType.eWallet: 1,
+    AccountType.cash: 2,
+    AccountType.investment: 3,
+    AccountType.savings: 4,
+    AccountType.crypto: 5,
+    AccountType.forex: 6,
+    AccountType.creditCard: 7,
+    AccountType.loan: 8,
+    AccountType.mortgage: 9,
+    AccountType.bnpl: 10,
+    AccountType.otherLiability: 11,
+  };
+
   List<Account> _read(String userId) {
     final list = _box.values
         .whereType<Map>()
@@ -42,7 +57,12 @@ class LocalAccountRepository implements AccountRepository {
         .where((data) => data['userId'] == userId && data['id'] is String)
         .map<Account>((data) => Account.fromMap(data, id: data['id'] as String))
         .toList();
-    list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    list.sort((a, b) {
+      final ta = _kTypeOrder[a.type] ?? 99;
+      final tb = _kTypeOrder[b.type] ?? 99;
+      if (ta != tb) return ta.compareTo(tb);
+      return a.createdAt.compareTo(b.createdAt);
+    });
     return list;
   }
 

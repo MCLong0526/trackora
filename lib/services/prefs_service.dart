@@ -20,6 +20,7 @@ class PrefsService {
   static const _kFirstLaunchDone = 'first_launch_done';
   static const _kUseCustomCycle = 'use_custom_cycle';
   static const _kCycleDayStart = 'cycle_day_start';
+  static const _kMoneyHubDragHintShown = 'money_hub_drag_hint_shown';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -79,6 +80,18 @@ class PrefsService {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.setBool(_kFirstLaunchDone, true);
+  }
+
+  Future<bool> isDragHintShown() async {
+    final p = await _prefsOrNull();
+    if (p == null) return true;
+    return p.getBool(_kMoneyHubDragHintShown) ?? false;
+  }
+
+  Future<void> markDragHintShown() async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setBool(_kMoneyHubDragHintShown, true);
   }
 
   Future<List<String>> homeCardOrder() async {
