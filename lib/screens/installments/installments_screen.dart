@@ -14,6 +14,8 @@ import '../../widgets/section_card.dart';
 import 'add_edit_installment_screen.dart';
 import 'installment_detail_screen.dart';
 
+enum _InstallFilter { all, active, completed, cancelled }
+
 // Coordinates open/close state across all swipe rows so only one can be open at a time.
 class _SwipeCoordinator extends ValueNotifier<String?> {
   _SwipeCoordinator() : super(null);
@@ -31,6 +33,7 @@ class InstallmentsScreen extends ConsumerStatefulWidget {
 
 class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
   final _coordinator = _SwipeCoordinator();
+  _InstallFilter _filter = _InstallFilter.all;
 
   @override
   void dispose() {
@@ -89,77 +92,92 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
                   return a.dayOfMonth.compareTo(b.dayOfMonth);
                 });
 
+              final filtered = sorted.where((item) => switch (_filter) {
+                _InstallFilter.all => true,
+                _InstallFilter.active =>
+                  item.status == InstallmentStatus.active,
+                _InstallFilter.completed =>
+                  item.status == InstallmentStatus.completed,
+                _InstallFilter.cancelled =>
+                  item.status == InstallmentStatus.cancelled,
+              }).toList();
+
               return ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                 children: [
                   _SummaryCard(items: items, symbol: symbol),
-                  const SizedBox(height: 20),
-                  // Section header
-                  Row(
-                    children: [
-                      Text(
-                        context.t('inst.all').toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF8E8E93),
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () {},
-                        child: const Text(
-                          'Filter',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppActionBlue.color,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 14),
+                  _InstallFilterSegment(
+                    selected: _filter,
+                    onSelected: (f) => setState(() => _filter = f),
                   ),
-                  const SizedBox(height: 10),
-                  // Grouped card with all installments
-                  Container(
-                    decoration: BoxDecoration(
-                      color: brand.surface,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Column(
-                        children: [
-                          for (int i = 0; i < sorted.length; i++) ...[
-                            _InstallmentSwipeActions(
-                              installment: sorted[i],
-                              userId: user?.uid,
-                              coordinator: _coordinator,
-                              child: _InstallmentRow(
-                                installment: sorted[i],
-                                symbol: symbol,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  CupertinoPageRoute(
-                                    builder: (_) => InstallmentDetailScreen(
-                                      installmentId: sorted[i].id,
-                                    ),
-                                  ),
+                  const SizedBox(height: 18),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: filtered.isEmpty
+                        ? Padding(
+                            key: ValueKey('empty-${_filter.name}'),
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: Text(
+                                'No ${_filter.name} installments',
+                                style: TextStyle(
+                                  color: brand.inkSoft,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
-                            if (i < sorted.length - 1)
-                              Divider(
-                                height: 1,
-                                color: brand.divider,
-                                indent: 16,
-                                endIndent: 0,
+                          )
+                        : Column(
+                            key: ValueKey(_filter),
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: brand.surface,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Column(
+                                    children: [
+                                      for (int i = 0; i < filtered.length; i++) ...[
+                                        _InstallmentSwipeActions(
+                                          installment: filtered[i],
+                                          userId: user?.uid,
+                                          coordinator: _coordinator,
+                                          child: _InstallmentRow(
+                                            installment: filtered[i],
+                                            symbol: symbol,
+                                            onTap: () => Navigator.push(
+                                              context,
+                                              CupertinoPageRoute(
+                                                builder: (_) =>
+                                                    InstallmentDetailScreen(
+                                                  installmentId: filtered[i].id,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (i < filtered.length - 1)
+                                          Divider(
+                                            height: 1,
+                                            color: brand.divider,
+                                            indent: 16,
+                                            endIndent: 0,
+                                          ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
-                          ],
-                        ],
-                      ),
-                    ),
+                            ],
+                          ),
                   ),
                 ],
               );
@@ -571,9 +589,9 @@ class _InstallmentSwipeActionsState
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 300),
     );
-    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
     _ctrl.addListener(_onTick);
     widget.coordinator.addListener(_onCoordinatorChange);
   }
@@ -792,7 +810,7 @@ class _InstallmentSwipeActionsState
                     child: _SwipeAction(
                       label: 'Paid',
                       icon: CupertinoIcons.checkmark_circle_fill,
-                      color: const Color(0xFF34C759),
+                      color: Color.fromARGB(200, 52, 199, 89),
                       reveal: (revealRight * 3).clamp(0.0, 1.0),
                       onTap: _markPaid,
                     ),
@@ -801,7 +819,7 @@ class _InstallmentSwipeActionsState
                     child: _SwipeAction(
                       label: 'Cancel',
                       icon: CupertinoIcons.xmark_circle_fill,
-                      color: const Color(0xFFFF9500),
+                      color: Color.fromARGB(200, 255, 149, 0),
                       reveal: (revealRight * 3 - 0.25).clamp(0.0, 1.0),
                       onTap: _cancelInstallment,
                     ),
@@ -810,7 +828,7 @@ class _InstallmentSwipeActionsState
                     child: _SwipeAction(
                       label: 'Delete',
                       icon: CupertinoIcons.trash_fill,
-                      color: const Color(0xFFFF3B30),
+                      color: Color.fromARGB(200, 255, 69, 58),
                       reveal: (revealRight * 3 - 0.5).clamp(0.0, 1.0),
                       onTap: _deleteInstallment,
                     ),
@@ -827,7 +845,7 @@ class _InstallmentSwipeActionsState
               child: _SwipeAction(
                 label: 'Edit',
                 icon: CupertinoIcons.pencil,
-                color: const Color(0xFF007AFF),
+                color: Color.fromARGB(200, 0, 122, 255),
                 reveal: revealLeft,
                 onTap: _handleEditSwipe,
               ),
@@ -915,6 +933,94 @@ class _SwipeActionState extends State<_SwipeAction> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Filter segment (matches Saving Plans style) ───────────────
+
+class _InstallFilterSegment extends StatelessWidget {
+  final _InstallFilter selected;
+  final ValueChanged<_InstallFilter> onSelected;
+  const _InstallFilterSegment({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    const filters = <(_InstallFilter, String)>[
+      (_InstallFilter.all, 'All'),
+      (_InstallFilter.active, 'Active'),
+      (_InstallFilter.completed, 'Completed'),
+      (_InstallFilter.cancelled, 'Cancelled'),
+    ];
+    final selectedIdx = filters.indexWhere((f) => f.$1 == selected);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final pillW = (constraints.maxWidth - 8) / 4;
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.divider,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: selectedIdx * pillW,
+                top: 0,
+                bottom: 0,
+                width: pillW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (final (f, label) in filters)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => onSelected(f),
+                        child: Container(
+                          alignment: Alignment.center,
+                          color: Colors.transparent,
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: f == selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: f == selected ? brand.ink : brand.inkSoft,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/saving_plan.dart';
 import '../../services/i18n.dart';
@@ -9,6 +10,14 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plan_detail_screen.dart';
+
+// Coordinates open/close state across all swipe rows.
+class _SpCoordinator extends ValueNotifier<String?> {
+  _SpCoordinator() : super(null);
+
+  void openRow(String id) => value = id;
+  void closeAll() => value = null;
+}
 
 class SavingPlansScreen extends ConsumerStatefulWidget {
   const SavingPlansScreen({super.key});
@@ -21,6 +30,13 @@ enum _Filter { all, active, completed, cancelled }
 
 class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
   _Filter _filter = _Filter.all;
+  final _coordinator = _SpCoordinator();
+
+  @override
+  void dispose() {
+    _coordinator.dispose();
+    super.dispose();
+  }
 
   bool _matches(SavingPlan p) => switch (_filter) {
         _Filter.all => true,
@@ -56,7 +72,10 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: _coordinator.closeAll,
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
         child: async.when(
           loading: () => const Center(child: CupertinoActivityIndicator()),
           error: (e, _) =>
@@ -118,8 +137,8 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                                     for (int i = 0; i < filtered.length; i++) ...[
                                       _SavingPlanSwipeActions(
                                         plan: filtered[i],
-                                        symbol: symbol,
                                         userId: user?.uid,
+                                        coordinator: _coordinator,
                                         child: _PlanRow(
                                           plan: filtered[i],
                                           symbol: symbol,
@@ -143,6 +162,7 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
               ],
             );
           },
+        ),
         ),
       ),
     );
@@ -547,262 +567,186 @@ class _PlanRow extends StatelessWidget {
 
 // ── Swipe actions ─────────────────────────────────────────────
 
-class _SavingPlanSwipeActions extends ConsumerWidget {
+class _SavingPlanSwipeActions extends ConsumerStatefulWidget {
   final SavingPlan plan;
-  final String symbol;
   final String? userId;
   final Widget child;
+  final _SpCoordinator coordinator;
 
   const _SavingPlanSwipeActions({
     required this.plan,
-    required this.symbol,
     required this.userId,
     required this.child,
+    required this.coordinator,
   });
 
-  bool get _canAddContribution =>
-      plan.status == SavingPlanStatus.active &&
-      plan.type != SavingPlanType.daysChallenge &&
-      plan.type != SavingPlanType.weeksChallenge;
+  @override
+  ConsumerState<_SavingPlanSwipeActions> createState() =>
+      _SavingPlanSwipeActionsState();
+}
+
+class _SavingPlanSwipeActionsState
+    extends ConsumerState<_SavingPlanSwipeActions>
+    with SingleTickerProviderStateMixin {
+  static const double _rightPanelW = 240.0; // 3 × 80
+  static const double _leftPanelW = 88.0;
+
+  late final AnimationController _ctrl;
+  late final CurvedAnimation _curve;
+  double _offset = 0;
+  double _animStart = 0;
+  double _animTarget = 0;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Dismissible(
-      key: ValueKey('saving-plan-swipe-${plan.id}'),
-      direction: DismissDirection.horizontal,
-      background: _SwipeBg(
-        icon: CupertinoIcons.pencil,
-        label: context.t('common.edit'),
-        alignment: Alignment.centerLeft,
-        color: AppColors.mint,
-      ),
-      secondaryBackground: _SwipeBg(
-        icon: CupertinoIcons.ellipsis,
-        label: context.t('common.actions'),
-        alignment: Alignment.centerRight,
-        color: AppColors.blush,
-      ),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          if (_canAddContribution) {
-            await _showEditActions(context, ref);
-          } else {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(
-                builder: (_) => AddEditSavingPlanScreen(plan: plan),
-              ),
-            );
-          }
-        } else {
-          await _showMoreActions(context, ref);
-        }
-        return false;
-      },
-      child: child,
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _ctrl.addListener(_onTick);
+    widget.coordinator.addListener(_onCoordinatorChange);
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChange);
+    _ctrl.dispose();
+    _curve.dispose();
+    super.dispose();
+  }
+
+  void _onCoordinatorChange() {
+    final openId = widget.coordinator.value;
+    if (openId != widget.plan.id && _offset != 0) {
+      _springAnimate(0);
+    }
+  }
+
+  void _onTick() {
+    setState(
+      () => _offset = _animStart + (_animTarget - _animStart) * _curve.value,
     );
   }
 
-  Future<void> _showEditActions(BuildContext context, WidgetRef ref) async {
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(plan.name),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.push(
-                context,
-                CupertinoPageRoute(
-                  builder: (_) => AddEditSavingPlanScreen(plan: plan),
-                ),
-              );
-            },
-            child: Text(context.t('common.edit')),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _showAddContributionSheet(context, ref);
-            },
-            child: Text(context.t('sp.addContribution')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.t('common.cancel')),
-        ),
-      ),
-    );
+  void _springAnimate(double target) {
+    _ctrl.stop();
+    _animStart = _offset;
+    _animTarget = target;
+    _ctrl
+      ..reset()
+      ..forward();
   }
 
-  Future<void> _showMoreActions(BuildContext context, WidgetRef ref) async {
-    await showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(plan.name),
-        actions: [
-          if (plan.status == SavingPlanStatus.active)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await ref
-                      .read(savingPlanServiceProvider)
-                      .markCompleted(userId!, plan);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Plan completed', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('inst.markCompleted')),
-            ),
-          if (plan.status == SavingPlanStatus.cancelled)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await ref
-                      .read(savingPlanServiceProvider)
-                      .setCancelled(userId!, plan, false);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('inst.reactivate')),
-            )
-          else if (plan.status != SavingPlanStatus.completed)
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () async {
-                Navigator.pop(ctx);
-                if (userId == null) return;
-                try {
-                  await ref
-                      .read(savingPlanServiceProvider)
-                      .setCancelled(userId!, plan, true);
-                  if (context.mounted) {
-                    AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
-                  }
-                }
-              },
-              child: Text(context.t('common.cancel')),
-            ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _confirmDelete(context, ref);
-            },
-            child: Text(context.t('common.delete')),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.t('common.cancel')),
-        ),
+  void _close() => _springAnimate(0);
+
+  void _onDragStart(DragStartDetails _) {
+    _ctrl.stop();
+    widget.coordinator.openRow(widget.plan.id);
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() {
+      _offset = (_offset + d.delta.dx).clamp(-_rightPanelW, _leftPanelW);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (_offset < 0) {
+      (_offset < -_rightPanelW * 0.35 || v < -500)
+          ? _springAnimate(-_rightPanelW)
+          : _springAnimate(0);
+    } else {
+      (_offset > _leftPanelW * 0.35 || v > 500)
+          ? _handleEditSwipe()
+          : _springAnimate(0);
+    }
+  }
+
+  Future<void> _handleEditSwipe() async {
+    HapticFeedback.selectionClick();
+    _springAnimate(_leftPanelW);
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    _springAnimate(0);
+    await Future.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddEditSavingPlanScreen(plan: widget.plan),
       ),
     );
   }
 
-  Future<void> _showAddContributionSheet(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _completePlan() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
     if (userId == null) return;
-    final controller = TextEditingController(
-      text: (plan.contributionAmount ?? 0) > 0
-          ? plan.contributionAmount!.toStringAsFixed(2)
-          : '',
-    );
-    final amount = await showModalBottomSheet<double>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.brand.background,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              context.t('sp.addContribution'),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              autofocus: false,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                prefixText: '$symbol  ',
-                hintText: '0.00',
-              ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                final value = double.tryParse(controller.text) ?? 0;
-                Navigator.pop(ctx, value);
-              },
-              child: Text(context.t('common.save')),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    if (amount == null || amount <= 0) return;
+    if (widget.plan.status != SavingPlanStatus.active) {
+      if (mounted) {
+        AppToast.show(context, 'Plan is not active', type: AppToastType.error);
+      }
+      return;
+    }
     try {
-      await ref.read(savingPlanServiceProvider).addContribution(
-            userId!,
-            plan,
-            SavingContribution(
-              id: DateTime.now().microsecondsSinceEpoch.toString(),
-              amount: amount,
-              date: DateTime.now(),
-            ),
-          );
-      if (context.mounted) {
-        AppToast.show(context, 'Contribution added', type: AppToastType.success);
+      await ref.read(savingPlanServiceProvider).markCompleted(userId, widget.plan);
+      if (mounted) {
+        AppToast.show(context, 'Plan completed', type: AppToastType.success);
       }
     } catch (_) {
-      if (context.mounted) {
-        AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+      if (mounted) {
+        AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
       }
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _cancelPlan() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
+    if (userId == null) return;
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(context.t('sp.deleteTitle')),
+        content: const Text('Are you sure you want to cancel this plan?'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.cancel')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel Plan'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      try {
+        await ref
+            .read(savingPlanServiceProvider)
+            .setCancelled(userId, widget.plan, true);
+        if (mounted) {
+          AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (mounted) {
+          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+        }
+      }
+    }
+  }
+
+  Future<void> _deletePlan() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
     if (userId == null) return;
     final ok = await showCupertinoDialog<bool>(
       context: context,
@@ -822,53 +766,168 @@ class _SavingPlanSwipeActions extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) {
+    if (ok == true && mounted) {
       try {
-        await ref.read(savingPlanServiceProvider).delete(userId!, plan.id);
-        if (context.mounted) {
+        await ref.read(savingPlanServiceProvider).delete(userId, widget.plan.id);
+        if (mounted) {
           AppToast.show(context, 'Plan deleted', type: AppToastType.success);
         }
       } catch (_) {
-        if (context.mounted) {
+        if (mounted) {
           AppToast.show(context, 'Failed to delete', type: AppToastType.error);
         }
       }
     }
   }
-}
-
-class _SwipeBg extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Alignment alignment;
-  final Color color;
-
-  const _SwipeBg({
-    required this.icon,
-    required this.label,
-    required this.alignment,
-    required this.color,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      color: color,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppColors.ink, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w600,
+    final brand = context.brand;
+    final revealRight = (-_offset / _rightPanelW).clamp(0.0, 1.0);
+    final revealLeft = (_offset / _leftPanelW).clamp(0.0, 1.0);
+    final isOpen = _offset != 0;
+
+    return ClipRect(
+      child: GestureDetector(
+        onHorizontalDragStart: _onDragStart,
+        onHorizontalDragUpdate: _onDragUpdate,
+        onHorizontalDragEnd: _onDragEnd,
+        child: Stack(
+          children: [
+            // Right panel (swipe left): Complete / Cancel / Delete
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: _rightPanelW,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _SpSwipeAction(
+                      label: 'Complete',
+                      icon: CupertinoIcons.checkmark_circle_fill,
+                      color: Color.fromARGB(200, 52, 199, 89),
+                      reveal: (revealRight * 3).clamp(0.0, 1.0),
+                      onTap: _completePlan,
+                    ),
+                  ),
+                  Expanded(
+                    child: _SpSwipeAction(
+                      label: 'Cancel',
+                      icon: CupertinoIcons.xmark_circle_fill,
+                      color: Color.fromARGB(200, 255, 149, 0),
+                      reveal: (revealRight * 3 - 0.25).clamp(0.0, 1.0),
+                      onTap: _cancelPlan,
+                    ),
+                  ),
+                  Expanded(
+                    child: _SpSwipeAction(
+                      label: 'Delete',
+                      icon: CupertinoIcons.trash_fill,
+                      color: Color.fromARGB(200, 255, 69, 58),
+                      reveal: (revealRight * 3 - 0.5).clamp(0.0, 1.0),
+                      onTap: _deletePlan,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Left panel (swipe right): Edit
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _leftPanelW,
+              child: _SpSwipeAction(
+                label: 'Edit',
+                icon: CupertinoIcons.pencil,
+                color: Color.fromARGB(200, 0, 122, 255),
+                reveal: revealLeft,
+                onTap: _handleEditSwipe,
+              ),
+            ),
+            // Main content
+            Transform.translate(
+              offset: Offset(_offset, 0),
+              child: isOpen
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _close,
+                      child: AbsorbPointer(
+                        child: Container(
+                          color: brand.surface,
+                          child: widget.child,
+                        ),
+                      ),
+                    )
+                  : Container(color: brand.surface, child: widget.child),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SpSwipeAction extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final double reveal;
+  final VoidCallback onTap;
+
+  const _SpSwipeAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.reveal,
+    required this.onTap,
+  });
+
+  @override
+  State<_SpSwipeAction> createState() => _SpSwipeActionState();
+}
+
+class _SpSwipeActionState extends State<_SpSwipeAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        width: double.infinity,
+        height: double.infinity,
+        color: _pressed
+            ? widget.color.withValues(alpha: widget.color.a * 0.72)
+            : widget.color,
+        child: Transform.scale(
+          scale: 0.7 + 0.3 * widget.reveal,
+          child: Opacity(
+            opacity: widget.reveal.clamp(0.0, 1.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(widget.icon, color: Colors.white, size: 22),
+                const SizedBox(height: 4),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
