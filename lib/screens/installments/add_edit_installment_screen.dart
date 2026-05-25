@@ -601,24 +601,15 @@ class _AddEditInstallmentScreenState
                 // Positioned so they don't affect Stack height (only current child does).
                 ClipRect(
                   child: AnimatedSize(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeInOutCubic,
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
                     alignment: Alignment.topCenter,
                     child: SectionCard(
                       padding: EdgeInsets.zero,
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        layoutBuilder: (currentChild, previousChildren) => Stack(
-                          alignment: Alignment.topCenter,
-                          children: [
-                            ...previousChildren.map(
-                              (c) => Positioned(top: 0, left: 0, right: 0, child: c),
-                            ),
-                            ?currentChild,
-                          ],
-                        ),
+                        duration: const Duration(milliseconds: 200),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
                         transitionBuilder: (child, anim) => FadeTransition(
                           opacity: anim,
                           child: child,
