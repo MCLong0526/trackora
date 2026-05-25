@@ -2,7 +2,7 @@ name: trackora
 description: "Trackora — a clean, iOS-first expense tracker."
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+1
 
 environment:
   sdk: ^3.11.3

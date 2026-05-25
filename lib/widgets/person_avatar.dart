@@ -22,17 +22,15 @@ int personColorIndex(String name) {
 Color personAvatarBg(int colorIndex) =>
     _pastelColors[colorIndex.clamp(0, _pastelColors.length - 1)];
 
-/// Circular avatar showing up to 2 initials on a brand pastel background.
+/// Circular avatar showing emoji or up to 2 initials on a brand pastel background.
 ///
 /// If [colorIndex] is omitted it is derived deterministically from [name]
 /// so the same name always maps to the same color across the app.
-/// Set [animated] to true to make the emoji continuously pulse (scale 0.92↔1.08).
-class PersonAvatar extends StatefulWidget {
+class PersonAvatar extends StatelessWidget {
   final String name;
   final int? colorIndex;
   final String? emoji;
   final double size;
-  final bool animated;
 
   const PersonAvatar({
     super.key,
@@ -40,83 +38,33 @@ class PersonAvatar extends StatefulWidget {
     this.colorIndex,
     this.emoji,
     this.size = 40,
-    this.animated = false,
+    // ignored – kept for call-site compatibility
+    bool animated = false,
   });
-
-  @override
-  State<PersonAvatar> createState() => _PersonAvatarState();
-}
-
-class _PersonAvatarState extends State<PersonAvatar>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _ctrl;
-  Animation<double>? _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _setupAnimation();
-  }
-
-  @override
-  void didUpdateWidget(PersonAvatar old) {
-    super.didUpdateWidget(old);
-    if (old.animated != widget.animated || old.emoji != widget.emoji) {
-      _ctrl?.dispose();
-      _ctrl = null;
-      _scale = null;
-      _setupAnimation();
-    }
-  }
-
-  void _setupAnimation() {
-    final hasEmoji = widget.emoji != null && widget.emoji!.isNotEmpty;
-    if (widget.animated && hasEmoji) {
-      _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 2000),
-      )..repeat(reverse: true);
-      _scale = Tween<double>(begin: 0.92, end: 1.08).animate(
-        CurvedAnimation(parent: _ctrl!, curve: Curves.easeInOut),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl?.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final idx = widget.colorIndex ?? personColorIndex(widget.name);
+    final idx = colorIndex ?? personColorIndex(name);
     final bg = personAvatarBg(idx);
-    final hasEmoji = widget.emoji != null && widget.emoji!.isNotEmpty;
+    final hasEmoji = emoji != null && emoji!.isNotEmpty;
     final fs = hasEmoji
-        ? (widget.size * 0.52).clamp(12.0, 30.0)
-        : (widget.size * 0.38).clamp(11.0, 24.0);
-
-    Widget content = Text(
-      hasEmoji ? widget.emoji! : _initials(widget.name),
-      style: TextStyle(
-        fontSize: fs,
-        fontWeight: hasEmoji ? FontWeight.normal : FontWeight.w600,
-        color: brand.ink,
-      ),
-    );
-
-    if (_scale != null) {
-      content = ScaleTransition(scale: _scale!, child: content);
-    }
+        ? (size * 0.52).clamp(12.0, 30.0)
+        : (size * 0.38).clamp(11.0, 24.0);
 
     return Container(
-      width: widget.size,
-      height: widget.size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
-      child: content,
+      child: Text(
+        hasEmoji ? emoji! : _initials(name),
+        style: TextStyle(
+          fontSize: fs,
+          fontWeight: hasEmoji ? FontWeight.normal : FontWeight.w600,
+          color: brand.ink,
+        ),
+      ),
     );
   }
 
