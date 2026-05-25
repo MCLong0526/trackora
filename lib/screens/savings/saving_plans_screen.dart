@@ -473,17 +473,24 @@ class _PlanRow extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _TypeChip(type: plan.type, tint: tint),
+                        if (plan.status != SavingPlanStatus.active) ...[
+                          const SizedBox(width: 6),
+                          _StatusPill(status: plan.status),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      _subtitle(context, plan),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    if (plan.status == SavingPlanStatus.active)
+                      Text(
+                        _activeSubtitle(context, plan) ?? '',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
                   ],
                 ),
               ),
@@ -516,29 +523,23 @@ class _PlanRow extends StatelessWidget {
     );
   }
 
-  String _subtitle(BuildContext context, SavingPlan p) {
-    switch (p.status) {
-      case SavingPlanStatus.cancelled:
-        return context.t('sp.statusCancelled');
-      case SavingPlanStatus.completed:
-        return context.t('sp.statusCompleted');
-      case SavingPlanStatus.active:
-        switch (p.type) {
-          case SavingPlanType.daysChallenge:
-            final done = p.slotsCompleted;
-            final total = p.totalDays ?? 0;
-            final left = total - done;
-            return 'Day $done of $total · $left days left';
-          case SavingPlanType.weeksChallenge:
-            final done = p.slotsCompleted;
-            final total = p.totalWeeks ?? 0;
-            final left = total - done;
-            return 'Week $done of $total · $left weeks left';
-          case SavingPlanType.flexible:
-            return context.t('sp.flexibleNote');
-          case SavingPlanType.fixed:
-            return _frequencyLabel(context, p.frequency);
-        }
+  String? _activeSubtitle(BuildContext context, SavingPlan p) {
+    if (p.status != SavingPlanStatus.active) return null;
+    switch (p.type) {
+      case SavingPlanType.daysChallenge:
+        final done = p.slotsCompleted;
+        final total = p.totalDays ?? 0;
+        final left = total - done;
+        return 'Day $done of $total · $left days left';
+      case SavingPlanType.weeksChallenge:
+        final done = p.slotsCompleted;
+        final total = p.totalWeeks ?? 0;
+        final left = total - done;
+        return 'Week $done of $total · $left weeks left';
+      case SavingPlanType.flexible:
+        return context.t('sp.flexibleNote');
+      case SavingPlanType.fixed:
+        return _frequencyLabel(context, p.frequency);
     }
   }
 
@@ -1056,6 +1057,62 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           FilledButton(onPressed: onAdd, child: Text(context.t('sp.add'))),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Status pill ───────────────────────────────────────────────
+
+class _StatusPill extends StatelessWidget {
+  final SavingPlanStatus status;
+  const _StatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, icon, label) = switch (status) {
+      SavingPlanStatus.completed => (
+          const Color(0xFF34C759).withValues(alpha: 0.15),
+          const Color(0xFF34C759),
+          CupertinoIcons.checkmark_circle_fill,
+          'Completed',
+        ),
+      SavingPlanStatus.cancelled => (
+          const Color(0xFF8E8E93).withValues(alpha: 0.15),
+          const Color(0xFF8E8E93),
+          CupertinoIcons.xmark_circle_fill,
+          'Cancelled',
+        ),
+      SavingPlanStatus.active => (
+          Colors.transparent,
+          Colors.transparent,
+          CupertinoIcons.circle,
+          '',
+        ),
+    };
+
+    if (status == SavingPlanStatus.active) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: fg),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );

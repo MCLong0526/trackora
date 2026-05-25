@@ -9,13 +9,6 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
-/// Create / edit a saving plan.
-///
-/// The form adapts to the chosen type:
-///  • fixed → contribution amount + frequency required.
-///  • flexible → just target.
-///  • daysChallenge → totalDays required (suggests 30).
-///  • weeksChallenge → totalWeeks required (suggests 12).
 class AddEditSavingPlanScreen extends ConsumerStatefulWidget {
   final SavingPlan? plan;
   const AddEditSavingPlanScreen({super.key, this.plan});
@@ -31,6 +24,7 @@ class _AddEditSavingPlanScreenState
   final _name = TextEditingController();
   final _target = TextEditingController();
   final _contribution = TextEditingController();
+  final _periodsCtrl = TextEditingController();
   final _totalDays = TextEditingController(text: '30');
   final _totalWeeks = TextEditingController(text: '12');
   final _note = TextEditingController();
@@ -41,6 +35,11 @@ class _AddEditSavingPlanScreenState
   DateTime? _endDate;
   bool _saving = false;
   bool _success = false;
+
+  // Auto-fill state for Fixed tab
+  bool _periodsIsAuto = true;
+  bool _contribIsAuto = false;
+  bool _isUpdating = false;
 
   bool get _isEdit => widget.plan != null;
 
@@ -59,7 +58,19 @@ class _AddEditSavingPlanScreenState
       if (p.totalDays != null) _totalDays.text = '${p.totalDays}';
       if (p.totalWeeks != null) _totalWeeks.text = '${p.totalWeeks}';
       _note.text = p.note;
+      // Pre-fill periods from endDate for fixed plans
+      if (p.type == SavingPlanType.fixed && p.endDate != null) {
+        final computed = _periodsFromDates(p.startDate, p.endDate!, p.frequency ?? SavingFrequency.monthly);
+        if (computed > 0) {
+          _periodsCtrl.text = '$computed';
+          _periodsIsAuto = false;
+        }
+      }
     }
+
+    _target.addListener(_recalculateFixed);
+    _contribution.addListener(_onContributionChanged);
+    _periodsCtrl.addListener(_onPeriodsChanged);
   }
 
   @override
@@ -67,11 +78,98 @@ class _AddEditSavingPlanScreenState
     _name.dispose();
     _target.dispose();
     _contribution.dispose();
+    _periodsCtrl.dispose();
     _totalDays.dispose();
     _totalWeeks.dispose();
     _note.dispose();
     super.dispose();
   }
+
+  // ── Auto-fill logic ──────────────────────────────────────────
+
+  void _onContributionChanged() {
+    if (_isUpdating) return;
+    if (_contribution.text.trim().isEmpty) {
+      _contribIsAuto = true;
+    } else {
+      _contribIsAuto = false;
+      _periodsIsAuto = true;
+    }
+    _recalculateFixed();
+  }
+
+  void _onPeriodsChanged() {
+    if (_isUpdating) return;
+    if (_periodsCtrl.text.trim().isEmpty) {
+      _periodsIsAuto = true;
+    } else {
+      _periodsIsAuto = false;
+      _contribIsAuto = true;
+    }
+    _recalculateFixed();
+  }
+
+  void _recalculateFixed() {
+    if (_isUpdating || _type != SavingPlanType.fixed) return;
+    _isUpdating = true;
+    try {
+      final target = double.tryParse(_target.text.trim());
+      final contribution = double.tryParse(_contribution.text.trim());
+      final periods = int.tryParse(_periodsCtrl.text.trim());
+
+      DateTime? newEndDate = _endDate;
+
+      if (_periodsIsAuto &&
+          target != null && target > 0 &&
+          contribution != null && contribution > 0) {
+        final p = (target / contribution).ceil();
+        _periodsCtrl.text = '$p';
+        newEndDate = _computeEndDate(p);
+      } else if (_contribIsAuto &&
+          target != null && target > 0 &&
+          periods != null && periods > 0) {
+        _contribution.text = (target / periods).toStringAsFixed(2);
+        newEndDate = _computeEndDate(periods);
+      } else if (periods != null && periods > 0) {
+        newEndDate = _computeEndDate(periods);
+      }
+
+      if (newEndDate != _endDate) {
+        setState(() => _endDate = newEndDate);
+      }
+    } finally {
+      _isUpdating = false;
+    }
+  }
+
+  DateTime _computeEndDate(int periods) {
+    return switch (_frequency) {
+      SavingFrequency.daily => _startDate.add(Duration(days: periods)),
+      SavingFrequency.weekly => _startDate.add(Duration(days: periods * 7)),
+      SavingFrequency.monthly => DateTime(
+          _startDate.year,
+          _startDate.month + periods,
+          _startDate.day,
+        ),
+    };
+  }
+
+  int _periodsFromDates(DateTime start, DateTime end, SavingFrequency freq) {
+    return switch (freq) {
+      SavingFrequency.daily => end.difference(start).inDays,
+      SavingFrequency.weekly => (end.difference(start).inDays / 7).round(),
+      SavingFrequency.monthly =>
+        (end.year - start.year) * 12 + (end.month - start.month),
+    };
+  }
+
+  String _periodsLabel() => switch (_frequency) {
+        SavingFrequency.daily => 'Days',
+        SavingFrequency.weekly => 'Weeks',
+        SavingFrequency.monthly => 'Months',
+      };
+
+  // ── Date picker ──────────────────────────────────────────────
 
   Future<void> _pickDate({required bool start}) async {
     DateTime temp = start ? _startDate : (_endDate ?? DateTime.now());
@@ -95,8 +193,21 @@ class _AddEditSavingPlanScreenState
                 setState(() {
                   if (start) {
                     _startDate = temp;
+                    // Recompute end date when start changes if periods set
+                    final p = int.tryParse(_periodsCtrl.text.trim());
+                    if (p != null && p > 0 && _type == SavingPlanType.fixed) {
+                      _endDate = _computeEndDate(p);
+                    }
                   } else {
                     _endDate = temp;
+                    // When end date is manually set, compute periods
+                    if (_type == SavingPlanType.fixed) {
+                      final p = _periodsFromDates(_startDate, temp, _frequency);
+                      if (p > 0) {
+                        _periodsIsAuto = false;
+                        _periodsCtrl.text = '$p';
+                      }
+                    }
                   }
                 });
                 Navigator.pop(ctx);
@@ -108,6 +219,8 @@ class _AddEditSavingPlanScreenState
       ),
     );
   }
+
+  // ── Save ─────────────────────────────────────────────────────
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -122,7 +235,6 @@ class _AddEditSavingPlanScreenState
       final now = DateTime.now();
       final target = double.parse(_target.text);
 
-      // Per-type fields.
       double? contribution;
       SavingFrequency? frequency;
       int? totalDays;
@@ -136,7 +248,6 @@ class _AddEditSavingPlanScreenState
           break;
         case SavingPlanType.daysChallenge:
           totalDays = int.tryParse(_totalDays.text.trim());
-          // Daily contribution is target / days.
           if (totalDays != null && totalDays > 0) {
             contribution = target / totalDays;
             frequency = SavingFrequency.daily;
@@ -187,7 +298,10 @@ class _AddEditSavingPlanScreenState
         );
       }
       if (mounted) {
-        setState(() { _saving = false; _success = true; });
+        setState(() {
+          _saving = false;
+          _success = true;
+        });
         AppToast.show(
           context,
           _isEdit ? 'Plan updated' : 'Plan created',
@@ -198,11 +312,14 @@ class _AddEditSavingPlanScreenState
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, context.t('common.saveFailed'), type: AppToastType.error);
+        AppToast.show(context, context.t('common.saveFailed'),
+            type: AppToastType.error);
         setState(() => _saving = false);
       }
     }
   }
+
+  // ── Build ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -221,190 +338,239 @@ class _AddEditSavingPlanScreenState
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            children: [
-              _typeSelector(brand),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _name,
-                decoration: InputDecoration(
-                  labelText: context.t('sp.fieldName'),
-                  hintText: context.t('sp.fieldNameHint'),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
+                _typeSelector(brand),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _name,
+                  decoration: InputDecoration(
+                    labelText: context.t('sp.fieldName'),
+                    hintText: context.t('sp.fieldNameHint'),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? context.t('sp.nameRequired')
+                      : null,
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? context.t('sp.nameRequired')
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _target,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: context.t('sp.fieldTarget'),
-                  prefixText: '$symbol  ',
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _target,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: context.t('sp.fieldTarget'),
+                    prefixText: '$symbol  ',
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return context.t('validation.enterAmount');
+                    }
+                    final n = double.tryParse(v);
+                    if (n == null || n <= 0) {
+                      return context.t('validation.invalidAmount');
+                    }
+                    return null;
+                  },
                 ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) {
-                    return context.t('validation.enterAmount');
-                  }
-                  final n = double.tryParse(v);
-                  if (n == null || n <= 0) {
-                    return context.t('validation.invalidAmount');
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: Column(
-                  key: ValueKey(_type),
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_type == SavingPlanType.fixed) ...[
-                      TextFormField(
-                        controller: _contribution,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          labelText: context.t('sp.fieldContribution'),
-                          prefixText: '$symbol  ',
-                        ),
-                        validator: (v) {
-                          if (_type != SavingPlanType.fixed) return null;
-                          if (v == null || v.isEmpty) {
-                            return context.t('validation.enterAmount');
-                          }
-                          final n = double.tryParse(v);
-                          if (n == null || n <= 0) {
-                            return context.t('validation.invalidAmount');
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _frequencyPicker(brand),
-                      const SizedBox(height: 12),
-                    ],
-                    if (_type == SavingPlanType.daysChallenge) ...[
-                      TextFormField(
-                        controller: _totalDays,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: context.t('sp.fieldDays'),
-                          hintText: '30',
-                        ),
-                        validator: (v) {
-                          if (_type != SavingPlanType.daysChallenge) return null;
-                          final n = int.tryParse((v ?? '').trim());
-                          if (n == null || n <= 0) {
-                            return context.t('sp.invalidDays');
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (_type == SavingPlanType.weeksChallenge) ...[
-                      TextFormField(
-                        controller: _totalWeeks,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: context.t('sp.fieldWeeks'),
-                          hintText: '12',
-                        ),
-                        validator: (v) {
-                          if (_type != SavingPlanType.weeksChallenge) return null;
-                          final n = int.tryParse((v ?? '').trim());
-                          if (n == null || n <= 0) {
-                            return context.t('sp.invalidWeeks');
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                ),
-              ),
-              _dateTile(
-                label: context.t('sp.fieldStartDate'),
-                value: DateFormat('MMM d, yyyy').format(_startDate),
-                onTap: () => _pickDate(start: true),
-              ),
-              const SizedBox(height: 10),
-              _dateTile(
-                label: context.t('sp.fieldEndDate'),
-                value: _endDate == null
-                    ? context.t('sp.optional')
-                    : DateFormat('MMM d, yyyy').format(_endDate!),
-                onTap: () => _pickDate(start: false),
-                onClear:
-                    _endDate == null ? null : () => setState(() => _endDate = null),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _note,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: context.t('sp.fieldNote'),
-                ),
-              ),
-              const SizedBox(height: 24),
-              TweenAnimationBuilder<Color?>(
-                tween: ColorTween(
-                  begin: _success ? Theme.of(context).colorScheme.primary : null,
-                  end: _success
-                      ? const Color(0xFF34C759)
-                      : Theme.of(context).colorScheme.primary,
-                ),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                builder: (ctx, color, _) => FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: color),
-                  onPressed: (_saving || _success) ? null : _save,
+                const SizedBox(height: 12),
+                // Type-specific fields with smooth crossfade
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: _success
-                        ? const Icon(
-                            CupertinoIcons.checkmark_alt,
-                            size: 20,
-                            color: Colors.white,
-                            key: ValueKey('success'),
-                          )
-                        : _saving
-                            ? const SizedBox(
-                                key: ValueKey('loading'),
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _isEdit
-                                    ? context.t('common.update')
-                                    : context.t('common.save'),
-                                key: const ValueKey('label'),
-                              ),
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: Column(
+                      key: ValueKey(_type),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_type == SavingPlanType.fixed) ...[
+                          TextFormField(
+                            controller: _contribution,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: InputDecoration(
+                              labelText: context.t('sp.fieldContribution'),
+                              prefixText: '$symbol  ',
+                              suffixText: _contribIsAuto &&
+                                      _contribution.text.isNotEmpty
+                                  ? 'auto'
+                                  : null,
+                              suffixStyle: TextStyle(
+                                  fontSize: 11, color: brand.accentDark),
+                            ),
+                            validator: (v) {
+                              if (_type != SavingPlanType.fixed) return null;
+                              if (v == null || v.isEmpty) {
+                                return context.t('validation.enterAmount');
+                              }
+                              final n = double.tryParse(v);
+                              if (n == null || n <= 0) {
+                                return context.t('validation.invalidAmount');
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _frequencyPicker(brand),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _periodsCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText:
+                                  'Number of ${_periodsLabel()}',
+                              hintText: 'e.g. 12',
+                              suffixText: _periodsIsAuto &&
+                                      _periodsCtrl.text.isNotEmpty
+                                  ? 'auto'
+                                  : null,
+                              suffixStyle: TextStyle(
+                                  fontSize: 11, color: brand.accentDark),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_type == SavingPlanType.daysChallenge) ...[
+                          TextFormField(
+                            controller: _totalDays,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.t('sp.fieldDays'),
+                              hintText: '30',
+                            ),
+                            validator: (v) {
+                              if (_type != SavingPlanType.daysChallenge) {
+                                return null;
+                              }
+                              final n = int.tryParse((v ?? '').trim());
+                              if (n == null || n <= 0) {
+                                return context.t('sp.invalidDays');
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_type == SavingPlanType.weeksChallenge) ...[
+                          TextFormField(
+                            controller: _totalWeeks,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: context.t('sp.fieldWeeks'),
+                              hintText: '12',
+                            ),
+                            validator: (v) {
+                              if (_type != SavingPlanType.weeksChallenge) {
+                                return null;
+                              }
+                              final n = int.tryParse((v ?? '').trim());
+                              if (n == null || n <= 0) {
+                                return context.t('sp.invalidWeeks');
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+                _dateTile(
+                  label: context.t('sp.fieldStartDate'),
+                  value: DateFormat('MMM d, yyyy').format(_startDate),
+                  onTap: () => _pickDate(start: true),
+                ),
+                const SizedBox(height: 10),
+                _dateTile(
+                  label: context.t('sp.fieldEndDate'),
+                  value: _endDate == null
+                      ? context.t('sp.optional')
+                      : DateFormat('MMM d, yyyy').format(_endDate!),
+                  onTap: () => _pickDate(start: false),
+                  onClear: _endDate == null
+                      ? null
+                      : () => setState(() {
+                            _endDate = null;
+                            if (_type == SavingPlanType.fixed) {
+                              _periodsCtrl.clear();
+                              _periodsIsAuto = true;
+                            }
+                          }),
+                  isAutoFilled: _type == SavingPlanType.fixed &&
+                      _endDate != null &&
+                      (_periodsIsAuto || _contribIsAuto),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _note,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: context.t('sp.fieldNote'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    begin: _success
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                    end: _success
+                        ? const Color(0xFF34C759)
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  builder: (ctx, color, _) => FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: color),
+                    onPressed: (_saving || _success) ? null : _save,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _success
+                          ? const Icon(
+                              CupertinoIcons.checkmark_alt,
+                              size: 20,
+                              color: Colors.white,
+                              key: ValueKey('success'),
+                            )
+                          : _saving
+                              ? const SizedBox(
+                                  key: ValueKey('loading'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _isEdit
+                                      ? context.t('common.update')
+                                      : context.t('common.save'),
+                                  key: const ValueKey('label'),
+                                ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-      ),
     );
   }
+
+  // ── Type selector ────────────────────────────────────────────
 
   Widget _typeSelector(BrandColors brand) {
     final selectedFg = foregroundOn(brand.accentDark);
@@ -450,7 +616,16 @@ class _AddEditSavingPlanScreenState
                   for (final (type, label, icon) in types)
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _type = type),
+                        onTap: () {
+                          if (_type == type) return;
+                          setState(() => _type = type);
+                          // Reset auto-fill when switching type
+                          if (type == SavingPlanType.fixed) {
+                            _periodsIsAuto = true;
+                            _contribIsAuto = false;
+                            _recalculateFixed();
+                          }
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           child: Column(
@@ -462,8 +637,9 @@ class _AddEditSavingPlanScreenState
                                   icon,
                                   key: ValueKey(type == _type),
                                   size: 18,
-                                  color:
-                                      type == _type ? selectedFg : brand.ink,
+                                  color: type == _type
+                                      ? selectedFg
+                                      : brand.ink,
                                 ),
                               ),
                               const SizedBox(height: 5),
@@ -473,8 +649,9 @@ class _AddEditSavingPlanScreenState
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color:
-                                      type == _type ? selectedFg : brand.ink,
+                                  color: type == _type
+                                      ? selectedFg
+                                      : brand.ink,
                                 ),
                                 child: Text(label),
                               ),
@@ -492,55 +669,92 @@ class _AddEditSavingPlanScreenState
     );
   }
 
+  // ── Frequency picker with sliding pill ───────────────────────
+
   Widget _frequencyPicker(BrandColors brand) {
     final selectedFg = foregroundOn(brand.accentDark);
-    Widget opt(SavingFrequency f, String label) {
-      final selected = _frequency == f;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => setState(() => _frequency = f),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? brand.accentDark : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: selected ? selectedFg : brand.ink,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final freqs = <(SavingFrequency, String)>[
+      (SavingFrequency.daily, context.t('sp.daily')),
+      (SavingFrequency.weekly, context.t('sp.weekly')),
+      (SavingFrequency.monthly, context.t('sp.monthly')),
+    ];
+    final selectedIdx = freqs.indexWhere((f) => f.$1 == _frequency);
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Row(
-        children: [
-          opt(SavingFrequency.daily, context.t('sp.daily')),
-          opt(SavingFrequency.weekly, context.t('sp.weekly')),
-          opt(SavingFrequency.monthly, context.t('sp.monthly')),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final segW = (constraints.maxWidth - 8) / 3;
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              if (selectedIdx >= 0)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  left: selectedIdx * segW,
+                  top: 0,
+                  bottom: 0,
+                  width: segW,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: brand.accentDark,
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.chip - 2),
+                    ),
+                  ),
+                ),
+              Row(
+                children: [
+                  for (final (f, label) in freqs)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_frequency == f) return;
+                          setState(() => _frequency = f);
+                          // Update periods label and recompute end date
+                          _recalculateFixed();
+                        },
+                        child: Container(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                          alignment: Alignment.center,
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _frequency == f
+                                  ? selectedFg
+                                  : brand.ink,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+
+  // ── Date tile ────────────────────────────────────────────────
 
   Widget _dateTile({
     required String label,
     required String value,
     required VoidCallback onTap,
     VoidCallback? onClear,
+    bool isAutoFilled = false,
   }) {
     final brand = context.brand;
     return Material(
@@ -564,7 +778,24 @@ class _AddEditSavingPlanScreenState
                   ),
                 ),
               ),
-              Text(value, style: TextStyle(color: brand.inkSoft)),
+              Text(
+                value,
+                style: TextStyle(
+                  color: isAutoFilled ? brand.accentDark : brand.inkSoft,
+                  fontSize: 14,
+                ),
+              ),
+              if (isAutoFilled) ...[
+                const SizedBox(width: 4),
+                Text(
+                  'auto',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: brand.accentDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               if (onClear != null) ...[
                 const SizedBox(width: 6),
                 GestureDetector(
