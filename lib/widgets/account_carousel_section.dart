@@ -2225,29 +2225,14 @@ class _Step2State extends State<_Step2> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Live preview card ────────────────────────────
+          // ── Live preview card (no background on create) ───
           AnimatedContainer(
             duration: const Duration(milliseconds: 360),
             height: 168,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [widget.pal.a, widget.pal.b],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.pal.b.withValues(alpha: 0.50),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
-                  blurRadius: 32,
-                  offset: const Offset(0, 16),
-                ),
-              ],
+              border: Border.all(color: brand.divider, width: 1.5),
             ),
             clipBehavior: Clip.hardEdge,
             child: Stack(
@@ -2260,7 +2245,7 @@ class _Step2State extends State<_Step2> {
                     height: 200,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: widget.pal.accent.withValues(alpha: 0.10),
+                      color: widget.pal.accent.withValues(alpha: 0.08),
                     ),
                   ),
                 ),
@@ -2272,25 +2257,8 @@ class _Step2State extends State<_Step2> {
                     style: TextStyle(
                       fontSize: 180,
                       fontWeight: FontWeight.w900,
-                      color: widget.pal.accent.withValues(alpha: 0.10),
+                      color: widget.pal.accent.withValues(alpha: 0.08),
                       height: 1,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: -40,
-                  left: -20,
-                  child: Container(
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          Colors.white.withValues(alpha: 0.45),
-                          Colors.white.withValues(alpha: 0),
-                        ],
-                      ),
                     ),
                   ),
                 ),
@@ -2304,7 +2272,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
-                          color: widget.pal.ink.withValues(alpha: 0.60),
+                          color: brand.inkSoft,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2314,7 +2282,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: widget.pal.ink,
+                          color: brand.ink,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2325,7 +2293,7 @@ class _Step2State extends State<_Step2> {
                         style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 1.3,
-                          color: widget.pal.ink.withValues(alpha: 0.55),
+                          color: brand.inkSoft,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -2347,7 +2315,7 @@ class _Step2State extends State<_Step2> {
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
-                                  color: widget.pal.ink,
+                                  color: brand.ink,
                                   letterSpacing: -0.4,
                                 ),
                               ),
@@ -2364,7 +2332,7 @@ class _Step2State extends State<_Step2> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: widget.pal.ink.withValues(alpha: 0.65),
+                                    color: brand.inkSoft,
                                   ),
                                 );
                               }),
@@ -2379,7 +2347,17 @@ class _Step2State extends State<_Step2> {
             ),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 8),
+          Text(
+            'Fill in the details below',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: brand.inkSoft,
+            ),
+          ),
+          const SizedBox(height: 14),
 
           // ── Form fields ──────────────────────────────────
           Container(

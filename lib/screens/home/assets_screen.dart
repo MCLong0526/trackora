@@ -19,7 +19,6 @@ import '../../widgets/masked_amount.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
-import '../travel/travel_groups_screen.dart';
 
 class AssetsScreen extends ConsumerStatefulWidget {
   const AssetsScreen({super.key});
@@ -75,6 +74,10 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                 const SizedBox(height: 18),
                 if (isLoading && accounts.isEmpty)
                   const _LoadingCard()
+                else if (accounts.isEmpty)
+                  _EmptyAccounts(
+                    onTap: () => showAddAccountSheet(context),
+                  )
                 else ...[
                   _NetWorthCard(
                     snapshot: snapshot,
@@ -84,25 +87,19 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                     mainCode: mainCode,
                   ),
                   const SizedBox(height: 20),
-                  if (accounts.isEmpty)
-                    _EmptyAccounts(
-                      onTap: () => showAddAccountSheet(context),
-                    )
-                  else ...[
-                    _SectionLabel(context.t('asset.title')),
-                    const SizedBox(height: 12),
-                    AccountCarouselSection(
-                      accounts: accounts,
-                      balances: {
-                        for (final a in snapshot.accounts)
-                          a.account.id: a.balance,
-                      },
-                      allExpenses: expenses,
-                      symbol: symbol,
-                      visible: visible,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                  _SectionLabel(context.t('asset.title')),
+                  const SizedBox(height: 12),
+                  AccountCarouselSection(
+                    accounts: accounts,
+                    balances: {
+                      for (final a in snapshot.accounts)
+                        a.account.id: a.balance,
+                    },
+                    allExpenses: expenses,
+                    symbol: symbol,
+                    visible: visible,
+                  ),
+                  const SizedBox(height: 8),
                   if (snapshot.hasBorrowLend) ...[
                     const SizedBox(height: 20),
                     _SectionLabel(context.t('asset.moneyFlow')),
@@ -133,166 +130,11 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                       visible: visible,
                     ),
                   ],
-                  const SizedBox(height: 20),
-                  _SectionLabel(context.t('travel.title').toUpperCase()),
-                  const SizedBox(height: 8),
-                  _TravelGroupsEntryCard(),
                 ],
               ]),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Travel Groups Entry Card ──────────────────────────────────────────────────
-
-class _TravelGroupsEntryCard extends ConsumerWidget {
-  const _TravelGroupsEntryCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final groups = ref.watch(travelGroupsProvider).valueOrNull ?? const [];
-
-    final now = DateTime.now();
-    final activeGroups = groups
-        .where((g) => g.endDate == null || g.endDate!.isAfter(now))
-        .toList()
-      ..sort((a, b) => b.startDate.compareTo(a.startDate));
-    final completedCount = groups.length - activeGroups.length;
-    final totalMembers =
-        groups.fold<int>(0, (sum, g) => sum + g.memberIds.length);
-    final featuredTrip = activeGroups.isNotEmpty
-        ? activeGroups.first
-        : (groups.isNotEmpty ? groups.first : null);
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        CupertinoPageRoute(builder: (_) => const TravelGroupsScreen()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : brand.divider,
-            width: 0.8,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFF3478F6).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                CupertinoIcons.airplane,
-                color: Color(0xFF3478F6),
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        context.t('travel.title'),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: brand.ink,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      if (activeGroups.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3478F6).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${activeGroups.length} active',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF3478F6),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  if (groups.isEmpty)
-                    Text(
-                      context.t('travel.empty'),
-                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
-                    )
-                  else ...[
-                    if (featuredTrip != null)
-                      Text(
-                        featuredTrip.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: brand.inkSoft,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(CupertinoIcons.person_2,
-                            size: 11, color: brand.inkSoft),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$totalMembers member${totalMembers == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (completedCount > 0)
-                          Text(
-                            ' · $completedCount completed',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_right,
-              color: brand.inkSoft,
-              size: 16,
-            ),
-          ],
-        ),
       ),
     );
   }
