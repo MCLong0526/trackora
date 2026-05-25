@@ -46,9 +46,10 @@ class _TrackoraBootstrapState extends State<TrackoraBootstrap> {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-    } else {
-      await LocalStorage.init();
     }
+    // Always init local storage — used as offline cache for group expenses
+    // even in Firebase mode.
+    await LocalStorage.init();
 
     // Widget syncing is useful, but it should never block the main app from
     // rendering. If a platform channel is unavailable during launch, the
