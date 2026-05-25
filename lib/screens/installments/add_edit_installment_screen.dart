@@ -506,20 +506,15 @@ class _AddEditInstallmentScreenState
               ),
           ],
         ),
-        body: SafeArea(
-          child: Form(
-            key: _formKey,
-            child: Stack(
-              children: [
-                ListView(
+        body: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    8,
-                    20,
-                    80 + MediaQuery.of(context).padding.bottom,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                   children: [
                 // Status summary (edit mode only)
                 if (_isEdit && status != null && existing != null)
@@ -666,6 +661,42 @@ class _AddEditInstallmentScreenState
                           ),
                         ),
                         _Divider(brand: brand),
+                        _FieldRow(
+                          child: TextFormField(
+                            controller: _remainingBalance,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: context.t('inst.optionalRemaining'),
+                              hintText: context.t('inst.remainingHint'),
+                              prefixText: '$symbol  ',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                        _Divider(brand: brand),
+                        _FieldRow(
+                          child: TextFormField(
+                            controller: _principal,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: context.t('inst.originalTotal'),
+                              hintText: 'e.g. ${formatMoney(symbol, 24000)}',
+                              prefixText: '$symbol  ',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                        _Divider(brand: brand),
                       ],
                       if (_lifetime) ...[
                         _FieldRow(
@@ -685,50 +716,21 @@ class _AddEditInstallmentScreenState
                         ),
                         _Divider(brand: brand),
                       ],
-                      _FieldRow(
-                        child: TextFormField(
-                          controller: _remainingBalance,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: context.t('inst.optionalRemaining'),
-                            hintText: context.t('inst.remainingHint'),
-                            prefixText: '$symbol  ',
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ),
-                      _Divider(brand: brand),
-                      _FieldRow(
-                        child: TextFormField(
-                          controller: _principal,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: context.t('inst.originalTotal'),
-                            hintText: 'e.g. ${formatMoney(symbol, 24000)}',
-                            prefixText: '$symbol  ',
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ),
-                      _Divider(brand: brand),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                         child: Row(
                           children: [
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 350),
+                              duration: const Duration(milliseconds: 250),
                               transitionBuilder: (child, animation) =>
                                   ScaleTransition(
-                                    scale: CurvedAnimation(
+                                    scale: Tween<double>(
+                                      begin: 0.65,
+                                      end: 1.0,
+                                    ).animate(CurvedAnimation(
                                       parent: animation,
-                                      curve: Curves.elasticOut,
-                                    ),
+                                      curve: Curves.easeOutCubic,
+                                    )),
                                     child: FadeTransition(
                                       opacity: animation,
                                       child: child,
@@ -919,44 +921,53 @@ class _AddEditInstallmentScreenState
 
               ],
                 ),
+              ),
 
-                // ── Floating Save Button ──────────────────────────────
-                Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 20 + MediaQuery.of(context).padding.bottom,
-                  child: FilledButton(
-                    onPressed: (_saving || _success) ? null : _save,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: _success
-                          ? const Icon(
-                              CupertinoIcons.checkmark_alt,
-                              size: 20,
-                              key: ValueKey('check'),
-                            )
-                          : _saving
-                              ? SizedBox(
-                                  key: const ValueKey('loading'),
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color:
-                                        Theme.of(context).colorScheme.onPrimary,
-                                  ),
-                                )
-                              : Text(
-                                  _isEdit
-                                      ? context.t('common.update')
-                                      : context.t('inst.save'),
-                                  key: const ValueKey('label'),
-                                ),
-                    ),
+              // ── Sticky Save Button ────────────────────────────────
+              Container(
+                decoration: BoxDecoration(
+                  color: brand.background,
+                  border: Border(
+                    top: BorderSide(color: brand.divider, width: 0.5),
                   ),
                 ),
-              ],
-            ),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  MediaQuery.of(context).padding.bottom + 12,
+                ),
+                child: FilledButton(
+                  onPressed: (_saving || _success) ? null : _save,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: _success
+                        ? const Icon(
+                            CupertinoIcons.checkmark_alt,
+                            size: 20,
+                            key: ValueKey('check'),
+                          )
+                        : _saving
+                            ? SizedBox(
+                                key: const ValueKey('loading'),
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color:
+                                      Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              )
+                            : Text(
+                                _isEdit
+                                    ? context.t('common.update')
+                                    : context.t('inst.save'),
+                                key: const ValueKey('label'),
+                              ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
