@@ -1071,24 +1071,57 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFF2F2F7),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Row(
-                children: [
-                  _PeriodTab(
-                    label: 'Daily',
-                    selected: isDaily,
-                    onTap: () =>
-                        setState(() => _period = GroupReceiptPeriod.day),
-                  ),
-                  _PeriodTab(
-                    label: 'Month',
-                    selected: !isDaily,
-                    onTap: () =>
-                        setState(() => _period = GroupReceiptPeriod.month),
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final pillWidth = (constraints.maxWidth - 8) / 2;
+                  return SizedBox(
+                    height: 44,
+                    child: Stack(
+                      children: [
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOut,
+                          left: isDaily ? 0 : pillWidth,
+                          top: 0,
+                          bottom: 0,
+                          width: pillWidth,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(13),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            _PeriodTab(
+                              label: 'Daily',
+                              selected: isDaily,
+                              onTap: () => setState(
+                                  () => _period = GroupReceiptPeriod.day),
+                            ),
+                            _PeriodTab(
+                              label: 'Month',
+                              selected: !isDaily,
+                              onTap: () => setState(
+                                  () => _period = GroupReceiptPeriod.month),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),
@@ -1198,32 +1231,22 @@ class _PeriodTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(13),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : const [],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? const Color(0xFF0B0B0F)
-                  : const Color(0xFF8E8E96),
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        child: SizedBox(
+          height: 44,
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              style: TextStyle(
+                color: selected
+                    ? const Color(0xFF0B0B0F)
+                    : const Color(0xFF8E8E96),
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+              child: Text(label),
             ),
           ),
         ),

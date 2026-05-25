@@ -460,7 +460,7 @@ class _AddGroupExpenseScreenState
                                 ),
                                 child: Center(
                                   child: SizedBox(
-                                    width: 46,
+                                    width: partner != null ? 46 : 30,
                                     height: 30,
                                     child: Stack(
                                       clipBehavior: Clip.none,
@@ -471,16 +471,17 @@ class _AddGroupExpenseScreenState
                                             fg: const Color(
                                                 0xFF5A4AAB),
                                             size: 30),
-                                        Positioned(
-                                          left: 16,
-                                          child: _GroupAvatar(
-                                              initial:
-                                                  partnerInitial,
-                                              bg: Colors.white,
-                                              fg: const Color(
-                                                  0xFF1FBE71),
-                                              size: 30),
-                                        ),
+                                        if (partner != null)
+                                          Positioned(
+                                            left: 16,
+                                            child: _GroupAvatar(
+                                                initial:
+                                                    partnerInitial,
+                                                bg: Colors.white,
+                                                fg: const Color(
+                                                    0xFF1FBE71),
+                                                size: 30),
+                                          ),
                                       ],
                                     ),
                                   ),

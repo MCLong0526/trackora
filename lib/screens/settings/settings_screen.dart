@@ -3242,7 +3242,7 @@ class _GroupPartnerTile extends ConsumerWidget {
           children: [
             // Overlapping avatar pair
             SizedBox(
-              width: 46,
+              width: partner != null ? 46 : 32,
               height: 32,
               child: Stack(
                 clipBehavior: Clip.none,
@@ -3252,20 +3252,21 @@ class _GroupPartnerTile extends ConsumerWidget {
                     bg: const Color(0xFFEAE3F8),
                     fg: const Color(0xFF5A4AAB),
                   ),
-                  Positioned(
-                    left: 18,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
-                      child: _SettingsAvatar(
-                        initial: partnerInitial,
-                        bg: const Color(0xFFD7F4E5),
-                        fg: const Color(0xFF1FBE71),
+                  if (partner != null)
+                    Positioned(
+                      left: 18,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: _SettingsAvatar(
+                          initial: partnerInitial,
+                          bg: const Color(0xFFD7F4E5),
+                          fg: const Color(0xFF1FBE71),
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
