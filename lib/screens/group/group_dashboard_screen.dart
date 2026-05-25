@@ -10,6 +10,7 @@ import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/personal_group_toggle.dart';
 import '../../widgets/profile_avatar_button.dart';
 import 'add_group_expense_screen.dart';
@@ -30,14 +31,10 @@ class GroupDashboardScreen extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull;
 
     final groups = groupsAsync.valueOrNull ?? const [];
+    final visible = ref.watch(balanceVisibleProvider);
 
     // Auto-select first group if active is null
-    if (groups.isEmpty && ref.watch(homeModeProvider) == HomeMode.group) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(activeGroupIdProvider.notifier).state = null;
-        ref.read(homeModeProvider.notifier).state = HomeMode.personal;
-      });
-    } else if (activeGroupId == null && groups.isNotEmpty) {
+    if (activeGroupId == null && groups.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeGroupIdProvider.notifier).state = groups.first.id;
       });
@@ -47,13 +44,6 @@ class GroupDashboardScreen extends ConsumerWidget {
       (g) => g?.id == activeGroupId,
       orElse: () => groups.isNotEmpty ? groups.first : null,
     );
-    if (activeGroupId != null &&
-        groups.isNotEmpty &&
-        activeGroup?.id != activeGroupId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(activeGroupIdProvider.notifier).state = activeGroup?.id;
-      });
-    }
 
     return SafeArea(
       child: Column(
@@ -88,10 +78,33 @@ class GroupDashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                // Group avatar pill + profile button
+                // Eye + currency + group pill + profile
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    GestureDetector(
+                      onTap: () => ref
+                          .read(balanceVisibleProvider.notifier)
+                          .toggle(),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          visible
+                              ? CupertinoIcons.eye
+                              : CupertinoIcons.eye_slash,
+                          size: 17,
+                          color: brand.inkSoft,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const FxRateButton(),
+                    const SizedBox(width: 10),
                     GestureDetector(
                       onTap: () =>
                           showGroupMenu(context, ref, activeGroup, user?.uid),
@@ -204,7 +217,7 @@ class GroupAvatarPill extends StatelessWidget {
           const Icon(
             CupertinoIcons.chevron_down,
             size: 13,
-            color: const Color(0xFF8E8E96),
+            color: Color(0xFF8E8E96),
           ),
         ],
       ),
@@ -593,79 +606,37 @@ class GroupDashboardContent extends ConsumerWidget {
                 letterSpacing: -0.3,
               ),
             ),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => AddGroupExpenseScreen(group: group!),
-                    ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A6CFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.plus,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Add',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            GestureDetector(
+              onTap: () => showGroupReceiptPicker(context, group!),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => showGroupReceiptPicker(context, group!),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.doc_text,
-                          color: brand.inkSoft,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Generate Receipt',
-                          style: TextStyle(
-                            color: brand.ink,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.doc_text,
+                      color: brand.inkSoft,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Generate Receipt',
+                      style: TextStyle(
+                        color: brand.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -1312,86 +1283,90 @@ class _GroupMenuSheet extends ConsumerWidget {
             _MemberRow(member: partner, isYou: false),
           ],
           const SizedBox(height: 20),
-          // Leave group button
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              color: const Color(0xFFFFEEEE),
-              borderRadius: BorderRadius.circular(14),
-              onPressed: () async {
-                // Show dialog FIRST while sheet context is still valid
-                final confirmed = await showCupertinoDialog<bool>(
-                  context: context,
-                  builder: (dialogCtx) => CupertinoAlertDialog(
-                    title: const Text('Leave group?'),
-                    content: const Text(
-                      'You will lose access to this group\'s expenses.',
+          // When sole member: only show Delete (leaving = deleting anyway).
+          // When multiple members: show Leave for everyone, Delete for owner.
+          if (group.members.length > 1) ...[
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFFFFEEEE),
+                borderRadius: BorderRadius.circular(14),
+                onPressed: () async {
+                  final confirmed = await showCupertinoDialog<bool>(
+                    context: context,
+                    builder: (dialogCtx) => CupertinoAlertDialog(
+                      title: const Text('Leave group?'),
+                      content: const Text(
+                        'You will lose access to this group\'s expenses.',
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          onPressed: () => Navigator.pop(dialogCtx, true),
+                          child: const Text('Leave'),
+                        ),
+                        CupertinoDialogAction(
+                          onPressed: () => Navigator.pop(dialogCtx, false),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
                     ),
-                    actions: [
-                      CupertinoDialogAction(
-                        isDestructiveAction: true,
-                        onPressed: () => Navigator.pop(dialogCtx, true),
-                        child: const Text('Leave'),
-                      ),
-                      CupertinoDialogAction(
-                        onPressed: () => Navigator.pop(dialogCtx, false),
-                        child: const Text('Cancel'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true && userId != null) {
-                  void clearGroupState() {
-                    ref.read(removedExpenseGroupIdsProvider.notifier).state = {
-                      ...ref.read(removedExpenseGroupIdsProvider),
-                      group.id,
-                    };
-                    ref.read(activeGroupIdProvider.notifier).state = null;
-                    ref.read(homeModeProvider.notifier).state =
-                        HomeMode.personal;
-                  }
-
-                  try {
-                    final service = ref.read(expenseGroupServiceProvider);
-                    await service.leaveGroup(group.id, userId!);
-                    clearGroupState();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      AppToast.show(context, 'Left group');
+                  );
+                  if (confirmed == true && userId != null) {
+                    void clearGroupState() {
+                      ref
+                          .read(removedExpenseGroupIdsProvider.notifier)
+                          .state = {
+                        ...ref.read(removedExpenseGroupIdsProvider),
+                        group.id,
+                      };
+                      ref.read(activeGroupIdProvider.notifier).state = null;
+                      ref.read(homeModeProvider.notifier).state =
+                          HomeMode.personal;
                     }
-                  } on FirebaseException catch (e) {
-                    if (e.code == 'not-found' ||
-                        e.code == 'permission-denied') {
+
+                    try {
+                      final service = ref.read(expenseGroupServiceProvider);
+                      await service.leaveGroup(group.id, userId!);
                       clearGroupState();
                       if (context.mounted) {
                         Navigator.pop(context);
                         AppToast.show(context, 'Left group');
                       }
-                    } else {
+                    } on FirebaseException catch (e) {
+                      if (e.code == 'not-found' ||
+                          e.code == 'permission-denied') {
+                        clearGroupState();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          AppToast.show(context, 'Left group');
+                        }
+                      } else {
+                        if (context.mounted) {
+                          AppToast.show(context, 'Failed to leave group');
+                        }
+                      }
+                    } catch (_) {
                       if (context.mounted) {
                         AppToast.show(context, 'Failed to leave group');
                       }
                     }
-                  } catch (_) {
-                    if (context.mounted) {
-                      AppToast.show(context, 'Failed to leave group');
-                    }
                   }
-                }
-              },
-              child: const Text(
-                'Leave group',
-                style: TextStyle(
-                  color: Color(0xFFD93025),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                },
+                child: const Text(
+                  'Leave group',
+                  style: TextStyle(
+                    color: Color(0xFFD93025),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
-          ),
-          // Delete group button — owner only
-          if (userId == group.createdBy) ...[
+          ],
+          // Delete group button — owner only (or sole member)
+          if (userId == group.createdBy || group.members.length == 1) ...[
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,

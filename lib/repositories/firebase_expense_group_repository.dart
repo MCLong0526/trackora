@@ -195,10 +195,18 @@ class FirebaseExpenseGroupRepository implements ExpenseGroupRepository {
       // Non-creator: fall through to memberUids update so query stops matching.
     }
 
+    // Transfer ownership if the leaver was the creator and others remain.
+    final currentCreatedBy = data['createdBy'] as String?;
+    final newOwnerUid =
+        (newMembers.isNotEmpty && currentCreatedBy == userId)
+            ? (newMembers.first['uid'] as String?)
+            : null;
+
     try {
       await docRef.update({
         'members': newMembers,
         'memberUids': FieldValue.arrayRemove([userId]),
+        if (newOwnerUid != null) 'createdBy': newOwnerUid,
         'updatedAt': Timestamp.now(),
       });
     } on FirebaseException catch (e) {

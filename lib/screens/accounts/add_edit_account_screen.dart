@@ -124,7 +124,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     super.initState();
     // Load main currency as default, then override with account's currency
     PrefsService().currencyCode().then((code) {
-      if (mounted) setState(() => _currencyCode = code);
+      if (mounted && !_isEdit) setState(() => _currencyCode = code);
     });
     if (_isEdit) {
       final a = widget.account!;

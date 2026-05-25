@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/expense.dart';
+import '../../models/expense_group.dart';
 import '../../models/installment.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../repositories/local_split_bill_repository.dart';
@@ -22,7 +23,9 @@ import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import '../../widgets/personal_group_toggle.dart';
 import 'calendar_screen.dart';
+import '../group/group_dashboard_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -38,9 +41,35 @@ class DashboardScreen extends ConsumerWidget {
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final mode = ref.watch(homeModeProvider);
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+    final hasGroups = groups.isNotEmpty;
+    final activeGroupId = ref.watch(activeGroupIdProvider);
+    final isGroupMode = mode == HomeMode.group && hasGroups;
+    final activeGroup = groups.cast<ExpenseGroup?>().firstWhere(
+      (g) => g?.id == activeGroupId,
+      orElse: () => groups.isNotEmpty ? groups.first : null,
+    );
+
+    if (groups.isEmpty && mode == HomeMode.group) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = null;
+        ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+      });
+    } else if (activeGroupId == null && groups.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = groups.first.id;
+      });
+    } else if (activeGroupId != null &&
+        groups.isNotEmpty &&
+        activeGroup?.id != activeGroupId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeGroupIdProvider.notifier).state = activeGroup?.id;
+      });
+    }
 
     final cycleRange = ref.watch(cycleDateRangeProvider);
-
+    final visible = ref.watch(balanceVisibleProvider);
     final budget = budgetAsync.valueOrNull ?? 0;
     final monthExpenses = expensesAsync.valueOrNull ?? const <Expense>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
@@ -54,7 +83,8 @@ class DashboardScreen extends ConsumerWidget {
       cycleExpenseOnly = allExpenses.where((e) {
         if (e.type != EntryType.expense) return false;
         final d = DateTime(e.date.year, e.date.month, e.date.day);
-        return !d.isBefore(cycleRange.start) && d.isBefore(cycleRange.endExclusive);
+        return !d.isBefore(cycleRange.start) &&
+            d.isBefore(cycleRange.endExclusive);
       }).toList();
     } else {
       cycleExpenseOnly = monthExpenseOnly;
@@ -71,7 +101,8 @@ class DashboardScreen extends ConsumerWidget {
     final List<Expense> cycleAll = cycleRange != null
         ? allExpenses.where((e) {
             final d = DateTime(e.date.year, e.date.month, e.date.day);
-            return !d.isBefore(cycleRange.start) && d.isBefore(cycleRange.endExclusive);
+            return !d.isBefore(cycleRange.start) &&
+                d.isBefore(cycleRange.endExclusive);
           }).toList()
         : monthExpenses;
 
@@ -93,12 +124,16 @@ class DashboardScreen extends ConsumerWidget {
     // Unpaid installments for current cycle month
     final allInstallments = ref.watch(installmentsProvider).valueOrNull ?? [];
     final now = DateTime.now();
-    final cycleMonthDate = cycleRange?.start ?? DateTime(now.year, now.month, 1);
+    final cycleMonthDate =
+        cycleRange?.start ?? DateTime(now.year, now.month, 1);
     final unpaidInstallments = allInstallments.where((inst) {
       if (inst.status != InstallmentStatus.active) return false;
       return !inst.isPaidIn(cycleMonthDate);
     }).toList();
-    final unpaidTotal = unpaidInstallments.fold<double>(0, (s, e) => s + e.amount);
+    final unpaidTotal = unpaidInstallments.fold<double>(
+      0,
+      (s, e) => s + e.amount,
+    );
     final totalInstallmentAmount = allInstallments
         .where((inst) => inst.status == InstallmentStatus.active)
         .fold<double>(0, (s, e) => s + e.amount);
@@ -163,9 +198,45 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   Row(
                     children: [
+                      GestureDetector(
+                        onTap: () =>
+                            ref.read(balanceVisibleProvider.notifier).toggle(),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: brand.surface,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            visible
+                                ? CupertinoIcons.eye
+                                : CupertinoIcons.eye_slash,
+                            size: 17,
+                            color: brand.inkSoft,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       const FxRateButton(),
                       const SizedBox(width: 10),
-                      const ProfileAvatarButton(),
+                      if (isGroupMode) ...[
+                        GestureDetector(
+                          onTap: () => showGroupMenu(
+                            context,
+                            ref,
+                            activeGroup,
+                            user?.uid,
+                          ),
+                          child: GroupAvatarPill(
+                            group: activeGroup,
+                            userId: user?.uid,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const ProfileAvatarButton(),
+                      ] else
+                        const ProfileAvatarButton(),
                     ],
                   ),
                 ],
@@ -173,236 +244,269 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, 10, 20, cycleRange != null ? 4 : 12),
-              child: _HomeOverviewCard(
-                balance: totalBalance,
-                symbol: symbol,
-                monthSpent: monthSpent,
-                monthIncome: monthIncome,
-                budget: budget,
-                budgetSpent: budgetableSpent,
-                selectedMonth: selectedMonth,
-                hasForeignExpense: hasForeignExpense,
-                unpaidInstallmentTotal: unpaidTotal,
-                totalInstallmentAmount: totalInstallmentAmount,
-              ),
-            ),
-          ),
-
-          if (cycleRange != null)
+          if (hasGroups)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: brand.surface,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Cycle: ${DateFormat('d MMM').format(cycleRange.start)} – ${DateFormat('d MMM').format(cycleRange.endExclusive.subtract(const Duration(days: 1)))}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: brand.inkSoft,
-                      ),
-                    ),
-                  ),
-                ),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: PersonalGroupToggle(brand: brand),
               ),
             ),
 
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    context.t('home.activity'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: brand.ink,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => CalendarDialog.show(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.calendar,
-                          size: 14,
-                          color: brand.accentDark,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          context.t('stats.calendar'),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: brand.accentDark,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+          if (isGroupMode)
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: GroupDashboardContent(
+                brand: brand,
+                group: activeGroup,
+                symbol: symbol,
+                userId: user?.uid,
               ),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: MonthFilterBar(
-              selectedMonth: selectedMonth,
-              onMonthSelected: (m) =>
-                  ref.read(selectedMonthProvider.notifier).state = m,
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-          if (monthExpenses.isEmpty)
-            SliverToBoxAdapter(child: _empty(context))
+            )
           else ...[
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: brand.surface,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Column(
-                      children: [
-                        for (
-                          var i = 0;
-                          i < monthExpenses.length.clamp(0, 5);
-                          i++
-                        ) ...[
-                          if (i > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 70),
-                              child: Container(
-                                height: 0.5,
-                                color: brand.divider,
-                              ),
-                            ),
-                          Builder(
-                            builder: (ctx) {
-                              final expense = monthExpenses[i];
-                              final acct = accounts
-                                  .where((a) => a.id == expense.accountId)
-                                  .firstOrNull;
-                              return ExpenseCard(
-                                key: ValueKey(expense.id),
-                                expense: expense,
-                                currencySymbol: symbol,
-                                account: acct,
-                                flat: true,
-                                hasSplitBill: user != null &&
-                                    LocalSplitBillRepository.hasSplitBillSync(
-                                        user.uid, expense.id),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  CupertinoPageRoute(
-                                    builder: (_) =>
-                                        AddEditExpenseScreen(expense: expense),
-                                  ),
-                                ),
-                                onEdit: () => Navigator.push(
-                                  context,
-                                  CupertinoPageRoute(
-                                    builder: (_) =>
-                                        AddEditExpenseScreen(expense: expense),
-                                  ),
-                                ),
-                                onDelete: () async {
-                                  if (user == null) return;
-                                  final uid = user.uid;
-                                  try {
-                                    if (storageMode == StorageMode.firebase) {
-                                      final isOnline = ref.read(
-                                        isOnlineProvider,
-                                      );
-                                      await SyncService().deleteExpense(
-                                        userId: uid,
-                                        expenseId: expense.id,
-                                        isOnline: isOnline,
-                                      );
-                                    } else {
-                                      await LocalExpenseRepository()
-                                          .deleteExpense(uid, expense.id);
-                                    }
-                                    if (!context.mounted) return;
-                                    AppToast.show(
-                                      context,
-                                      context.t('expense.entryDeleted'),
-                                      type: AppToastType.info,
-                                      icon: CupertinoIcons.trash,
-                                    );
-                                  } catch (_) {
-                                    if (!context.mounted) return;
-                                    AppToast.show(
-                                      context,
-                                      context.t('common.error'),
-                                      type: AppToastType.error,
-                                      icon: CupertinoIcons
-                                          .exclamationmark_circle_fill,
-                                    );
-                                  }
-                                },
-                                onCopy: () => _copyRecord(context, expense),
-                              );
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  10,
+                  20,
+                  cycleRange != null ? 4 : 12,
+                ),
+                child: _HomeOverviewCard(
+                  balance: totalBalance,
+                  symbol: symbol,
+                  monthSpent: monthSpent,
+                  monthIncome: monthIncome,
+                  budget: budget,
+                  budgetSpent: budgetableSpent,
+                  selectedMonth: selectedMonth,
+                  hasForeignExpense: hasForeignExpense,
+                  unpaidInstallmentTotal: unpaidTotal,
+                  totalInstallmentAmount: totalInstallmentAmount,
                 ),
               ),
             ),
-            if (monthExpenses.length > 5)
+
+            if (cycleRange != null)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: GestureDetector(
-                    onTap: () => _showAllBillsSheet(
-                      context,
-                      monthExpenses,
-                      symbol,
-                      selectedMonth,
-                    ),
-                    behavior: HitTestBehavior.opaque,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: brand.surface,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      alignment: Alignment.center,
                       child: Text(
-                        '${context.t('home.allBills')} · ${monthExpenses.length} ${context.t('common.entries')}',
+                        'Cycle: ${DateFormat('d MMM').format(cycleRange.start)} – ${DateFormat('d MMM').format(cycleRange.endExclusive.subtract(const Duration(days: 1)))}',
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: brand.accentDark,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: brand.inkSoft,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
 
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      context.t('home.activity'),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: brand.ink,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => CalendarDialog.show(context),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.calendar,
+                            size: 14,
+                            color: brand.accentDark,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            context.t('stats.calendar'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: brand.accentDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: MonthFilterBar(
+                selectedMonth: selectedMonth,
+                onMonthSelected: (m) =>
+                    ref.read(selectedMonthProvider.notifier).state = m,
+              ),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+            if (monthExpenses.isEmpty)
+              SliverToBoxAdapter(child: _empty(context))
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Column(
+                        children: [
+                          for (
+                            var i = 0;
+                            i < monthExpenses.length.clamp(0, 5);
+                            i++
+                          ) ...[
+                            if (i > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 70),
+                                child: Container(
+                                  height: 0.5,
+                                  color: brand.divider,
+                                ),
+                              ),
+                            Builder(
+                              builder: (ctx) {
+                                final expense = monthExpenses[i];
+                                final acct = accounts
+                                    .where((a) => a.id == expense.accountId)
+                                    .firstOrNull;
+                                return ExpenseCard(
+                                  key: ValueKey(expense.id),
+                                  expense: expense,
+                                  currencySymbol: symbol,
+                                  account: acct,
+                                  flat: true,
+                                  hasSplitBill:
+                                      user != null &&
+                                      LocalSplitBillRepository.hasSplitBillSync(
+                                        user.uid,
+                                        expense.id,
+                                      ),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    CupertinoPageRoute(
+                                      builder: (_) => AddEditExpenseScreen(
+                                        expense: expense,
+                                      ),
+                                    ),
+                                  ),
+                                  onEdit: () => Navigator.push(
+                                    context,
+                                    CupertinoPageRoute(
+                                      builder: (_) => AddEditExpenseScreen(
+                                        expense: expense,
+                                      ),
+                                    ),
+                                  ),
+                                  onDelete: () async {
+                                    if (user == null) return;
+                                    final uid = user.uid;
+                                    try {
+                                      if (storageMode == StorageMode.firebase) {
+                                        final isOnline = ref.read(
+                                          isOnlineProvider,
+                                        );
+                                        await SyncService().deleteExpense(
+                                          userId: uid,
+                                          expenseId: expense.id,
+                                          isOnline: isOnline,
+                                        );
+                                      } else {
+                                        await LocalExpenseRepository()
+                                            .deleteExpense(uid, expense.id);
+                                      }
+                                      if (!context.mounted) return;
+                                      AppToast.show(
+                                        context,
+                                        context.t('expense.entryDeleted'),
+                                        type: AppToastType.info,
+                                        icon: CupertinoIcons.trash,
+                                      );
+                                    } catch (_) {
+                                      if (!context.mounted) return;
+                                      AppToast.show(
+                                        context,
+                                        context.t('common.error'),
+                                        type: AppToastType.error,
+                                        icon: CupertinoIcons
+                                            .exclamationmark_circle_fill,
+                                      );
+                                    }
+                                  },
+                                  onCopy: () => _copyRecord(context, expense),
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (monthExpenses.length > 5)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: GestureDetector(
+                      onTap: () => _showAllBillsSheet(
+                        context,
+                        monthExpenses,
+                        symbol,
+                        selectedMonth,
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${context.t('home.allBills')} · ${monthExpenses.length} ${context.t('common.entries')}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: brand.accentDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
+          ],
         ],
       ),
     );

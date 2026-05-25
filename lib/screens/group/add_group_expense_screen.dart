@@ -391,7 +391,10 @@ class _AddGroupExpenseScreenState
       splitBadgeFg = const Color(0xFF9A6B00);
     }
 
-    return Scaffold(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: _kBg,
       body: SafeArea(
         child: Column(
@@ -600,6 +603,10 @@ class _AddGroupExpenseScreenState
                                       isDense: true,
                                       contentPadding: EdgeInsets.zero,
                                     ),
+                                    textInputAction:
+                                        TextInputAction.done,
+                                    onSubmitted: (_) =>
+                                        FocusScope.of(context).unfocus(),
                                     onChanged: (_) => setState(() {}),
                                   ),
                                 ),
@@ -1034,6 +1041,11 @@ class _AddGroupExpenseScreenState
                                             contentPadding:
                                                 EdgeInsets.zero,
                                           ),
+                                          textInputAction:
+                                              TextInputAction.done,
+                                          onSubmitted: (_) =>
+                                              FocusScope.of(context)
+                                                  .unfocus(),
                                         ),
                                       ),
                                     ],
@@ -1190,6 +1202,7 @@ class _AddGroupExpenseScreenState
             ),
           ],
         ),
+      ),
       ),
     );
   }
