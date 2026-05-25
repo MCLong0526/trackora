@@ -10,7 +10,6 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/section_card.dart';
-import '../expenses/add_edit_expense_screen.dart' show kExpenseCategories;
 
 class AddEditInstallmentScreen extends ConsumerStatefulWidget {
   final Installment? installment;
@@ -596,182 +595,197 @@ class _AddEditInstallmentScreenState
                   }),
                 ),
                 const SizedBox(height: 8),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.04, 0),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: SectionCard(
-                  key: ValueKey(_lifetime),
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      if (!_lifetime) ...[
-                        _FieldRow(
-                          child: TextFormField(
-                            controller: _months,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: context.t('inst.totalMonths'),
-                              hintText: context.t('inst.totalMonthsHint'),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                              suffixText: _months.text.isNotEmpty ? 'mo' : null,
-                            ),
-                            validator: (v) {
-                              if (_lifetime) return null;
-                              final n = int.tryParse((v ?? '').trim());
-                              if ((v ?? '').trim().isEmpty) return null;
-                              if (n == null || n <= 0) {
-                                return context.t('validation.enterMonths');
-                              }
-                              if (n > 600) return context.t('validation.tooManyMonths');
-                              return null;
-                            },
-                          ),
-                        ),
-                        _Divider(brand: brand),
-                        _FieldRow(
-                          child: TextFormField(
-                            controller: _remainingMonths,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: context.t('inst.monthsLeft'),
-                              hintText: context.t('inst.monthsLeftHint'),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                              suffixText: _remainingMonths.text.isNotEmpty ? 'mo' : null,
-                              suffixStyle: _monthsLeftIsAuto
-                                  ? TextStyle(color: brand.accentDark, fontSize: 12)
-                                  : null,
-                            ),
-                          ),
-                        ),
-                        _Divider(brand: brand),
-                        _FieldRow(
-                          child: TextFormField(
-                            controller: _remainingBalance,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: context.t('inst.optionalRemaining'),
-                              hintText: context.t('inst.remainingHint'),
-                              prefixText: '$symbol  ',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        _Divider(brand: brand),
-                        _FieldRow(
-                          child: TextFormField(
-                            controller: _principal,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: context.t('inst.originalTotal'),
-                              hintText: 'e.g. ${formatMoney(symbol, 24000)}',
-                              prefixText: '$symbol  ',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        _Divider(brand: brand),
-                      ],
-                      if (_lifetime) ...[
-                        _FieldRow(
-                          child: TextFormField(
-                            controller: _alreadyPaid,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: context.t('inst.monthsPaid'),
-                              hintText: context.t('inst.monthsPaidHint'),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                              suffixText: _alreadyPaid.text.isNotEmpty ? 'mo' : null,
-                            ),
-                          ),
-                        ),
-                        _Divider(brand: brand),
-                      ],
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                        child: Row(
+                // Fix 3: ClipRect + AnimatedSize for smooth height transition.
+                // SectionCard has no key (persistent). AnimatedSwitcher crossfades
+                // the inner Column content, with previousChildren pinned via
+                // Positioned so they don't affect Stack height (only current child does).
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: SectionCard(
+                      padding: EdgeInsets.zero,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        layoutBuilder: (currentChild, previousChildren) => Stack(
+                          alignment: Alignment.topCenter,
                           children: [
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
-                              transitionBuilder: (child, animation) =>
-                                  ScaleTransition(
-                                    scale: Tween<double>(
-                                      begin: 0.65,
-                                      end: 1.0,
-                                    ).animate(CurvedAnimation(
-                                      parent: animation,
-                                      curve: Curves.easeOutCubic,
-                                    )),
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    ),
-                                  ),
-                              child: _currentMonthPaid
-                                  ? const Icon(
-                                      CupertinoIcons.checkmark_seal_fill,
-                                      key: ValueKey(true),
-                                      size: 20,
-                                      color: Color(0xFF34C759),
-                                    )
-                                  : Icon(
-                                      CupertinoIcons.checkmark_seal,
-                                      key: ValueKey(false),
-                                      size: 20,
-                                      color: brand.inkSoft,
-                                    ),
+                            ...previousChildren.map(
+                              (c) => Positioned(top: 0, left: 0, right: 0, child: c),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                context.t('inst.currentMonthPaid'),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 15,
+                            ?currentChild,
+                          ],
+                        ),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: child,
+                        ),
+                        child: Column(
+                          key: ValueKey(_lifetime),
+                          children: [
+                            if (!_lifetime) ...[
+                              _FieldRow(
+                                child: TextFormField(
+                                  controller: _months,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: context.t('inst.totalMonths'),
+                                    hintText: context.t('inst.totalMonthsHint'),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                    suffixText: _months.text.isNotEmpty ? 'mo' : null,
+                                  ),
+                                  validator: (v) {
+                                    if (_lifetime) return null;
+                                    final n = int.tryParse((v ?? '').trim());
+                                    if ((v ?? '').trim().isEmpty) return null;
+                                    if (n == null || n <= 0) {
+                                      return context.t('validation.enterMonths');
+                                    }
+                                    if (n > 600) return context.t('validation.tooManyMonths');
+                                    return null;
+                                  },
                                 ),
                               ),
-                            ),
-                            CupertinoSwitch(
-                              value: _currentMonthPaid,
-                              activeTrackColor: const Color(0xFF34C759),
-                              onChanged: (v) =>
-                                  setState(() => _currentMonthPaid = v),
-                            ),
+                              _Divider(brand: brand),
+                              _FieldRow(
+                                child: TextFormField(
+                                  controller: _remainingMonths,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: context.t('inst.monthsLeft'),
+                                    hintText: context.t('inst.monthsLeftHint'),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                    suffixText: _remainingMonths.text.isNotEmpty ? 'mo' : null,
+                                    suffixStyle: _monthsLeftIsAuto
+                                        ? TextStyle(color: brand.accentDark, fontSize: 12)
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              _Divider(brand: brand),
+                              _FieldRow(
+                                child: TextFormField(
+                                  controller: _remainingBalance,
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: context.t('inst.optionalRemaining'),
+                                    hintText: context.t('inst.remainingHint'),
+                                    prefixText: '$symbol  ',
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                              _Divider(brand: brand),
+                              _FieldRow(
+                                child: TextFormField(
+                                  controller: _principal,
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: context.t('inst.originalTotal'),
+                                    hintText: 'e.g. ${formatMoney(symbol, 24000)}',
+                                    prefixText: '$symbol  ',
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                              if (!_isEdit) _Divider(brand: brand),
+                            ],
+                            if (_lifetime) ...[
+                              _FieldRow(
+                                child: TextFormField(
+                                  controller: _alreadyPaid,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: context.t('inst.monthsPaid'),
+                                    hintText: context.t('inst.monthsPaidHint'),
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                    suffixText: _alreadyPaid.text.isNotEmpty ? 'mo' : null,
+                                  ),
+                                ),
+                              ),
+                              if (!_isEdit) _Divider(brand: brand),
+                            ],
+                            if (!_isEdit)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                                child: Row(
+                                  children: [
+                                    AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 250),
+                                      transitionBuilder: (child, animation) =>
+                                          ScaleTransition(
+                                            scale: Tween<double>(
+                                              begin: 0.65,
+                                              end: 1.0,
+                                            ).animate(CurvedAnimation(
+                                              parent: animation,
+                                              curve: Curves.easeOutCubic,
+                                            )),
+                                            child: FadeTransition(
+                                              opacity: animation,
+                                              child: child,
+                                            ),
+                                          ),
+                                      child: _currentMonthPaid
+                                          ? const Icon(
+                                              CupertinoIcons.checkmark_seal_fill,
+                                              key: ValueKey(true),
+                                              size: 20,
+                                              color: Color(0xFF34C759),
+                                            )
+                                          : Icon(
+                                              CupertinoIcons.checkmark_seal,
+                                              key: ValueKey(false),
+                                              size: 20,
+                                              color: brand.inkSoft,
+                                            ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        context.t('inst.currentMonthPaid'),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                    CupertinoSwitch(
+                                      value: _currentMonthPaid,
+                                      activeTrackColor: const Color(0xFF34C759),
+                                      onChanged: (v) =>
+                                          setState(() => _currentMonthPaid = v),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
                 ),
 
                 const SizedBox(height: 24),
@@ -877,46 +891,6 @@ class _AddEditInstallmentScreenState
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── Section: Category ────────────────────────────────
-                _SectionHeader(label: context.t('inst.category')),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: kExpenseCategories.map((c) {
-                    final s = styleFor(c);
-                    final selected = c == _category;
-                    return GestureDetector(
-                      onTap: () => setState(() => _category = c),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: selected ? brand.accentDark : s.background,
-                          borderRadius: BorderRadius.circular(AppRadius.chip),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(s.icon, size: 14, color: selected ? foregroundOn(brand.accentDark) : s.accent),
-                            const SizedBox(width: 6),
-                            Text(
-                              context.categoryLabel(c),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: selected ? foregroundOn(brand.accentDark) : AppColors.ink,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
                 ),
 
               ],
