@@ -10,6 +10,12 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/person_avatar.dart';
 import 'add_edit_person_screen.dart';
 
+class _PeopleCoordinator extends ValueNotifier<String?> {
+  _PeopleCoordinator() : super(null);
+  void openRow(String id) => value = id;
+  void closeAll() => value = null;
+}
+
 class PeopleScreen extends ConsumerStatefulWidget {
   const PeopleScreen({super.key});
 
@@ -20,10 +26,12 @@ class PeopleScreen extends ConsumerStatefulWidget {
 class _PeopleScreenState extends ConsumerState<PeopleScreen> {
   final _searchCtrl = TextEditingController();
   PersonType? _typeFilter;
+  final _coordinator = _PeopleCoordinator();
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _coordinator.dispose();
     super.dispose();
   }
 
@@ -70,7 +78,10 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: GestureDetector(
+        onTap: _coordinator.closeAll,
+        behavior: HitTestBehavior.translucent,
+        child: Column(
         children: [
           // Search bar
           Padding(
@@ -130,16 +141,22 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                   itemCount: list.length,
                   separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
-                  itemBuilder: (ctx, i) => _PersonCard(
+                  itemBuilder: (ctx, i) => _PersonSwipeActions(
                     person: list[i],
                     userId: user?.uid,
-                    onTap: () => _openEdit(context, list[i]),
+                    coordinator: _coordinator,
+                    onEdit: () => _openEdit(context, list[i]),
+                    child: _PersonCard(
+                      person: list[i],
+                      onTap: () => _openEdit(context, list[i]),
+                    ),
                   ),
                 );
               },
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -161,124 +178,211 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
 
 // ── Person card ───────────────────────────────────────────────────────────────
 
-class _PersonCard extends ConsumerWidget {
+class _PersonCard extends StatelessWidget {
   final Person person;
-  final String? userId;
   final VoidCallback onTap;
 
   const _PersonCard({
     required this.person,
-    required this.userId,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final brand = context.brand;
 
-    return Dismissible(
-      key: ValueKey(person.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.expense,
+          color: brand.surface,
           borderRadius: BorderRadius.circular(AppRadius.card),
         ),
-        child: const Icon(CupertinoIcons.delete, color: Colors.white, size: 22),
-      ),
-      confirmDismiss: (_) => _confirmDelete(context, ref),
-      onDismissed: (_) async {
-        if (userId == null) return;
-        try {
-          await ref.read(personServiceProvider).delete(userId!, person.id);
-          if (context.mounted) {
-            AppToast.show(context, 'Person removed', type: AppToastType.success);
-          }
-        } catch (_) {
-          if (context.mounted) {
-            AppToast.show(context, 'Failed to remove person', type: AppToastType.error);
-          }
-        }
-      },
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Row(
+          children: [
+            PersonAvatar(
+              name: person.name,
+              colorIndex: person.colorIndex,
+              emoji: person.emoji,
+              size: 48,
             ),
-          child: Row(
-            children: [
-              PersonAvatar(
-                name: person.name,
-                colorIndex: person.colorIndex,
-                emoji: person.emoji,
-                size: 48,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      person.name,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: brand.ink,
-                      ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    person.name,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        _TypeBadge(person.type, brand),
-                        if (person.phone != null) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            CupertinoIcons.phone,
-                            size: 11,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      _TypeBadge(person.type, brand),
+                      if (person.phone != null) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          CupertinoIcons.phone,
+                          size: 11,
+                          color: brand.inkSoft,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          person.phone!,
+                          style: TextStyle(
+                            fontSize: 11,
                             color: brand.inkSoft,
                           ),
-                          const SizedBox(width: 3),
-                          Text(
-                            person.phone!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: brand.inkSoft,
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
-                    ),
-                    if (person.note != null && person.note!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        person.note!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: brand.inkSoft),
-                      ),
                     ],
+                  ),
+                  if (person.note != null && person.note!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      person.note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    ),
                   ],
-                ),
+                ],
               ),
-              Icon(CupertinoIcons.chevron_right, size: 16, color: brand.inkSoft),
-            ],
-          ),
+            ),
+            Icon(CupertinoIcons.chevron_right, size: 16, color: brand.inkSoft),
+          ],
         ),
       ),
     );
   }
+}
 
-  Future<bool?> _confirmDelete(BuildContext context, WidgetRef ref) {
-    return showCupertinoDialog<bool>(
+// ── Swipe actions ─────────────────────────────────────────────────────────────
+
+class _PersonSwipeActions extends ConsumerStatefulWidget {
+  final Person person;
+  final String? userId;
+  final _PeopleCoordinator coordinator;
+  final VoidCallback onEdit;
+  final Widget child;
+
+  const _PersonSwipeActions({
+    required this.person,
+    required this.userId,
+    required this.coordinator,
+    required this.onEdit,
+    required this.child,
+  });
+
+  @override
+  ConsumerState<_PersonSwipeActions> createState() =>
+      _PersonSwipeActionsState();
+}
+
+class _PersonSwipeActionsState extends ConsumerState<_PersonSwipeActions>
+    with SingleTickerProviderStateMixin {
+  static const double _rightPanelW = 80.0;
+  static const double _leftPanelW = 88.0;
+
+  late final AnimationController _ctrl;
+  late final CurvedAnimation _curve;
+  double _offset = 0;
+  double _animStart = 0;
+  double _animTarget = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _curve = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _ctrl.addListener(_onTick);
+    widget.coordinator.addListener(_onCoordinatorChange);
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChange);
+    _ctrl.dispose();
+    _curve.dispose();
+    super.dispose();
+  }
+
+  void _onCoordinatorChange() {
+    if (widget.coordinator.value != widget.person.id && _offset != 0) {
+      _springAnimate(0);
+    }
+  }
+
+  void _onTick() {
+    setState(
+      () => _offset = _animStart + (_animTarget - _animStart) * _curve.value,
+    );
+  }
+
+  void _springAnimate(double target) {
+    _ctrl.stop();
+    _animStart = _offset;
+    _animTarget = target;
+    _ctrl
+      ..reset()
+      ..forward();
+  }
+
+  void _close() => _springAnimate(0);
+
+  void _onDragStart(DragStartDetails _) {
+    _ctrl.stop();
+    widget.coordinator.openRow(widget.person.id);
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() {
+      _offset = (_offset + d.delta.dx).clamp(-_rightPanelW, _leftPanelW);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    if (_offset < 0) {
+      (_offset < -_rightPanelW * 0.35 || v < -500)
+          ? _springAnimate(-_rightPanelW)
+          : _springAnimate(0);
+    } else {
+      (_offset > _leftPanelW * 0.35 || v > 500)
+          ? _handleEditSwipe()
+          : _springAnimate(0);
+    }
+  }
+
+  Future<void> _handleEditSwipe() async {
+    HapticFeedback.selectionClick();
+    _springAnimate(_leftPanelW);
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    _springAnimate(0);
+    await Future.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    widget.onEdit();
+  }
+
+  Future<void> _deletePerson() async {
+    _close();
+    HapticFeedback.selectionClick();
+    final userId = widget.userId;
+    if (userId == null) return;
+    final ok = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Remove Person?'),
-        content: Text('Remove ${person.name} from your people list?'),
+        content: Text('Remove ${widget.person.name} from your people list?'),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
@@ -290,6 +394,148 @@ class _PersonCard extends ConsumerWidget {
             child: const Text('Remove'),
           ),
         ],
+      ),
+    );
+    if (ok == true && mounted) {
+      try {
+        await ref.read(personServiceProvider).delete(userId, widget.person.id);
+        if (mounted) {
+          AppToast.show(context, 'Person removed', type: AppToastType.success);
+        }
+      } catch (_) {
+        if (mounted) {
+          AppToast.show(context, 'Failed to remove person',
+              type: AppToastType.error);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final revealRight = (-_offset / _rightPanelW).clamp(0.0, 1.0);
+    final revealLeft = (_offset / _leftPanelW).clamp(0.0, 1.0);
+    final isOpen = _offset != 0;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: GestureDetector(
+        onHorizontalDragStart: _onDragStart,
+        onHorizontalDragUpdate: _onDragUpdate,
+        onHorizontalDragEnd: _onDragEnd,
+        child: Stack(
+          children: [
+            // Right panel (swipe left): Delete
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: _rightPanelW,
+              child: _PSwipeAction(
+                label: 'Delete',
+                icon: CupertinoIcons.trash_fill,
+                color: const Color.fromARGB(200, 255, 69, 58),
+                reveal: revealRight,
+                onTap: _deletePerson,
+              ),
+            ),
+            // Left panel (swipe right): Edit
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _leftPanelW,
+              child: _PSwipeAction(
+                label: 'Edit',
+                icon: CupertinoIcons.pencil,
+                color: const Color.fromARGB(200, 0, 122, 255),
+                reveal: revealLeft,
+                onTap: _handleEditSwipe,
+              ),
+            ),
+            // Main content
+            Transform.translate(
+              offset: Offset(_offset, 0),
+              child: isOpen
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _close,
+                      child: AbsorbPointer(
+                        child: Container(
+                          color: brand.surface,
+                          child: widget.child,
+                        ),
+                      ),
+                    )
+                  : Container(color: brand.surface, child: widget.child),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PSwipeAction extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final double reveal;
+  final VoidCallback onTap;
+
+  const _PSwipeAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.reveal,
+    required this.onTap,
+  });
+
+  @override
+  State<_PSwipeAction> createState() => _PSwipeActionState();
+}
+
+class _PSwipeActionState extends State<_PSwipeAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        width: double.infinity,
+        height: double.infinity,
+        color: _pressed
+            ? widget.color.withValues(alpha: widget.color.a * 0.72)
+            : widget.color,
+        child: Transform.scale(
+          scale: 0.7 + 0.3 * widget.reveal,
+          child: Opacity(
+            opacity: widget.reveal.clamp(0.0, 1.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(widget.icon, color: Colors.white, size: 22),
+                const SizedBox(height: 4),
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
