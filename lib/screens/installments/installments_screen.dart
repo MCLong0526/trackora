@@ -457,31 +457,32 @@ class _InstallmentRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          i.name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: brand.ink,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
                         Row(
                           children: [
-                            Flexible(
+                            _StatusBadge(installment: i),
+                            const SizedBox(width: 6),
+                            Expanded(
                               child: Text(
-                                i.name,
+                                _subtitle(context, i),
                                 style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: brand.ink,
+                                  fontSize: 12,
+                                  color: brand.inkSoft,
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _StatusBadge(installment: i),
                           ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _subtitle(context, i),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w500,
-                          ),
                         ),
                       ],
                     ),

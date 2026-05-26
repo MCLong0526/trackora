@@ -590,14 +590,12 @@ class _AddEditSavingPlanScreenState
           CupertinoIcons.calendar_badge_plus),
       (SavingPlanType.flexible, context.t('sp.typeFlexible'),
           CupertinoIcons.drop_fill),
-      (SavingPlanType.daysChallenge, context.t('sp.typeDays'),
-          CupertinoIcons.number_circle),
     ];
     final selectedIdx = types.indexWhere((t) => t.$1 == _type);
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final segW = (constraints.maxWidth - 8) / 3;
+        final segW = (constraints.maxWidth - 8) / 2;
         return Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(

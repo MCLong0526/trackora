@@ -473,10 +473,6 @@ class _PlanRow extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         _TypeChip(type: plan.type, tint: tint),
-                        if (plan.status != SavingPlanStatus.active) ...[
-                          const SizedBox(width: 6),
-                          _StatusPill(status: plan.status),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -490,7 +486,7 @@ class _PlanRow extends StatelessWidget {
                         ),
                       )
                     else
-                      const SizedBox.shrink(),
+                      _StatusPill(status: plan.status),
                   ],
                 ),
               ),

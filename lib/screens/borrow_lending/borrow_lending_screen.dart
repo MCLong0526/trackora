@@ -148,18 +148,31 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
                             child: _EntranceItem(
                               key: ValueKey(filtered[i].id),
                               delay: Duration(milliseconds: i * 45),
-                              child: _BorrowSwipeActions(
-                                record: filtered[i],
-                                userId: user?.uid,
-                                coordinator: _coordinator,
-                                child: _RecordTile(
-                                  record: filtered[i],
-                                  symbol: symbol,
-                                  matchedPerson: people
-                                      .where((p) =>
-                                          p.name.toLowerCase() ==
-                                          filtered[i].person.toLowerCase())
-                                      .firstOrNull,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: brand.surface,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.card,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.card,
+                                  ),
+                                  child: _BorrowSwipeActions(
+                                    record: filtered[i],
+                                    userId: user?.uid,
+                                    coordinator: _coordinator,
+                                    child: _RecordTile(
+                                      record: filtered[i],
+                                      symbol: symbol,
+                                      matchedPerson: people
+                                          .where((p) =>
+                                              p.name.toLowerCase() ==
+                                              filtered[i].person.toLowerCase())
+                                          .firstOrNull,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -418,15 +431,10 @@ class _RecordTile extends StatelessWidget {
     final isBorrow = record.type == BorrowLendingType.borrowed;
     final accent = isBorrow ? AppColors.expense : AppColors.income;
     final tint = isBorrow ? AppColors.blush : AppColors.mint;
-    return Container(
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: InkWell(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.card),
           onTap: () => Navigator.push(
             context,
@@ -480,32 +488,30 @@ class _RecordTile extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  record.person.isEmpty
-                                      ? context.t('bl.unknownPerson')
-                                      : record.person,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusPill(record: record),
-                            ],
+                          Text(
+                            record.person.isEmpty
+                                ? context.t('bl.unknownPerson')
+                                : record.person,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            DateFormat('MMM d, yyyy').format(record.date),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: brand.inkSoft,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              _StatusPill(record: record),
+                              const SizedBox(width: 8),
+                              Text(
+                                DateFormat('MMM d, yyyy').format(record.date),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: brand.inkSoft,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -567,7 +573,6 @@ class _RecordTile extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -755,14 +760,14 @@ class _BorrowSwipeActionsState extends ConsumerState<_BorrowSwipeActions>
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     final revealRight = (-_offset / _rightPanelW).clamp(0.0, 1.0);
     final revealLeft = (_offset / _leftPanelW).clamp(0.0, 1.0);
     final isOpen = _offset != 0;
     final canSettle = widget.record.status != BorrowLendingStatus.settled &&
         widget.record.status != BorrowLendingStatus.cancelled;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.card),
+    return ClipRect(
       child: GestureDetector(
         onHorizontalDragStart: _onDragStart,
         onHorizontalDragUpdate: _onDragUpdate,
@@ -824,9 +829,14 @@ class _BorrowSwipeActionsState extends ConsumerState<_BorrowSwipeActions>
                   ? GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: _close,
-                      child: AbsorbPointer(child: widget.child),
+                      child: AbsorbPointer(
+                        child: Container(
+                          color: brand.surface,
+                          child: widget.child,
+                        ),
+                      ),
                     )
-                  : widget.child,
+                  : Container(color: brand.surface, child: widget.child),
             ),
           ],
         ),
