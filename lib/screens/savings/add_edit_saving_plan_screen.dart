@@ -181,43 +181,6 @@ class _AddEditSavingPlanScreenState
         SavingFrequency.monthly => 'Months',
       };
 
-  void _onTypeSwipe(DragEndDetails details) {
-    final v = details.primaryVelocity ?? 0;
-    if (v.abs() < 200) return;
-    final goFlexible = v < 0;
-    final target =
-        goFlexible ? SavingPlanType.flexible : SavingPlanType.fixed;
-    if (_type == target) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      _type = target;
-      if (target == SavingPlanType.fixed) {
-        _periodsIsAuto = true;
-        _contribIsAuto = false;
-        _recalculateFixed();
-      }
-    });
-  }
-
-  void _onFrequencySwipe(DragEndDetails details) {
-    if (_type != SavingPlanType.fixed) return;
-    final v = details.primaryVelocity ?? 0;
-    if (v.abs() < 200) return;
-    const freqs = [
-      SavingFrequency.daily,
-      SavingFrequency.weekly,
-      SavingFrequency.monthly
-    ];
-    final idx = freqs.indexOf(_frequency);
-    final newIdx = v < 0 ? idx + 1 : idx - 1;
-    if (newIdx < 0 || newIdx >= freqs.length) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      _frequency = freqs[newIdx];
-      _recalculateFixed();
-    });
-  }
-
   // ── Date picker ──────────────────────────────────────────────
 
   Future<void> _pickDate({required bool start}) async {
@@ -631,11 +594,32 @@ class _AddEditSavingPlanScreenState
     ];
     final selectedIdx = types.indexWhere((t) => t.$1 == _type);
 
+    double selectorW = 0;
     return GestureDetector(
-      onHorizontalDragEnd: _onTypeSwipe,
+      onHorizontalDragUpdate: (details) {
+        if (selectorW == 0) return;
+        const padding = 4.0;
+        const tabCount = 2;
+        final segW = (selectorW - padding * 2) / tabCount;
+        final newIdx =
+            ((details.localPosition.dx - padding) / segW).floor().clamp(0, tabCount - 1);
+        const tabTypes = [SavingPlanType.fixed, SavingPlanType.flexible];
+        final newType = tabTypes[newIdx];
+        if (newType == _type) return;
+        HapticFeedback.selectionClick();
+        setState(() {
+          _type = newType;
+          if (newType == SavingPlanType.fixed) {
+            _periodsIsAuto = true;
+            _contribIsAuto = false;
+            _recalculateFixed();
+          }
+        });
+      },
       behavior: HitTestBehavior.translucent,
       child: LayoutBuilder(
         builder: (ctx, constraints) {
+          selectorW = constraints.maxWidth;
           final segW = (constraints.maxWidth - 8) / 2;
           return Container(
             padding: const EdgeInsets.all(4),
@@ -731,11 +715,32 @@ class _AddEditSavingPlanScreenState
     ];
     final selectedIdx = freqs.indexWhere((f) => f.$1 == _frequency);
 
+    double pickerW = 0;
     return GestureDetector(
-      onHorizontalDragEnd: _onFrequencySwipe,
+      onHorizontalDragUpdate: (details) {
+        if (pickerW == 0 || _type != SavingPlanType.fixed) return;
+        const padding = 4.0;
+        const tabCount = 3;
+        final segW = (pickerW - padding * 2) / tabCount;
+        final newIdx =
+            ((details.localPosition.dx - padding) / segW).floor().clamp(0, tabCount - 1);
+        const freqs = [
+          SavingFrequency.daily,
+          SavingFrequency.weekly,
+          SavingFrequency.monthly,
+        ];
+        final newFreq = freqs[newIdx];
+        if (newFreq == _frequency) return;
+        HapticFeedback.selectionClick();
+        setState(() {
+          _frequency = newFreq;
+          _recalculateFixed();
+        });
+      },
       behavior: HitTestBehavior.translucent,
       child: LayoutBuilder(
       builder: (ctx, constraints) {
+        pickerW = constraints.maxWidth;
         final segW = (constraints.maxWidth - 8) / 3;
         return Container(
           padding: const EdgeInsets.all(4),

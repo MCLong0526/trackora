@@ -231,17 +231,6 @@ class _AddEditBorrowLendingScreenState
     }
   }
 
-  void _onTypeSwipe(DragEndDetails details) {
-    final v = details.primaryVelocity ?? 0;
-    if (v.abs() < 200) return;
-    const types = [BorrowLendingType.borrowed, BorrowLendingType.lent];
-    final idx = types.indexOf(_type);
-    final newIdx = v < 0 ? idx + 1 : idx - 1;
-    if (newIdx < 0 || newIdx >= types.length) return;
-    HapticFeedback.selectionClick();
-    setState(() => _type = types[newIdx]);
-  }
-
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -446,11 +435,23 @@ class _AddEditBorrowLendingScreenState
     final fgColors = [AppColors.expense, AppColors.income];
     final selectedIdx = types.indexOf(_type);
 
+    double toggleW = 0;
     return GestureDetector(
-      onHorizontalDragEnd: _onTypeSwipe,
+      onHorizontalDragUpdate: (details) {
+        if (toggleW == 0) return;
+        const padding = 4.0;
+        final segW = (toggleW - padding * 2) / 2;
+        final newIdx =
+            ((details.localPosition.dx - padding) / segW).floor().clamp(0, 1);
+        final newType = types[newIdx];
+        if (newType == _type) return;
+        HapticFeedback.selectionClick();
+        setState(() => _type = newType);
+      },
       behavior: HitTestBehavior.translucent,
       child: LayoutBuilder(
         builder: (ctx, constraints) {
+          toggleW = constraints.maxWidth;
           final pillW = (constraints.maxWidth - 8) / 2;
           return Container(
             padding: const EdgeInsets.all(4),

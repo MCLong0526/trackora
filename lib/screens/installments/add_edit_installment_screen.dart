@@ -480,23 +480,6 @@ class _AddEditInstallmentScreenState
     );
   }
 
-  void _onPlanTypeSwipe(DragEndDetails details) {
-    final v = details.primaryVelocity ?? 0;
-    if (v.abs() < 200) return;
-    final goLifetime = v < 0;
-    if (goLifetime == _lifetime) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      _lifetime = goLifetime;
-      if (goLifetime) {
-        _updating = true;
-        _months.clear();
-        _remainingMonths.clear();
-        _updating = false;
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -600,21 +583,44 @@ class _AddEditInstallmentScreenState
                 // ── Section: Plan ────────────────────────────────────
                 _SectionHeader(label: context.t('inst.planLength')),
                 const SizedBox(height: 8),
-                GestureDetector(
-                  onHorizontalDragEnd: _onPlanTypeSwipe,
-                  behavior: HitTestBehavior.translucent,
-                  child: _PlanTypeSelector(
-                    isLifetime: _lifetime,
-                    onChanged: (isLifetime) => setState(() {
-                      _lifetime = isLifetime;
-                      if (isLifetime) {
-                        _updating = true;
-                        _months.clear();
-                        _remainingMonths.clear();
-                        _updating = false;
-                      }
-                    }),
-                  ),
+                LayoutBuilder(
+                  builder: (ctx, constraints) {
+                    final totalW = constraints.maxWidth;
+                    return GestureDetector(
+                      onHorizontalDragUpdate: (details) {
+                        const padding = 4.0;
+                        final segW = (totalW - padding * 2) / 2;
+                        final newIdx = ((details.localPosition.dx - padding) / segW)
+                            .floor()
+                            .clamp(0, 1);
+                        final goLifetime = newIdx == 1;
+                        if (goLifetime == _lifetime) return;
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _lifetime = goLifetime;
+                          if (goLifetime) {
+                            _updating = true;
+                            _months.clear();
+                            _remainingMonths.clear();
+                            _updating = false;
+                          }
+                        });
+                      },
+                      behavior: HitTestBehavior.translucent,
+                      child: _PlanTypeSelector(
+                        isLifetime: _lifetime,
+                        onChanged: (isLifetime) => setState(() {
+                          _lifetime = isLifetime;
+                          if (isLifetime) {
+                            _updating = true;
+                            _months.clear();
+                            _remainingMonths.clear();
+                            _updating = false;
+                          }
+                        }),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 // Fix 3: ClipRect + AnimatedSize for smooth height transition.
