@@ -47,6 +47,7 @@ class SettingsScreen extends ConsumerWidget {
     final brand = context.brand;
     final user = ref.watch(authStateProvider).valueOrNull;
     final email = user?.email ?? '';
+    final userName = ref.watch(userNameProvider);
     final code = ref.watch(currencyCodeProvider).valueOrNull ?? 'USD';
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final themeMode = ref.watch(themeModeProvider);
@@ -112,6 +113,14 @@ class SettingsScreen extends ConsumerWidget {
             _GroupHeader(label: context.t('settings.account')),
             _GroupCard(
               children: [
+                _Tile(
+                  icon: CupertinoIcons.person_circle_fill,
+                  iconColor: AppColors.lilac,
+                  label: 'Display Name',
+                  trailing: userName.isNotEmpty ? userName : 'Not set',
+                  onTap: () => _showEditUserName(context, ref, userName),
+                ),
+                _GroupDivider(),
                 _Tile(
                   icon: CupertinoIcons.money_dollar,
                   iconColor: AppColors.mint,
@@ -457,6 +466,44 @@ class SettingsScreen extends ConsumerWidget {
             )
           : null,
       onTap: onTap,
+    );
+  }
+
+  void _showEditUserName(
+    BuildContext context,
+    WidgetRef ref,
+    String currentName,
+  ) {
+    final ctrl = TextEditingController(text: currentName);
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Display Name'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: ctrl,
+            placeholder: 'e.g. John',
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              ref.read(userNameProvider.notifier).set(ctrl.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 

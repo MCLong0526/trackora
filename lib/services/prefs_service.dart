@@ -21,6 +21,7 @@ class PrefsService {
   static const _kUseCustomCycle = 'use_custom_cycle';
   static const _kCycleDayStart = 'cycle_day_start';
   static const _kMoneyHubDragHintShown = 'money_hub_drag_hint_shown';
+  static const _kUserName = 'user_name';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -80,6 +81,22 @@ class PrefsService {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.setBool(_kFirstLaunchDone, true);
+  }
+
+  Future<String> userName() async {
+    final p = await _prefsOrNull();
+    if (p == null) return '';
+    return p.getString(_kUserName) ?? '';
+  }
+
+  Future<void> setUserName(String name) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    if (name.trim().isEmpty) {
+      await p.remove(_kUserName);
+    } else {
+      await p.setString(_kUserName, name.trim());
+    }
   }
 
   Future<bool> isDragHintShown() async {

@@ -216,6 +216,52 @@ final prefsServiceProvider = Provider((_) => PrefsService());
 final widgetSyncServiceProvider = Provider((_) => WidgetSyncService());
 final watchServiceProvider = Provider((_) => WatchService());
 
+// ── Display name ─────────────────────────────────────────────────────────────
+
+class UserNameNotifier extends StateNotifier<String> {
+  UserNameNotifier(this._prefs, this._ref) : super('') {
+    _load();
+  }
+
+  final PrefsService _prefs;
+  final Ref _ref;
+
+  Future<void> _load() async {
+    // Try local first for instant startup, then sync from Firebase
+    state = await _prefs.userName();
+    try {
+      final user = _ref.read(authStateProvider).valueOrNull;
+      if (user == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final remote = doc.data()?['displayName'] as String?;
+      if (remote != null && remote.trim().isNotEmpty) {
+        state = remote.trim();
+        await _prefs.setUserName(remote.trim());
+      }
+    } catch (_) {}
+  }
+
+  Future<void> set(String name) async {
+    state = name.trim();
+    await _prefs.setUserName(name.trim());
+    try {
+      final user = _ref.read(authStateProvider).valueOrNull;
+      if (user == null) return;
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({'displayName': name.trim()}, SetOptions(merge: true));
+    } catch (_) {}
+  }
+}
+
+final userNameProvider = StateNotifierProvider<UserNameNotifier, String>(
+  (ref) => UserNameNotifier(ref.read(prefsServiceProvider), ref),
+);
+
 final authStateProvider = StreamProvider<AppUser?>(
   (ref) => ref.read(authServiceProvider).authStateChanges,
 );

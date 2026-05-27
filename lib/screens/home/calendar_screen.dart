@@ -678,18 +678,35 @@ class _RecordRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Builder(builder: (ctx) {
+              final hasFx = expense.originalCurrency != null &&
+                  (expense.convertedAmount - expense.amount).abs() > 0.001;
               final displaySym = expense.originalCurrency != null
-                  ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+                  ? (kSupportedCurrencies[expense.originalCurrency!] ??
+                      expense.originalCurrency!)
                   : symbol;
-              return Text(
-                isIncome
-                    ? formatMoney(displaySym, expense.amount, forceSign: true)
-                    : formatMoney(displaySym, -expense.amount),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: isIncome ? AppColors.income : brand.ink,
-                ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    isIncome
+                        ? formatMoney(displaySym, expense.amount, forceSign: true)
+                        : formatMoney(displaySym, -expense.amount),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: isIncome ? AppColors.income : brand.ink,
+                    ),
+                  ),
+                  if (hasFx)
+                    Text(
+                      '≈ ${isIncome ? formatMoney(symbol, expense.convertedAmount, forceSign: true) : formatMoney(symbol, -expense.convertedAmount)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: brand.inkSoft,
+                      ),
+                    ),
+                ],
               );
             }),
           ],
@@ -1524,8 +1541,11 @@ class _DialogTransactionRow extends StatelessWidget {
     final timeStr = DateFormat('HH:mm').format(expense.date);
     final categoryLabel = context.categoryLabel(expense.category);
 
+    final hasFx = expense.originalCurrency != null &&
+        (expense.convertedAmount - expense.amount).abs() > 0.001;
     final displaySym = expense.originalCurrency != null
-        ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
+        ? (kSupportedCurrencies[expense.originalCurrency!] ??
+            expense.originalCurrency!)
         : symbol;
     final amountStr = isIncome
         ? formatMoney(displaySym, expense.amount, forceSign: true)
@@ -1572,13 +1592,27 @@ class _DialogTransactionRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              amountStr,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: amountColor,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  amountStr,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: amountColor,
+                  ),
+                ),
+                if (hasFx)
+                  Text(
+                    '≈ ${isIncome ? formatMoney(symbol, expense.convertedAmount, forceSign: true) : formatMoney(symbol, -expense.convertedAmount)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: brand.inkSoft,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),

@@ -207,6 +207,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _amountController.addListener(_onAmountChanged);
     _loadInitialCurrency();
     if (_isEdit) _loadSplitBill();
+    if (widget.copyFrom != null) _loadSplitBillForCopy();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceCtrl.forward();
@@ -369,6 +370,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         ? _noteController.text.trim()
         : _category;
 
+    final displayName = ref.read(userNameProvider);
     final result = await Navigator.push<SplitBillResult>(
       context,
       CupertinoPageRoute(
@@ -378,6 +380,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           expenseTitle: title,
           initialMembers: _splitMembers,
           initialSplitMode: _splitMode,
+          userName: displayName,
         ),
         fullscreenDialog: true,
       ),
@@ -830,6 +833,43 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       });
     } catch (e) {
       dev.log('[LOAD] Split-bill load error: $e', name: 'AddEditExpense');
+    }
+  }
+
+  Future<void> _loadSplitBillForCopy() async {
+    final source = widget.copyFrom;
+    if (source == null) return;
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    try {
+      SplitBill? bill = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(user.uid, source.id);
+      if (bill == null) {
+        final expectedTitle =
+            source.note.trim().isNotEmpty ? source.note.trim() : source.category;
+        final bills = await LocalSplitBillRepository().getAllSplitBills(user.uid);
+        for (final b in bills) {
+          if (b.title != expectedTitle) { continue; }
+          if (!_sameCalendarDate(b.date, source.date)) { continue; }
+          bill = b;
+          break;
+        }
+      }
+      if (bill == null && ref.read(isOnlineProvider)) {
+        try {
+          bill = await SplitBillRepository()
+              .getSplitBillByExpenseId(user.uid, source.id);
+        } catch (_) {}
+      }
+      if (!mounted || bill == null) return;
+      setState(() {
+        _splitBillEnabled = true;
+        _splitMembers = bill!.members.map((m) => m.copyWith()).toList();
+        _splitMode = bill.splitMode;
+        _splitBillTotal = bill.totalAmount;
+      });
+    } catch (e) {
+      dev.log('[COPY] Split-bill copy load error: $e', name: 'AddEditExpense');
     }
   }
 
@@ -2530,18 +2570,20 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   Future<void> _pickFromPeople(BrandColors brand) async {
-    final result = await showModalBottomSheet<Person>(
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PersonPickerSheet(
+      builder: (_) => PersonOrNamePickerSheet(
         currentName: _counterpartController.text.trim().isEmpty
             ? null
             : _counterpartController.text.trim(),
       ),
     );
-    if (result != null) {
+    if (result is Person) {
       setState(() => _counterpartController.text = result.name);
+    } else if (result is String && result.trim().isNotEmpty) {
+      setState(() => _counterpartController.text = result.trim());
     }
   }
 

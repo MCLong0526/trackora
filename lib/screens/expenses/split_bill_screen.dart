@@ -43,6 +43,7 @@ class SplitBillScreen extends ConsumerStatefulWidget {
   final String expenseTitle;
   final List<SplitMember> initialMembers;
   final SplitMode initialSplitMode;
+  final String userName;
 
   const SplitBillScreen({
     super.key,
@@ -51,6 +52,7 @@ class SplitBillScreen extends ConsumerStatefulWidget {
     required this.expenseTitle,
     required this.initialMembers,
     this.initialSplitMode = SplitMode.equally,
+    this.userName = '',
   });
 
   @override
@@ -85,7 +87,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
         : [
             SplitMember(
               id: DateTime.now().microsecondsSinceEpoch.toString(),
-              name: 'You',
+              name: widget.userName.isNotEmpty ? widget.userName : 'You',
               colorIndex: 0,
               amount: _totalAmount,
               isPayer: true,
@@ -902,7 +904,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   }
 
   Widget _memberRow(SplitMember m, BrandColors brand) {
-    final isYou = m.name == 'You' && m.isPayer;
+    final isYou = m.isPayer;
 
     return Dismissible(
       key: ValueKey(m.id),
@@ -935,7 +937,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                   Row(
                     children: [
                       Text(
-                        isYou ? 'You' : m.name,
+                        m.name,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1404,11 +1406,41 @@ class _SplitBillAddPersonSheetState
                   color: brand.surface,
                   borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
-                child: Row(
-                  children: [
-                    _tabChip('New', _showNew, brand, () => setState(() => _showNew = true)),
-                    _tabChip('From Contacts', !_showNew, brand, () => setState(() => _showNew = false)),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final pillW = constraints.maxWidth / 2;
+                    return Stack(
+                      children: [
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeInOutCubic,
+                          left: _showNew ? 0 : pillW,
+                          top: 0,
+                          bottom: 0,
+                          width: pillW,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: brand.background,
+                              borderRadius: BorderRadius.circular(AppRadius.chip - 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            _tabChip('New', _showNew, brand, () => setState(() => _showNew = true)),
+                            _tabChip('From Contacts', !_showNew, brand, () => setState(() => _showNew = false)),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -1469,8 +1501,18 @@ class _SplitBillAddPersonSheetState
               ),
               child: Row(
                 children: [
-                  Icon(CupertinoIcons.person_badge_plus,
-                      size: 18, color: brand.inkSoft),
+                  TweenAnimationBuilder<Color?>(
+                    duration: const Duration(milliseconds: 250),
+                    tween: ColorTween(
+                      begin: brand.inkSoft,
+                      end: _saveToContacts ? brand.accentDark : brand.inkSoft,
+                    ),
+                    builder: (_, color, child) => Icon(
+                      CupertinoIcons.person_crop_circle_fill,
+                      size: 20,
+                      color: color ?? brand.inkSoft,
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1660,27 +1702,18 @@ class _SplitBillAddPersonSheetState
           HapticFeedback.selectionClick();
           onTap();
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? brand.background : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4)
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? brand.ink : brand.inkSoft,
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? brand.ink : brand.inkSoft,
+              ),
+              child: Text(label),
             ),
           ),
         ),

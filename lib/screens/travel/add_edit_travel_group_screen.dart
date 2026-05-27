@@ -153,10 +153,13 @@ class _AddEditTravelGroupScreenState
           createdAt: DateTime.now(), updatedAt: DateTime.now(),
         );
         // Add creator as first member (avoid duplicate if already added)
+        final myName = ref.read(userNameProvider).isNotEmpty
+            ? ref.read(userNameProvider)
+            : (user.email?.split('@').first ?? 'Me');
         await svc.addMember(
           groupId: groupId,
           group: createdGroup,
-          name: user.email?.split('@').first ?? 'Me',
+          name: myName,
           userId: user.uid,
           email: user.email,
         );

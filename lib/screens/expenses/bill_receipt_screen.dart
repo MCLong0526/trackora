@@ -5,11 +5,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/split_bill.dart';
+import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
@@ -21,16 +23,16 @@ const _ink60 = Color(0xFF6B6259);
 const _green = Color(0xFF2A8C52);
 const _kReceiptW = 320.0;
 
-class BillReceiptScreen extends StatefulWidget {
+class BillReceiptScreen extends ConsumerStatefulWidget {
   final SplitBill bill;
 
   const BillReceiptScreen({super.key, required this.bill});
 
   @override
-  State<BillReceiptScreen> createState() => _BillReceiptScreenState();
+  ConsumerState<BillReceiptScreen> createState() => _BillReceiptScreenState();
 }
 
-class _BillReceiptScreenState extends State<BillReceiptScreen> {
+class _BillReceiptScreenState extends ConsumerState<BillReceiptScreen> {
   final _shareButtonKey = GlobalKey();
   final _receiptKey = GlobalKey();
   bool _sharing = false;
@@ -101,6 +103,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final bg = context.brand.background;
+    final userName = ref.watch(userNameProvider);
 
     return Scaffold(
       backgroundColor: bg,
@@ -145,7 +148,7 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                       child: RepaintBoundary(
                         key: _receiptKey,
-                        child: _ReceiptCard(bill: widget.bill),
+                        child: _ReceiptCard(bill: widget.bill, userName: userName),
                       ),
                     ),
                   ),
@@ -197,8 +200,23 @@ class _BillReceiptScreenState extends State<BillReceiptScreen> {
 
 class _ReceiptCard extends StatelessWidget {
   final SplitBill bill;
+  final String userName;
 
-  const _ReceiptCard({required this.bill});
+  const _ReceiptCard({required this.bill, this.userName = ''});
+
+  String _resolveName(String name) {
+    if (name == 'You' && userName.isNotEmpty) return userName;
+    return name;
+  }
+
+  String _initials(String name) {
+    final resolved = _resolveName(name);
+    final parts = resolved.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return resolved.length >= 2
+        ? resolved.substring(0, 2).toUpperCase()
+        : resolved.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +310,7 @@ class _ReceiptCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      payer.initials,
+                      _initials(payer.name),
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -316,7 +334,7 @@ class _ReceiptCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        payer.name,
+                        _resolveName(payer.name),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -395,7 +413,7 @@ class _ReceiptCard extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        member.initials,
+                        _initials(member.name),
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
@@ -407,7 +425,9 @@ class _ReceiptCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      member.isPayer ? '${member.name} (paid)' : member.name,
+                      member.isPayer
+                          ? '${_resolveName(member.name)} (paid)'
+                          : _resolveName(member.name),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12, color: _ink),

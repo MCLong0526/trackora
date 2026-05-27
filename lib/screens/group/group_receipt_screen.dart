@@ -125,6 +125,7 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
   Widget build(BuildContext context) {
     final bg = context.brand.background;
     final userId = ref.watch(authStateProvider).valueOrNull?.uid;
+    final userName = ref.watch(userNameProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '';
     final expensesAsync = ref.watch(groupExpensesProvider(widget.group.id));
     final allExpenses = expensesAsync.valueOrNull ?? const [];
@@ -197,6 +198,7 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
                           myNet: myNet,
                           partnerName: partnerName,
                           userId: userId,
+                          userName: userName,
                         ),
                       ),
                     ),
@@ -262,6 +264,7 @@ class _GroupReceiptCard extends StatelessWidget {
   final double myNet;
   final String partnerName;
   final String? userId;
+  final String userName;
 
   const _GroupReceiptCard({
     required this.group,
@@ -272,10 +275,19 @@ class _GroupReceiptCard extends StatelessWidget {
     required this.myNet,
     required this.partnerName,
     required this.userId,
+    this.userName = '',
   });
 
   String _memberName(String uid) {
-    if (uid == userId) return 'You';
+    if (uid == userId) {
+      final displayName = group.members
+          .where((m) => m.uid == uid)
+          .firstOrNull
+          ?.displayName ?? '';
+      if (userName.isNotEmpty) return userName;
+      if (displayName.isNotEmpty) return displayName;
+      return 'You';
+    }
     try {
       return group.members.firstWhere((m) => m.uid == uid).displayName;
     } catch (_) {
@@ -523,7 +535,7 @@ class _GroupReceiptCard extends StatelessWidget {
                           ? 'All settled up'
                           : myNet > 0
                               ? '$partnerName owes you  $symbol${myNet.abs().toStringAsFixed(2)}'
-                              : 'You owe $partnerName  $symbol${myNet.abs().toStringAsFixed(2)}',
+                              : '${userName.isNotEmpty ? userName : 'You'} owe $partnerName  $symbol${myNet.abs().toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
