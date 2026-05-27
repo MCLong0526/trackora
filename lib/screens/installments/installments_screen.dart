@@ -961,7 +961,19 @@ class _InstallFilterSegment extends StatelessWidget {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final pillW = (constraints.maxWidth - 8) / 4;
-        return Container(
+        return GestureDetector(
+          onHorizontalDragUpdate: (details) {
+            const padding = 4.0;
+            final newIdx = ((details.localPosition.dx - padding) / pillW)
+                .floor()
+                .clamp(0, filters.length - 1);
+            final newFilter = filters[newIdx].$1;
+            if (newFilter == selected) return;
+            HapticFeedback.selectionClick();
+            onSelected(newFilter);
+          },
+          behavior: HitTestBehavior.translucent,
+          child: Container(
           height: 40,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -1019,6 +1031,7 @@ class _InstallFilterSegment extends StatelessWidget {
                 ],
               ),
             ],
+          ),
           ),
         );
       },
