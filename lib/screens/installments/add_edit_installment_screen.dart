@@ -506,7 +506,6 @@ class _AddEditInstallmentScreenState
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
-      onHorizontalDragEnd: _onPlanTypeSwipe,
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         backgroundColor: brand.background,
@@ -601,17 +600,21 @@ class _AddEditInstallmentScreenState
                 // ── Section: Plan ────────────────────────────────────
                 _SectionHeader(label: context.t('inst.planLength')),
                 const SizedBox(height: 8),
-                _PlanTypeSelector(
-                  isLifetime: _lifetime,
-                  onChanged: (isLifetime) => setState(() {
-                    _lifetime = isLifetime;
-                    if (isLifetime) {
-                      _updating = true;
-                      _months.clear();
-                      _remainingMonths.clear();
-                      _updating = false;
-                    }
-                  }),
+                GestureDetector(
+                  onHorizontalDragEnd: _onPlanTypeSwipe,
+                  behavior: HitTestBehavior.translucent,
+                  child: _PlanTypeSelector(
+                    isLifetime: _lifetime,
+                    onChanged: (isLifetime) => setState(() {
+                      _lifetime = isLifetime;
+                      if (isLifetime) {
+                        _updating = true;
+                        _months.clear();
+                        _remainingMonths.clear();
+                        _updating = false;
+                      }
+                    }),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 // Fix 3: ClipRect + AnimatedSize for smooth height transition.

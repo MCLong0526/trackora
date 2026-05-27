@@ -400,6 +400,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         _splitBill = null;
         _amountController.text = payer.amount.toStringAsFixed(2);
       });
+      // Prevent the amount field from auto-focusing when returning
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
     } else if (_splitMembers.isEmpty) {
       // User cancelled without configuring, turn off toggle
       setState(() => _splitBillEnabled = false);

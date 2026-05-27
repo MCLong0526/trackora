@@ -385,7 +385,6 @@ class _AddEditSavingPlanScreenState
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
-        onHorizontalDragEnd: _onTypeSwipe,
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
           child: Form(
@@ -632,15 +631,18 @@ class _AddEditSavingPlanScreenState
     ];
     final selectedIdx = types.indexWhere((t) => t.$1 == _type);
 
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final segW = (constraints.maxWidth - 8) / 2;
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(14),
-          ),
+    return GestureDetector(
+      onHorizontalDragEnd: _onTypeSwipe,
+      behavior: HitTestBehavior.translucent,
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          final segW = (constraints.maxWidth - 8) / 2;
+          return Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(14),
+            ),
           child: Stack(
             clipBehavior: Clip.antiAlias,
             children: [
@@ -714,6 +716,7 @@ class _AddEditSavingPlanScreenState
           ),
         );
       },
+      ),
     );
   }
 

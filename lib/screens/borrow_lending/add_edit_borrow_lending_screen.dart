@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -230,6 +231,17 @@ class _AddEditBorrowLendingScreenState
     }
   }
 
+  void _onTypeSwipe(DragEndDetails details) {
+    final v = details.primaryVelocity ?? 0;
+    if (v.abs() < 200) return;
+    const types = [BorrowLendingType.borrowed, BorrowLendingType.lent];
+    final idx = types.indexOf(_type);
+    final newIdx = v < 0 ? idx + 1 : idx - 1;
+    if (newIdx < 0 || newIdx >= types.length) return;
+    HapticFeedback.selectionClick();
+    setState(() => _type = types[newIdx]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -434,14 +446,17 @@ class _AddEditBorrowLendingScreenState
     final fgColors = [AppColors.expense, AppColors.income];
     final selectedIdx = types.indexOf(_type);
 
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final pillW = (constraints.maxWidth - 8) / 2;
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: brand.surface,
-            borderRadius: BorderRadius.circular(AppRadius.chip),
+    return GestureDetector(
+      onHorizontalDragEnd: _onTypeSwipe,
+      behavior: HitTestBehavior.translucent,
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          final pillW = (constraints.maxWidth - 8) / 2;
+          return Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Stack(
             clipBehavior: Clip.antiAlias,
@@ -526,6 +541,7 @@ class _AddEditBorrowLendingScreenState
           ),
         );
       },
+      ),
     );
   }
 
