@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -479,6 +480,23 @@ class _AddEditInstallmentScreenState
     );
   }
 
+  void _onPlanTypeSwipe(DragEndDetails details) {
+    final v = details.primaryVelocity ?? 0;
+    if (v.abs() < 200) return;
+    final goLifetime = v < 0;
+    if (goLifetime == _lifetime) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _lifetime = goLifetime;
+      if (goLifetime) {
+        _updating = true;
+        _months.clear();
+        _remainingMonths.clear();
+        _updating = false;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
@@ -488,6 +506,7 @@ class _AddEditInstallmentScreenState
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
+      onHorizontalDragEnd: _onPlanTypeSwipe,
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         backgroundColor: brand.background,

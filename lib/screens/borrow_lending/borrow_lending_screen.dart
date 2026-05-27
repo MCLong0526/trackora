@@ -373,7 +373,6 @@ class _FilterChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final fg = foregroundOn(brand.accentDark);
     final filters = <(_Filter, String)>[
       (_Filter.all, context.t('bl.filterAll')),
       (_Filter.borrowed, context.t('bl.filterBorrowed')),
@@ -381,36 +380,75 @@ class _FilterChips extends StatelessWidget {
       (_Filter.active, context.t('bl.filterActive')),
       (_Filter.settled, context.t('bl.filterSettled')),
     ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final (f, label) in filters) ...[
-            GestureDetector(
-              onTap: () => onSelected(f),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: f == selected ? brand.accentDark : brand.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: f == selected ? fg : brand.ink,
+    final selectedIdx = filters.indexWhere((f) => f.$1 == selected);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final pillW = (constraints.maxWidth - 8) / filters.length;
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: brand.divider,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            clipBehavior: Clip.antiAlias,
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: selectedIdx * pillW,
+                top: 0,
+                bottom: 0,
+                width: pillW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ],
-      ),
+              Row(
+                children: [
+                  for (final (f, label) in filters)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onSelected(f);
+                        },
+                        child: Container(
+                          alignment: Alignment.center,
+                          color: Colors.transparent,
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: f == selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color:
+                                  f == selected ? brand.ink : brand.inkSoft,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

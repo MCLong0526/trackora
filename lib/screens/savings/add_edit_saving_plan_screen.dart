@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -180,6 +181,43 @@ class _AddEditSavingPlanScreenState
         SavingFrequency.monthly => 'Months',
       };
 
+  void _onTypeSwipe(DragEndDetails details) {
+    final v = details.primaryVelocity ?? 0;
+    if (v.abs() < 200) return;
+    final goFlexible = v < 0;
+    final target =
+        goFlexible ? SavingPlanType.flexible : SavingPlanType.fixed;
+    if (_type == target) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _type = target;
+      if (target == SavingPlanType.fixed) {
+        _periodsIsAuto = true;
+        _contribIsAuto = false;
+        _recalculateFixed();
+      }
+    });
+  }
+
+  void _onFrequencySwipe(DragEndDetails details) {
+    if (_type != SavingPlanType.fixed) return;
+    final v = details.primaryVelocity ?? 0;
+    if (v.abs() < 200) return;
+    const freqs = [
+      SavingFrequency.daily,
+      SavingFrequency.weekly,
+      SavingFrequency.monthly
+    ];
+    final idx = freqs.indexOf(_frequency);
+    final newIdx = v < 0 ? idx + 1 : idx - 1;
+    if (newIdx < 0 || newIdx >= freqs.length) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _frequency = freqs[newIdx];
+      _recalculateFixed();
+    });
+  }
+
   // ── Date picker ──────────────────────────────────────────────
 
   Future<void> _pickDate({required bool start}) async {
@@ -347,6 +385,7 @@ class _AddEditSavingPlanScreenState
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
+        onHorizontalDragEnd: _onTypeSwipe,
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
           child: Form(
@@ -689,7 +728,10 @@ class _AddEditSavingPlanScreenState
     ];
     final selectedIdx = freqs.indexWhere((f) => f.$1 == _frequency);
 
-    return LayoutBuilder(
+    return GestureDetector(
+      onHorizontalDragEnd: _onFrequencySwipe,
+      behavior: HitTestBehavior.translucent,
+      child: LayoutBuilder(
       builder: (ctx, constraints) {
         final segW = (constraints.maxWidth - 8) / 3;
         return Container(
@@ -753,6 +795,7 @@ class _AddEditSavingPlanScreenState
           ),
         );
       },
+      ),
     );
   }
 
