@@ -18,7 +18,18 @@ class PersonalGroupToggle extends ConsumerWidget {
     final memberCount = hasGroup ? groups.first.members.length : 0;
     final isPersonal = mode == HomeMode.personal;
 
-    return Container(
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final v = details.primaryVelocity ?? 0;
+        if (v < -100 && isPersonal) {
+          HapticFeedback.selectionClick();
+          ref.read(homeModeProvider.notifier).state = HomeMode.group;
+        } else if (v > 100 && !isPersonal) {
+          HapticFeedback.selectionClick();
+          ref.read(homeModeProvider.notifier).state = HomeMode.personal;
+        }
+      },
+      child: Container(
       height: 52,
       decoration: BoxDecoration(
         color: const Color(0xFFEFEFF4),
@@ -170,6 +181,7 @@ class PersonalGroupToggle extends ConsumerWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

@@ -828,26 +828,41 @@ class _AddGroupExpenseScreenState
 
                           if (_category.isNotEmpty) ...[
                             const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: catMeta.color,
-                                    shape: BoxShape.circle,
-                                  ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(
+                                opacity: anim,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.3),
+                                    end: Offset.zero,
+                                  ).animate(anim),
+                                  child: child,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _category,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: catMeta.color,
+                              ),
+                              child: Row(
+                                key: ValueKey(_category),
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: catMeta.color,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    context.categoryLabel(_category),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: catMeta.color,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
 
@@ -1064,8 +1079,7 @@ class _AddGroupExpenseScreenState
 
             // ── Save bar ─────────────────────────────────────
             Padding(
-              padding: EdgeInsets.fromLTRB(16, 10, 16,
-                  MediaQuery.of(context).padding.bottom + 12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
               child: Row(
                 children: [
                   // Circle category icon
