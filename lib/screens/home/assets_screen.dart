@@ -1603,7 +1603,7 @@ class _BreakdownSheetState extends ConsumerState<_BreakdownSheet> {
                       children: [
                         Expanded(
                           child: Text(
-                            'Exclude bills + installments',
+                            context.t('stats.excludeFixed'),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

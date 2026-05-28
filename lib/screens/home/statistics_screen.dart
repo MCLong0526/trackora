@@ -605,7 +605,7 @@ class _PeriodPills extends StatelessWidget {
           if (i > 0) const SizedBox(width: 6),
           Expanded(
             child: _PeriodPill(
-              label: _label(_StatsPeriod.values[i]),
+              label: _label(context, _StatsPeriod.values[i]),
               selected: period == _StatsPeriod.values[i],
               onTap: () {
                 HapticFeedback.selectionClick();
@@ -618,12 +618,12 @@ class _PeriodPills extends StatelessWidget {
     );
   }
 
-  String _label(_StatsPeriod p) => switch (p) {
-    _StatsPeriod.week => 'W',
-    _StatsPeriod.month => 'M',
-    _StatsPeriod.sixMonth => '6M',
-    _StatsPeriod.year => 'Y',
-    _StatsPeriod.all => 'All',
+  String _label(BuildContext context, _StatsPeriod p) => switch (p) {
+    _StatsPeriod.week => context.t('stats.filterWeek'),
+    _StatsPeriod.month => context.t('stats.filterMonth'),
+    _StatsPeriod.sixMonth => context.t('stats.filterSixMonth'),
+    _StatsPeriod.year => context.t('stats.filterYear'),
+    _StatsPeriod.all => context.t('stats.filterAll'),
   };
 }
 
@@ -888,7 +888,7 @@ class _SpendingHeader extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Exclude bills + installments',
+                    context.t('stats.excludeFixed'),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1546,7 +1546,7 @@ class _ReportHeader extends StatelessWidget {
     final periodKey = switch (period) {
       _StatsPeriod.week => 'stats.filterWeek',
       _StatsPeriod.month => 'stats.filterMonth',
-      _StatsPeriod.sixMonth => '6M',
+      _StatsPeriod.sixMonth => 'stats.filterSixMonth',
       _StatsPeriod.year => 'stats.filterYear',
       _StatsPeriod.all => 'stats.filterAll',
     };

@@ -23,7 +23,8 @@ class MonthFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final months = _months();
-    final formatter = DateFormat('MMM');
+    final locale = Localizations.localeOf(context).toString();
+    final formatter = DateFormat('MMM', locale);
     final brand = context.brand;
 
     return SizedBox(

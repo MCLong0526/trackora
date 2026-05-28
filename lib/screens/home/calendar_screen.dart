@@ -249,12 +249,17 @@ class _CalendarGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final locale = Localizations.localeOf(context).toString();
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final firstWeekday = DateTime(month.year, month.month, 1).weekday;
     // weekday: 1=Mon..7=Sun, we want Sun as first column (index 0)
     final leadingBlanks = firstWeekday % 7;
 
-    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Jan 1 2023 is a Sunday; generate Sun–Sat abbreviations in current locale
+    final weekdays = List.generate(
+      7,
+      (i) => DateFormat('EEE', locale).format(DateTime(2023, 1, i + 1)),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -279,7 +284,7 @@ class _CalendarGrid extends StatelessWidget {
               children: [
                 _NavButton(icon: CupertinoIcons.chevron_left, onTap: onPrev),
                 Text(
-                  DateFormat('MMMM yyyy').format(month),
+                  DateFormat('MMMM yyyy', locale).format(month),
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -494,6 +499,7 @@ class _DayHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final locale = Localizations.localeOf(context).toString();
     final expense = expenses
         .where((e) => e.type.isOutflow)
         .fold<double>(0, (s, e) => s + e.convertedAmount);
@@ -508,7 +514,7 @@ class _DayHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                DateFormat('EEEE').format(day),
+                DateFormat('EEEE', locale).format(day),
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -516,7 +522,7 @@ class _DayHeader extends StatelessWidget {
                 ),
               ),
               Text(
-                DateFormat('MMMM d, yyyy').format(day),
+                DateFormat('MMMM d, yyyy', locale).format(day),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -781,7 +787,7 @@ class _MonthSummary extends StatelessWidget {
                   size: 32, color: brand.inkSoft),
               const SizedBox(height: 10),
               Text(
-                'No records this month',
+                context.t('stats.noCalendarRecords'),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -790,7 +796,7 @@ class _MonthSummary extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Tap a day to see records',
+                context.t('stats.tapDayToSeeRecords'),
                 style: TextStyle(fontSize: 12, color: brand.inkSoft),
               ),
             ],

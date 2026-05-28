@@ -116,8 +116,8 @@ class SettingsScreen extends ConsumerWidget {
                 _Tile(
                   icon: CupertinoIcons.person_circle_fill,
                   iconColor: AppColors.lilac,
-                  label: 'Display Name',
-                  trailing: userName.isNotEmpty ? userName : 'Not set',
+                  label: context.t('settings.displayName'),
+                  trailing: userName.isNotEmpty ? userName : context.t('settings.notSet'),
                   onTap: () => _showEditUserName(context, ref, userName),
                 ),
                 _GroupDivider(),
@@ -478,7 +478,7 @@ class SettingsScreen extends ConsumerWidget {
     showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Display Name'),
+        title: Text(context.t('settings.displayName')),
         content: Padding(
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
@@ -492,7 +492,7 @@ class SettingsScreen extends ConsumerWidget {
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(context.t('common.cancel')),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -500,7 +500,7 @@ class SettingsScreen extends ConsumerWidget {
               ref.read(userNameProvider.notifier).set(ctrl.text);
               Navigator.pop(ctx);
             },
-            child: const Text('Save'),
+            child: Text(context.t('common.save')),
           ),
         ],
       ),
