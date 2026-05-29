@@ -1224,15 +1224,23 @@ class _QuickAddCard extends StatelessWidget {
               letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.05,
-            children: items.map((item) => _QuickAddButton(item: item)).toList(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(child: _QuickAddButton(item: items[i])),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (var i = 3; i < 6; i++) ...[
+                if (i > 3) const SizedBox(width: 10),
+                Expanded(child: _QuickAddButton(item: items[i])),
+              ],
+            ],
           ),
         ],
       ),
@@ -1323,26 +1331,26 @@ class _QuickAddButtonState extends State<_QuickAddButton>
       onTapCancel: () => _press.forward(),
       child: ScaleTransition(
         scale: _press,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: widget.item.iconBg,
-                borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 82,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: widget.item.iconBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  widget.item.icon,
+                  color: widget.item.iconColor,
+                  size: 21,
+                ),
               ),
-              child: Icon(
-                widget.item.icon,
-                color: widget.item.iconColor,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 7),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
+              const SizedBox(height: 6),
+              Text(
                 context.t(widget.item.labelKey),
                 style: TextStyle(
                   fontSize: 11,
@@ -1353,8 +1361,8 @@ class _QuickAddButtonState extends State<_QuickAddButton>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

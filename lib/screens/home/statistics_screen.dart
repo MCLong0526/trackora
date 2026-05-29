@@ -898,12 +898,14 @@ class _LineChartCard extends StatefulWidget {
   final _StatsRange range;
   final _StatsPeriod period;
   final String symbol;
+  final bool bare;
 
   const _LineChartCard({
     required this.expenses,
     required this.range,
     required this.period,
     required this.symbol,
+    this.bare = false,
   });
 
   @override
@@ -960,7 +962,7 @@ class _LineChartCardState extends State<_LineChartCard>
     final maxV = values.fold<double>(0, (m, v) => v > m ? v : m);
     final chartMax = maxV == 0 ? 1.0 : maxV * 1.25;
 
-    return _FloatCard(
+    final content = Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1045,6 +1047,12 @@ class _LineChartCardState extends State<_LineChartCard>
             ),
         ],
       ),
+    );
+
+    if (widget.bare) return content;
+    return _FloatCard(
+      padding: EdgeInsets.zero,
+      child: content,
     );
   }
 
@@ -1431,137 +1439,138 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     }
 
     final brand = context.brand;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Controls bar: < period > + exclude toggle
-        if (widget.onExcludeChanged != null || widget.showNav) ...[
-          _StatsControlsBar(
-            rangeLabel: widget.rangeLabel,
-            showNav: widget.showNav,
-            onPrev: widget.onPrev ?? () {},
-            onNext: widget.onNext ?? () {},
-            excludeFixed: widget.excludeFixed,
-            onExcludeChanged: widget.onExcludeChanged,
-          ),
-          const SizedBox(height: 12),
-        ],
-        // "By Category" / "Trend" — individual floating glass tabs
-        Row(
-          children: [
-            for (var i = 0; i < pages.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    _controller.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutCubic,
-                    );
-                  },
-                  child: _GlassTab(
-                    label: pages[i].label,
-                    selected: _page == i,
-                    accentDark: brand.accentDark,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 540,
-          child: PageView(
-            controller: _controller,
-            onPageChanged: (i) => setState(() => _page = i),
-            children: [
-              for (final page in pages)
-                // Donut card manages its own internal scroll; trend uses SingleChildScrollView
-                if (page.id == 'donut')
-                  page.builder(context)
-                else
-                  SingleChildScrollView(child: page.builder(context)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
+    final hasControls = widget.onExcludeChanged != null || widget.showNav;
 
-// ── Stats controls bar (nav + exclude toggle) ──────────────────
-
-class _StatsControlsBar extends StatelessWidget {
-  final String rangeLabel;
-  final bool showNav;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final bool excludeFixed;
-  final ValueChanged<bool>? onExcludeChanged;
-
-  const _StatsControlsBar({
-    required this.rangeLabel,
-    required this.showNav,
-    required this.onPrev,
-    required this.onNext,
-    required this.excludeFixed,
-    this.onExcludeChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
     return Container(
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
       ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
-      child: Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (showNav) _navBtn(context, CupertinoIcons.chevron_left, onPrev),
-          if (showNav) const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              rangeLabel.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: brand.inkSoft,
-                letterSpacing: 0.8,
+          // Controls row: < period > + exclude toggle — inside the card
+          if (hasControls) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
+              child: Row(
+                children: [
+                  if (widget.showNav)
+                    _navBtn(
+                      context,
+                      CupertinoIcons.chevron_left,
+                      widget.onPrev ?? () {},
+                    ),
+                  if (widget.showNav) const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.rangeLabel.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: brand.inkSoft,
+                        letterSpacing: 0.8,
+                      ),
+                      textAlign:
+                          widget.showNav ? TextAlign.center : TextAlign.start,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.showNav) const SizedBox(width: 6),
+                  if (widget.showNav)
+                    _navBtn(
+                      context,
+                      CupertinoIcons.chevron_right,
+                      widget.onNext ?? () {},
+                    ),
+                  if (widget.onExcludeChanged != null) ...[
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        context.t('stats.excludeFixed'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Transform.scale(
+                      scale: 0.8,
+                      child: CupertinoSwitch(
+                        value: widget.excludeFixed,
+                        onChanged: widget.onExcludeChanged,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              textAlign: showNav ? TextAlign.center : TextAlign.start,
-              overflow: TextOverflow.ellipsis,
+            ),
+            Container(height: 0.5, color: brand.divider),
+            const SizedBox(height: 12),
+          ],
+          // "By Category" / "Trend" — tabs
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                for (var i = 0; i < pages.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        _controller.animateToPage(
+                          i,
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeOutCubic,
+                        );
+                      },
+                      child: _GlassTab(
+                        label: pages[i].label,
+                        selected: _page == i,
+                        accentDark: brand.accentDark,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (showNav) const SizedBox(width: 6),
-          if (showNav) _navBtn(context, CupertinoIcons.chevron_right, onNext),
-          if (onExcludeChanged != null) ...[
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                context.t('stats.excludeFixed'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: brand.inkSoft,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+          const SizedBox(height: 12),
+          // Chart content — chart pages render bare (no own card background)
+          SizedBox(
+            height: 540,
+            child: PageView(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _page = i),
+              children: [
+                for (final page in pages)
+                  if (page.id == 'donut')
+                    _CategoryCard(
+                      expenses: widget.rangedExpenses,
+                      symbol: widget.symbol,
+                      rangeLabel: widget.range.label,
+                      forReport: widget.stacked,
+                      bare: true,
+                    )
+                  else
+                    SingleChildScrollView(
+                      child: _LineChartCard(
+                        expenses: widget.allExpenses,
+                        range: widget.range,
+                        period: widget.period,
+                        symbol: widget.symbol,
+                        bare: true,
+                      ),
+                    ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Transform.scale(
-              scale: 0.8,
-              child: CupertinoSwitch(
-                value: excludeFixed,
-                onChanged: onExcludeChanged,
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -1572,13 +1581,13 @@ class _StatsControlsBar extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 34,
-        height: 34,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: brand.background,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, size: 17, color: brand.ink),
+        child: Icon(icon, size: 16, color: brand.ink),
       ),
     );
   }
@@ -1727,12 +1736,14 @@ class _CategoryCard extends StatefulWidget {
   final String symbol;
   final String rangeLabel;
   final bool forReport;
+  final bool bare;
 
   const _CategoryCard({
     required this.expenses,
     required this.symbol,
     required this.rangeLabel,
     this.forReport = false,
+    this.bare = false,
   });
 
   @override
@@ -1752,18 +1763,20 @@ class _CategoryCardState extends State<_CategoryCard> {
     final brand = context.brand;
 
     if (widget.expenses.isEmpty) {
-      return _FloatCard(
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
-          child: Center(
-            child: Text(
-              context.t('stats.noCategorySpend'),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: brand.inkSoft),
-            ),
+      final emptyContent = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Text(
+            context.t('stats.noCategorySpend'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: brand.inkSoft),
           ),
         ),
+      );
+      if (widget.bare) return emptyContent;
+      return _FloatCard(
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+        child: emptyContent,
       );
     }
 
@@ -1804,43 +1817,44 @@ class _CategoryCardState extends State<_CategoryCard> {
 
         if (bounded) {
           // Bounded height (in PageView): chart stays fixed, only legend scrolls
+          final inner = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'BY CATEGORY',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: brand.inkSoft,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    chart,
+                    const SizedBox(height: 18),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+                  children: legendItems,
+                ),
+              ),
+            ],
+          );
+          if (widget.bare) return inner;
           return Container(
             decoration: BoxDecoration(
               color: brand.surface,
               borderRadius: BorderRadius.circular(AppRadius.card),
-              
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'BY CATEGORY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: brand.inkSoft,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      chart,
-                      const SizedBox(height: 18),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-                    children: legendItems,
-                  ),
-                ),
-              ],
-            ),
+            child: inner,
           );
         }
 
