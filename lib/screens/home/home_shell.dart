@@ -139,15 +139,12 @@ class _BottomBarState extends State<_BottomBar>
   // Liquid glass expand animation (long press)
   late final AnimationController _glassCtrl;
 
-  // Default compact height; expands on long press to full liquid glass
+  // Default compact height; modest bar grow on long press
   static const _compactH = 56.0;
-  static const _liquidH = 74.0;
-  static const _pillHCompact = 46.0;
-  static const _pillHLiquid = 62.0;
-  static const _pillTopCompact = 5.0;
-  static const _pillTopLiquid = 6.0;
-  static const _indicatorRestW = 68.0;
-  static const _indicatorDragW = 82.0;
+  static const _liquidH = 66.0;
+  // Circle indicator diameters: base (contained) → expanded (overflows bar)
+  static const _circleDBase = 46.0;
+  static const _circleDExpanded = 76.0;
 
   @override
   void initState() {
@@ -240,12 +237,14 @@ class _BottomBarState extends State<_BottomBar>
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
       child: AnimatedBuilder(
-        animation: _glassCtrl,
+        // Single builder listening to both animations
+        animation: Listenable.merge([_pillCtrl, _glassCtrl]),
         builder: (context, _) {
           final t = Curves.easeOutCubic.transform(_glassCtrl.value);
           final barH = lerpDouble(_compactH, _liquidH, t)!;
-          final pillH = lerpDouble(_pillHCompact, _pillHLiquid, t)!;
-          final pillTop = lerpDouble(_pillTopCompact, _pillTopLiquid, t)!;
+          // Circle grows from base (fits inside bar) → expanded (overflows bar)
+          final circleD = lerpDouble(_circleDBase, _circleDExpanded, t)!;
+          final cx = _currentX;
           final blurSigma = lerpDouble(18.0, 40.0, t)!;
           final bgTopAlpha = isDark
               ? lerpDouble(0.10, 0.19, t)!
@@ -263,248 +262,239 @@ class _BottomBarState extends State<_BottomBar>
               ? lerpDouble(0.32, 0.62, t)!
               : lerpDouble(0.62, 0.92, t)!;
 
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(36),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-              child: Container(
-                height: barH,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: bgTopAlpha),
-                      Colors.white.withValues(alpha: bgBotAlpha),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(36),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: borderAlpha),
-                    width: 1.0,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: shadowAlpha),
-                      blurRadius: lerpDouble(26.0, 52.0, t)!,
-                      offset: const Offset(0, 10),
-                    ),
-                    BoxShadow(
-                      color: Colors.black
-                          .withValues(alpha: shadowAlpha * 0.45),
-                      blurRadius: lerpDouble(8.0, 16.0, t)!,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // ── Specular highlight line at top edge ──────────────
-                    Positioned(
-                      top: 0,
-                      left: 12,
-                      right: 12,
-                      height: 1.0,
+          // Stack with Clip.none allows circle to overflow bar bounds
+          return SizedBox(
+            height: barH,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // ── Layer 1: Glass bar background (clipped pill) ──────────
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(36),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                          sigmaX: blurSigma, sigmaY: blurSigma),
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
                             colors: [
-                              Colors.transparent,
-                              Colors.white.withValues(alpha: specularPeak - 0.08),
-                              Colors.white.withValues(alpha: specularPeak),
-                              Colors.white.withValues(alpha: specularPeak - 0.08),
-                              Colors.transparent,
+                              Colors.white.withValues(alpha: bgTopAlpha),
+                              Colors.white.withValues(alpha: bgBotAlpha),
                             ],
-                            stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
                           ),
-                          borderRadius: BorderRadius.circular(1),
+                          borderRadius: BorderRadius.circular(36),
+                          border: Border.all(
+                            color:
+                                Colors.white.withValues(alpha: borderAlpha),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black
+                                  .withValues(alpha: shadowAlpha),
+                              blurRadius: lerpDouble(26.0, 52.0, t)!,
+                              offset: const Offset(0, 10),
+                            ),
+                            BoxShadow(
+                              color: Colors.black
+                                  .withValues(alpha: shadowAlpha * 0.45),
+                              blurRadius: lerpDouble(8.0, 16.0, t)!,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          children: [
+                            // Specular highlight line at top edge
+                            Positioned(
+                              top: 0,
+                              left: 12,
+                              right: 12,
+                              height: 1.0,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.white.withValues(
+                                          alpha: specularPeak - 0.08),
+                                      Colors.white
+                                          .withValues(alpha: specularPeak),
+                                      Colors.white.withValues(
+                                          alpha: specularPeak - 0.08),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
+                                  ),
+                                  borderRadius: BorderRadius.circular(1),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    // ── Nav content ──────────────────────────────────────
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        _barWidth = constraints.maxWidth;
-                        if (!_initialized) {
-                          _fromX = _tabCenterX(widget.index);
-                          _toX = _fromX;
-                          _initialized = true;
-                        }
-                        return GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onLongPressStart: (_) => _expandGlass(),
-                          onLongPressEnd: (_) => _collapseGlass(),
-                          onLongPressCancel: _collapseGlass,
-                          onHorizontalDragStart: (d) {
-                            final idx =
-                                _indexFromLocalX(d.localPosition.dx);
-                            if (idx == null) return;
-                            HapticFeedback.mediumImpact();
-                            setState(() {
-                              _isDragging = true;
-                              _dragIndex = idx;
-                            });
-                            widget.onTap(idx);
-                            _animateToTab(idx, fast: true);
-                          },
-                          onHorizontalDragUpdate: (d) {
-                            if (!_isDragging) return;
-                            final idx =
-                                _indexFromLocalX(d.localPosition.dx);
-                            if (idx == null || idx == _dragIndex) return;
-                            HapticFeedback.selectionClick();
-                            setState(() => _dragIndex = idx);
-                            widget.onTap(idx);
-                            _animateToTab(idx, fast: true);
-                          },
-                          onHorizontalDragEnd: (_) {
-                            if (!_isDragging) return;
-                            setState(() {
-                              _isDragging = false;
-                              _dragIndex = null;
-                            });
-                            _animateToTab(widget.index, fast: false);
-                          },
-                          onHorizontalDragCancel: () {
-                            if (!_isDragging) return;
-                            setState(() {
-                              _isDragging = false;
-                              _dragIndex = null;
-                            });
-                            _animateToTab(widget.index, fast: false);
-                          },
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              // ── Liquid glass indicator pill ──────────
-                              TweenAnimationBuilder<double>(
-                                tween: Tween(
-                                  end: _isDragging
-                                      ? _indicatorDragW
-                                      : _indicatorRestW,
-                                ),
-                                duration: const Duration(milliseconds: 220),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, iw, _) {
-                                  return AnimatedBuilder(
-                                    animation: _pillCtrl,
-                                    builder: (context, child) {
-                                      final cx = _currentX;
-                                      return Positioned(
-                                        left: cx - iw / 2,
-                                        top: pillTop,
-                                        width: iw,
-                                        height: pillH,
-                                        child: child!,
-                                      );
-                                    },
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: isDark
-                                              ? [
-                                                  Colors.white.withValues(
-                                                    alpha: lerpDouble(0.18, 0.30, t)!,
-                                                  ),
-                                                  Colors.white.withValues(
-                                                    alpha: lerpDouble(0.06, 0.13, t)!,
-                                                  ),
-                                                ]
-                                              : [
-                                                  Colors.white.withValues(
-                                                    alpha: lerpDouble(0.90, 0.98, t)!,
-                                                  ),
-                                                  Colors.white.withValues(
-                                                    alpha: lerpDouble(0.60, 0.76, t)!,
-                                                  ),
-                                                ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(22),
-                                        border: Border.all(
-                                          color: isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: lerpDouble(0.22, 0.32, t)!,
-                                                )
-                                              : Colors.white.withValues(
-                                                  alpha: lerpDouble(0.90, 1.0, t)!,
-                                                ),
-                                          width: 0.8,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.white.withValues(
-                                              alpha: isDark ? lerpDouble(0.18, 0.30, t)! : lerpDouble(0.55, 0.75, t)!,
-                                            ),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, -1),
-                                          ),
-                                          BoxShadow(
-                                            color: AppActionBlue.color.withValues(
-                                              alpha: isDark ? lerpDouble(0.22, 0.35, t)! : lerpDouble(0.14, 0.26, t)!,
-                                            ),
-                                            blurRadius: lerpDouble(12.0, 22.0, t)!,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                          if (_isDragging)
-                                            BoxShadow(
-                                              color: AppActionBlue.color
-                                                  .withValues(alpha: 0.22),
-                                              blurRadius: 20,
-                                              spreadRadius: 2,
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              // ── Nav items ────────────────────────────
-                              Row(
-                                children: [
-                                  _NavItem(
-                                    icon: CupertinoIcons.house_fill,
-                                    label: context.t('tab.home'),
-                                    selected: activeIndex == 0,
-                                    onTap: () => widget.onTap(0),
-                                    isDark: isDark,
-                                    glassExpand: t,
-                                  ),
-                                  _NavItem(
-                                    icon: CupertinoIcons.chart_bar_alt_fill,
-                                    label: context.t('tab.stats'),
-                                    selected: activeIndex == 1,
-                                    onTap: () => widget.onTap(1),
-                                    isDark: isDark,
-                                    glassExpand: t,
-                                  ),
-                                  _NavItem(
-                                    icon: CupertinoIcons.creditcard,
-                                    label: context.t('tab.money'),
-                                    selected: activeIndex == 2,
-                                    onTap: () => widget.onTap(2),
-                                    isDark: isDark,
-                                    glassExpand: t,
-                                  ),
-                                  _NavItem(
-                                    icon: CupertinoIcons.chart_pie_fill,
-                                    label: context.t('tab.assets'),
-                                    selected: activeIndex == 3,
-                                    onTap: () => widget.onTap(3),
-                                    isDark: isDark,
-                                    glassExpand: t,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                // ── Layer 2: Circle indicator (behind nav items, can overflow) ──
+                Positioned(
+                  left: cx - circleD / 2,
+                  top: (barH - circleD) / 2,
+                  width: circleD,
+                  height: circleD,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [
+                                Colors.white.withValues(
+                                    alpha: lerpDouble(0.20, 0.34, t)!),
+                                Colors.white.withValues(
+                                    alpha: lerpDouble(0.07, 0.15, t)!),
+                              ]
+                            : [
+                                Colors.white.withValues(
+                                    alpha: lerpDouble(0.92, 1.0, t)!),
+                                Colors.white.withValues(
+                                    alpha: lerpDouble(0.62, 0.80, t)!),
+                              ],
+                      ),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(
+                                alpha: lerpDouble(0.24, 0.40, t)!)
+                            : Colors.white.withValues(
+                                alpha: lerpDouble(0.92, 1.0, t)!),
+                        width: 0.8,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withValues(
+                            alpha: isDark
+                                ? lerpDouble(0.18, 0.34, t)!
+                                : lerpDouble(0.58, 0.78, t)!,
+                          ),
+                          blurRadius: 5,
+                          offset: const Offset(0, -1),
+                        ),
+                        BoxShadow(
+                          color: AppActionBlue.color.withValues(
+                            alpha: isDark
+                                ? lerpDouble(0.24, 0.42, t)!
+                                : lerpDouble(0.15, 0.30, t)!,
+                          ),
+                          blurRadius: lerpDouble(14.0, 28.0, t)!,
+                          offset: const Offset(0, 4),
+                        ),
+                        if (_isDragging)
+                          BoxShadow(
+                            color: AppActionBlue.color
+                                .withValues(alpha: 0.26),
+                            blurRadius: 24,
+                            spreadRadius: 3,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                // ── Layer 3: Nav items + gestures (renders above circle) ──────
+                LayoutBuilder(
+                  builder: (ctx, constraints) {
+                    _barWidth = constraints.maxWidth;
+                    if (!_initialized) {
+                      _fromX = _tabCenterX(widget.index);
+                      _toX = _fromX;
+                      _initialized = true;
+                    }
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onLongPressStart: (_) => _expandGlass(),
+                      onLongPressEnd: (_) => _collapseGlass(),
+                      onLongPressCancel: _collapseGlass,
+                      onHorizontalDragStart: (d) {
+                        final idx =
+                            _indexFromLocalX(d.localPosition.dx);
+                        if (idx == null) return;
+                        HapticFeedback.mediumImpact();
+                        setState(() {
+                          _isDragging = true;
+                          _dragIndex = idx;
+                        });
+                        widget.onTap(idx);
+                        _animateToTab(idx, fast: true);
+                      },
+                      onHorizontalDragUpdate: (d) {
+                        if (!_isDragging) return;
+                        final idx =
+                            _indexFromLocalX(d.localPosition.dx);
+                        if (idx == null || idx == _dragIndex) return;
+                        HapticFeedback.selectionClick();
+                        setState(() => _dragIndex = idx);
+                        widget.onTap(idx);
+                        _animateToTab(idx, fast: true);
+                      },
+                      onHorizontalDragEnd: (_) {
+                        if (!_isDragging) return;
+                        setState(() {
+                          _isDragging = false;
+                          _dragIndex = null;
+                        });
+                        _animateToTab(widget.index, fast: false);
+                      },
+                      onHorizontalDragCancel: () {
+                        if (!_isDragging) return;
+                        setState(() {
+                          _isDragging = false;
+                          _dragIndex = null;
+                        });
+                        _animateToTab(widget.index, fast: false);
+                      },
+                      child: Row(
+                        children: [
+                          _NavItem(
+                            icon: CupertinoIcons.house_fill,
+                            label: context.t('tab.home'),
+                            selected: activeIndex == 0,
+                            onTap: () => widget.onTap(0),
+                            isDark: isDark,
+                            glassExpand: t,
+                          ),
+                          _NavItem(
+                            icon: CupertinoIcons.chart_bar_alt_fill,
+                            label: context.t('tab.stats'),
+                            selected: activeIndex == 1,
+                            onTap: () => widget.onTap(1),
+                            isDark: isDark,
+                            glassExpand: t,
+                          ),
+                          _NavItem(
+                            icon: CupertinoIcons.creditcard,
+                            label: context.t('tab.money'),
+                            selected: activeIndex == 2,
+                            onTap: () => widget.onTap(2),
+                            isDark: isDark,
+                            glassExpand: t,
+                          ),
+                          _NavItem(
+                            icon: CupertinoIcons.chart_pie_fill,
+                            label: context.t('tab.assets'),
+                            selected: activeIndex == 3,
+                            onTap: () => widget.onTap(3),
+                            isDark: isDark,
+                            glassExpand: t,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           );
         },
