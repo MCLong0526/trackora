@@ -646,18 +646,14 @@ class _HomeOverviewCard extends ConsumerWidget {
           shadows: firstCardShadow,
           isDark: isDark,
           hasForeignExpense: hasForeignExpense,
+          budget: budget,
+          budgetSpent: budgetSpent,
+          budgetProgress: budgetProgress,
+          onBalanceTap: () =>
+              ref.read(homeTabIndexProvider.notifier).state = 3,
+          onBudgetTap: () =>
+              ref.read(homeTabIndexProvider.notifier).state = 2,
         ),
-        if (budget > 0) ...[
-          const SizedBox(height: 8),
-          _BudgetProgressLine(
-            visible: visible,
-            symbol: symbol,
-            budget: budget,
-            budgetSpent: budgetSpent,
-            budgetProgress: budgetProgress,
-            brand: brand,
-          ),
-        ],
         const SizedBox(height: 12),
         const _QuickAddCard(),
       ],
@@ -680,6 +676,11 @@ class _SpendingOverviewCard extends StatelessWidget {
   final List<BoxShadow> shadows;
   final bool isDark;
   final bool hasForeignExpense;
+  final double budget;
+  final double budgetSpent;
+  final double budgetProgress;
+  final VoidCallback? onBalanceTap;
+  final VoidCallback? onBudgetTap;
 
   const _SpendingOverviewCard({
     required this.visible,
@@ -696,13 +697,18 @@ class _SpendingOverviewCard extends StatelessWidget {
     required this.shadows,
     required this.isDark,
     required this.hasForeignExpense,
+    this.budget = 0,
+    this.budgetSpent = 0,
+    this.budgetProgress = 0,
+    this.onBalanceTap,
+    this.onBudgetTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final hasBudget = budget > 0;
     return Container(
-      height: 215,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: background,
@@ -714,16 +720,18 @@ class _SpendingOverviewCard extends StatelessWidget {
           Positioned(
             right: 56,
             top: 12,
-            child: Transform.rotate(
-              angle: 0.34,
-              child: Container(
-                width: 98,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.04)
-                      : brand.inkSoft.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(28),
+            child: IgnorePointer(
+              child: Transform.rotate(
+                angle: 0.34,
+                child: Container(
+                  width: 98,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : brand.inkSoft.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
                 ),
               ),
             ),
@@ -731,75 +739,91 @@ class _SpendingOverviewCard extends StatelessWidget {
           Positioned(
             right: -2,
             top: 54,
-            child: Transform.rotate(
-              angle: -0.16,
-              child: Container(
-                width: 86,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.40),
-                  borderRadius: BorderRadius.circular(24),
+            child: IgnorePointer(
+              child: Transform.rotate(
+                angle: -0.16,
+                child: Container(
+                  width: 86,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.40),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
               ),
             ),
           ),
-          Positioned(
-            left: 24,
-            top: 23,
-            child: _MonthChip(month: selectedMonth, ink: ink, isDark: isDark),
-          ),
-          Positioned(
-            right: 24,
-            top: 28,
-            child: Semantics(
-              button: true,
-              label: visible ? 'Hide balance amounts' : 'Show balance amounts',
-              child: GestureDetector(
-                onTap: onToggleVisibility,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 2,
-                    vertical: 4,
-                  ),
-                  child: Text(
-                    context.t('home.spent'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: soft,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _MonthChip(month: selectedMonth, ink: ink, isDark: isDark),
+                    const Spacer(),
+                    Semantics(
+                      button: true,
+                      label: visible
+                          ? 'Hide balance amounts'
+                          : 'Show balance amounts',
+                      child: GestureDetector(
+                        onTap: onToggleVisibility,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            context.t('home.spent'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: soft,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            top: 70,
-            child: _HeroAmount(
-              visible: visible,
-              symbol: symbol,
-              amount: monthSpent,
-              ink: ink,
-              soft: soft,
-              hasForeign: hasForeignExpense,
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 22,
-            child: _TopStatsPill(
-              background: statPillBg,
-              divider: soft.withValues(alpha: isDark ? 0.22 : 0.14),
-              ink: ink,
-              soft: soft,
-              visible: visible,
-              symbol: symbol,
-              income: monthIncome,
-              balance: balance,
+                const SizedBox(height: 12),
+                _HeroAmount(
+                  visible: visible,
+                  symbol: symbol,
+                  amount: monthSpent,
+                  ink: ink,
+                  soft: soft,
+                  hasForeign: hasForeignExpense,
+                ),
+                const SizedBox(height: 16),
+                _TopStatsPill(
+                  background: statPillBg,
+                  divider: soft.withValues(alpha: isDark ? 0.22 : 0.14),
+                  ink: ink,
+                  soft: soft,
+                  visible: visible,
+                  symbol: symbol,
+                  income: monthIncome,
+                  balance: balance,
+                  onBalanceTap: onBalanceTap,
+                ),
+                if (hasBudget) ...[
+                  const SizedBox(height: 10),
+                  _InlineBudgetBar(
+                    visible: visible,
+                    symbol: symbol,
+                    budget: budget,
+                    budgetSpent: budgetSpent,
+                    budgetProgress: budgetProgress,
+                    ink: ink,
+                    soft: soft,
+                    isDark: isDark,
+                    onTap: onBudgetTap,
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -933,6 +957,7 @@ class _TopStatsPill extends StatelessWidget {
   final String symbol;
   final double income;
   final double balance;
+  final VoidCallback? onBalanceTap;
 
   const _TopStatsPill({
     required this.background,
@@ -943,6 +968,7 @@ class _TopStatsPill extends StatelessWidget {
     required this.symbol,
     required this.income,
     required this.balance,
+    this.onBalanceTap,
   });
 
   @override
@@ -969,12 +995,17 @@ class _TopStatsPill extends StatelessWidget {
           Container(width: 1, height: 34, color: divider),
           const SizedBox(width: 14),
           Expanded(
-            child: _TopStat(
-              dotColor: AppActionBlue.color,
-              label: context.t('account.balance'),
-              value: visible ? formatMoney(symbol, balance) : '$symbol ****',
-              ink: ink,
-              soft: soft,
+            child: GestureDetector(
+              onTap: onBalanceTap,
+              behavior: HitTestBehavior.opaque,
+              child: _TopStat(
+                dotColor: AppActionBlue.color,
+                label: context.t('account.balance'),
+                value: visible ? formatMoney(symbol, balance) : '$symbol ****',
+                ink: ink,
+                soft: soft,
+                tappable: onBalanceTap != null,
+              ),
             ),
           ),
         ],
@@ -983,96 +1014,110 @@ class _TopStatsPill extends StatelessWidget {
   }
 }
 
-// ── Budget progress line (compact, below spending card) ───────
+// ── Inline budget bar (inside spending card) ──────────────────
 
-class _BudgetProgressLine extends StatelessWidget {
+class _InlineBudgetBar extends StatelessWidget {
   final bool visible;
   final String symbol;
   final double budget;
   final double budgetSpent;
   final double budgetProgress;
-  final BrandColors brand;
+  final Color ink;
+  final Color soft;
+  final bool isDark;
+  final VoidCallback? onTap;
 
-  const _BudgetProgressLine({
+  const _InlineBudgetBar({
     required this.visible,
     required this.symbol,
     required this.budget,
     required this.budgetSpent,
     required this.budgetProgress,
-    required this.brand,
+    required this.ink,
+    required this.soft,
+    required this.isDark,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final budgetRemaining = budget - budgetSpent;
-    final overspent = budgetRemaining < 0;
+    final overspent = budgetSpent > budget;
     final barColor = overspent ? AppColors.expense : AppColors.income;
     final pct = (budgetProgress * 100).clamp(0.0, 100.0);
+    final remaining = budget - budgetSpent;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 13),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 8,
-                height: 8,
+                width: 6,
+                height: 6,
                 decoration: BoxDecoration(
                   color: barColor,
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               Text(
                 context.t('home.budget'),
                 style: TextStyle(
-                  fontSize: 13,
-                  color: brand.ink,
-                  fontWeight: FontWeight.w500,
-                  height: 1.1,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: soft,
                 ),
               ),
+              const SizedBox(width: 4),
+              if (onTap != null)
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 9,
+                  color: soft.withValues(alpha: 0.7),
+                ),
               const Spacer(),
               Text(
                 visible
-                    ? '${pct.toStringAsFixed(1)}%  ·  ${formatMoney(symbol, budgetSpent)} / ${formatMoney(symbol, budget)}'
-                    : '$symbol **** / ****',
+                    ? overspent
+                        ? '-${formatMoney(symbol, -remaining)}  ·  ${pct.toStringAsFixed(0)}%'
+                        : '${formatMoney(symbol, remaining)} left  ·  ${pct.toStringAsFixed(0)}%'
+                    : '$symbol ****',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: overspent ? AppColors.expense : brand.inkSoft,
-                  height: 1.1,
+                  color: overspent ? AppColors.expense : soft,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: budgetProgress),
             duration: const Duration(milliseconds: 900),
             curve: Curves.easeOutCubic,
             builder: (context, animatedProgress, _) => ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(3),
               child: Stack(
                 children: [
                   Container(
-                    height: 5,
+                    height: 4,
                     width: double.infinity,
-                    color: barColor.withValues(alpha: 0.15),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : barColor.withValues(alpha: 0.15),
                   ),
                   FractionallySizedBox(
                     widthFactor: animatedProgress.clamp(0.0, 1.0),
                     child: Container(
-                      height: 5,
+                      height: 4,
                       decoration: BoxDecoration(
                         color: barColor,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(3),
                       ),
                     ),
                   ),
@@ -1100,72 +1145,64 @@ class _QuickAddCard extends StatelessWidget {
       _QuickItem(
         icon: CupertinoIcons.minus,
         labelKey: 'expense.expense',
-        iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+        iconBg: isDark
+            ? const Color(0xFF7C3AED).withValues(alpha: 0.22)
+            : const Color(0xFFEFEBFF),
         iconColor: const Color(0xFF7C3AED),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.expense),
-          ),
+        pageBuilder: () => const AddEditExpenseScreen(
+          initialType: EntryType.expense,
         ),
       ),
       _QuickItem(
         icon: CupertinoIcons.plus,
         labelKey: 'expense.income',
-        iconBg: isDark ? const Color(0xFF22C55E).withValues(alpha: 0.20) : const Color(0xFFE8FBF0),
+        iconBg: isDark
+            ? const Color(0xFF22C55E).withValues(alpha: 0.20)
+            : const Color(0xFFE8FBF0),
         iconColor: const Color(0xFF22C55E),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.income),
-          ),
+        pageBuilder: () => const AddEditExpenseScreen(
+          initialType: EntryType.income,
         ),
       ),
       _QuickItem(
         icon: CupertinoIcons.arrow_right_arrow_left,
         labelKey: 'expense.transfer',
-        iconBg: isDark ? const Color(0xFFEF4444).withValues(alpha: 0.18) : const Color(0xFFFFEEEE),
+        iconBg: isDark
+            ? const Color(0xFFEF4444).withValues(alpha: 0.18)
+            : const Color(0xFFFFEEEE),
         iconColor: const Color(0xFFEF4444),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.transfer),
-          ),
+        pageBuilder: () => const AddEditExpenseScreen(
+          initialType: EntryType.transfer,
         ),
       ),
       _QuickItem(
         icon: CupertinoIcons.arrow_down_circle,
         labelKey: 'expense.receive',
-        iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+        iconBg: isDark
+            ? const Color(0xFF7C3AED).withValues(alpha: 0.22)
+            : const Color(0xFFEFEBFF),
         iconColor: const Color(0xFF7C3AED),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.receive),
-          ),
+        pageBuilder: () => const AddEditExpenseScreen(
+          initialType: EntryType.receive,
         ),
       ),
       _QuickItem(
         icon: CupertinoIcons.viewfinder,
         labelKey: 'home.scanReceipt',
-        iconBg: isDark ? const Color(0xFFF97316).withValues(alpha: 0.18) : const Color(0xFFFFF3E8),
+        iconBg: isDark
+            ? const Color(0xFFF97316).withValues(alpha: 0.18)
+            : const Color(0xFFFFF3E8),
         iconColor: const Color(0xFFF97316),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(
-            builder: (_) => const ImportReceiptScreen(openCamera: true),
-          ),
-        ),
+        pageBuilder: () => const ImportReceiptScreen(openCamera: true),
       ),
       _QuickItem(
         icon: CupertinoIcons.person_2,
         labelKey: 'travel.groupTrip',
-        iconBg: isDark ? const Color(0xFFE86E2C).withValues(alpha: 0.18) : const Color(0xFFFFF0E8),
+        iconBg: isDark
+            ? const Color(0xFFE86E2C).withValues(alpha: 0.18)
+            : const Color(0xFFFFF0E8),
         iconColor: const Color(0xFFE86E2C),
-        onTap: () => Navigator.push(
-          context,
-          CupertinoPageRoute(builder: (_) => const TravelGroupsScreen()),
-        ),
+        pageBuilder: () => const TravelGroupsScreen(),
       ),
     ];
 
@@ -1178,27 +1215,14 @@ class _QuickAddCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                context.t('quickAdd.title'),
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: brand.ink,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              Text(
-                context.t('quickAdd.tapToStart'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: brand.inkSoft,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+          Text(
+            context.t('quickAdd.title'),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: brand.ink,
+              letterSpacing: -0.2,
+            ),
           ),
           const SizedBox(height: 14),
           GridView.count(
@@ -1221,14 +1245,14 @@ class _QuickItem {
   final String labelKey;
   final Color iconBg;
   final Color iconColor;
-  final VoidCallback onTap;
+  final Widget Function() pageBuilder;
 
   const _QuickItem({
     required this.icon,
     required this.labelKey,
     required this.iconBg,
     required this.iconColor,
-    required this.onTap,
+    required this.pageBuilder,
   });
 }
 
@@ -1263,53 +1287,74 @@ class _QuickAddButtonState extends State<_QuickAddButton>
     super.dispose();
   }
 
+  void _navigate() {
+    Navigator.push(
+      context,
+      PageRouteBuilder<void>(
+        pageBuilder: (ctx, anim, secAnim) => widget.item.pageBuilder(),
+        transitionDuration: const Duration(milliseconds: 340),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        transitionsBuilder: (ctx, animation, secAnim, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTapDown: (_) => _press.reverse(),
       onTapUp: (_) {
         _press.forward();
-        widget.item.onTap();
+        _navigate();
       },
       onTapCancel: () => _press.forward(),
       child: ScaleTransition(
         scale: _press,
-        child: Container(
-          decoration: BoxDecoration(
-            color: isDark ? brand.background : const Color(0xFFF7F7FA),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: widget.item.iconBg,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(widget.item.icon, color: widget.item.iconColor, size: 20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: widget.item.iconBg,
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 7),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  context.t(widget.item.labelKey),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              child: Icon(
+                widget.item.icon,
+                color: widget.item.iconColor,
+                size: 22,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 7),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                context.t(widget.item.labelKey),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: brand.ink,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1322,6 +1367,7 @@ class _TopStat extends StatelessWidget {
   final String value;
   final Color ink;
   final Color soft;
+  final bool tappable;
 
   const _TopStat({
     required this.dotColor,
@@ -1329,6 +1375,7 @@ class _TopStat extends StatelessWidget {
     required this.value,
     required this.ink,
     required this.soft,
+    this.tappable = false,
   });
 
   @override
@@ -1360,6 +1407,14 @@ class _TopStat extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (tappable) ...[
+              const SizedBox(width: 4),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 9,
+                color: soft.withValues(alpha: 0.7),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 4),

@@ -271,6 +271,9 @@ final selectedMonthProvider = StateProvider<DateTime>((_) {
   return DateTime(now.year, now.month, 1);
 });
 
+/// Controls which HomeShell tab is shown (0=Home, 1=Stats, 2=Budget, 3=Assets).
+final homeTabIndexProvider = StateProvider<int>((_) => 0);
+
 final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value([]);

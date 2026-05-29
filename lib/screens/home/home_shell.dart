@@ -72,6 +72,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(homeTabIndexProvider, (_, next) {
+      if (next != _index) setState(() => _index = next);
+    });
     final brand = context.brand;
     return Scaffold(
       backgroundColor: brand.background,
@@ -101,6 +104,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         index: _index,
         onTap: (i) {
           if (i == _index) return;
+          ref.read(homeTabIndexProvider.notifier).state = i;
           setState(() => _index = i);
         },
       ),
