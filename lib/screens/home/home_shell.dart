@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -123,28 +123,42 @@ class _BottomBar extends StatefulWidget {
 }
 
 class _BottomBarState extends State<_BottomBar>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   int? _dragIndex;
   bool _isDragging = false;
   double _barWidth = 300;
   bool _initialized = false;
+  bool _isLongPressed = false;
 
-  late final AnimationController _ctrl;
+  // Pill slide animation
+  late final AnimationController _pillCtrl;
   double _fromX = 0;
   double _toX = 0;
   Curve _curve = Curves.easeOutBack;
 
-  static const _indicatorH = 58.0;
-  static const _indicatorRestW = 72.0;
-  static const _indicatorDragW = 84.0;
-  static const _indicatorTop = 5.0;
+  // Liquid glass expand animation (long press)
+  late final AnimationController _glassCtrl;
+
+  // Default compact height; expands on long press to full liquid glass
+  static const _compactH = 56.0;
+  static const _liquidH = 74.0;
+  static const _pillHCompact = 46.0;
+  static const _pillHLiquid = 62.0;
+  static const _pillTopCompact = 5.0;
+  static const _pillTopLiquid = 6.0;
+  static const _indicatorRestW = 68.0;
+  static const _indicatorDragW = 82.0;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
+    _pillCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
+    );
+    _glassCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
     );
   }
 
@@ -158,17 +172,15 @@ class _BottomBarState extends State<_BottomBar>
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _pillCtrl.dispose();
+    _glassCtrl.dispose();
     super.dispose();
   }
 
-  double _tabCenterX(int idx) {
-    final itemW = _barWidth / 4;
-    return (idx + 0.5) * itemW;
-  }
+  double _tabCenterX(int idx) => (_barWidth / 4) * (idx + 0.5);
 
   double get _currentX {
-    final t = _curve.transform(_ctrl.value.clamp(0.0, 1.0));
+    final t = _curve.transform(_pillCtrl.value.clamp(0.0, 1.0));
     return _fromX + (_toX - _fromX) * t;
   }
 
@@ -177,21 +189,42 @@ class _BottomBarState extends State<_BottomBar>
     _fromX = _currentX;
     _toX = targetX;
     _curve = fast ? Curves.easeOutCubic : Curves.easeOutBack;
-    _ctrl.stop();
-    _ctrl.duration = fast
-        ? const Duration(milliseconds: 160)
-        : const Duration(milliseconds: 420);
-    _ctrl.value = 0;
-    _ctrl.forward();
+    _pillCtrl
+      ..stop()
+      ..duration = fast
+          ? const Duration(milliseconds: 150)
+          : const Duration(milliseconds: 420)
+      ..value = 0
+      ..forward();
   }
 
   int? _indexFromLocalX(double x) {
     final itemW = _barWidth / 4;
     if (x < 0) return 0;
-    if (x < itemW) return 0;
-    if (x < itemW * 2) return 1;
-    if (x < itemW * 3) return 2;
+    for (var i = 0; i < 4; i++) {
+      if (x < itemW * (i + 1)) return i;
+    }
     return 3;
+  }
+
+  void _expandGlass() {
+    if (_isLongPressed) return;
+    _isLongPressed = true;
+    HapticFeedback.mediumImpact();
+    _glassCtrl.animateTo(
+      1.0,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _collapseGlass() {
+    _isLongPressed = false;
+    _glassCtrl.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInCubic,
+    );
   }
 
   @override
@@ -206,239 +239,275 @@ class _BottomBarState extends State<_BottomBar>
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(36),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
-          child: Container(
-            height: 68,
-            decoration: BoxDecoration(
-              // Liquid glass base — layered gradient for refraction illusion
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: isDark
-                    ? [
-                        Colors.white.withValues(alpha: 0.14),
-                        Colors.white.withValues(alpha: 0.06),
-                      ]
-                    : [
-                        Colors.white.withValues(alpha: 0.88),
-                        Colors.white.withValues(alpha: 0.68),
-                      ],
-              ),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.18)
-                    : Colors.white.withValues(alpha: 0.90),
-                width: 1.0,
-              ),
-              boxShadow: [
-                // Main lift shadow
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.10),
-                  blurRadius: 40,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 10),
-                ),
-                // Soft ambient shadow
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05),
-                  blurRadius: 12,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                // ── Specular highlight line at top edge (glass rim) ──────
-                Positioned(
-                  top: 0,
-                  left: 12,
-                  right: 12,
-                  height: 1.0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.white.withValues(alpha: isDark ? 0.40 : 0.70),
-                          Colors.white.withValues(alpha: isDark ? 0.50 : 0.80),
-                          Colors.white.withValues(alpha: isDark ? 0.40 : 0.70),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-                      ),
-                      borderRadius: BorderRadius.circular(1),
-                    ),
+      child: AnimatedBuilder(
+        animation: _glassCtrl,
+        builder: (context, _) {
+          final t = Curves.easeOutCubic.transform(_glassCtrl.value);
+          final barH = lerpDouble(_compactH, _liquidH, t)!;
+          final pillH = lerpDouble(_pillHCompact, _pillHLiquid, t)!;
+          final pillTop = lerpDouble(_pillTopCompact, _pillTopLiquid, t)!;
+          final blurSigma = lerpDouble(18.0, 40.0, t)!;
+          final bgTopAlpha = isDark
+              ? lerpDouble(0.10, 0.19, t)!
+              : lerpDouble(0.74, 0.92, t)!;
+          final bgBotAlpha = isDark
+              ? lerpDouble(0.04, 0.09, t)!
+              : lerpDouble(0.56, 0.74, t)!;
+          final borderAlpha = isDark
+              ? lerpDouble(0.13, 0.24, t)!
+              : lerpDouble(0.80, 0.96, t)!;
+          final shadowAlpha = isDark
+              ? lerpDouble(0.25, 0.42, t)!
+              : lerpDouble(0.07, 0.15, t)!;
+          final specularPeak = isDark
+              ? lerpDouble(0.32, 0.62, t)!
+              : lerpDouble(0.62, 0.92, t)!;
+
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(36),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+              child: Container(
+                height: barH,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: bgTopAlpha),
+                      Colors.white.withValues(alpha: bgBotAlpha),
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(36),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: borderAlpha),
+                    width: 1.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: shadowAlpha),
+                      blurRadius: lerpDouble(26.0, 52.0, t)!,
+                      offset: const Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: Colors.black
+                          .withValues(alpha: shadowAlpha * 0.45),
+                      blurRadius: lerpDouble(8.0, 16.0, t)!,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                // ── Nav content ──────────────────────────────────────────
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    _barWidth = constraints.maxWidth;
-                    if (!_initialized) {
-                      _fromX = _tabCenterX(widget.index);
-                      _toX = _fromX;
-                      _initialized = true;
-                    }
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragStart: (d) {
-                        final idx = _indexFromLocalX(d.localPosition.dx);
-                        if (idx == null) return;
-                        HapticFeedback.mediumImpact();
-                        setState(() {
-                          _isDragging = true;
-                          _dragIndex = idx;
-                        });
-                        widget.onTap(idx);
-                        _animateToTab(idx, fast: true);
-                      },
-                      onHorizontalDragUpdate: (d) {
-                        if (!_isDragging) return;
-                        final idx = _indexFromLocalX(d.localPosition.dx);
-                        if (idx == null || idx == _dragIndex) return;
-                        HapticFeedback.selectionClick();
-                        setState(() => _dragIndex = idx);
-                        widget.onTap(idx);
-                        _animateToTab(idx, fast: true);
-                      },
-                      onHorizontalDragEnd: (_) {
-                        if (!_isDragging) return;
-                        setState(() {
-                          _isDragging = false;
-                          _dragIndex = null;
-                        });
-                        _animateToTab(widget.index, fast: false);
-                      },
-                      onHorizontalDragCancel: () {
-                        if (!_isDragging) return;
-                        setState(() {
-                          _isDragging = false;
-                          _dragIndex = null;
-                        });
-                        _animateToTab(widget.index, fast: false);
-                      },
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // ── Liquid glass indicator pill ──────────────
-                          AnimatedBuilder(
-                            animation: _ctrl,
-                            builder: (context, child) {
-                              final cx = _currentX;
-                              final iw = _isDragging
-                                  ? _indicatorDragW
-                                  : _indicatorRestW;
-                              return Positioned(
-                                left: cx - iw / 2,
-                                top: _indicatorTop,
-                                width: iw,
-                                height: _indicatorH,
-                                child: child!,
-                              );
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              width: _isDragging
-                                  ? _indicatorDragW
-                                  : _indicatorRestW,
-                              decoration: BoxDecoration(
-                                // Glass indicator gradient: bright top → translucent bottom
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: isDark
-                                      ? [
-                                          Colors.white.withValues(alpha: 0.22),
-                                          Colors.white.withValues(alpha: 0.08),
-                                        ]
-                                      : [
-                                          Colors.white.withValues(alpha: 0.95),
-                                          Colors.white.withValues(alpha: 0.65),
-                                        ],
-                                ),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: isDark
-                                      ? Colors.white.withValues(alpha: 0.28)
-                                      : Colors.white.withValues(alpha: 1.0),
-                                  width: 0.8,
-                                ),
-                                boxShadow: [
-                                  // Top specular glow (looks like glass thickness)
-                                  BoxShadow(
-                                    color: Colors.white
-                                        .withValues(alpha: isDark ? 0.25 : 0.70),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, -1),
-                                  ),
-                                  // Accent color glow under indicator
-                                  BoxShadow(
-                                    color: AppActionBlue.color
-                                        .withValues(alpha: isDark ? 0.28 : 0.18),
-                                    blurRadius: 14,
-                                    spreadRadius: 0,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                  // Drag spread glow
-                                  if (_isDragging)
-                                    BoxShadow(
-                                      color: AppActionBlue.color
-                                          .withValues(alpha: 0.22),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                ],
-                              ),
-                            ),
+                child: Stack(
+                  children: [
+                    // ── Specular highlight line at top edge ──────────────
+                    Positioned(
+                      top: 0,
+                      left: 12,
+                      right: 12,
+                      height: 1.0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.white.withValues(alpha: specularPeak - 0.08),
+                              Colors.white.withValues(alpha: specularPeak),
+                              Colors.white.withValues(alpha: specularPeak - 0.08),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
                           ),
-                          // ── Nav items ────────────────────────────────
-                          Row(
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
+                    // ── Nav content ──────────────────────────────────────
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        _barWidth = constraints.maxWidth;
+                        if (!_initialized) {
+                          _fromX = _tabCenterX(widget.index);
+                          _toX = _fromX;
+                          _initialized = true;
+                        }
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onLongPressStart: (_) => _expandGlass(),
+                          onLongPressEnd: (_) => _collapseGlass(),
+                          onLongPressCancel: _collapseGlass,
+                          onHorizontalDragStart: (d) {
+                            final idx =
+                                _indexFromLocalX(d.localPosition.dx);
+                            if (idx == null) return;
+                            HapticFeedback.mediumImpact();
+                            setState(() {
+                              _isDragging = true;
+                              _dragIndex = idx;
+                            });
+                            widget.onTap(idx);
+                            _animateToTab(idx, fast: true);
+                          },
+                          onHorizontalDragUpdate: (d) {
+                            if (!_isDragging) return;
+                            final idx =
+                                _indexFromLocalX(d.localPosition.dx);
+                            if (idx == null || idx == _dragIndex) return;
+                            HapticFeedback.selectionClick();
+                            setState(() => _dragIndex = idx);
+                            widget.onTap(idx);
+                            _animateToTab(idx, fast: true);
+                          },
+                          onHorizontalDragEnd: (_) {
+                            if (!_isDragging) return;
+                            setState(() {
+                              _isDragging = false;
+                              _dragIndex = null;
+                            });
+                            _animateToTab(widget.index, fast: false);
+                          },
+                          onHorizontalDragCancel: () {
+                            if (!_isDragging) return;
+                            setState(() {
+                              _isDragging = false;
+                              _dragIndex = null;
+                            });
+                            _animateToTab(widget.index, fast: false);
+                          },
+                          child: Stack(
+                            clipBehavior: Clip.none,
                             children: [
-                              _NavItem(
-                                icon: CupertinoIcons.house_fill,
-                                label: context.t('tab.home'),
-                                selected: activeIndex == 0,
-                                onTap: () => widget.onTap(0),
-                                isDark: isDark,
+                              // ── Liquid glass indicator pill ──────────
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(
+                                  end: _isDragging
+                                      ? _indicatorDragW
+                                      : _indicatorRestW,
+                                ),
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, iw, _) {
+                                  return AnimatedBuilder(
+                                    animation: _pillCtrl,
+                                    builder: (context, child) {
+                                      final cx = _currentX;
+                                      return Positioned(
+                                        left: cx - iw / 2,
+                                        top: pillTop,
+                                        width: iw,
+                                        height: pillH,
+                                        child: child!,
+                                      );
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: isDark
+                                              ? [
+                                                  Colors.white.withValues(
+                                                    alpha: lerpDouble(0.18, 0.30, t)!,
+                                                  ),
+                                                  Colors.white.withValues(
+                                                    alpha: lerpDouble(0.06, 0.13, t)!,
+                                                  ),
+                                                ]
+                                              : [
+                                                  Colors.white.withValues(
+                                                    alpha: lerpDouble(0.90, 0.98, t)!,
+                                                  ),
+                                                  Colors.white.withValues(
+                                                    alpha: lerpDouble(0.60, 0.76, t)!,
+                                                  ),
+                                                ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(22),
+                                        border: Border.all(
+                                          color: isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: lerpDouble(0.22, 0.32, t)!,
+                                                )
+                                              : Colors.white.withValues(
+                                                  alpha: lerpDouble(0.90, 1.0, t)!,
+                                                ),
+                                          width: 0.8,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.white.withValues(
+                                              alpha: isDark ? lerpDouble(0.18, 0.30, t)! : lerpDouble(0.55, 0.75, t)!,
+                                            ),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, -1),
+                                          ),
+                                          BoxShadow(
+                                            color: AppActionBlue.color.withValues(
+                                              alpha: isDark ? lerpDouble(0.22, 0.35, t)! : lerpDouble(0.14, 0.26, t)!,
+                                            ),
+                                            blurRadius: lerpDouble(12.0, 22.0, t)!,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                          if (_isDragging)
+                                            BoxShadow(
+                                              color: AppActionBlue.color
+                                                  .withValues(alpha: 0.22),
+                                              blurRadius: 20,
+                                              spreadRadius: 2,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                              _NavItem(
-                                icon: CupertinoIcons.chart_bar_alt_fill,
-                                label: context.t('tab.stats'),
-                                selected: activeIndex == 1,
-                                onTap: () => widget.onTap(1),
-                                isDark: isDark,
-                              ),
-                              _NavItem(
-                                icon: CupertinoIcons.creditcard,
-                                label: context.t('tab.money'),
-                                selected: activeIndex == 2,
-                                onTap: () => widget.onTap(2),
-                                isDark: isDark,
-                              ),
-                              _NavItem(
-                                icon: CupertinoIcons.chart_pie_fill,
-                                label: context.t('tab.assets'),
-                                selected: activeIndex == 3,
-                                onTap: () => widget.onTap(3),
-                                isDark: isDark,
+                              // ── Nav items ────────────────────────────
+                              Row(
+                                children: [
+                                  _NavItem(
+                                    icon: CupertinoIcons.house_fill,
+                                    label: context.t('tab.home'),
+                                    selected: activeIndex == 0,
+                                    onTap: () => widget.onTap(0),
+                                    isDark: isDark,
+                                    glassExpand: t,
+                                  ),
+                                  _NavItem(
+                                    icon: CupertinoIcons.chart_bar_alt_fill,
+                                    label: context.t('tab.stats'),
+                                    selected: activeIndex == 1,
+                                    onTap: () => widget.onTap(1),
+                                    isDark: isDark,
+                                    glassExpand: t,
+                                  ),
+                                  _NavItem(
+                                    icon: CupertinoIcons.creditcard,
+                                    label: context.t('tab.money'),
+                                    selected: activeIndex == 2,
+                                    onTap: () => widget.onTap(2),
+                                    isDark: isDark,
+                                    glassExpand: t,
+                                  ),
+                                  _NavItem(
+                                    icon: CupertinoIcons.chart_pie_fill,
+                                    label: context.t('tab.assets'),
+                                    selected: activeIndex == 3,
+                                    onTap: () => widget.onTap(3),
+                                    isDark: isDark,
+                                    glassExpand: t,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -450,6 +519,7 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final bool isDark;
+  final double glassExpand; // 0.0 = compact, 1.0 = liquid expanded
 
   const _NavItem({
     required this.icon,
@@ -457,6 +527,7 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.isDark,
+    required this.glassExpand,
   });
 
   @override
@@ -466,13 +537,15 @@ class _NavItem extends StatelessWidget {
     final iconColor = selected
         ? accent
         : (isDark
-            ? Colors.white.withValues(alpha: 0.50)
-            : brand.ink.withValues(alpha: 0.40));
+            ? Colors.white.withValues(alpha: 0.48)
+            : brand.ink.withValues(alpha: 0.38));
     final labelColor = selected
         ? accent
         : (isDark
-            ? Colors.white.withValues(alpha: 0.45)
-            : brand.ink.withValues(alpha: 0.38));
+            ? Colors.white.withValues(alpha: 0.42)
+            : brand.ink.withValues(alpha: 0.36));
+    final iconSz = lerpDouble(21.0, 22.0, glassExpand)!;
+    final labelSz = lerpDouble(9.5, 10.5, glassExpand)!;
 
     return Expanded(
       child: GestureDetector(
@@ -485,25 +558,23 @@ class _NavItem extends StatelessWidget {
               tween: Tween(begin: 1.0, end: selected ? 1.08 : 1.0),
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutBack,
-              builder: (context, scale, child) => Transform.scale(
-                scale: scale,
-                child: child,
-              ),
+              builder: (ctx, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: Icon(
                   icon,
                   key: ValueKey(selected),
                   color: iconColor,
-                  size: 22,
+                  size: iconSz,
                 ),
               ),
             ),
-            const SizedBox(height: 3),
+            SizedBox(height: lerpDouble(2.0, 3.0, glassExpand)!),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 200),
               style: TextStyle(
-                fontSize: 10,
+                fontSize: labelSz,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: labelColor,
                 letterSpacing: selected ? -0.1 : 0,
