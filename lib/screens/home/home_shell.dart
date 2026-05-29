@@ -78,65 +78,39 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final brand = context.brand;
     return Scaffold(
       backgroundColor: brand.background,
-      body: Builder(
-        builder: (ctx) {
-          // Add nav pill height (64 compact + 6 top gap) on top of the existing
-          // safe-area padding so scroll views inside each screen scroll far enough
-          // that the last item is visible above the floating glass pill.
-          final mq = MediaQuery.of(ctx);
-          return MediaQuery(
-            data: mq.copyWith(
-              padding: mq.padding.copyWith(
-                bottom: mq.padding.bottom + 70.0,
-              ),
+      extendBody: true,
+      bottomNavigationBar: _BottomBar(
+        index: _index,
+        onTap: (i) {
+          if (i == _index) return;
+          ref.read(homeTabIndexProvider.notifier).state = i;
+          setState(() => _index = i);
+        },
+      ),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        transitionBuilder: (child, animation) {
+          final isEntering = child.key == ValueKey(_index);
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
             ),
-            child: Stack(
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  transitionBuilder: (child, animation) {
-                    final isEntering = child.key == ValueKey(_index);
-                    return FadeTransition(
-                      opacity: CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeInOut,
-                      ),
-                      child: ScaleTransition(
-                        scale: Tween<double>(
-                          begin: isEntering ? 0.97 : 1.02,
-                          end: 1.0,
-                        ).animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                          ),
-                        ),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: KeyedSubtree(
-                    key: ValueKey(_index),
-                    child: _screens[_index],
-                  ),
+            child: ScaleTransition(
+              scale: Tween<double>(
+                begin: isEntering ? 0.97 : 1.02,
+                end: 1.0,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: _BottomBar(
-                    index: _index,
-                    onTap: (i) {
-                      if (i == _index) return;
-                      ref.read(homeTabIndexProvider.notifier).state = i;
-                      setState(() => _index = i);
-                    },
-                  ),
-                ),
-              ],
+              ),
+              child: child,
             ),
           );
         },
+        child: KeyedSubtree(key: ValueKey(_index), child: _screens[_index]),
       ),
     );
   }
@@ -340,7 +314,9 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         ? (safeBottom * 0.52).roundToDouble() + 8.0
         : 16.0;
 
-    return Padding(
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
       child: AnimatedBuilder(
         // Single builder listening to both animations
@@ -548,7 +524,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
           );
         },
       ),
-    );
+    ));
   }
 }
 
