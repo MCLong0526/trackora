@@ -134,10 +134,10 @@ class _BottomBarState extends State<_BottomBar>
   double _toX = 0;
   Curve _curve = Curves.easeOutBack;
 
-  static const _navPurple = AppActionBlue.color;
-  static const _indicatorW = 48.0;
-  static const _indicatorH = 28.0;
-  static const _indicatorTop = 8.0;
+  static const _indicatorH = 58.0;
+  static const _indicatorRestW = 72.0;
+  static const _indicatorDragW = 84.0;
+  static const _indicatorTop = 5.0;
 
   @override
   void initState() {
@@ -179,8 +179,8 @@ class _BottomBarState extends State<_BottomBar>
     _curve = fast ? Curves.easeOutCubic : Curves.easeOutBack;
     _ctrl.stop();
     _ctrl.duration = fast
-        ? const Duration(milliseconds: 180)
-        : const Duration(milliseconds: 380);
+        ? const Duration(milliseconds: 160)
+        : const Duration(milliseconds: 420);
     _ctrl.value = 0;
     _ctrl.forward();
   }
@@ -200,167 +200,246 @@ class _BottomBarState extends State<_BottomBar>
     final activeIndex =
         _isDragging ? (_dragIndex ?? widget.index) : widget.index;
 
-    // Position the floating pill slightly above the home-indicator area for
-    // balanced safe-area spacing.
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final bottomPad = safeBottom > 0 ? (safeBottom * 0.52).roundToDouble() : 10.0;
+    final bottomPad =
+        safeBottom > 0 ? (safeBottom * 0.52).roundToDouble() : 10.0;
+
     return Padding(
-        padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: 64,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.52)
-                    : Colors.white.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.10)
-                      : Colors.white.withValues(alpha: 0.60),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
-                    blurRadius: 32,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _barWidth = constraints.maxWidth;
-                  // One-time init of indicator without triggering rebuild
-                  if (!_initialized) {
-                    _fromX = _tabCenterX(widget.index);
-                    _toX = _fromX;
-                    _initialized = true;
-                  }
-                  return GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragStart: (d) {
-                      final idx = _indexFromLocalX(d.localPosition.dx);
-                      if (idx == null) return;
-                      HapticFeedback.mediumImpact();
-                      setState(() {
-                        _isDragging = true;
-                        _dragIndex = idx;
-                      });
-                      widget.onTap(idx);
-                      _animateToTab(idx, fast: true);
-                    },
-                    onHorizontalDragUpdate: (d) {
-                      if (!_isDragging) return;
-                      final idx = _indexFromLocalX(d.localPosition.dx);
-                      if (idx == null || idx == _dragIndex) return;
-                      HapticFeedback.selectionClick();
-                      setState(() => _dragIndex = idx);
-                      widget.onTap(idx);
-                      _animateToTab(idx, fast: true);
-                    },
-                    onHorizontalDragEnd: (_) {
-                      if (!_isDragging) return;
-                      setState(() {
-                        _isDragging = false;
-                        _dragIndex = null;
-                      });
-                      _animateToTab(widget.index, fast: false);
-                    },
-                    onHorizontalDragCancel: () {
-                      if (!_isDragging) return;
-                      setState(() {
-                        _isDragging = false;
-                        _dragIndex = null;
-                      });
-                      _animateToTab(widget.index, fast: false);
-                    },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Single animated indicator pill — replaces NavItem's
-                        // built-in pill. Slides smoothly to the active tab.
-                        AnimatedBuilder(
-                          animation: _ctrl,
-                          builder: (context, _) {
-                            final cx = _currentX;
-                            return Positioned(
-                              left: cx - _indicatorW / 2,
-                              top: _indicatorTop,
-                              width: _indicatorW,
-                              height: _indicatorH,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 160),
-                                decoration: BoxDecoration(
-                                  // Same alpha as original NavItem pill
-                                  color: _navPurple.withValues(
-                                    alpha: _isDragging ? 0.19 : 0.13,
-                                  ),
-                                  // Same radius as original NavItem pill
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: _isDragging
-                                      ? Border.all(
-                                          color: _navPurple.withValues(
-                                              alpha: 0.30),
-                                          width: 0.8,
-                                        )
-                                      : null,
-                                  boxShadow: _isDragging
-                                      ? [
-                                          BoxShadow(
-                                            color: _navPurple.withValues(
-                                                alpha: 0.22),
-                                            blurRadius: 12,
-                                            spreadRadius: 1,
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        // Nav items row
-                        Row(
-                          children: [
-                            _NavItem(
-                              icon: CupertinoIcons.house_fill,
-                              label: context.t('tab.home'),
-                              selected: activeIndex == 0,
-                              onTap: () => widget.onTap(0),
-                            ),
-                            _NavItem(
-                              icon: CupertinoIcons.chart_bar_alt_fill,
-                              label: context.t('tab.stats'),
-                              selected: activeIndex == 1,
-                              onTap: () => widget.onTap(1),
-                            ),
-                            _NavItem(
-                              icon: CupertinoIcons.creditcard,
-                              label: context.t('tab.money'),
-                              selected: activeIndex == 2,
-                              onTap: () => widget.onTap(2),
-                            ),
-                            _NavItem(
-                              icon: CupertinoIcons.chart_pie_fill,
-                              label: context.t('tab.assets'),
-                              selected: activeIndex == 3,
-                              onTap: () => widget.onTap(3),
-                            ),
-                          ],
-                        ),
+      padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(36),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+          child: Container(
+            height: 68,
+            decoration: BoxDecoration(
+              // Liquid glass base — layered gradient for refraction illusion
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: isDark
+                    ? [
+                        Colors.white.withValues(alpha: 0.14),
+                        Colors.white.withValues(alpha: 0.06),
+                      ]
+                    : [
+                        Colors.white.withValues(alpha: 0.88),
+                        Colors.white.withValues(alpha: 0.68),
                       ],
-                    ),
-                  );
-                },
               ),
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.90),
+                width: 1.0,
+              ),
+              boxShadow: [
+                // Main lift shadow
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.10),
+                  blurRadius: 40,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 10),
+                ),
+                // Soft ambient shadow
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05),
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // ── Specular highlight line at top edge (glass rim) ──────
+                Positioned(
+                  top: 0,
+                  left: 12,
+                  right: 12,
+                  height: 1.0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: isDark ? 0.40 : 0.70),
+                          Colors.white.withValues(alpha: isDark ? 0.50 : 0.80),
+                          Colors.white.withValues(alpha: isDark ? 0.40 : 0.70),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
+                      ),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ),
+                // ── Nav content ──────────────────────────────────────────
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    _barWidth = constraints.maxWidth;
+                    if (!_initialized) {
+                      _fromX = _tabCenterX(widget.index);
+                      _toX = _fromX;
+                      _initialized = true;
+                    }
+                    return GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onHorizontalDragStart: (d) {
+                        final idx = _indexFromLocalX(d.localPosition.dx);
+                        if (idx == null) return;
+                        HapticFeedback.mediumImpact();
+                        setState(() {
+                          _isDragging = true;
+                          _dragIndex = idx;
+                        });
+                        widget.onTap(idx);
+                        _animateToTab(idx, fast: true);
+                      },
+                      onHorizontalDragUpdate: (d) {
+                        if (!_isDragging) return;
+                        final idx = _indexFromLocalX(d.localPosition.dx);
+                        if (idx == null || idx == _dragIndex) return;
+                        HapticFeedback.selectionClick();
+                        setState(() => _dragIndex = idx);
+                        widget.onTap(idx);
+                        _animateToTab(idx, fast: true);
+                      },
+                      onHorizontalDragEnd: (_) {
+                        if (!_isDragging) return;
+                        setState(() {
+                          _isDragging = false;
+                          _dragIndex = null;
+                        });
+                        _animateToTab(widget.index, fast: false);
+                      },
+                      onHorizontalDragCancel: () {
+                        if (!_isDragging) return;
+                        setState(() {
+                          _isDragging = false;
+                          _dragIndex = null;
+                        });
+                        _animateToTab(widget.index, fast: false);
+                      },
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // ── Liquid glass indicator pill ──────────────
+                          AnimatedBuilder(
+                            animation: _ctrl,
+                            builder: (context, child) {
+                              final cx = _currentX;
+                              final iw = _isDragging
+                                  ? _indicatorDragW
+                                  : _indicatorRestW;
+                              return Positioned(
+                                left: cx - iw / 2,
+                                top: _indicatorTop,
+                                width: iw,
+                                height: _indicatorH,
+                                child: child!,
+                              );
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              width: _isDragging
+                                  ? _indicatorDragW
+                                  : _indicatorRestW,
+                              decoration: BoxDecoration(
+                                // Glass indicator gradient: bright top → translucent bottom
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: isDark
+                                      ? [
+                                          Colors.white.withValues(alpha: 0.22),
+                                          Colors.white.withValues(alpha: 0.08),
+                                        ]
+                                      : [
+                                          Colors.white.withValues(alpha: 0.95),
+                                          Colors.white.withValues(alpha: 0.65),
+                                        ],
+                                ),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.28)
+                                      : Colors.white.withValues(alpha: 1.0),
+                                  width: 0.8,
+                                ),
+                                boxShadow: [
+                                  // Top specular glow (looks like glass thickness)
+                                  BoxShadow(
+                                    color: Colors.white
+                                        .withValues(alpha: isDark ? 0.25 : 0.70),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, -1),
+                                  ),
+                                  // Accent color glow under indicator
+                                  BoxShadow(
+                                    color: AppActionBlue.color
+                                        .withValues(alpha: isDark ? 0.28 : 0.18),
+                                    blurRadius: 14,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                  // Drag spread glow
+                                  if (_isDragging)
+                                    BoxShadow(
+                                      color: AppActionBlue.color
+                                          .withValues(alpha: 0.22),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          // ── Nav items ────────────────────────────────
+                          Row(
+                            children: [
+                              _NavItem(
+                                icon: CupertinoIcons.house_fill,
+                                label: context.t('tab.home'),
+                                selected: activeIndex == 0,
+                                onTap: () => widget.onTap(0),
+                                isDark: isDark,
+                              ),
+                              _NavItem(
+                                icon: CupertinoIcons.chart_bar_alt_fill,
+                                label: context.t('tab.stats'),
+                                selected: activeIndex == 1,
+                                onTap: () => widget.onTap(1),
+                                isDark: isDark,
+                              ),
+                              _NavItem(
+                                icon: CupertinoIcons.creditcard,
+                                label: context.t('tab.money'),
+                                selected: activeIndex == 2,
+                                onTap: () => widget.onTap(2),
+                                isDark: isDark,
+                              ),
+                              _NavItem(
+                                icon: CupertinoIcons.chart_pie_fill,
+                                label: context.t('tab.assets'),
+                                selected: activeIndex == 3,
+                                onTap: () => widget.onTap(3),
+                                isDark: isDark,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ),
+      ),
     );
   }
 }
@@ -370,19 +449,31 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool isDark;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    const purple = AppActionBlue.color;
-    final color = selected ? purple : brand.inkSoft;
+    const accent = AppActionBlue.color;
+    final iconColor = selected
+        ? accent
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.50)
+            : brand.ink.withValues(alpha: 0.40));
+    final labelColor = selected
+        ? accent
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.45)
+            : brand.ink.withValues(alpha: 0.38));
+
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -390,17 +481,34 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // No pill here — the sliding overlay indicator handles selection
-            Icon(icon, color: color, size: 20),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 1.0, end: selected ? 1.08 : 1.0),
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutBack,
+              builder: (context, scale, child) => Transform.scale(
+                scale: scale,
+                child: child,
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  icon,
+                  key: ValueKey(selected),
+                  color: iconColor,
+                  size: 22,
+                ),
+              ),
+            ),
             const SizedBox(height: 3),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 220),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: color,
+                color: labelColor,
+                letterSpacing: selected ? -0.1 : 0,
               ),
-              child: Text(label),
+              child: Text(label, maxLines: 1),
             ),
           ],
         ),
