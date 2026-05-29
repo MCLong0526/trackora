@@ -78,39 +78,60 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final brand = context.brand;
     return Scaffold(
       backgroundColor: brand.background,
-      extendBody: true,
-      bottomNavigationBar: _BottomBar(
-        index: _index,
-        onTap: (i) {
-          if (i == _index) return;
-          ref.read(homeTabIndexProvider.notifier).state = i;
-          setState(() => _index = i);
-        },
-      ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        transitionBuilder: (child, animation) {
-          final isEntering = child.key == ValueKey(_index);
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeInOut,
-            ),
-            child: ScaleTransition(
-              scale: Tween<double>(
-                begin: isEntering ? 0.97 : 1.02,
-                end: 1.0,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
+      // Stack-based floating nav: no bottomNavigationBar slot so Flutter never
+      // injects a canvas-color background behind the pill.
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Strip bottom safe-area padding from screens so scroll content
+          // fills all the way to the screen edge and is visible behind the pill.
+          MediaQuery.removePadding(
+            context: context,
+            removeBottom: true,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              transitionBuilder: (child, animation) {
+                final isEntering = child.key == ValueKey(_index);
+                return FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeInOut,
+                  ),
+                  child: ScaleTransition(
+                    scale: Tween<double>(
+                      begin: isEntering ? 0.97 : 1.02,
+                      end: 1.0,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey(_index),
+                child: _screens[_index],
               ),
-              child: child,
             ),
-          );
-        },
-        child: KeyedSubtree(key: ValueKey(_index), child: _screens[_index]),
+          ),
+          // Floating glass pill — purely transparent outside the pill bounds.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _BottomBar(
+              index: _index,
+              onTap: (i) {
+                if (i == _index) return;
+                ref.read(homeTabIndexProvider.notifier).state = i;
+                setState(() => _index = i);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -314,9 +335,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         ? (safeBottom * 0.52).roundToDouble() + 8.0
         : 16.0;
 
-    return Material(
-      color: Colors.transparent,
-      child: Padding(
+    return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
       child: AnimatedBuilder(
         // Single builder listening to both animations
@@ -524,7 +543,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
           );
         },
       ),
-    ));
+    );
   }
 }
 
