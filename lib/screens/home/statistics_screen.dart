@@ -31,7 +31,6 @@ class StatisticsScreen extends ConsumerStatefulWidget {
 
 class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   _StatsPeriod _period = _StatsPeriod.month;
-  bool _excludeFixed = true;
   late DateTime _anchor;
   bool _isSharing = false;
 
@@ -41,9 +40,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final now = DateTime.now();
     _anchor = DateTime(now.year, now.month, 1);
   }
-
-  bool _isFixed(Expense e) =>
-      e.category == 'Bills' || e.note.contains('(installment)');
 
   _StatsRange _currentRange(BuildContext context) {
     final useCustomCycle = ref.watch(useCustomCycleProvider);
@@ -206,7 +202,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         data: (allItems) {
           final allExpenses = allItems
               .where((e) => e.type == EntryType.expense)
-              .where((e) => !_excludeFixed || !_isFixed(e))
               .toList();
           final allIncome = allItems
               .where((e) => e.type == EntryType.income)
@@ -269,8 +264,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   showNav: _period != _StatsPeriod.all,
                   onPrev: () => _step(-1),
                   onNext: () => _step(1),
-                  excludeFixed: _excludeFixed,
-                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
                 ),
               ],
             ),
@@ -325,8 +318,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     bool showNav = false,
     VoidCallback? onPrev,
     VoidCallback? onNext,
-    bool excludeFixed = true,
-    ValueChanged<bool>? onExcludeChanged,
   }) {
     final showLine =
         visibleSections.contains('lineChart') && _period != _StatsPeriod.all;
@@ -347,8 +338,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       showNav: showNav,
       onPrev: onPrev,
       onNext: onNext,
-      excludeFixed: excludeFixed,
-      onExcludeChanged: onExcludeChanged,
     );
   }
 
@@ -368,7 +357,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     final allExpenses = allItems
         .where((e) => e.type == EntryType.expense)
-        .where((e) => !_isFixed(e))
         .toList();
     final allIncome = allItems
         .where((e) => e.type == EntryType.income)
@@ -668,59 +656,6 @@ class _PeriodPill extends StatelessWidget {
             ),
             child: Text(label),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Shared glass tab pill ──────────────────────────────────────
-
-class _GlassTab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final Color accentDark;
-
-  const _GlassTab({
-    required this.label,
-    required this.selected,
-    required this.accentDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: selected
-            ? accentDark
-            : (isDark
-                ? Colors.white.withValues(alpha: 0.07)
-                : Colors.white.withValues(alpha: 0.72)),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? accentDark.withValues(alpha: 0.45)
-              : (isDark
-                  ? Colors.white.withValues(alpha: 0.13)
-                  : Colors.white.withValues(alpha: 0.85)),
-          width: 0.8,
-        ),
-        
-      ),
-      child: Center(
-        child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 180),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: selected ? foregroundOn(accentDark) : brand.inkSoft,
-          ),
-          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ),
     );
@@ -1338,8 +1273,6 @@ class _ChartsCarousel extends StatefulWidget {
   final bool showNav;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
-  final bool excludeFixed;
-  final ValueChanged<bool>? onExcludeChanged;
 
   const _ChartsCarousel({
     required this.showLine,
@@ -1354,8 +1287,6 @@ class _ChartsCarousel extends StatefulWidget {
     this.showNav = false,
     this.onPrev,
     this.onNext,
-    this.excludeFixed = true,
-    this.onExcludeChanged,
   });
 
   @override
@@ -1365,11 +1296,17 @@ class _ChartsCarousel extends StatefulWidget {
 class _ChartsCarouselState extends State<_ChartsCarousel> {
   late PageController _controller;
   int _page = 0;
+  double _pageOffset = 0.0;
+
+  void _onControllerUpdate() {
+    if (mounted) setState(() => _pageOffset = _controller.page ?? _page.toDouble());
+  }
 
   @override
   void initState() {
     super.initState();
     _controller = PageController();
+    _controller.addListener(_onControllerUpdate);
   }
 
   @override
@@ -1379,7 +1316,7 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     if (_page >= pageCount && pageCount > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _page = 0);
+        setState(() { _page = 0; _pageOffset = 0.0; });
         if (_controller.hasClients) _controller.jumpToPage(0);
       });
     }
@@ -1387,6 +1324,7 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerUpdate);
     _controller.dispose();
     super.dispose();
   }
@@ -1439,7 +1377,6 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     }
 
     final brand = context.brand;
-    final hasControls = widget.onExcludeChanged != null || widget.showNav;
 
     return Container(
       decoration: BoxDecoration(
@@ -1450,19 +1387,14 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Controls row: < period > + exclude toggle — inside the card
-          if (hasControls) ...[
+          // Controls row: < period > — inside the card
+          if (widget.showNav) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
               child: Row(
                 children: [
-                  if (widget.showNav)
-                    _navBtn(
-                      context,
-                      CupertinoIcons.chevron_left,
-                      widget.onPrev ?? () {},
-                    ),
-                  if (widget.showNav) const SizedBox(width: 6),
+                  _navBtn(context, CupertinoIcons.chevron_left, widget.onPrev ?? () {}),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       widget.rangeLabel.toUpperCase(),
@@ -1472,73 +1404,85 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
                         color: brand.inkSoft,
                         letterSpacing: 0.8,
                       ),
-                      textAlign:
-                          widget.showNav ? TextAlign.center : TextAlign.start,
+                      textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (widget.showNav) const SizedBox(width: 6),
-                  if (widget.showNav)
-                    _navBtn(
-                      context,
-                      CupertinoIcons.chevron_right,
-                      widget.onNext ?? () {},
-                    ),
-                  if (widget.onExcludeChanged != null) ...[
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        context.t('stats.excludeFixed'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: brand.inkSoft,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Transform.scale(
-                      scale: 0.8,
-                      child: CupertinoSwitch(
-                        value: widget.excludeFixed,
-                        onChanged: widget.onExcludeChanged,
-                      ),
-                    ),
-                  ],
+                  const SizedBox(width: 6),
+                  _navBtn(context, CupertinoIcons.chevron_right, widget.onNext ?? () {}),
                 ],
               ),
             ),
             Container(height: 0.5, color: brand.divider),
             const SizedBox(height: 12),
           ],
-          // "By Category" / "Trend" — tabs
+          // "By Category" / "Trend" — sliding pill tabs
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                for (var i = 0; i < pages.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        _controller.animateToPage(
-                          i,
-                          duration: const Duration(milliseconds: 280),
-                          curve: Curves.easeOutCubic,
-                        );
-                      },
-                      child: _GlassTab(
-                        label: pages[i].label,
-                        selected: _page == i,
-                        accentDark: brand.accentDark,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 8.0;
+                final pillW = (constraints.maxWidth - gap * (pages.length - 1)) / pages.length;
+                final pillLeft = _pageOffset * (pillW + gap);
+                return SizedBox(
+                  height: 40,
+                  child: Stack(
+                    children: [
+                      // Sliding selected pill
+                      Positioned(
+                        left: pillLeft,
+                        top: 0,
+                        bottom: 0,
+                        width: pillW,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: brand.accentDark,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                    ),
+                      // Labels row — tappable to switch page
+                      Row(
+                        children: [
+                          for (var i = 0; i < pages.length; i++) ...[
+                            if (i > 0) const SizedBox(width: gap),
+                            Expanded(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  _controller.animateToPage(
+                                    i,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                },
+                                child: Center(
+                                  child: Builder(builder: (context) {
+                                    final dist = (_pageOffset - i).abs().clamp(0.0, 1.0);
+                                    final fg = brand.accentDark.computeLuminance() < 0.5
+                                        ? Colors.white
+                                        : Colors.black;
+                                    final color = Color.lerp(fg, brand.inkSoft, dist)!;
+                                    return Text(
+                                      pages[i].label,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: color,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
@@ -1547,7 +1491,7 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
             height: 540,
             child: PageView(
               controller: _controller,
-              onPageChanged: (i) => setState(() => _page = i),
+              onPageChanged: (i) => setState(() { _page = i; _pageOffset = i.toDouble(); }),
               children: [
                 for (final page in pages)
                   if (page.id == 'donut')

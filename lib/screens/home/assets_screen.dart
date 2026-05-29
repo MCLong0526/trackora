@@ -80,11 +80,7 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
                   )
                 else ...[
                   // ── 1. Accounts section (first) ────────────────────────
-                  _SectionHeaderRow(
-                    label: context.t('asset.title'),
-                    actionLabel: context.t('asset.addAccount'),
-                    onAction: () => showAddAccountSheet(context),
-                  ),
+                  _SectionLabel(context.t('asset.title')),
                   const SizedBox(height: 12),
                   AccountCarouselSection(
                     accounts: accounts,
@@ -162,67 +158,6 @@ class _SectionLabel extends StatelessWidget {
         letterSpacing: 0.6,
         color: context.brand.inkSoft,
       ),
-    );
-  }
-}
-
-class _SectionHeaderRow extends StatelessWidget {
-  final String label;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  const _SectionHeaderRow({
-    required this.label,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Row(
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.6,
-            color: brand.inkSoft,
-          ),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onAction,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: brand.surface,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  CupertinoIcons.plus,
-                  size: 11,
-                  color: brand.accentDark,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  actionLabel,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: brand.accentDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
