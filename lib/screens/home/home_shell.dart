@@ -128,8 +128,6 @@ class _BottomBarState extends State<_BottomBar>
   bool _isDragging = false;
   double _barWidth = 300;
   bool _initialized = false;
-  bool _isLongPressed = false;
-
   // Pill slide animation
   late final AnimationController _pillCtrl;
   double _fromX = 0;
@@ -143,8 +141,8 @@ class _BottomBarState extends State<_BottomBar>
   static const _compactH = 56.0;
   static const _liquidH = 66.0;
   // Circle indicator diameters: base (contained) → expanded (overflows bar)
-  static const _circleDBase = 46.0;
-  static const _circleDExpanded = 76.0;
+  static const _circleDBase = 52.0;
+  static const _circleDExpanded = 90.0;
 
   @override
   void initState() {
@@ -205,21 +203,18 @@ class _BottomBarState extends State<_BottomBar>
   }
 
   void _expandGlass() {
-    if (_isLongPressed) return;
-    _isLongPressed = true;
-    HapticFeedback.mediumImpact();
+    HapticFeedback.lightImpact();
     _glassCtrl.animateTo(
       1.0,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
   }
 
   void _collapseGlass() {
-    _isLongPressed = false;
     _glassCtrl.animateTo(
       0.0,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 180),
       curve: Curves.easeInCubic,
     );
   }
@@ -245,21 +240,22 @@ class _BottomBarState extends State<_BottomBar>
           // Circle grows from base (fits inside bar) → expanded (overflows bar)
           final circleD = lerpDouble(_circleDBase, _circleDExpanded, t)!;
           final cx = _currentX;
-          final blurSigma = lerpDouble(18.0, 40.0, t)!;
+          final blurSigma = lerpDouble(20.0, 44.0, t)!;
+          // Dark mode: rich dark frosted glass matching WhatsApp reference
           final bgTopAlpha = isDark
-              ? lerpDouble(0.10, 0.19, t)!
+              ? lerpDouble(0.15, 0.26, t)!
               : lerpDouble(0.74, 0.92, t)!;
           final bgBotAlpha = isDark
-              ? lerpDouble(0.04, 0.09, t)!
+              ? lerpDouble(0.07, 0.14, t)!
               : lerpDouble(0.56, 0.74, t)!;
           final borderAlpha = isDark
-              ? lerpDouble(0.13, 0.24, t)!
+              ? lerpDouble(0.18, 0.32, t)!
               : lerpDouble(0.80, 0.96, t)!;
           final shadowAlpha = isDark
-              ? lerpDouble(0.25, 0.42, t)!
+              ? lerpDouble(0.40, 0.60, t)!
               : lerpDouble(0.07, 0.15, t)!;
           final specularPeak = isDark
-              ? lerpDouble(0.32, 0.62, t)!
+              ? lerpDouble(0.22, 0.44, t)!
               : lerpDouble(0.62, 0.92, t)!;
 
           // Stack with Clip.none allows circle to overflow bar bounds
@@ -348,56 +344,58 @@ class _BottomBarState extends State<_BottomBar>
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
+                      // Dark: medium-dark disc matching WhatsApp (lighter than bar, darker than icons)
+                      // Light: crisp white disc
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: isDark
                             ? [
                                 Colors.white.withValues(
-                                    alpha: lerpDouble(0.20, 0.34, t)!),
+                                    alpha: lerpDouble(0.26, 0.40, t)!),
                                 Colors.white.withValues(
-                                    alpha: lerpDouble(0.07, 0.15, t)!),
+                                    alpha: lerpDouble(0.12, 0.22, t)!),
                               ]
                             : [
                                 Colors.white.withValues(
-                                    alpha: lerpDouble(0.92, 1.0, t)!),
+                                    alpha: lerpDouble(0.94, 1.0, t)!),
                                 Colors.white.withValues(
-                                    alpha: lerpDouble(0.62, 0.80, t)!),
+                                    alpha: lerpDouble(0.66, 0.82, t)!),
                               ],
                       ),
                       border: Border.all(
                         color: isDark
                             ? Colors.white.withValues(
-                                alpha: lerpDouble(0.24, 0.40, t)!)
+                                alpha: lerpDouble(0.18, 0.38, t)!)
                             : Colors.white.withValues(
                                 alpha: lerpDouble(0.92, 1.0, t)!),
-                        width: 0.8,
+                        width: isDark ? lerpDouble(0.6, 1.2, t)! : 0.8,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.white.withValues(
                             alpha: isDark
-                                ? lerpDouble(0.18, 0.34, t)!
-                                : lerpDouble(0.58, 0.78, t)!,
+                                ? lerpDouble(0.14, 0.28, t)!
+                                : lerpDouble(0.60, 0.80, t)!,
                           ),
-                          blurRadius: 5,
+                          blurRadius: 6,
                           offset: const Offset(0, -1),
                         ),
                         BoxShadow(
-                          color: AppActionBlue.color.withValues(
+                          color: Colors.black.withValues(
                             alpha: isDark
-                                ? lerpDouble(0.24, 0.42, t)!
-                                : lerpDouble(0.15, 0.30, t)!,
+                                ? lerpDouble(0.30, 0.50, t)!
+                                : lerpDouble(0.08, 0.18, t)!,
                           ),
-                          blurRadius: lerpDouble(14.0, 28.0, t)!,
-                          offset: const Offset(0, 4),
+                          blurRadius: lerpDouble(8.0, 20.0, t)!,
+                          offset: const Offset(0, 3),
                         ),
-                        if (_isDragging)
+                        if (t > 0.05)
                           BoxShadow(
                             color: AppActionBlue.color
-                                .withValues(alpha: 0.26),
-                            blurRadius: 24,
-                            spreadRadius: 3,
+                                .withValues(alpha: lerpDouble(0.0, 0.28, t)!),
+                            blurRadius: lerpDouble(0.0, 22.0, t)!,
+                            spreadRadius: lerpDouble(0.0, 2.0, t)!,
                           ),
                       ],
                     ),
@@ -412,11 +410,13 @@ class _BottomBarState extends State<_BottomBar>
                       _toX = _fromX;
                       _initialized = true;
                     }
-                    return GestureDetector(
+                    // Listener fires immediately on pointer down/up (no delay)
+                    return Listener(
+                      onPointerDown: (_) => _expandGlass(),
+                      onPointerUp: (_) => _collapseGlass(),
+                      onPointerCancel: (_) => _collapseGlass(),
+                      child: GestureDetector(
                       behavior: HitTestBehavior.translucent,
-                      onLongPressStart: (_) => _expandGlass(),
-                      onLongPressEnd: (_) => _collapseGlass(),
-                      onLongPressCancel: _collapseGlass,
                       onHorizontalDragStart: (d) {
                         final idx =
                             _indexFromLocalX(d.localPosition.dx);
@@ -491,7 +491,8 @@ class _BottomBarState extends State<_BottomBar>
                           ),
                         ],
                       ),
-                    );
+                    ),  // GestureDetector
+                    );  // Listener
                   },
                 ),
               ],
