@@ -14,7 +14,6 @@ import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
@@ -68,33 +67,12 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                _Header(
-                  onAddAccount: () => showAddAccountSheet(context),
-                ),
+                const _Header(),
                 const SizedBox(height: 18),
                 if (isLoading && accounts.isEmpty)
                   const _LoadingCard()
-                else if (accounts.isEmpty)
-                  _EmptyAccounts(
-                    onTap: () => showAddAccountSheet(context),
-                  )
                 else ...[
-                  // ── 1. Accounts section (first) ────────────────────────
-                  _SectionLabel(context.t('asset.title')),
-                  const SizedBox(height: 12),
-                  AccountCarouselSection(
-                    accounts: accounts,
-                    balances: {
-                      for (final a in snapshot.accounts)
-                        a.account.id: a.balance,
-                    },
-                    allExpenses: expenses,
-                    symbol: symbol,
-                    visible: visible,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ── 2. Net worth overview (second) ─────────────────────
+                  // ── Net worth overview ─────────────────────────────────
                   _NetWorthCard(
                     snapshot: snapshot,
                     symbol: symbol,
@@ -165,8 +143,7 @@ class _SectionLabel extends StatelessWidget {
 // ── Header ────────────────────────────────────────────────────────────────────
 
 class _Header extends ConsumerWidget {
-  final VoidCallback onAddAccount;
-  const _Header({required this.onAddAccount});
+  const _Header();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1075,62 +1052,6 @@ class _LoadingCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: brand.inkSoft,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyAccounts extends StatelessWidget {
-  final VoidCallback onTap;
-  const _EmptyAccounts({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-      child: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.sky,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              CupertinoIcons.creditcard,
-              size: 26,
-              color: kCategoryStyles['Transport']!.accent,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            context.t('asset.noAccounts'),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: brand.ink,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            context.t('asset.addAccountsDesc'),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: brand.inkSoft,
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: onTap,
-            icon: const Icon(CupertinoIcons.add, size: 16),
-            label: Text(context.t('asset.addAccount')),
           ),
         ],
       ),

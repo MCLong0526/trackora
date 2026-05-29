@@ -4,17 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../models/borrow_lending.dart';
+import '../../models/account.dart';
 import '../../models/expense.dart';
-import '../../models/installment.dart';
-import '../../models/person.dart';
-import '../../models/precious_metal.dart';
-import '../../models/saving_plan.dart';
-import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/account_carousel_section.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
@@ -292,131 +288,30 @@ class BudgetScreen extends ConsumerWidget {
     final expenses =
         ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
-    final installments =
-        ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
-    final borrowLending =
-        ref.watch(borrowLendingProvider).valueOrNull ?? const <BorrowLending>[];
-    final savingPlans =
-        ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
-    final people = ref.watch(peopleProvider).valueOrNull ?? const [];
-    final travelGroups =
-        ref.watch(travelGroupsProvider).valueOrNull ?? const [];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
-    final metals =
-        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
-    final stocks =
-        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    // Accounts for carousel
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
+    final allExpenses =
+        ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final visible = ref.watch(balanceVisibleProvider);
+    final accountBalances = _computeBalances(accounts, allExpenses);
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
         .fold<double>(0, (s, e) => s + e.convertedAmount);
 
-    final activeInstallments = installments
-        .where((i) => i.isActiveIn(month))
-        .toList();
-    final installmentsMonthly = activeInstallments.fold<double>(
-      0,
-      (s, i) => s + i.amount,
-    );
-
-    final activeBorrowLending = borrowLending
-        .where(
-          (r) =>
-              r.status != BorrowLendingStatus.cancelled &&
-              r.status != BorrowLendingStatus.settled,
-        )
-        .toList();
-    final borrowed = activeBorrowLending
-        .where((r) => r.type == BorrowLendingType.borrowed)
-        .fold<double>(0, (s, r) => s + r.remaining);
-    final lent = activeBorrowLending
-        .where((r) => r.type == BorrowLendingType.lent)
-        .fold<double>(0, (s, r) => s + r.remaining);
-    final net = lent - borrowed;
-
-    final trackedPlans = savingPlans
-        .where((p) => p.status != SavingPlanStatus.cancelled)
-        .toList();
-    final saved = trackedPlans.fold<double>(0, (s, p) => s + p.currentAmount);
-
-    final budgetLeft = budget - discretionarySpent;
-    final budgetOverspent = budgetLeft < 0;
-
-    final savingTarget = trackedPlans.fold<double>(0, (s, p) => s + p.targetAmount);
-    final budgetProgress = budget > 0
-        ? (discretionarySpent / budget).clamp(0.0, 1.0)
-        : null;
-    final savingProgress = savingTarget > 0
-        ? (saved / savingTarget).clamp(0.0, 1.0)
-        : null;
-    final budgetUsagePct = budget > 0
-        ? (discretionarySpent / budget * 100).clamp(0, 999).round()
-        : 0;
-    final savingUsagePct = savingTarget > 0
-        ? (saved / savingTarget * 100).clamp(0, 100).round()
-        : 0;
-
-    // ── People breakdown ──────────────────────────────────────────────────────
-    final friendCount =
-        people.where((p) => p.type == PersonType.friend).length;
-    final familyCount =
-        people.where((p) => p.type == PersonType.family).length;
-    final coworkerCount =
-        people.where((p) => p.type == PersonType.coworker).length;
-    final peopleParts = <String>[
-      if (friendCount > 0)
-        '$friendCount friend${friendCount > 1 ? 's' : ''}',
-      if (familyCount > 0) '$familyCount family',
-      if (coworkerCount > 0) '$coworkerCount work',
-    ];
-    final peopleSubInfo = peopleParts.take(2).join(' · ');
-
-    // ── Travel breakdown ──────────────────────────────────────────────────────
-    final now = DateTime.now();
-    final activeTrips = travelGroups
-        .where((t) => t.endDate == null || t.endDate!.isAfter(now))
-        .length;
-    final totalTripMembers =
-        travelGroups.fold<int>(0, (s, t) => s + t.memberIds.length);
-
-    // ── Investment totals ─────────────────────────────────────────────────────
-    double metalsTotalValue = 0;
-    for (final m in metals) {
-      metalsTotalValue +=
-          m.action == MetalAction.buy ? m.totalAmount : -m.totalAmount;
-    }
-    if (metalsTotalValue < 0) metalsTotalValue = 0;
-    final stocksCostBasis =
-        stocks.fold<double>(0, (s, e) => s + e.totalCost);
-    final portfolioTotal = metalsTotalValue + stocksCostBasis;
-    final hasAnyInvestment = metals.isNotEmpty || stocks.isNotEmpty;
-
-    final cardOrder = ref.watch(moneyHubOrderProvider);
-
-    final cardWidgets = <String, Widget>{
+    // ── Quick-style button items (visible modules only) ──────────────────────
+    final quickItems = <_BudgetQuickItem>[
       if (visibleModules.contains('monthlyBudget'))
-        'monthlyBudget': _PremiumManagementCard(
-          badgeLabel: context.t('budget.badgeBudget'),
-          badgeColor: AppColors.lilac,
-          badgeTextColor: kCategoryStyles['Shopping']!.accent,
+        _BudgetQuickItem(
           icon: CupertinoIcons.chart_pie_fill,
-          iconBgColor: kCategoryStyles['Shopping']!.accent,
-          mainValue: budget <= 0
-              ? context.t('budget.monthlyNotSet')
-              : formatMoney(symbol, budgetLeft.abs()),
-          mainValueSub: budget <= 0
-              ? null
-              : budgetOverspent
-              ? context.t('budget.overBudget')
-              : context.t('budget.leftThisMonth'),
-          progress: budgetProgress,
-          progressLabel: budget <= 0
-              ? context.t('budget.setAction')
-              : '$budgetUsagePct% used',
-          progressColor: budgetOverspent ? AppColors.expense : null,
+          iconBg: AppColors.lilac,
+          iconColor: kCategoryStyles['Shopping']!.accent,
+          label: context.t('budget.badgeBudget'),
           onTap: () => showMonthlyBudgetDetails(
             context,
             ref,
@@ -428,117 +323,54 @@ class BudgetScreen extends ConsumerWidget {
           ),
         ),
       if (visibleModules.contains('savingPlans'))
-        'savingPlans': _PremiumManagementCard(
-          badgeLabel: context.t('budget.badgeSavings'),
-          badgeColor: AppColors.mint,
-          badgeTextColor: kCategoryStyles['Groceries']!.accent,
+        _BudgetQuickItem(
           icon: CupertinoIcons.flag_fill,
-          iconBgColor: kCategoryStyles['Groceries']!.accent,
-          mainValue: formatMoney(symbol, saved),
-          mainValueSub: savingTarget > 0
-              ? 'of ${formatMoney(symbol, savingTarget)} goal'
-              : '${trackedPlans.length} plans',
-          progress: savingProgress,
-          progressLabel: savingTarget > 0 ? '$savingUsagePct% saved' : null,
+          iconBg: AppColors.mint,
+          iconColor: kCategoryStyles['Groceries']!.accent,
+          label: context.t('budget.badgeSavings'),
           onTap: () => _push(context, const SavingPlansScreen()),
         ),
       if (visibleModules.contains('borrowLending'))
-        'borrowLending': _PremiumManagementCard(
-          badgeLabel: context.t('budget.badgeLending'),
-          badgeColor: AppColors.sky,
-          badgeTextColor: kCategoryStyles['Transport']!.accent,
+        _BudgetQuickItem(
           icon: CupertinoIcons.arrow_up_arrow_down,
-          iconBgColor: kCategoryStyles['Transport']!.accent,
-          mainValue: net == 0
-              ? formatMoney(symbol, 0)
-              : '${net > 0 ? '+' : '-'}${formatMoney(symbol, net.abs())}',
-          mainValueSub: context.t('budget.netPosition'),
-          mainValueColor: net < 0
-              ? AppColors.expense
-              : net > 0
-              ? AppColors.income
-              : null,
-          footer: '↑ ${formatMoney(symbol, lent)} · ↓ ${formatMoney(symbol, borrowed)}',
+          iconBg: AppColors.sky,
+          iconColor: kCategoryStyles['Transport']!.accent,
+          label: context.t('budget.badgeLending'),
           onTap: () => _push(context, const BorrowLendingScreen()),
         ),
       if (visibleModules.contains('installments'))
-        'installments': _PremiumManagementCard(
-          badgeLabel: context.t('budget.badgeInstallments'),
-          badgeColor: AppColors.peach,
-          badgeTextColor: kCategoryStyles['Food']!.accent,
+        _BudgetQuickItem(
           icon: CupertinoIcons.calendar_today,
-          iconBgColor: kCategoryStyles['Food']!.accent,
-          mainValue: activeInstallments.isEmpty
-              ? '—'
-              : formatMoney(symbol, installmentsMonthly),
-          mainValueSub: activeInstallments.isEmpty
-              ? null
-              : context.t('budget.dueThisMonth'),
-          footer: activeInstallments.isEmpty
-              ? context.t('budget.noneActive')
-              : context.t('budget.activePlans').replaceAll('{count}', '${activeInstallments.length}'),
+          iconBg: AppColors.peach,
+          iconColor: kCategoryStyles['Food']!.accent,
+          label: context.t('budget.badgeInstallments'),
           onTap: () => _push(context, const InstallmentsScreen()),
         ),
       if (visibleModules.contains('people'))
-        'people': _PremiumManagementCard(
-          badgeLabel: context.t('budget.badgePeople'),
-          badgeColor: AppColors.lilac,
-          badgeTextColor: kCategoryStyles['Shopping']!.accent,
+        _BudgetQuickItem(
           icon: CupertinoIcons.person_2_fill,
-          iconBgColor: kCategoryStyles['Shopping']!.accent,
-          mainValue: people.isEmpty ? '—' : '${people.length}',
-          mainValueSub: people.isEmpty
-              ? null
-              : people.length == 1
-              ? 'contact'
-              : 'contacts',
-          footer: people.isEmpty
-              ? context.t('budget.tapToAddPeople')
-              : peopleSubInfo.isNotEmpty
-                  ? peopleSubInfo
-                  : '${activeBorrowLending.length} record${activeBorrowLending.length == 1 ? '' : 's'}',
+          iconBg: AppColors.lilac,
+          iconColor: kCategoryStyles['Shopping']!.accent,
+          label: context.t('budget.badgePeople'),
           onTap: () => _push(context, const PeopleScreen()),
         ),
       if (visibleModules.contains('travelGroups'))
-        'travelGroups': _PremiumManagementCard(
-          badgeLabel: context.t('travel.title'),
-          badgeColor: AppColors.sky,
-          badgeTextColor: const Color(0xFF3478F6),
+        _BudgetQuickItem(
           icon: CupertinoIcons.airplane,
-          iconBgColor: const Color(0xFF3478F6),
-          mainValue: travelGroups.isEmpty ? '—' : '${travelGroups.length}',
-          mainValueSub: travelGroups.isEmpty
-              ? null
-              : activeTrips == travelGroups.length
-              ? 'all active'
-              : '$activeTrips active',
-          footer: travelGroups.isEmpty
-              ? context.t('travel.empty')
-              : totalTripMembers > 0
-                  ? '$totalTripMembers member${totalTripMembers == 1 ? '' : 's'} total'
-                  : context.t('travel.title'),
+          iconBg: AppColors.sky,
+          iconColor: const Color(0xFF3478F6),
+          label: context.t('travel.title'),
           onTap: () => _push(context, const TravelGroupsScreen()),
         ),
       if (visibleModules.contains('investments'))
-        'investments': _PremiumManagementCard(
-          badgeLabel: 'PORTFOLIO',
-          badgeColor: const Color(0xFFEBEAFF),
-          badgeTextColor: const Color(0xFF5856D6),
+        _BudgetQuickItem(
           icon: CupertinoIcons.chart_bar_square_fill,
-          iconBgColor: const Color(0xFF5856D6),
-          mainValue: hasAnyInvestment ? formatMoney(symbol, portfolioTotal) : '—',
-          mainValueSub: hasAnyInvestment
-              ? [
-                  if (metals.isNotEmpty)
-                    '${metals.length} metal${metals.length == 1 ? '' : 's'}',
-                  if (stocks.isNotEmpty)
-                    '${stocks.length} stock${stocks.length == 1 ? '' : 's'}',
-                ].join(' · ')
-              : null,
-          footer: hasAnyInvestment ? 'cost basis' : 'Gold, silver & stocks',
+          iconBg: const Color(0xFFEBEAFF),
+          iconColor: const Color(0xFF5856D6),
+          label: 'Portfolio',
           onTap: () => _push(context, const InvestmentScreen()),
         ),
-    };
+    ];
 
     return SafeArea(
       child: ListView(
@@ -571,15 +403,36 @@ class BudgetScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // ── Management cards ──────────────────────────────
+          // ── Accounts carousel (top section) ──────────────
+          _GroupHeader(label: context.t('asset.title')),
+          const SizedBox(height: 10),
+          AccountCarouselSection(
+            accounts: accounts,
+            balances: accountBalances,
+            allExpenses: allExpenses,
+            symbol: symbol,
+            visible: visible,
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Management quick-icon grid ────────────────────
           _GroupHeader(label: context.t('budget.management')),
           const SizedBox(height: 10),
-          _DragReorderGrid(
-            order: cardOrder,
-            cards: cardWidgets,
-            onReorder: (order) =>
-                ref.read(moneyHubOrderProvider.notifier).setOrder(order),
-          ),
+          if (quickItems.isNotEmpty)
+            for (int row = 0; row * 3 < quickItems.length; row++) ...[
+              if (row > 0) const SizedBox(height: 4),
+              Row(
+                children: [
+                  for (int col = 0; col < 3; col++)
+                    Expanded(
+                      child: (row * 3 + col) < quickItems.length
+                          ? _BudgetQuickButton(item: quickItems[row * 3 + col])
+                          : const SizedBox(),
+                    ),
+                ],
+              ),
+            ],
         ],
       ),
     );
@@ -796,359 +649,140 @@ class _VisibilitySwitchRow extends StatelessWidget {
   }
 }
 
-// ── Premium management card ────────────────────────────────────
+// ── Budget quick-icon button ───────────────────────────────────
 
-class _PremiumManagementCard extends StatelessWidget {
-  final String badgeLabel;
-  final Color badgeColor;
-  final Color badgeTextColor;
+class _BudgetQuickItem {
   final IconData icon;
-  final Color iconBgColor;
-  final String mainValue;
-  final String? mainValueSub;
-  final Color? mainValueColor;
-  final double? progress;
-  final String? progressLabel;
-  final Color? progressColor;
-  final String? footer;
+  final Color iconBg;
+  final Color iconColor;
+  final String label;
   final VoidCallback onTap;
 
-  const _PremiumManagementCard({
-    required this.badgeLabel,
-    required this.badgeColor,
-    required this.badgeTextColor,
+  const _BudgetQuickItem({
     required this.icon,
-    required this.iconBgColor,
-    required this.mainValue,
-    this.mainValueSub,
-    this.mainValueColor,
-    this.progress,
-    this.progressLabel,
-    this.progressColor,
-    this.footer,
+    required this.iconBg,
+    required this.iconColor,
+    required this.label,
     required this.onTap,
   });
+}
+
+class _BudgetQuickButton extends StatefulWidget {
+  final _BudgetQuickItem item;
+  const _BudgetQuickButton({required this.item});
+
+  @override
+  State<_BudgetQuickButton> createState() => _BudgetQuickButtonState();
+}
+
+class _BudgetQuickButtonState extends State<_BudgetQuickButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _press;
+
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      lowerBound: 0.94,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _press.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     return GestureDetector(
-      onTap: () {
+      onTapDown: (_) => _press.reverse(),
+      onTapUp: (_) {
+        _press.forward();
         HapticFeedback.selectionClick();
-        onTap();
+        widget.item.onTap();
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          
-        ),
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Badge + chevron
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon, size: 10, color: badgeTextColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        badgeLabel,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: badgeTextColor,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  CupertinoIcons.chevron_right,
-                  size: 12,
-                  color: brand.inkSoft,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Donut / circle progress or icon
-            if (progress != null) ...[
-              _CircleProgress(
-                progress: progress!,
-                color: progressColor ?? iconBgColor,
-                size: 48,
-                strokeWidth: 5,
-              ),
-              const SizedBox(height: 8),
-            ] else ...[
+      onTapCancel: () => _press.forward(),
+      child: ScaleTransition(
+        scale: _press,
+        child: SizedBox(
+          height: 82,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: badgeColor,
-                  borderRadius: BorderRadius.circular(10),
+                  color: widget.item.iconBg,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, size: 18, color: badgeTextColor),
-              ),
-              const SizedBox(height: 8),
-            ],
-            // Main value
-            FittedBox(
-              alignment: Alignment.centerLeft,
-              fit: BoxFit.scaleDown,
-              child: Text(
-                mainValue,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: mainValueColor ?? brand.ink,
+                child: Icon(
+                  widget.item.icon,
+                  color: widget.item.iconColor,
+                  size: 21,
                 ),
               ),
-            ),
-            if (mainValueSub != null) ...[
-              const SizedBox(height: 2),
+              const SizedBox(height: 6),
               Text(
-                mainValueSub!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                widget.item.label,
                 style: TextStyle(
-                  fontSize: 10,
-                  color: brand.inkSoft,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
+                  color: brand.ink,
                 ),
-              ),
-            ],
-            if (footer != null || progressLabel != null) ...[
-              const Spacer(),
-              Text(
-                footer ?? progressLabel ?? '',
+                textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: brand.inkSoft,
-                  fontWeight: FontWeight.w700,
-                ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Circle progress indicator ──────────────────────────────────
+// ── Account balance helpers (mirrors assets_screen logic) ──────
 
-class _CircleProgress extends StatelessWidget {
-  final double progress;
-  final Color color;
-  final double size;
-  final double strokeWidth;
-
-  const _CircleProgress({
-    required this.progress,
-    required this.color,
-    required this.size,
-    required this.strokeWidth,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CircularProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            strokeWidth: strokeWidth,
-            backgroundColor: brand.divider,
-            valueColor: AlwaysStoppedAnimation(color),
-            strokeCap: StrokeCap.round,
-          ),
-          Text(
-            '${(progress * 100).round()}%',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: brand.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+double _effectiveAmountForAccount(
+  Expense expense,
+  String? accountCurrencyCode,
+) {
+  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
+  return expense.convertedAmount;
 }
 
-// ── Drag-reorder grid ──────────────────────────────────────────────────────────
-
-class _DragReorderGrid extends StatefulWidget {
-  final List<String> order;
-  final Map<String, Widget> cards;
-  final void Function(List<String>) onReorder;
-
-  const _DragReorderGrid({
-    required this.order,
-    required this.cards,
-    required this.onReorder,
-  });
-
-  @override
-  State<_DragReorderGrid> createState() => _DragReorderGridState();
-}
-
-class _DragReorderGridState extends State<_DragReorderGrid> {
-  late List<String> _order;
-  String? _dragging;
-  String? _hoverTarget;
-
-  @override
-  void initState() {
-    super.initState();
-    _order = List.from(widget.order);
-  }
-
-  @override
-  void didUpdateWidget(_DragReorderGrid old) {
-    super.didUpdateWidget(old);
-    if (_dragging == null) {
-      _order = List.from(widget.order);
+Map<String, double> _computeBalances(
+  List<Account> accounts,
+  List<Expense> expenses,
+) {
+  final currencyCodes = <String, String?>{
+    for (final a in accounts) a.id: a.currencyCode,
+  };
+  final balances = <String, double>{
+    for (final a in accounts) a.id: a.openingBalance,
+  };
+  for (final expense in expenses) {
+    final from = expense.accountId;
+    if (from != null && balances.containsKey(from)) {
+      final amt = _effectiveAmountForAccount(expense, currencyCodes[from]);
+      if (expense.type.isInflow) {
+        balances[from] = (balances[from] ?? 0) + amt;
+      } else {
+        balances[from] = (balances[from] ?? 0) - amt;
+      }
+    }
+    final to = expense.toAccountId;
+    if (to != null && balances.containsKey(to)) {
+      balances[to] = (balances[to] ?? 0) +
+          _effectiveAmountForAccount(expense, currencyCodes[to]);
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        const h = 186.0;
-        const gap = 12.0;
-        final w = (constraints.maxWidth - gap) / 2;
-        final visible =
-            _order.where((id) => widget.cards.containsKey(id)).toList();
-        if (visible.isEmpty) return const SizedBox.shrink();
-        final rows = (visible.length / 2).ceil();
-        final height = rows * h + (rows - 1) * gap;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: height,
-              child: Stack(
-                children: [
-                  for (int i = 0; i < visible.length; i++)
-                    _buildCell(i, visible[i], w, h, gap),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    CupertinoIcons.hand_draw,
-                    size: 13,
-                    color: brand.inkSoft.withValues(alpha: 0.55),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Hold & drag to reorder',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: brand.inkSoft.withValues(alpha: 0.55),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildCell(int idx, String id, double w, double h, double gap) {
-    final card = widget.cards[id]!;
-    final left = (idx % 2) * (w + gap);
-    final top = (idx ~/ 2) * (h + gap);
-    final isDragging = _dragging == id;
-
-    return AnimatedPositioned(
-      key: ValueKey(id),
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      left: left,
-      top: top,
-      width: w,
-      height: h,
-      child: LongPressDraggable<String>(
-        data: id,
-        delay: const Duration(milliseconds: 350),
-        onDragStarted: () {
-          HapticFeedback.mediumImpact();
-          setState(() {
-            _dragging = id;
-            _hoverTarget = null;
-          });
-        },
-        onDragEnd: (_) {
-          final newOrder = _order.toList();
-          widget.onReorder(newOrder);
-          setState(() {
-            _dragging = null;
-            _hoverTarget = null;
-          });
-        },
-        feedback: Material(
-          color: Colors.transparent,
-          child: SizedBox(
-            width: w,
-            height: h,
-            child: Transform.scale(scale: 1.06, child: card),
-          ),
-        ),
-        childWhenDragging: Opacity(opacity: 0.0, child: card),
-        child: DragTarget<String>(
-          onWillAcceptWithDetails: (details) {
-            if (details.data == id || _hoverTarget == id) return false;
-            final fromIdx = _order.indexOf(details.data);
-            final toIdx = _order.indexOf(id);
-            if (fromIdx == -1 || toIdx == -1 || fromIdx == toIdx) return false;
-            HapticFeedback.selectionClick();
-            setState(() {
-              _hoverTarget = id;
-              final item = _order.removeAt(fromIdx);
-              _order.insert(toIdx, item);
-            });
-            return false;
-          },
-          builder: (ctx, candidateData, rejectedData) => AnimatedScale(
-            scale: isDragging ? 1.0 : (_dragging != null ? 0.96 : 1.0),
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: card,
-          ),
-        ),
-      ),
-    );
-  }
+  return balances;
 }
