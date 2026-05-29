@@ -217,6 +217,7 @@ class AppStrings {
 
     // Quick add sheet.
     'quickAdd.title': 'Quick add',
+    'quickAdd.tapToStart': 'Tap to start',
 
     // Stats.
     'stats.title': 'Statistics',
@@ -1093,6 +1094,7 @@ class AppStrings {
     'category.Salary': '薪资',
 
     'quickAdd.title': '快速添加',
+    'quickAdd.tapToStart': '点击开始',
 
     'stats.title': '统计',
     'stats.trend': '趋势',
@@ -1946,6 +1948,7 @@ class AppStrings {
     'category.Salary': 'Gaji',
 
     'quickAdd.title': 'Tambah pantas',
+    'quickAdd.tapToStart': 'Ketik untuk mula',
 
     'stats.title': 'Statistik',
     'stats.trend': 'Trend',

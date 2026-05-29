@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +21,8 @@ import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import '../expenses/import_receipt_screen.dart';
+import '../travel/travel_groups_screen.dart';
 import '../../widgets/personal_group_toggle.dart';
 import 'calendar_screen.dart';
 import '../group/group_dashboard_screen.dart';
@@ -130,13 +130,6 @@ class DashboardScreen extends ConsumerWidget {
       if (inst.status != InstallmentStatus.active) return false;
       return !inst.isPaidIn(cycleMonthDate);
     }).toList();
-    final unpaidTotal = unpaidInstallments.fold<double>(
-      0,
-      (s, e) => s + e.amount,
-    );
-    final totalInstallmentAmount = allInstallments
-        .where((inst) => inst.status == InstallmentStatus.active)
-        .fold<double>(0, (s, e) => s + e.amount);
     final todayStart = DateTime(now.year, now.month, now.day);
     final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
     double todaySpent = 0;
@@ -280,8 +273,6 @@ class DashboardScreen extends ConsumerWidget {
                   budgetSpent: budgetableSpent,
                   selectedMonth: selectedMonth,
                   hasForeignExpense: hasForeignExpense,
-                  unpaidInstallmentTotal: unpaidTotal,
-                  totalInstallmentAmount: totalInstallmentAmount,
                 ),
               ),
             ),
@@ -605,8 +596,6 @@ class _HomeOverviewCard extends ConsumerWidget {
   final double budgetSpent;
   final DateTime selectedMonth;
   final bool hasForeignExpense;
-  final double unpaidInstallmentTotal;
-  final double totalInstallmentAmount;
 
   const _HomeOverviewCard({
     required this.balance,
@@ -617,8 +606,6 @@ class _HomeOverviewCard extends ConsumerWidget {
     required this.budgetSpent,
     required this.selectedMonth,
     required this.hasForeignExpense,
-    required this.unpaidInstallmentTotal,
-    required this.totalInstallmentAmount,
   });
 
   @override
@@ -627,27 +614,9 @@ class _HomeOverviewCard extends ConsumerWidget {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final now = DateTime.now();
-    final isCurrentMonth =
-        selectedMonth.year == now.year && selectedMonth.month == now.month;
-    final daysInMonth = DateTime(
-      selectedMonth.year,
-      selectedMonth.month + 1,
-      0,
-    ).day;
-    final daysPassed = isCurrentMonth ? now.day : daysInMonth;
-    final daysRemaining = isCurrentMonth ? (daysInMonth - now.day) : 0;
-
-    final avgDaily = daysPassed > 0 ? monthSpent / daysPassed : 0.0;
-    final budgetRemaining = budget - budgetSpent;
-    final remainingDaily = (budget > 0 && daysRemaining > 0)
-        ? budgetRemaining / daysRemaining
-        : 0.0;
     final budgetProgress = budget > 0
         ? (budgetSpent / budget).clamp(0.0, 1.0)
         : 0.0;
-    final pct = budgetProgress * 100;
-    final overspent = budgetRemaining < 0;
 
     final topBg = isDark ? const Color(0xFF201E2C) : brand.surface;
     final topInk = brand.ink;
@@ -657,7 +626,6 @@ class _HomeOverviewCard extends ConsumerWidget {
         : Colors.white.withValues(alpha: 0.62);
 
     const firstCardShadow = <BoxShadow>[];
-    const cardShadow = <BoxShadow>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -679,25 +647,19 @@ class _HomeOverviewCard extends ConsumerWidget {
           isDark: isDark,
           hasForeignExpense: hasForeignExpense,
         ),
+        if (budget > 0) ...[
+          const SizedBox(height: 8),
+          _BudgetProgressLine(
+            visible: visible,
+            symbol: symbol,
+            budget: budget,
+            budgetSpent: budgetSpent,
+            budgetProgress: budgetProgress,
+            brand: brand,
+          ),
+        ],
         const SizedBox(height: 12),
-        _BudgetOverviewCard(
-          visible: visible,
-          symbol: symbol,
-          budget: budget,
-          budgetSpent: budgetSpent,
-          budgetRemaining: budgetRemaining,
-          budgetProgress: budgetProgress,
-          pct: pct,
-          overspent: overspent,
-          avgDaily: avgDaily,
-          remainingDaily: remainingDaily,
-          daysRemaining: daysRemaining,
-          brand: brand,
-          shadows: cardShadow,
-          isDark: isDark,
-          unpaidInstallmentTotal: unpaidInstallmentTotal,
-          totalInstallmentAmount: totalInstallmentAmount,
-        ),
+        const _QuickAddCard(),
       ],
     );
   }
@@ -1021,210 +983,334 @@ class _TopStatsPill extends StatelessWidget {
   }
 }
 
-class _BudgetOverviewCard extends StatelessWidget {
+// ── Budget progress line (compact, below spending card) ───────
+
+class _BudgetProgressLine extends StatelessWidget {
   final bool visible;
   final String symbol;
   final double budget;
   final double budgetSpent;
-  final double budgetRemaining;
   final double budgetProgress;
-  final double pct;
-  final bool overspent;
-  final double avgDaily;
-  final double remainingDaily;
-  final int daysRemaining;
   final BrandColors brand;
-  final List<BoxShadow> shadows;
-  final bool isDark;
-  final double unpaidInstallmentTotal;
-  final double totalInstallmentAmount;
 
-  const _BudgetOverviewCard({
+  const _BudgetProgressLine({
     required this.visible,
     required this.symbol,
     required this.budget,
     required this.budgetSpent,
-    required this.budgetRemaining,
     required this.budgetProgress,
-    required this.pct,
-    required this.overspent,
-    required this.avgDaily,
-    required this.remainingDaily,
-    required this.daysRemaining,
     required this.brand,
-    required this.shadows,
-    required this.isDark,
-    required this.unpaidInstallmentTotal,
-    required this.totalInstallmentAmount,
   });
 
   @override
   Widget build(BuildContext context) {
+    final budgetRemaining = budget - budgetSpent;
+    final overspent = budgetRemaining < 0;
+    final barColor = overspent ? AppColors.expense : AppColors.income;
+    final pct = (budgetProgress * 100).clamp(0.0, 100.0);
+
     return Container(
-      constraints: const BoxConstraints(minHeight: 300),
       decoration: BoxDecoration(
         color: brand.surface,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: shadows,
+        borderRadius: BorderRadius.circular(18),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 21, 24, 20),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: barColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 context.t('home.budget'),
                 style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                   color: brand.ink,
+                  fontWeight: FontWeight.w500,
+                  height: 1.1,
                 ),
               ),
               const Spacer(),
               Text(
-                budget > 0 ? formatMoney(symbol, budget) : '—',
+                visible
+                    ? '${pct.toStringAsFixed(1)}%  ·  ${formatMoney(symbol, budgetSpent)} / ${formatMoney(symbol, budget)}'
+                    : '$symbol **** / ****',
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: brand.inkSoft,
+                  color: overspent ? AppColors.expense : brand.inkSoft,
+                  height: 1.1,
                 ),
               ),
             ],
           ),
-          if (budget > 0) ...[
-            const SizedBox(height: 18),
-            Center(
-              child: SizedBox(
-                width: 154,
-                height: 82,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: budgetProgress),
-                  duration: const Duration(milliseconds: 900),
-                  curve: Curves.easeOutCubic,
-                  builder: (context, animatedProgress, child) => CustomPaint(
-                    painter: _ArcGaugePainter(
-                      progress: animatedProgress,
-                      bgColor: overspent
-                          ? AppColors.blush.withValues(alpha: 0.55)
-                          : AppColors.income.withValues(
-                              alpha: isDark ? 0.18 : 0.14,
-                            ),
-                      fgColor: overspent ? AppColors.expense : AppColors.income,
-                      strokeWidth: 14,
-                    ),
-                    child: child,
+          const SizedBox(height: 8),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: budgetProgress),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, animatedProgress, _) => ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                children: [
+                  Container(
+                    height: 5,
+                    width: double.infinity,
+                    color: barColor.withValues(alpha: 0.15),
                   ),
-                  child: Align(
-                    alignment: const Alignment(0, 0.55),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${pct.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            fontSize: 23,
-                            fontWeight: FontWeight.w700,
-                            color: brand.ink,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          '${context.t('home.of')} ${context.t('home.budget')}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
-                          ),
-                        ),
-                      ],
+                  FractionallySizedBox(
+                    widthFactor: animatedProgress.clamp(0.0, 1.0),
+                    child: Container(
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: barColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            Container(height: 1, color: brand.divider),
-            const SizedBox(height: 13),
-            Row(
-              children: [
-                Expanded(
-                  child: _BudgetAmountMetric(
-                    value: visible
-                        ? formatMoney('', budgetSpent).trim()
-                        : '****',
-                    label: context.t('home.budgetSpent'),
-                    valueColor: brand.ink,
-                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Quick add card ──────────────────────────────────────────────
+
+class _QuickAddCard extends StatelessWidget {
+  const _QuickAddCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final items = [
+      _QuickItem(
+        icon: CupertinoIcons.minus,
+        labelKey: 'expense.expense',
+        iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+        iconColor: const Color(0xFF7C3AED),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.expense),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: CupertinoIcons.plus,
+        labelKey: 'expense.income',
+        iconBg: isDark ? const Color(0xFF22C55E).withValues(alpha: 0.20) : const Color(0xFFE8FBF0),
+        iconColor: const Color(0xFF22C55E),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.income),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: CupertinoIcons.arrow_right_arrow_left,
+        labelKey: 'expense.transfer',
+        iconBg: isDark ? const Color(0xFFEF4444).withValues(alpha: 0.18) : const Color(0xFFFFEEEE),
+        iconColor: const Color(0xFFEF4444),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.transfer),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: CupertinoIcons.arrow_down_circle,
+        labelKey: 'expense.receive',
+        iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+        iconColor: const Color(0xFF7C3AED),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const AddEditExpenseScreen(initialType: EntryType.receive),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: CupertinoIcons.viewfinder,
+        labelKey: 'home.scanReceipt',
+        iconBg: isDark ? const Color(0xFFF97316).withValues(alpha: 0.18) : const Color(0xFFFFF3E8),
+        iconColor: const Color(0xFFF97316),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => const ImportReceiptScreen(openCamera: true),
+          ),
+        ),
+      ),
+      _QuickItem(
+        icon: CupertinoIcons.person_2,
+        labelKey: 'travel.groupTrip',
+        iconBg: isDark ? const Color(0xFFE86E2C).withValues(alpha: 0.18) : const Color(0xFFFFF0E8),
+        iconColor: const Color(0xFFE86E2C),
+        onTap: () => Navigator.push(
+          context,
+          CupertinoPageRoute(builder: (_) => const TravelGroupsScreen()),
+        ),
+      ),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                context.t('quickAdd.title'),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: brand.ink,
+                  letterSpacing: -0.2,
                 ),
-                Container(width: 1, height: 42, color: brand.divider),
-                Expanded(
-                  child: _BudgetAmountMetric(
-                    value: visible
-                        ? formatMoney('', budgetRemaining.abs()).trim()
-                        : '****',
-                    label: overspent
-                        ? context.t('home.overBy')
-                        : context.t('home.budgetRemaining'),
-                    valueColor: overspent
-                        ? AppColors.expense
-                        : AppColors.income,
-                  ),
+              ),
+              Text(
+                context.t('quickAdd.tapToStart'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-            ),
-            const SizedBox(height: 13),
-            _DottedDivider(color: brand.divider),
-            const SizedBox(height: 12),
-            _DailyStat(
-              label: context.t('home.avgDailySpending'),
-              value: visible ? formatMoney('', avgDaily).trim() : '****',
-              brand: brand,
-              dotColor: const Color(0xFFE89A14),
-            ),
-            const SizedBox(height: 8),
-            _DailyStat(
-              label: context.t('home.remainingDaily'),
-              value: visible
-                  ? (daysRemaining > 0
-                        ? formatMoney('', remainingDaily).trim()
-                        : '—')
-                  : '****',
-              brand: brand,
-              dotColor: AppActionBlue.color,
-              valueColor: daysRemaining > 0 && !overspent
-                  ? AppColors.income
-                  : null,
-            ),
-            if (totalInstallmentAmount > 0) ...[
-              const SizedBox(height: 12),
-              _DottedDivider(color: brand.divider),
-              const SizedBox(height: 12),
-              _InstallmentProgressRow(
-                visible: visible,
-                symbol: symbol,
-                paidAmount: totalInstallmentAmount - unpaidInstallmentTotal,
-                totalAmount: totalInstallmentAmount,
-                brand: brand,
               ),
             ],
-          ] else
-            SizedBox(
-              height: 219,
-              child: Center(
+          ),
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.05,
+            children: items.map((item) => _QuickAddButton(item: item)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickItem {
+  final IconData icon;
+  final String labelKey;
+  final Color iconBg;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _QuickItem({
+    required this.icon,
+    required this.labelKey,
+    required this.iconBg,
+    required this.iconColor,
+    required this.onTap,
+  });
+}
+
+class _QuickAddButton extends StatefulWidget {
+  final _QuickItem item;
+
+  const _QuickAddButton({required this.item});
+
+  @override
+  State<_QuickAddButton> createState() => _QuickAddButtonState();
+}
+
+class _QuickAddButtonState extends State<_QuickAddButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _press;
+
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      lowerBound: 0.94,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _press.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTapDown: (_) => _press.reverse(),
+      onTapUp: (_) {
+        _press.forward();
+        widget.item.onTap();
+      },
+      onTapCancel: () => _press.forward(),
+      child: ScaleTransition(
+        scale: _press,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? brand.background : const Color(0xFFF7F7FA),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: widget.item.iconBg,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(widget.item.icon, color: widget.item.iconColor, size: 20),
+              ),
+              const SizedBox(height: 7),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
-                  context.t('home.budgetNoBudget'),
+                  context.t(widget.item.labelKey),
                   style: TextStyle(
-                    fontSize: 13,
-                    color: brand.inkSoft,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
+                    color: brand.ink,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1290,286 +1376,6 @@ class _TopStat extends StatelessWidget {
       ],
     );
   }
-}
-
-class _BudgetAmountMetric extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color valueColor;
-
-  const _BudgetAmountMetric({
-    required this.value,
-    required this.label,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: valueColor,
-            height: 1.05,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: brand.inkSoft,
-            height: 1,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DailyStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final BrandColors brand;
-  final Color dotColor;
-  final Color? valueColor;
-
-  const _DailyStat({
-    required this.label,
-    required this.value,
-    required this.brand,
-    required this.dotColor,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 9,
-          height: 9,
-          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: brand.ink,
-              fontWeight: FontWeight.w500,
-              height: 1.1,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: valueColor ?? brand.ink,
-            height: 1.1,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InstallmentProgressRow extends StatelessWidget {
-  final bool visible;
-  final String symbol;
-  final double paidAmount;
-  final double totalAmount;
-  final BrandColors brand;
-
-  const _InstallmentProgressRow({
-    required this.visible,
-    required this.symbol,
-    required this.paidAmount,
-    required this.totalAmount,
-    required this.brand,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = totalAmount > 0
-        ? (paidAmount / totalAmount).clamp(0.0, 1.0)
-        : 0.0;
-    final allPaid = paidAmount >= totalAmount;
-    final barColor = allPaid ? AppColors.income : AppColors.expense;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(
-                color: barColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Installments',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: brand.ink,
-                  fontWeight: FontWeight.w500,
-                  height: 1.1,
-                ),
-              ),
-            ),
-            Text(
-              visible
-                  ? '${formatMoney(symbol, paidAmount)} / ${formatMoney(symbol, totalAmount)}'
-                  : '$symbol **** / ****',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: allPaid ? AppColors.income : AppColors.expense,
-                height: 1.1,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: progress),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.easeOutCubic,
-          builder: (context, animatedProgress, _) => ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Stack(
-              children: [
-                Container(
-                  height: 5,
-                  width: double.infinity,
-                  color: barColor.withValues(alpha: 0.15),
-                ),
-                FractionallySizedBox(
-                  widthFactor: animatedProgress,
-                  child: Container(
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: barColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ArcGaugePainter extends CustomPainter {
-  final double progress;
-  final Color bgColor;
-  final Color fgColor;
-  final double strokeWidth;
-
-  const _ArcGaugePainter({
-    required this.progress,
-    required this.bgColor,
-    required this.fgColor,
-    this.strokeWidth = 10,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height);
-    final radius = size.height - strokeWidth / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final bgPaint = Paint()
-      ..color = bgColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final fgPaint = Paint()
-      ..color = fgColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(rect, math.pi, math.pi, false, bgPaint);
-    if (progress > 0) {
-      canvas.drawArc(
-        rect,
-        math.pi,
-        math.pi * progress.clamp(0.0, 1.0),
-        false,
-        fgPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ArcGaugePainter old) =>
-      old.progress != progress ||
-      old.bgColor != bgColor ||
-      old.fgColor != fgColor ||
-      old.strokeWidth != strokeWidth;
-}
-
-class _DottedDivider extends StatelessWidget {
-  final Color color;
-
-  const _DottedDivider({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 1,
-      width: double.infinity,
-      child: CustomPaint(painter: _DottedDividerPainter(color)),
-    );
-  }
-}
-
-class _DottedDividerPainter extends CustomPainter {
-  final Color color;
-
-  const _DottedDividerPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
-    const dashWidth = 2.0;
-    const gap = 6.0;
-    var x = 0.0;
-    while (x < size.width) {
-      canvas.drawLine(
-        Offset(x, size.height / 2),
-        Offset(math.min(x + dashWidth, size.width), size.height / 2),
-        paint,
-      );
-      x += dashWidth + gap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DottedDividerPainter old) => old.color != color;
 }
 
 // ── All Activity bottom sheet ──────────────────────────────────

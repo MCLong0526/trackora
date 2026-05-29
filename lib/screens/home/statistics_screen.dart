@@ -219,16 +219,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               .where((e) => _inRange(e, range))
               .toList();
 
-          final prevRange = _prevRange();
-          final prevExpenses = prevRange != null
-              ? allExpenses.where((e) => _inRange(e, prevRange)).toList()
-              : <Expense>[];
-          final prevTotal = prevExpenses.fold<double>(
-            0,
-            (s, e) => s + e.convertedAmount,
-          );
-          final prevLabel = prevRange?.label ?? '';
-
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
             child: Column(
@@ -267,25 +257,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── 3. Spending header with comparison + exclude toggle
-                _SpendingHeader(
-                  period: _period,
-                  anchor: _anchor,
-                  rangeLabel: range.label,
-                  currentTotal: rangedExpenses.fold(0, (s, e) => s + e.convertedAmount),
-                  prevTotal: prevTotal,
-                  prevLabel: prevLabel,
-                  symbol: symbol,
-                  showNav: _period != _StatsPeriod.all,
-                  onPrev: () => _step(-1),
-                  onNext: () => _step(1),
-                  excludeFixed: _excludeFixed,
-                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
-                  hasForeignExpense: rangedExpenses.any((e) => e.baseCurrencyAmount != null),
-                ),
-                const SizedBox(height: 14),
-
-                // ── 4. Charts carousel (By Category + Trend)
+                // ── 3. Charts carousel (By Category + Trend) with nav + exclude controls
                 _buildReport(
                   visibleSections: visibleSections,
                   rangedExpenses: rangedExpenses,
@@ -293,6 +265,12 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   allExpenses: allExpenses,
                   range: range,
                   symbol: symbol,
+                  rangeLabel: range.label,
+                  showNav: _period != _StatsPeriod.all,
+                  onPrev: () => _step(-1),
+                  onNext: () => _step(1),
+                  excludeFixed: _excludeFixed,
+                  onExcludeChanged: (v) => setState(() => _excludeFixed = v),
                 ),
               ],
             ),
@@ -343,6 +321,12 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     required _StatsRange range,
     required String symbol,
     bool forReport = false,
+    String rangeLabel = '',
+    bool showNav = false,
+    VoidCallback? onPrev,
+    VoidCallback? onNext,
+    bool excludeFixed = true,
+    ValueChanged<bool>? onExcludeChanged,
   }) {
     final showLine =
         visibleSections.contains('lineChart') && _period != _StatsPeriod.all;
@@ -359,6 +343,12 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       period: _period,
       symbol: symbol,
       stacked: forReport,
+      rangeLabel: rangeLabel,
+      showNav: showNav,
+      onPrev: onPrev,
+      onNext: onNext,
+      excludeFixed: excludeFixed,
+      onExcludeChanged: onExcludeChanged,
     );
   }
 
@@ -469,12 +459,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       final boundary =
           captureKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
-      if (boundary == null)
+      if (boundary == null) {
         throw StateError('Could not locate capture boundary.');
+      }
       final image = await boundary.toImage(pixelRatio: 2.5);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null)
+      if (byteData == null) {
         throw StateError('Snapshot encoding returned null.');
+      }
       final bytes = byteData.buffer.asUint8List();
       final dir = await getTemporaryDirectory();
       final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
@@ -748,9 +740,6 @@ class _SpendingHeader extends StatelessWidget {
   final bool showNav;
   final VoidCallback onPrev;
   final VoidCallback onNext;
-  final bool? excludeFixed;
-  final ValueChanged<bool>? onExcludeChanged;
-  final bool hasForeignExpense;
 
   const _SpendingHeader({
     required this.period,
@@ -763,9 +752,6 @@ class _SpendingHeader extends StatelessWidget {
     required this.showNav,
     required this.onPrev,
     required this.onNext,
-    this.excludeFixed,
-    this.onExcludeChanged,
-    this.hasForeignExpense = false,
   });
 
   @override
@@ -815,18 +801,6 @@ class _SpendingHeader extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      if (hasForeignExpense) ...[
-                        Text(
-                          'est.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: brand.inkSoft,
-                            letterSpacing: -0.12,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                      ],
                       Text(
                         formatMoney(symbol, currentTotal),
                         style: TextStyle(
@@ -878,29 +852,6 @@ class _SpendingHeader extends StatelessWidget {
                 color: brand.inkSoft,
                 fontWeight: FontWeight.w600,
               ),
-            ),
-          ],
-          if (onExcludeChanged != null) ...[
-            const SizedBox(height: 14),
-            Container(height: 1, color: brand.divider),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.t('stats.excludeFixed'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: brand.inkSoft,
-                    ),
-                  ),
-                ),
-                CupertinoSwitch(
-                  value: excludeFixed ?? true,
-                  onChanged: onExcludeChanged,
-                ),
-              ],
             ),
           ],
         ],
@@ -1375,6 +1326,12 @@ class _ChartsCarousel extends StatefulWidget {
   final _StatsPeriod period;
   final String symbol;
   final bool stacked;
+  final String rangeLabel;
+  final bool showNav;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+  final bool excludeFixed;
+  final ValueChanged<bool>? onExcludeChanged;
 
   const _ChartsCarousel({
     required this.showLine,
@@ -1385,6 +1342,12 @@ class _ChartsCarousel extends StatefulWidget {
     required this.period,
     required this.symbol,
     required this.stacked,
+    this.rangeLabel = '',
+    this.showNav = false,
+    this.onPrev,
+    this.onNext,
+    this.excludeFixed = true,
+    this.onExcludeChanged,
   });
 
   @override
@@ -1471,6 +1434,18 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Controls bar: < period > + exclude toggle
+        if (widget.onExcludeChanged != null || widget.showNav) ...[
+          _StatsControlsBar(
+            rangeLabel: widget.rangeLabel,
+            showNav: widget.showNav,
+            onPrev: widget.onPrev ?? () {},
+            onNext: widget.onNext ?? () {},
+            excludeFixed: widget.excludeFixed,
+            onExcludeChanged: widget.onExcludeChanged,
+          ),
+          const SizedBox(height: 12),
+        ],
         // "By Category" / "Trend" — individual floating glass tabs
         Row(
           children: [
@@ -1514,6 +1489,97 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Stats controls bar (nav + exclude toggle) ──────────────────
+
+class _StatsControlsBar extends StatelessWidget {
+  final String rangeLabel;
+  final bool showNav;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final bool excludeFixed;
+  final ValueChanged<bool>? onExcludeChanged;
+
+  const _StatsControlsBar({
+    required this.rangeLabel,
+    required this.showNav,
+    required this.onPrev,
+    required this.onNext,
+    required this.excludeFixed,
+    this.onExcludeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+      child: Row(
+        children: [
+          if (showNav) _navBtn(context, CupertinoIcons.chevron_left, onPrev),
+          if (showNav) const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              rangeLabel.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: brand.inkSoft,
+                letterSpacing: 0.8,
+              ),
+              textAlign: showNav ? TextAlign.center : TextAlign.start,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (showNav) const SizedBox(width: 6),
+          if (showNav) _navBtn(context, CupertinoIcons.chevron_right, onNext),
+          if (onExcludeChanged != null) ...[
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                context.t('stats.excludeFixed'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: brand.inkSoft,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Transform.scale(
+              scale: 0.8,
+              child: CupertinoSwitch(
+                value: excludeFixed,
+                onChanged: onExcludeChanged,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _navBtn(BuildContext context, IconData icon, VoidCallback onTap) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 17, color: brand.ink),
+      ),
     );
   }
 }

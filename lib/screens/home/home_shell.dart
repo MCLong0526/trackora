@@ -1,19 +1,14 @@
-import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/expense_group.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
-import '../expenses/add_edit_expense_screen.dart';
-import '../expenses/import_receipt_screen.dart';
-import '../group/add_group_expense_screen.dart';
-import '../travel/travel_groups_screen.dart';
 import 'assets_screen.dart';
 import 'dashboard_screen.dart';
 import 'statistics_screen.dart';
@@ -28,8 +23,6 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
-  bool _fabOpen = false;
-  final _fabKey = GlobalKey<_AddFabState>();
 
   static const _screens = <Widget>[
     _HomeTabWrapper(),
@@ -38,23 +31,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     AssetsScreen(),
   ];
 
-  static const _navPurple = AppActionBlue.color;
-
   @override
   void initState() {
     super.initState();
     _maybeShowFirstLaunchCurrencyPicker();
   }
 
-  /// On the very first launch (flag not yet set), shows the currency picker
-  /// so the user can choose their currency before seeing any amounts.
   Future<void> _maybeShowFirstLaunchCurrencyPicker() async {
     final prefs = ref.read(prefsServiceProvider);
     final done = await prefs.isFirstLaunchDone();
     if (done || !mounted) return;
     await prefs.markFirstLaunchDone();
     if (!mounted) return;
-    // Defer until the first frame is drawn so the scaffold is ready.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final currentCode = await prefs.currencyCode();
@@ -82,117 +70,32 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
-  void _openManualEntry() {
-    Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => const AddEditExpenseScreen(),
-      ),
-    );
-  }
-
-  void _openCameraOcr() {
-    Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => const ImportReceiptScreen(openCamera: true),
-      ),
-    );
-  }
-
-  void _openGroupTrip() {
-    Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => const TravelGroupsScreen(),
-      ),
-    );
-  }
-
-  void _runAddAction(VoidCallback action) {
-    _fabKey.currentState?._close();
-    action();
-  }
-
-  void _openGroupExpense(ExpenseGroup group) {
-    Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => AddGroupExpenseScreen(group: group),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final homeMode = ref.watch(homeModeProvider);
-    final activeGroupId = ref.watch(activeGroupIdProvider);
-    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
-    final activeGroup = groups.cast<ExpenseGroup?>().firstWhere(
-      (g) => g?.id == activeGroupId,
-      orElse: () => groups.isNotEmpty ? groups.first : null,
-    );
-    final isGroupMode =
-        _index == 0 && homeMode == HomeMode.group && activeGroup != null;
-
     return Scaffold(
       backgroundColor: brand.background,
-      body: Stack(
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            transitionBuilder: (child, animation) {
-              final isEntering = child.key == ValueKey(_index);
-              return FadeTransition(
-                opacity: CurvedAnimation(
-                    parent: animation, curve: Curves.easeInOut),
-                child: ScaleTransition(
-                  scale: Tween<double>(
-                    begin: isEntering ? 0.97 : 1.02,
-                    end: 1.0,
-                  ).animate(CurvedAnimation(
-                      parent: animation, curve: Curves.easeOutCubic)),
-                  child: child,
-                ),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey(_index),
-              child: _screens[_index],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        transitionBuilder: (child, animation) {
+          final isEntering = child.key == ValueKey(_index);
+          return FadeTransition(
+            opacity: CurvedAnimation(
+                parent: animation, curve: Curves.easeInOut),
+            child: ScaleTransition(
+              scale: Tween<double>(
+                begin: isEntering ? 0.97 : 1.02,
+                end: 1.0,
+              ).animate(CurvedAnimation(
+                  parent: animation, curve: Curves.easeOutCubic)),
+              child: child,
             ),
-          ),
-          // Full-screen backdrop — dims content when speed-dial is open
-          IgnorePointer(
-            ignoring: !_fabOpen,
-            child: AnimatedOpacity(
-              opacity: _fabOpen ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeInOut,
-              child: GestureDetector(
-                onTap: () => _fabKey.currentState?._close(),
-                child: Container(color: Colors.black.withValues(alpha: 0.45)),
-              ),
-            ),
-          ),
-          if (!isGroupMode)
-            _SpeedDialOverlay(
-              open: _fabOpen,
-              onManualEntry: () => _runAddAction(_openManualEntry),
-              onScanReceipt: () => _runAddAction(_openCameraOcr),
-              onGroupTrip: () => _runAddAction(_openGroupTrip),
-            ),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: _AddFab(
-        key: _fabKey,
-        brand: brand,
-        onOpenChanged: (v) => setState(() => _fabOpen = v),
-        isGroupMode: isGroupMode,
-        onGroupAdd: isGroupMode
-            ? () => _openGroupExpense(activeGroup)
-            : null,
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey(_index),
+          child: _screens[_index],
+        ),
       ),
       bottomNavigationBar: _BottomBar(
         index: _index,
@@ -205,433 +108,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 }
 
-class _AddFab extends StatefulWidget {
-  final BrandColors brand;
-  final ValueChanged<bool>? onOpenChanged;
-  final bool isGroupMode;
-  final VoidCallback? onGroupAdd;
-
-  const _AddFab({
-    super.key,
-    required this.brand,
-    this.onOpenChanged,
-    this.isGroupMode = false,
-    this.onGroupAdd,
-  });
-
-  @override
-  State<_AddFab> createState() => _AddFabState();
-}
-
-class _AddFabState extends State<_AddFab> {
-  bool _open = false;
-
-  static const _navPurple = AppActionBlue.color;
-  static const double _stackH = 80;
-
-  void _toggle() {
-    if (widget.isGroupMode) {
-      widget.onGroupAdd?.call();
-      return;
-    }
-    if (_open) {
-      _close();
-    } else {
-      setState(() => _open = true);
-      widget.onOpenChanged?.call(true);
-    }
-  }
-
-  void _close() {
-    if (!_open) return;
-    setState(() => _open = false);
-    widget.onOpenChanged?.call(false);
-  }
-
-  Widget _fabColumn() => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      SizedBox(
-        width: 60,
-        height: 60,
-        child: FloatingActionButton(
-          backgroundColor: _navPurple,
-          elevation: _open ? 6 : 0,
-          shape: const CircleBorder(),
-          onPressed: _toggle,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeOutBack,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) => ScaleTransition(
-              scale: anim,
-              child: FadeTransition(opacity: anim, child: child),
-            ),
-            child: Icon(
-              _open ? CupertinoIcons.xmark : CupertinoIcons.add,
-              key: ValueKey(_open),
-              size: 24,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 4),
-      AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutBack,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.4),
-              end: Offset.zero,
-            ).animate(anim),
-            child: child,
-          ),
-        ),
-        child: Text(
-          widget.isGroupMode ? 'Group' : 'Add',
-          key: ValueKey(widget.isGroupMode),
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: widget.brand.inkSoft,
-          ),
-        ),
-      ),
-    ],
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      height: _stackH,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // FAB — anchored to bottom-centre of the fixed-size box
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Center(child: _fabColumn()),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SpeedDialOverlay extends StatefulWidget {
-  final bool open;
-  final VoidCallback onManualEntry;
-  final VoidCallback onScanReceipt;
-  final VoidCallback onGroupTrip;
-
-  const _SpeedDialOverlay({
-    required this.open,
-    required this.onManualEntry,
-    required this.onScanReceipt,
-    required this.onGroupTrip,
-  });
-
-  @override
-  State<_SpeedDialOverlay> createState() => _SpeedDialOverlayState();
-}
-
-class _SpeedDialOverlayState extends State<_SpeedDialOverlay>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _fadeLeft;
-  late final Animation<double> _moveLeft;
-  late final Animation<double> _fadeRight;
-  late final Animation<double> _moveRight;
-  late final Animation<double> _fadeTop;
-  late final Animation<double> _moveTop;
-
-  static const double _bottomGap = 78;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 380),
-    );
-    _fadeLeft = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.0, 0.65, curve: Curves.easeOut),
-    );
-    _moveLeft = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.0, 0.75, curve: Curves.easeOutBack),
-    );
-    _fadeRight = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.08, 0.72, curve: Curves.easeOut),
-    );
-    _moveRight = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.08, 0.80, curve: Curves.easeOutBack),
-    );
-    _fadeTop = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.16, 0.80, curve: Curves.easeOut),
-    );
-    _moveTop = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.16, 0.88, curve: Curves.easeOutBack),
-    );
-    if (widget.open) _ctrl.value = 1;
-  }
-
-  @override
-  void didUpdateWidget(covariant _SpeedDialOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.open == oldWidget.open) return;
-    if (widget.open) {
-      _ctrl.forward();
-    } else {
-      _ctrl.reverse();
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Positioned.fill(
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) => IgnorePointer(
-          ignoring: !widget.open,
-          child: Stack(
-            children: [
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: _bottomGap,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ── Group Trip (top center) ────────────────────────
-                    Transform.translate(
-                      offset: Offset(0, lerpDouble(30, 0, _moveTop.value)!),
-                      child: Transform.scale(
-                        scale: lerpDouble(0.75, 1.0, _moveTop.value)!,
-                        alignment: Alignment.bottomCenter,
-                        child: FadeTransition(
-                          opacity: _fadeTop,
-                          child: _HorizDialPill(
-                            icon: CupertinoIcons.airplane,
-                            label: context.t('travel.groupTrip'),
-                            isPrimary: false,
-                            isDark: isDark,
-                            onTap: widget.onGroupTrip,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // ── Create Entry + Scan Receipt row ────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Transform.rotate(
-                          angle: -0.07,
-                          child: Transform.translate(
-                            offset:
-                                Offset(0, lerpDouble(30, 0, _moveLeft.value)!),
-                            child: Transform.scale(
-                              scale: lerpDouble(0.75, 1.0, _moveLeft.value)!,
-                              alignment: Alignment.bottomCenter,
-                              child: FadeTransition(
-                                opacity: _fadeLeft,
-                                child: _HorizDialPill(
-                                  icon: CupertinoIcons.add,
-                                  label: context.t('home.createEntry'),
-                                  isPrimary: true,
-                                  isDark: isDark,
-                                  onTap: widget.onManualEntry,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Transform.rotate(
-                          angle: 0.07,
-                          child: Transform.translate(
-                            offset: Offset(
-                                0, lerpDouble(30, 0, _moveRight.value)!),
-                            child: Transform.scale(
-                              scale: lerpDouble(0.75, 1.0, _moveRight.value)!,
-                              alignment: Alignment.bottomCenter,
-                              child: FadeTransition(
-                                opacity: _fadeRight,
-                                child: _HorizDialPill(
-                                  icon: CupertinoIcons.camera_fill,
-                                  label: context.t('home.scanReceipt'),
-                                  isPrimary: false,
-                                  isDark: isDark,
-                                  onTap: widget.onScanReceipt,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Horizontal pill: [circle-icon] [label]
-// isPrimary → purple filled; !isPrimary → white/glass
-class _HorizDialPill extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final bool isPrimary;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _HorizDialPill({
-    required this.icon,
-    required this.label,
-    required this.isPrimary,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  State<_HorizDialPill> createState() => _HorizDialPillState();
-}
-
-class _HorizDialPillState extends State<_HorizDialPill>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _press;
-
-  @override
-  void initState() {
-    super.initState();
-    _press = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 90),
-      lowerBound: 0.93,
-      upperBound: 1.0,
-      value: 1.0,
-    );
-  }
-
-  @override
-  void dispose() {
-    _press.dispose();
-    super.dispose();
-  }
-
-  static const _purple = AppActionBlue.color;
-
-  @override
-  Widget build(BuildContext context) {
-    final pillBg = widget.isPrimary
-        ? _purple
-        : (widget.isDark ? const Color(0xFF2C2C2E) : Colors.white);
-    final labelColor = widget.isPrimary
-        ? Colors.white
-        : (widget.isDark ? Colors.white : const Color(0xFF1C1C1E));
-    final iconBg = widget.isPrimary
-        ? Colors.white.withValues(alpha: 0.22)
-        : (widget.isDark
-            ? Colors.white.withValues(alpha: 0.10)
-            : const Color(0xFFF0F0F5));
-    final iconColor = widget.isPrimary ? Colors.white : _purple;
-
-    return GestureDetector(
-      onTapDown: (_) => _press.reverse(),
-      onTapUp: (_) {
-        _press.forward();
-        widget.onTap();
-      },
-      onTapCancel: () => _press.forward(),
-      child: ScaleTransition(
-        scale: _press,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(100),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: pillBg,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: widget.isPrimary
-                      ? Colors.white.withValues(alpha: 0.18)
-                      : Colors.white
-                          .withValues(alpha: widget.isDark ? 0.12 : 0.7),
-                  width: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.isPrimary
-                        ? _purple.withValues(alpha: 0.32)
-                        : Colors.black
-                            .withValues(alpha: widget.isDark ? 0.25 : 0.10),
-                    blurRadius: widget.isPrimary ? 20 : 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: iconBg,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(widget.icon, color: iconColor, size: 16),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: labelColor,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _BottomBar extends StatefulWidget {
   final int index;
@@ -655,15 +131,9 @@ class _BottomBarState extends State<_BottomBar>
   Curve _curve = Curves.easeOutBack;
 
   static const _navPurple = AppActionBlue.color;
-  // Matches the original NavItem pill: icon(20) + 14px H-pad each side
   static const _indicatorW = 48.0;
-  // Height reduced to 28 so the pill clears the label below the icon
-  // Column: icon(20)+gap(3)+label(10)=33 → bar top inset≈15.5 → label starts at 38.5
-  // Pill top=8, height=28 → pill bottom=36, label start=38.5 → 2.5px clear
   static const _indicatorH = 28.0;
   static const _indicatorTop = 8.0;
-  // gap width reserved for the center FAB
-  static const _fabGap = 64.0;
 
   @override
   void initState() {
@@ -689,10 +159,8 @@ class _BottomBarState extends State<_BottomBar>
   }
 
   double _tabCenterX(int idx) {
-    final itemW = (_barWidth - _fabGap) / 4;
-    return idx < 2
-        ? (idx + 0.5) * itemW
-        : (idx + 0.5) * itemW + _fabGap;
+    final itemW = _barWidth / 4;
+    return (idx + 0.5) * itemW;
   }
 
   double get _currentX {
@@ -714,12 +182,11 @@ class _BottomBarState extends State<_BottomBar>
   }
 
   int? _indexFromLocalX(double x) {
-    final itemW = (_barWidth - _fabGap) / 4;
+    final itemW = _barWidth / 4;
     if (x < 0) return 0;
     if (x < itemW) return 0;
     if (x < itemW * 2) return 1;
-    if (x < itemW * 2 + _fabGap) return null; // FAB gap — excluded
-    if (x < itemW * 3 + _fabGap) return 2;
+    if (x < itemW * 3) return 2;
     return 3;
   }
 
@@ -868,7 +335,6 @@ class _BottomBarState extends State<_BottomBar>
                               selected: activeIndex == 1,
                               onTap: () => widget.onTap(1),
                             ),
-                            const SizedBox(width: _fabGap),
                             _NavItem(
                               icon: CupertinoIcons.creditcard,
                               label: context.t('tab.money'),
@@ -911,7 +377,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    const purple = _HomeShellState._navPurple;
+    const purple = AppActionBlue.color;
     final color = selected ? purple : brand.inkSoft;
     return Expanded(
       child: GestureDetector(
