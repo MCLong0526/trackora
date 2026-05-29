@@ -87,7 +87,7 @@ class AppStrings {
     'tab.home': 'Home',
     'tab.stats': 'Stats',
     'tab.budget': 'Budget',
-    'tab.money': 'Money',
+    'tab.money': 'Budget',
     'tab.assets': 'Assets',
     'tab.profile': 'Profile',
 
@@ -972,7 +972,7 @@ class AppStrings {
     'tab.home': '主页',
     'tab.stats': '统计',
     'tab.budget': '预算',
-    'tab.money': '资金',
+    'tab.money': '预算',
     'tab.assets': '资产',
     'tab.profile': '我的',
 
@@ -1823,7 +1823,7 @@ class AppStrings {
     'tab.home': 'Utama',
     'tab.stats': 'Statistik',
     'tab.budget': 'Bajet',
-    'tab.money': 'Wang',
+    'tab.money': 'Bajet',
     'tab.assets': 'Aset',
     'tab.profile': 'Profil',
 
