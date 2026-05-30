@@ -21,6 +21,7 @@ import '../../widgets/month_filter_bar.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
 import '../travel/travel_groups_screen.dart';
@@ -160,12 +161,13 @@ class DashboardScreen extends ConsumerWidget {
         );
 
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Row(
+      child: StickyHeaderScaffold(
+        header: Padding(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, hasGroups ? 4 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
@@ -235,17 +237,16 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
+              if (hasGroups) ...[
+                const SizedBox(height: 8),
+                PersonalGroupToggle(brand: brand),
+              ],
+            ],
           ),
-
-          if (hasGroups)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                child: PersonalGroupToggle(brand: brand),
-              ),
-            ),
-
+        ),
+        bodyBuilder: (sc) => CustomScrollView(
+          controller: sc,
+          slivers: [
           if (isGroupMode)
             SliverFillRemaining(
               hasScrollBody: true,
@@ -500,7 +501,8 @@ class DashboardScreen extends ConsumerWidget {
             const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ],
-      ),
+        ),  // end CustomScrollView
+      ),   // end StickyHeaderScaffold
     );
   }
 

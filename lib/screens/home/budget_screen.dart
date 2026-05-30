@@ -15,6 +15,7 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../installments/installments_screen.dart';
 import '../investments/investment_screen.dart';
@@ -404,11 +405,10 @@ class BudgetScreen extends ConsumerWidget {
     ];
 
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-        children: [
-          // ── Title row ────────────────────────────────────
-          Row(
+      child: StickyHeaderScaffold(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Row(
             children: [
               Expanded(
                 child: Text(
@@ -431,8 +431,12 @@ class BudgetScreen extends ConsumerWidget {
               ),
             ],
           ),
-
-          const SizedBox(height: 24),
+        ),
+        bodyBuilder: (sc) => ListView(
+          controller: sc,
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          children: [
+          const SizedBox(height: 16),
 
           // ── Accounts carousel (top section) ──────────────
           _GroupHeader(label: context.t('asset.title')),
@@ -464,8 +468,9 @@ class BudgetScreen extends ConsumerWidget {
                 ],
               ),
             ],
-        ],
-      ),
+          ],  // end ListView children
+        ),   // end ListView
+      ),     // end StickyHeaderScaffold
     );
   }
 

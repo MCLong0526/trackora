@@ -18,6 +18,7 @@ import '../../widgets/masked_amount.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 
 class AssetsScreen extends ConsumerStatefulWidget {
   const AssetsScreen({super.key});
@@ -61,14 +62,19 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
         accountsAsync.maybeWhen(loading: () => true, orElse: () => false);
 
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
+      child: StickyHeaderScaffold(
+        header: const Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: _Header(),
+        ),
+        bodyBuilder: (sc) => CustomScrollView(
+          controller: sc,
+          slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                const _Header(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 6),
                 if (isLoading && accounts.isEmpty)
                   const _LoadingCard()
                 else ...[
@@ -114,8 +120,9 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
               ]),
             ),
           ),
-        ],
-      ),
+          ],        // end slivers
+        ),          // end CustomScrollView
+      ),            // end StickyHeaderScaffold
     );
   }
 }

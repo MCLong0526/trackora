@@ -21,6 +21,7 @@ import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -208,145 +209,139 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final range = _currentRange(context);
 
     return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Always-visible header (title + period pills) ──────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
-            child: _TopActionBar(
-              onManage: () => _showVisibilitySheet(context),
-              onShare: _isSharing ? null : () => _shareSnapshot(context),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: _PeriodPills(
-              period: _period,
-              onChanged: (p) {
-                if (p == _StatsPeriod.custom) {
-                  _showDateRangePicker();
-                  return;
-                }
-                setState(() {
-                  _period = p;
-                  final now = DateTime.now();
-                  switch (p) {
-                    case _StatsPeriod.week:
-                      _anchor = _startOfWeek(now);
-                      break;
-                    case _StatsPeriod.month:
-                    case _StatsPeriod.sixMonth:
-                      _anchor = DateTime(now.year, now.month, 1);
-                      break;
-                    case _StatsPeriod.year:
-                      _anchor = DateTime(now.year, 1, 1);
-                      break;
-                    case _StatsPeriod.all:
-                    case _StatsPeriod.custom:
-                      break;
-                  }
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ── Content (loading / error / data) ─────────────────────────────
-          Expanded(
-            child: allExpensesAsync.when(
-              loading: () => const Center(child: CupertinoActivityIndicator()),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('${context.t('common.error')}: $e'),
-                ),
+      child: StickyHeaderScaffold(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _TopActionBar(
+                onManage: () => _showVisibilitySheet(context),
+                onShare: _isSharing ? null : () => _shareSnapshot(context),
               ),
-              data: (allItems) {
-                final allExpenses = allItems
-                    .where((e) => e.type == EntryType.expense)
-                    .toList();
-                final allIncome = allItems
-                    .where((e) => e.type == EntryType.income)
-                    .toList();
-
-                final rangedExpenses = allExpenses
-                    .where((e) => _inRange(e, range))
-                    .toList();
-                final rangedIncome = allIncome
-                    .where((e) => _inRange(e, range))
-                    .toList();
-
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _buildReport(
-                        visibleSections: visibleSections,
-                        rangedExpenses: rangedExpenses,
-                        rangedIncome: rangedIncome,
-                        allExpenses: allExpenses,
-                        range: range,
-                        symbol: symbol,
-                        rangeLabel: range.label,
-                        showNav: _period != _StatsPeriod.all &&
-                            _period != _StatsPeriod.custom,
-                        onPrev: () => _step(-1),
-                        onNext: () => _step(1),
-                      ),
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: GestureDetector(
-                          onTap: _showDateRangePicker,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOutCubic,
-                            padding: _period == _StatsPeriod.custom
-                                ? const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 7)
-                                : const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: _period == _StatsPeriod.custom
-                                  ? AppActionBlue.color
-                                  : context.brand.background,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: _period == _StatsPeriod.custom &&
-                                    _customStart != null
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(CupertinoIcons.calendar,
-                                          size: 13, color: Colors.white),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Icon(
-                                    CupertinoIcons.calendar,
-                                    size: 16,
-                                    color: context.brand.inkSoft,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              const SizedBox(height: 16),
+              _PeriodPills(
+                period: _period,
+                onChanged: (p) {
+                  if (p == _StatsPeriod.custom) {
+                    _showDateRangePicker();
+                    return;
+                  }
+                  setState(() {
+                    _period = p;
+                    final now = DateTime.now();
+                    switch (p) {
+                      case _StatsPeriod.week:
+                        _anchor = _startOfWeek(now);
+                        break;
+                      case _StatsPeriod.month:
+                      case _StatsPeriod.sixMonth:
+                        _anchor = DateTime(now.year, now.month, 1);
+                        break;
+                      case _StatsPeriod.year:
+                        _anchor = DateTime(now.year, 1, 1);
+                        break;
+                      case _StatsPeriod.all:
+                      case _StatsPeriod.custom:
+                        break;
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        bodyBuilder: (sc) => allExpensesAsync.when(
+          loading: () => const Center(child: CupertinoActivityIndicator()),
+          error: (e, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('${context.t('common.error')}: $e'),
             ),
           ),
-        ],
+          data: (allItems) {
+            final allExpenses = allItems
+                .where((e) => e.type == EntryType.expense)
+                .toList();
+            final allIncome = allItems
+                .where((e) => e.type == EntryType.income)
+                .toList();
+
+            final rangedExpenses = allExpenses
+                .where((e) => _inRange(e, range))
+                .toList();
+            final rangedIncome = allIncome
+                .where((e) => _inRange(e, range))
+                .toList();
+
+            return SingleChildScrollView(
+              controller: sc,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _buildReport(
+                    visibleSections: visibleSections,
+                    rangedExpenses: rangedExpenses,
+                    rangedIncome: rangedIncome,
+                    allExpenses: allExpenses,
+                    range: range,
+                    symbol: symbol,
+                    rangeLabel: range.label,
+                    showNav: _period != _StatsPeriod.all &&
+                        _period != _StatsPeriod.custom,
+                    onPrev: () => _step(-1),
+                    onNext: () => _step(1),
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: _showDateRangePicker,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
+                        padding: _period == _StatsPeriod.custom
+                            ? const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7)
+                            : const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _period == _StatsPeriod.custom
+                              ? AppActionBlue.color
+                              : context.brand.background,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: _period == _StatsPeriod.custom &&
+                                _customStart != null
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(CupertinoIcons.calendar,
+                                      size: 13, color: Colors.white),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Icon(
+                                CupertinoIcons.calendar,
+                                size: 16,
+                                color: context.brand.inkSoft,
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
