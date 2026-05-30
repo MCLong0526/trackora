@@ -366,6 +366,12 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                         borderRadius: BorderRadius.circular(36),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.10)
+                              : Colors.black.withValues(alpha: 0.07),
+                          width: 0.8,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(

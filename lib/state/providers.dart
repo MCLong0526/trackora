@@ -907,6 +907,32 @@ final groupExpensesProvider =
       return LocalExpenseGroupRepository().getExpenses(groupId);
     });
 
+// ── Quick Add order ──────────────────────────────────────────────────────────
+
+class QuickAddOrderNotifier extends StateNotifier<List<int>> {
+  final PrefsService _prefs;
+
+  QuickAddOrderNotifier(this._prefs)
+      : super(PrefsService.defaultQuickAddOrder) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final order = await _prefs.quickAddOrder();
+    if (mounted) state = order;
+  }
+
+  Future<void> setOrder(List<int> order) async {
+    state = order;
+    await _prefs.setQuickAddOrder(order);
+  }
+}
+
+final quickAddOrderProvider =
+    StateNotifierProvider<QuickAddOrderNotifier, List<int>>(
+  (ref) => QuickAddOrderNotifier(ref.read(prefsServiceProvider)),
+);
+
 // Background sync: pushes Firestore data into local Hive so partners'
 // expenses become visible without restarting the app.
 final groupExpenseSyncProvider =

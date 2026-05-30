@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -1133,116 +1134,328 @@ class _InlineBudgetBar extends StatelessWidget {
 
 // ── Quick add card ──────────────────────────────────────────────
 
-class _QuickAddCard extends StatelessWidget {
+class _QuickAddCard extends ConsumerStatefulWidget {
   const _QuickAddCard();
+
+  @override
+  ConsumerState<_QuickAddCard> createState() => _QuickAddCardState();
+}
+
+class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
+  bool _expanded = false;
+
+  List<_QuickItem> _allItems(bool isDark) => [
+    _QuickItem(
+      icon: CupertinoIcons.minus,
+      labelKey: 'expense.expense',
+      iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+      iconColor: const Color(0xFF7C3AED),
+      pageBuilder: () => const AddEditExpenseScreen(initialType: EntryType.expense),
+    ),
+    _QuickItem(
+      icon: CupertinoIcons.plus,
+      labelKey: 'expense.income',
+      iconBg: isDark ? const Color(0xFF22C55E).withValues(alpha: 0.20) : const Color(0xFFE8FBF0),
+      iconColor: const Color(0xFF22C55E),
+      pageBuilder: () => const AddEditExpenseScreen(initialType: EntryType.income),
+    ),
+    _QuickItem(
+      icon: CupertinoIcons.arrow_right_arrow_left,
+      labelKey: 'expense.transfer',
+      iconBg: isDark ? const Color(0xFFEF4444).withValues(alpha: 0.18) : const Color(0xFFFFEEEE),
+      iconColor: const Color(0xFFEF4444),
+      pageBuilder: () => const AddEditExpenseScreen(initialType: EntryType.transfer),
+    ),
+    _QuickItem(
+      icon: CupertinoIcons.arrow_down_circle,
+      labelKey: 'expense.receive',
+      iconBg: isDark ? const Color(0xFF7C3AED).withValues(alpha: 0.22) : const Color(0xFFEFEBFF),
+      iconColor: const Color(0xFF7C3AED),
+      pageBuilder: () => const AddEditExpenseScreen(initialType: EntryType.receive),
+    ),
+    _QuickItem(
+      icon: CupertinoIcons.viewfinder,
+      labelKey: 'home.scanReceipt',
+      iconBg: isDark ? const Color(0xFFF97316).withValues(alpha: 0.18) : const Color(0xFFFFF3E8),
+      iconColor: const Color(0xFFF97316),
+      pageBuilder: () => const ImportReceiptScreen(openCamera: true),
+    ),
+    _QuickItem(
+      icon: CupertinoIcons.person_2,
+      labelKey: 'travel.groupTrip',
+      iconBg: isDark ? const Color(0xFFE86E2C).withValues(alpha: 0.18) : const Color(0xFFFFF0E8),
+      iconColor: const Color(0xFFE86E2C),
+      pageBuilder: () => const TravelGroupsScreen(),
+    ),
+  ];
+
+  void _openReorderSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentOrder = ref.read(quickAddOrderProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _QuickAddReorderSheet(
+        order: List<int>.from(currentOrder),
+        items: _allItems(isDark),
+        onSave: (newOrder) =>
+            ref.read(quickAddOrderProvider.notifier).setOrder(newOrder),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final order = ref.watch(quickAddOrderProvider);
+    final all = _allItems(isDark);
+    final ordered = order.map((i) => all[i]).toList();
 
-    final items = [
-      _QuickItem(
-        icon: CupertinoIcons.minus,
-        labelKey: 'expense.expense',
-        iconBg: isDark
-            ? const Color(0xFF7C3AED).withValues(alpha: 0.22)
-            : const Color(0xFFEFEBFF),
-        iconColor: const Color(0xFF7C3AED),
-        pageBuilder: () => const AddEditExpenseScreen(
-          initialType: EntryType.expense,
-        ),
-      ),
-      _QuickItem(
-        icon: CupertinoIcons.plus,
-        labelKey: 'expense.income',
-        iconBg: isDark
-            ? const Color(0xFF22C55E).withValues(alpha: 0.20)
-            : const Color(0xFFE8FBF0),
-        iconColor: const Color(0xFF22C55E),
-        pageBuilder: () => const AddEditExpenseScreen(
-          initialType: EntryType.income,
-        ),
-      ),
-      _QuickItem(
-        icon: CupertinoIcons.arrow_right_arrow_left,
-        labelKey: 'expense.transfer',
-        iconBg: isDark
-            ? const Color(0xFFEF4444).withValues(alpha: 0.18)
-            : const Color(0xFFFFEEEE),
-        iconColor: const Color(0xFFEF4444),
-        pageBuilder: () => const AddEditExpenseScreen(
-          initialType: EntryType.transfer,
-        ),
-      ),
-      _QuickItem(
-        icon: CupertinoIcons.arrow_down_circle,
-        labelKey: 'expense.receive',
-        iconBg: isDark
-            ? const Color(0xFF7C3AED).withValues(alpha: 0.22)
-            : const Color(0xFFEFEBFF),
-        iconColor: const Color(0xFF7C3AED),
-        pageBuilder: () => const AddEditExpenseScreen(
-          initialType: EntryType.receive,
-        ),
-      ),
-      _QuickItem(
-        icon: CupertinoIcons.viewfinder,
-        labelKey: 'home.scanReceipt',
-        iconBg: isDark
-            ? const Color(0xFFF97316).withValues(alpha: 0.18)
-            : const Color(0xFFFFF3E8),
-        iconColor: const Color(0xFFF97316),
-        pageBuilder: () => const ImportReceiptScreen(openCamera: true),
-      ),
-      _QuickItem(
-        icon: CupertinoIcons.person_2,
-        labelKey: 'travel.groupTrip',
-        iconBg: isDark
-            ? const Color(0xFFE86E2C).withValues(alpha: 0.18)
-            : const Color(0xFFFFF0E8),
-        iconColor: const Color(0xFFE86E2C),
-        pageBuilder: () => const TravelGroupsScreen(),
-      ),
-    ];
+    Widget buildRow(int start, int end) => Row(
+      children: [
+        for (var i = start; i < end; i++) ...[
+          if (i > start) const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAddButton(
+              item: ordered[i],
+              onLongPress: _openReorderSheet,
+            ),
+          ),
+        ],
+      ],
+    );
 
     return Container(
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(24),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.t('quickAdd.title'),
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: brand.ink,
-              letterSpacing: -0.2,
-            ),
+          Row(
+            children: [
+              Text(
+                context.t('quickAdd.title'),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: brand.ink,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _openReorderSheet,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    CupertinoIcons.slider_horizontal_3,
+                    size: 16,
+                    color: brand.inkSoft,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var i = 0; i < 3; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                Expanded(child: _QuickAddButton(item: items[i])),
+          buildRow(0, 3),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 260),
+            sizeCurve: Curves.easeOutCubic,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Column(
+              children: [
+                const SizedBox(height: 10),
+                buildRow(3, 6),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              for (var i = 3; i < 6; i++) ...[
-                if (i > 3) const SizedBox(width: 10),
-                Expanded(child: _QuickAddButton(item: items[i])),
-              ],
-            ],
+          const SizedBox(height: 6),
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _expanded = !_expanded);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
+                child: AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(
+                    CupertinoIcons.chevron_down,
+                    size: 14,
+                    color: brand.inkSoft,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Reorder sheet ─────────────────────────────────────────────────────────────
+
+class _QuickAddReorderSheet extends StatefulWidget {
+  final List<int> order;
+  final List<_QuickItem> items;
+  final void Function(List<int>) onSave;
+
+  const _QuickAddReorderSheet({
+    required this.order,
+    required this.items,
+    required this.onSave,
+  });
+
+  @override
+  State<_QuickAddReorderSheet> createState() => _QuickAddReorderSheetState();
+}
+
+class _QuickAddReorderSheetState extends State<_QuickAddReorderSheet> {
+  late List<int> _order;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = List<int>.from(widget.order);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Customize Quick Add',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: brand.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'First 3 shown by default. Drag to reorder.',
+                          style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      widget.onSave(_order);
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0066CC),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            SizedBox(
+              height: 336,
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: _order.length,
+                buildDefaultDragHandles: false,
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex--;
+                    final item = _order.removeAt(oldIndex);
+                    _order.insert(newIndex, item);
+                  });
+                },
+                itemBuilder: (ctx, index) {
+                  final itemIdx = _order[index];
+                  final item = widget.items[itemIdx];
+                  return Material(
+                    key: ValueKey(itemIdx),
+                    color: Colors.transparent,
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: item.iconBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(item.icon, color: item.iconColor, size: 19),
+                      ),
+                      title: Text(
+                        context.t(item.labelKey),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: brand.ink,
+                        ),
+                      ),
+                      subtitle: index < 3
+                          ? Text(
+                              'Shown by default',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: const Color(0xFF0066CC).withValues(alpha: 0.8),
+                              ),
+                            )
+                          : null,
+                      trailing: ReorderableDragStartListener(
+                        index: index,
+                        child: Icon(
+                          CupertinoIcons.line_horizontal_3,
+                          color: brand.inkSoft,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1266,8 +1479,9 @@ class _QuickItem {
 
 class _QuickAddButton extends StatefulWidget {
   final _QuickItem item;
+  final VoidCallback? onLongPress;
 
-  const _QuickAddButton({required this.item});
+  const _QuickAddButton({required this.item, this.onLongPress});
 
   @override
   State<_QuickAddButton> createState() => _QuickAddButtonState();
@@ -1329,6 +1543,12 @@ class _QuickAddButtonState extends State<_QuickAddButton>
         _navigate();
       },
       onTapCancel: () => _press.forward(),
+      onLongPress: widget.onLongPress != null
+          ? () {
+              HapticFeedback.mediumImpact();
+              widget.onLongPress!();
+            }
+          : null,
       child: ScaleTransition(
         scale: _press,
         child: SizedBox(

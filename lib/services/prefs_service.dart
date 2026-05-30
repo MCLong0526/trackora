@@ -22,6 +22,7 @@ class PrefsService {
   static const _kCycleDayStart = 'cycle_day_start';
   static const _kMoneyHubDragHintShown = 'money_hub_drag_hint_shown';
   static const _kUserName = 'user_name';
+  static const _kQuickAddOrder = 'quick_add_order';
 
   static const defaultHomeCards = <String>[
     'totalBalance',
@@ -261,6 +262,28 @@ class PrefsService {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.setInt(_kCycleDayStart, day.clamp(1, 28));
+  }
+
+  static const defaultQuickAddOrder = <int>[0, 1, 2, 3, 4, 5];
+
+  Future<List<int>> quickAddOrder() async {
+    final p = await _prefsOrNull();
+    if (p == null) return defaultQuickAddOrder;
+    final saved = p.getStringList(_kQuickAddOrder);
+    if (saved == null || saved.length != 6) return defaultQuickAddOrder;
+    try {
+      final order = saved.map(int.parse).toList();
+      if (order.toSet().length == 6 && order.every((i) => i >= 0 && i < 6)) {
+        return order;
+      }
+    } catch (_) {}
+    return defaultQuickAddOrder;
+  }
+
+  Future<void> setQuickAddOrder(List<int> order) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setStringList(_kQuickAddOrder, order.map((i) => '$i').toList());
   }
 
   Future<bool> liveActivityEnabled() async {
