@@ -342,6 +342,8 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         animation: Listenable.merge([_pillCtrl, _glassCtrl]),
         builder: (context, _) {
           final t = Curves.easeOutCubic.transform(_glassCtrl.value);
+          // Lens is always at least 80% visible at rest, expands to 100% on touch.
+          final lensProgress = lerpDouble(0.8, 1.0, t)!;
           final barH = lerpDouble(_compactH, _liquidH, t)!;
           final jelly = Curves.easeOut.transform(_dragStretch) * t;
           final lensBaseW = lerpDouble(_lensWBase, _lensWExpanded, t)!;
@@ -392,7 +394,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                   width: lensW,
                   height: lensH,
                   child: _LiquidGlassLens(
-                    progress: t,
+                    progress: lensProgress,
                     isDark: isDark,
                     jelly: jelly,
                     direction: _dragDirection,
@@ -573,16 +575,16 @@ class _LiquidGlassLens extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = progress.clamp(0.0, 1.0);
     final rimOpacity = lerpDouble(0.0, 1.0, t)!;
-    final blur = lerpDouble(22.0, 34.0, t)!;
-    final radiusValue = lerpDouble(999, 30, t)!;
+    final blur = lerpDouble(24.0, 34.0, t)!;
+    final radiusValue = lerpDouble(24.0, 30.0, t)!;
     final radius = BorderRadius.circular(radiusValue);
     final glowShift = lerpDouble(0, 6, jelly)! * direction;
     final tintTop = isDark
         ? lerpDouble(0.22, 0.30, t)!
-        : lerpDouble(0.0, 0.15, t)!;
+        : lerpDouble(0.10, 0.18, t)!;
     final tintBottom = isDark
         ? lerpDouble(0.12, 0.18, t)!
-        : lerpDouble(0.0, 0.08, t)!;
+        : lerpDouble(0.05, 0.10, t)!;
 
     return Transform.translate(
       offset: Offset(glowShift * 0.16, 0),

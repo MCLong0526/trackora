@@ -307,35 +307,8 @@ class BudgetScreen extends ConsumerWidget {
         .where(_isDiscretionary)
         .fold<double>(0, (s, e) => s + e.convertedAmount);
 
-    // ── Quick-style button items ──────────────────────────────────────────────
+    // ── Quick-style button items — standard modules first, tools at end ─────────
     final quickItems = <_BudgetQuickItem>[
-      _BudgetQuickItem(
-        icon: CupertinoIcons.calendar_badge_plus,
-        iconBg: AppColors.butter,
-        iconColor: AppColors.ink,
-        label: context.t('settings.customExpenseCycle'),
-        onTap: () => _showCycleSheet(context),
-      ),
-      _BudgetQuickItem(
-        icon: CupertinoIcons.person_2_fill,
-        iconBg: const Color(0xFFEAE3F8),
-        iconColor: const Color(0xFF5A4AAB),
-        label: 'Groups',
-        onTap: () {
-          HapticFeedback.selectionClick();
-          if (groups.isEmpty) {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
-            );
-          } else {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
-            );
-          }
-        },
-      ),
       if (visibleModules.contains('monthlyBudget'))
         _BudgetQuickItem(
           icon: CupertinoIcons.chart_pie_fill,
@@ -400,6 +373,34 @@ class BudgetScreen extends ConsumerWidget {
           label: 'Portfolio',
           onTap: () => _push(context, const InvestmentScreen()),
         ),
+      // ── Always-visible tools ──────────────────────────────
+      _BudgetQuickItem(
+        icon: CupertinoIcons.calendar_badge_plus,
+        iconBg: AppColors.butter,
+        iconColor: AppColors.ink,
+        label: 'Expense Cycle',
+        onTap: () => _showCycleSheet(context),
+      ),
+      _BudgetQuickItem(
+        icon: CupertinoIcons.person_2_fill,
+        iconBg: const Color(0xFFEAE3F8),
+        iconColor: const Color(0xFF5A4AAB),
+        label: 'Groups',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          if (groups.isEmpty) {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
+            );
+          }
+        },
+      ),
     ];
 
     return SafeArea(
@@ -451,7 +452,7 @@ class BudgetScreen extends ConsumerWidget {
           const SizedBox(height: 10),
           if (quickItems.isNotEmpty)
             for (int row = 0; row * 3 < quickItems.length; row++) ...[
-              if (row > 0) const SizedBox(height: 2),
+              if (row > 0) const SizedBox(height: 4),
               Row(
                 children: [
                   for (int col = 0; col < 3; col++)
@@ -923,30 +924,38 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
       child: ScaleTransition(
         scale: _press,
         child: SizedBox(
-          height: 72,
+          height: 84,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   color: widget.item.iconBg,
-                  borderRadius: BorderRadius.circular(13),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.item.iconBg.withValues(alpha: 0.55),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Icon(
                   widget.item.icon,
                   color: widget.item.iconColor,
-                  size: 20,
+                  size: 22,
                 ),
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 7),
               Text(
                 widget.item.label,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: brand.ink,
+                  letterSpacing: -0.1,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,

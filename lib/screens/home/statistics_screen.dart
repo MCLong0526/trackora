@@ -274,18 +274,60 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── 3. Charts carousel (By Category + Trend) with nav + exclude controls
-                _buildReport(
-                  visibleSections: visibleSections,
-                  rangedExpenses: rangedExpenses,
-                  rangedIncome: rangedIncome,
-                  allExpenses: allExpenses,
-                  range: range,
-                  symbol: symbol,
-                  rangeLabel: range.label,
-                  showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
-                  onPrev: () => _step(-1),
-                  onNext: () => _step(1),
+                // ── 3. Charts carousel with calendar date-range button overlay
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _buildReport(
+                      visibleSections: visibleSections,
+                      rangedExpenses: rangedExpenses,
+                      rangedIncome: rangedIncome,
+                      allExpenses: allExpenses,
+                      range: range,
+                      symbol: symbol,
+                      rangeLabel: range.label,
+                      showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
+                      onPrev: () => _step(-1),
+                      onNext: () => _step(1),
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: _showDateRangePicker,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          padding: _period == _StatsPeriod.custom
+                              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 7)
+                              : const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _period == _StatsPeriod.custom
+                                ? AppActionBlue.color
+                                : context.brand.background,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: _period == _StatsPeriod.custom && _customStart != null
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(CupertinoIcons.calendar, size: 13, color: Colors.white),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
+                                      style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                )
+                              : Icon(
+                                  CupertinoIcons.calendar,
+                                  size: 16,
+                                  color: context.brand.inkSoft,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -631,21 +673,26 @@ class _PeriodPills extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: [
-        for (int i = 0; i < _StatsPeriod.values.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: _PeriodPill(
-              label: _label(context, _StatsPeriod.values[i]),
-              selected: period == _StatsPeriod.values[i],
-              onTap: () {
-                HapticFeedback.selectionClick();
-                onChanged(_StatsPeriod.values[i]);
-              },
-            ),
-          ),
-        ],
-      ],
+      children: () {
+          final periods = _StatsPeriod.values
+              .where((p) => p != _StatsPeriod.custom)
+              .toList();
+          return <Widget>[
+            for (int i = 0; i < periods.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: _PeriodPill(
+                  label: _label(context, periods[i]),
+                  selected: period == periods[i],
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onChanged(periods[i]);
+                  },
+                ),
+              ),
+            ],
+          ];
+        }(),
     );
   }
 
@@ -1766,18 +1813,49 @@ class _CategoryCardState extends State<_CategoryCard> {
 
     if (widget.expenses.isEmpty) {
       final emptyContent = Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        child: Center(
-          child: Text(
-            context.t('stats.noCategorySpend'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: brand.inkSoft),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: brand.background,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                CupertinoIcons.chart_pie_fill,
+                size: 28,
+                color: brand.inkSoft.withValues(alpha: 0.45),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              context.t('stats.noDataTitle'),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: brand.ink,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t('stats.noCategorySpend'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: brand.inkSoft,
+                height: 1.45,
+              ),
+            ),
+          ],
         ),
       );
       if (widget.bare) return emptyContent;
       return _FloatCard(
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+        padding: EdgeInsets.zero,
         child: emptyContent,
       );
     }
