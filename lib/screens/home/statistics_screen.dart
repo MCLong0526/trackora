@@ -208,131 +208,145 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final range = _currentRange(context);
 
     return SafeArea(
-      child: allExpensesAsync.when(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('${context.t('common.error')}: $e'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Always-visible header (title + period pills) ──────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+            child: _TopActionBar(
+              onManage: () => _showVisibilitySheet(context),
+              onShare: _isSharing ? null : () => _shareSnapshot(context),
+            ),
           ),
-        ),
-        data: (allItems) {
-          final allExpenses = allItems
-              .where((e) => e.type == EntryType.expense)
-              .toList();
-          final allIncome = allItems
-              .where((e) => e.type == EntryType.income)
-              .toList();
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: _PeriodPills(
+              period: _period,
+              onChanged: (p) {
+                if (p == _StatsPeriod.custom) {
+                  _showDateRangePicker();
+                  return;
+                }
+                setState(() {
+                  _period = p;
+                  final now = DateTime.now();
+                  switch (p) {
+                    case _StatsPeriod.week:
+                      _anchor = _startOfWeek(now);
+                      break;
+                    case _StatsPeriod.month:
+                    case _StatsPeriod.sixMonth:
+                      _anchor = DateTime(now.year, now.month, 1);
+                      break;
+                    case _StatsPeriod.year:
+                      _anchor = DateTime(now.year, 1, 1);
+                      break;
+                    case _StatsPeriod.all:
+                    case _StatsPeriod.custom:
+                      break;
+                  }
+                });
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
 
-          final rangedExpenses = allExpenses
-              .where((e) => _inRange(e, range))
-              .toList();
-          final rangedIncome = allIncome
-              .where((e) => _inRange(e, range))
-              .toList();
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── 1. Top action bar
-                _TopActionBar(
-                  onManage: () => _showVisibilitySheet(context),
-                  onShare: _isSharing ? null : () => _shareSnapshot(context),
+          // ── Content (loading / error / data) ─────────────────────────────
+          Expanded(
+            child: allExpensesAsync.when(
+              loading: () => const Center(child: CupertinoActivityIndicator()),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('${context.t('common.error')}: $e'),
                 ),
-                const SizedBox(height: 20),
+              ),
+              data: (allItems) {
+                final allExpenses = allItems
+                    .where((e) => e.type == EntryType.expense)
+                    .toList();
+                final allIncome = allItems
+                    .where((e) => e.type == EntryType.income)
+                    .toList();
 
-                // ── 2. Period pills (W M 6M Y All Date)
-                _PeriodPills(
-                  period: _period,
-                  onChanged: (p) {
-                    if (p == _StatsPeriod.custom) {
-                      _showDateRangePicker();
-                      return;
-                    }
-                    setState(() {
-                      _period = p;
-                      final now = DateTime.now();
-                      switch (p) {
-                        case _StatsPeriod.week:
-                          _anchor = _startOfWeek(now);
-                          break;
-                        case _StatsPeriod.month:
-                        case _StatsPeriod.sixMonth:
-                          _anchor = DateTime(now.year, now.month, 1);
-                          break;
-                        case _StatsPeriod.year:
-                          _anchor = DateTime(now.year, 1, 1);
-                          break;
-                        case _StatsPeriod.all:
-                        case _StatsPeriod.custom:
-                          break;
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 14),
+                final rangedExpenses = allExpenses
+                    .where((e) => _inRange(e, range))
+                    .toList();
+                final rangedIncome = allIncome
+                    .where((e) => _inRange(e, range))
+                    .toList();
 
-                // ── 3. Charts carousel with calendar date-range button overlay
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    _buildReport(
-                      visibleSections: visibleSections,
-                      rangedExpenses: rangedExpenses,
-                      rangedIncome: rangedIncome,
-                      allExpenses: allExpenses,
-                      range: range,
-                      symbol: symbol,
-                      rangeLabel: range.label,
-                      showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
-                      onPrev: () => _step(-1),
-                      onNext: () => _step(1),
-                    ),
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: GestureDetector(
-                        onTap: _showDateRangePicker,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeOutCubic,
-                          padding: _period == _StatsPeriod.custom
-                              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 7)
-                              : const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _period == _StatsPeriod.custom
-                                ? AppActionBlue.color
-                                : context.brand.background,
-                            borderRadius: BorderRadius.circular(12),
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 120),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _buildReport(
+                        visibleSections: visibleSections,
+                        rangedExpenses: rangedExpenses,
+                        rangedIncome: rangedIncome,
+                        allExpenses: allExpenses,
+                        range: range,
+                        symbol: symbol,
+                        rangeLabel: range.label,
+                        showNav: _period != _StatsPeriod.all &&
+                            _period != _StatsPeriod.custom,
+                        onPrev: () => _step(-1),
+                        onNext: () => _step(1),
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: GestureDetector(
+                          onTap: _showDateRangePicker,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            padding: _period == _StatsPeriod.custom
+                                ? const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 7)
+                                : const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _period == _StatsPeriod.custom
+                                  ? AppActionBlue.color
+                                  : context.brand.background,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: _period == _StatsPeriod.custom &&
+                                    _customStart != null
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(CupertinoIcons.calendar,
+                                          size: 13, color: Colors.white),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Icon(
+                                    CupertinoIcons.calendar,
+                                    size: 16,
+                                    color: context.brand.inkSoft,
+                                  ),
                           ),
-                          child: _period == _StatsPeriod.custom && _customStart != null
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(CupertinoIcons.calendar, size: 13, color: Colors.white),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
-                                      style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                )
-                              : Icon(
-                                  CupertinoIcons.calendar,
-                                  size: 16,
-                                  color: context.brand.inkSoft,
-                                ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -403,35 +417,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     );
   }
 
-  Future<void> _showDateRangePicker() async {
-    final now = DateTime.now();
-    final result = await showDateRangePicker(
+  void _showDateRangePicker() {
+    showModalBottomSheet<void>(
       context: context,
-      firstDate: DateTime(2020, 1, 1),
-      lastDate: now,
-      initialDateRange: _customStart != null && _customEnd != null
-          ? DateTimeRange(start: _customStart!, end: _customEnd!)
-          : DateTimeRange(
-              start: now.subtract(const Duration(days: 30)),
-              end: now,
-            ),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: AppActionBlue.color,
-            onPrimary: Colors.white,
-          ),
-        ),
-        child: child!,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (_) => _DateRangeSheet(
+        initialStart: _customStart,
+        initialEnd: _customEnd,
+        onConfirm: (start, end) {
+          if (mounted) {
+            setState(() {
+              _customStart = start;
+              _customEnd = end;
+              _period = _StatsPeriod.custom;
+            });
+          }
+        },
       ),
     );
-    if (result != null && mounted) {
-      setState(() {
-        _customStart = result.start;
-        _customEnd = result.end;
-        _period = _StatsPeriod.custom;
-      });
-    }
   }
 
   Future<void> _shareSnapshot(BuildContext context) async {
@@ -2316,6 +2321,325 @@ class _RecordRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── iOS-style date range picker sheet ─────────────────────────
+
+class _DateRangeSheet extends StatefulWidget {
+  final DateTime? initialStart;
+  final DateTime? initialEnd;
+  final void Function(DateTime start, DateTime end) onConfirm;
+
+  const _DateRangeSheet({
+    required this.onConfirm,
+    this.initialStart,
+    this.initialEnd,
+  });
+
+  @override
+  State<_DateRangeSheet> createState() => _DateRangeSheetState();
+}
+
+class _DateRangeSheetState extends State<_DateRangeSheet> {
+  DateTime? _start;
+  DateTime? _end;
+  late DateTime _month;
+
+  static const _weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.initialStart;
+    _end = widget.initialEnd;
+    final ref = widget.initialEnd ?? widget.initialStart ?? DateTime.now();
+    _month = DateTime(ref.year, ref.month);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  void _onDayTap(DateTime day) {
+    setState(() {
+      if (_start == null || (_start != null && _end != null)) {
+        _start = day;
+        _end = null;
+      } else {
+        if (day.isBefore(_start!)) {
+          _end = _start;
+          _start = day;
+        } else {
+          _end = day;
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = AppActionBlue.color;
+    final rangeColor = accent.withValues(alpha: isDark ? 0.22 : 0.12);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    String rangeLabel() {
+      if (_start == null) return 'Select start date';
+      if (_end == null) return '${DateFormat('d MMM yyyy').format(_start!)} — ?';
+      return '${DateFormat('d MMM').format(_start!)} – ${DateFormat('d MMM yyyy').format(_end!)}';
+    }
+
+    final firstOfMonth = _month;
+    final startWeekday = firstOfMonth.weekday % 7;
+    final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
+
+    Widget dayCell(int day) {
+      final date = DateTime(_month.year, _month.month, day);
+      final isStart = _start != null && _isSameDay(date, _start!);
+      final isEnd = _end != null && _isSameDay(date, _end!);
+      final isSelected = isStart || isEnd;
+      final inRange = _start != null &&
+          _end != null &&
+          !date.isBefore(_start!) &&
+          !date.isAfter(_end!);
+      final isToday = _isSameDay(date, today);
+      final isFuture = date.isAfter(today);
+
+      final textColor = isFuture
+          ? brand.inkSoft.withValues(alpha: 0.35)
+          : isSelected
+              ? Colors.white
+              : brand.ink;
+
+      // Range strip: full-width background for interior days, half-width for edges
+      Widget cell = Container(
+        decoration: inRange && !isStart && !isEnd
+            ? BoxDecoration(color: rangeColor)
+            : (isStart && _end != null
+                ? BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, rangeColor],
+                    ),
+                  )
+                : isEnd && _start != null
+                    ? BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [rangeColor, Colors.transparent],
+                        ),
+                      )
+                    : null),
+        child: Center(
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: isSelected
+                ? BoxDecoration(color: accent, shape: BoxShape.circle)
+                : isToday
+                    ? BoxDecoration(
+                        border: Border.all(color: accent, width: 1.5),
+                        shape: BoxShape.circle,
+                      )
+                    : null,
+            child: Center(
+              child: Text(
+                '$day',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      if (isFuture) return cell;
+      return GestureDetector(onTap: () => _onDayTap(date), child: cell);
+    }
+
+    final cells = <Widget>[
+      for (var i = 0; i < startWeekday; i++) const SizedBox(),
+      for (var d = 1; d <= daysInMonth; d++) dayCell(d),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 60, 0, 0),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // ── Sheet header ─────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Range',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          rangeLabel(),
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: brand.ink,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_start != null && _end != null)
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      color: accent,
+                      borderRadius: BorderRadius.circular(20),
+                      minimumSize: Size.zero,
+                      onPressed: () {
+                        widget.onConfirm(_start!, _end!);
+                        Navigator.pop(context);
+                      },
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(height: 0.5, color: brand.divider),
+            const SizedBox(height: 12),
+            // ── Month navigation ─────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _month = DateTime(_month.year, _month.month - 1);
+                    }),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: brand.background,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(CupertinoIcons.chevron_left,
+                          size: 14, color: brand.ink),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      DateFormat('MMMM yyyy').format(_month),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: brand.ink,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _month.year == today.year &&
+                            _month.month == today.month
+                        ? null
+                        : () => setState(() {
+                              _month =
+                                  DateTime(_month.year, _month.month + 1);
+                            }),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: brand.background,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 14,
+                        color: _month.year == today.year &&
+                                _month.month == today.month
+                            ? brand.inkSoft.withValues(alpha: 0.3)
+                            : brand.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            // ── Weekday headers ──────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  for (final d in _weekdays)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          d,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: brand.inkSoft,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            // ── Calendar grid ────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: GridView.count(
+                crossAxisCount: 7,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.0,
+                children: cells,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }
