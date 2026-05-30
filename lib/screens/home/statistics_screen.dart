@@ -33,6 +33,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   _StatsPeriod _period = _StatsPeriod.month;
   late DateTime _anchor;
   bool _isSharing = false;
+  DateTime? _customStart;
+  DateTime? _customEnd;
 
   @override
   void initState() {
@@ -97,6 +99,17 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           endExclusive: null,
           label: context.t('stats.filterAll'),
         );
+      case _StatsPeriod.custom:
+        if (_customStart == null || _customEnd == null) {
+          return _StatsRange(start: null, endExclusive: null, label: context.t('stats.filterAll'));
+        }
+        return _StatsRange(
+          start: _customStart,
+          endExclusive: _customEnd!.add(const Duration(days: 1)),
+          label:
+              '${DateFormat('d MMM').format(_customStart!)} – '
+              '${DateFormat('d MMM').format(_customEnd!)}',
+        );
     }
   }
 
@@ -147,6 +160,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         );
       case _StatsPeriod.all:
         return null;
+      case _StatsPeriod.custom:
+        return null;
     }
   }
 
@@ -178,6 +193,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           _anchor = DateTime(_anchor.year + dir, 1, 1);
           break;
         case _StatsPeriod.all:
+          break;
+        case _StatsPeriod.custom:
           break;
       }
     });
@@ -226,10 +243,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // ── 2. Period pills (W M 6M Y All)
+                // ── 2. Period pills (W M 6M Y All Date)
                 _PeriodPills(
                   period: _period,
                   onChanged: (p) {
+                    if (p == _StatsPeriod.custom) {
+                      _showDateRangePicker();
+                      return;
+                    }
                     setState(() {
                       _period = p;
                       final now = DateTime.now();
@@ -245,6 +266,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           _anchor = DateTime(now.year, 1, 1);
                           break;
                         case _StatsPeriod.all:
+                        case _StatsPeriod.custom:
                           break;
                       }
                     });
@@ -261,7 +283,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                   range: range,
                   symbol: symbol,
                   rangeLabel: range.label,
-                  showNav: _period != _StatsPeriod.all,
+                  showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
                   onPrev: () => _step(-1),
                   onNext: () => _step(1),
                 ),
@@ -285,7 +307,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           final visible = ref.watch(statsSectionsVisibilityProvider);
           final notifier = ref.read(statsSectionsVisibilityProvider.notifier);
           final items = [
-            ('lineChart', context.t('stats.section.lineChart')),
             ('donutChart', context.t('stats.section.donutChart')),
           ];
           return _VisibilitySheet(
@@ -319,8 +340,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     VoidCallback? onPrev,
     VoidCallback? onNext,
   }) {
-    final showLine =
-        visibleSections.contains('lineChart') && _period != _StatsPeriod.all;
+    const showLine = false;
     final showDonut = visibleSections.contains('donutChart');
 
     if (!showLine && !showDonut) return const SizedBox.shrink();
@@ -339,6 +359,37 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       onPrev: onPrev,
       onNext: onNext,
     );
+  }
+
+  Future<void> _showDateRangePicker() async {
+    final now = DateTime.now();
+    final result = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: now,
+      initialDateRange: _customStart != null && _customEnd != null
+          ? DateTimeRange(start: _customStart!, end: _customEnd!)
+          : DateTimeRange(
+              start: now.subtract(const Duration(days: 30)),
+              end: now,
+            ),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            primary: AppActionBlue.color,
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _customStart = result.start;
+        _customEnd = result.end;
+        _period = _StatsPeriod.custom;
+      });
+    }
   }
 
   Future<void> _shareSnapshot(BuildContext context) async {
@@ -474,7 +525,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   }
 }
 
-enum _StatsPeriod { week, month, sixMonth, year, all }
+enum _StatsPeriod { week, month, sixMonth, year, all, custom }
 
 class _StatsRange {
   final DateTime? start;
@@ -604,6 +655,7 @@ class _PeriodPills extends StatelessWidget {
     _StatsPeriod.sixMonth => context.t('stats.filterSixMonth'),
     _StatsPeriod.year => context.t('stats.filterYear'),
     _StatsPeriod.all => context.t('stats.filterAll'),
+    _StatsPeriod.custom => context.t('stats.filterCustom'),
   };
 }
 
@@ -806,6 +858,8 @@ class _SpendingHeader extends StatelessWidget {
         return '${DateFormat('yyyy').format(anchor)} · TOTAL SPENDING';
       case _StatsPeriod.all:
         return 'ALL TIME · TOTAL SPENDING';
+      case _StatsPeriod.custom:
+        return 'CUSTOM RANGE · TOTAL SPENDING';
     }
   }
 
@@ -998,6 +1052,7 @@ class _LineChartCardState extends State<_LineChartCard>
       _StatsPeriod.sixMonth => context.t('stats.lineChart.monthSubtitle'),
       _StatsPeriod.year => context.t('stats.lineChart.yearSubtitle'),
       _StatsPeriod.all => context.t('stats.lineChart.allSubtitle'),
+      _StatsPeriod.custom => context.t('stats.lineChart.allSubtitle'),
     };
   }
 
@@ -1087,6 +1142,8 @@ class _LineChartCardState extends State<_LineChartCard>
         }
         final labels = [for (int i = 0; i < n; i++) '${minYear + i}'];
         return _LineSeries(values: values, labels: labels, denseLabels: n <= 8);
+      case _StatsPeriod.custom:
+        return _emptySeries;
     }
   }
 
@@ -1568,6 +1625,7 @@ class _ReportHeader extends StatelessWidget {
       _StatsPeriod.sixMonth => 'stats.filterSixMonth',
       _StatsPeriod.year => 'stats.filterYear',
       _StatsPeriod.all => 'stats.filterAll',
+      _StatsPeriod.custom => 'stats.filterCustom',
     };
     final generated = DateFormat('MMM d, yyyy · HH:mm').format(DateTime.now());
     return _FloatCard(

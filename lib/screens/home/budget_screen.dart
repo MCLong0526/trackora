@@ -21,6 +21,8 @@ import '../investments/investment_screen.dart';
 import '../people/people_screen.dart';
 import '../savings/saving_plans_screen.dart';
 import '../travel/travel_groups_screen.dart';
+import '../group/create_group_screen.dart';
+import '../group/group_dashboard_screen.dart';
 
 bool _isDiscretionary(Expense e) =>
     e.type == EntryType.expense &&
@@ -299,13 +301,41 @@ class BudgetScreen extends ConsumerWidget {
         ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
     final visible = ref.watch(balanceVisibleProvider);
     final accountBalances = _computeBalances(accounts, allExpenses);
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
         .fold<double>(0, (s, e) => s + e.convertedAmount);
 
-    // ── Quick-style button items (visible modules only) ──────────────────────
+    // ── Quick-style button items ──────────────────────────────────────────────
     final quickItems = <_BudgetQuickItem>[
+      _BudgetQuickItem(
+        icon: CupertinoIcons.calendar_badge_plus,
+        iconBg: AppColors.butter,
+        iconColor: AppColors.ink,
+        label: context.t('settings.customExpenseCycle'),
+        onTap: () => _showCycleSheet(context),
+      ),
+      _BudgetQuickItem(
+        icon: CupertinoIcons.person_2_fill,
+        iconBg: const Color(0xFFEAE3F8),
+        iconColor: const Color(0xFF5A4AAB),
+        label: 'Groups',
+        onTap: () {
+          HapticFeedback.selectionClick();
+          if (groups.isEmpty) {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
+            );
+          } else {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
+            );
+          }
+        },
+      ),
       if (visibleModules.contains('monthlyBudget'))
         _BudgetQuickItem(
           icon: CupertinoIcons.chart_pie_fill,
@@ -421,7 +451,7 @@ class BudgetScreen extends ConsumerWidget {
           const SizedBox(height: 10),
           if (quickItems.isNotEmpty)
             for (int row = 0; row * 3 < quickItems.length; row++) ...[
-              if (row > 0) const SizedBox(height: 4),
+              if (row > 0) const SizedBox(height: 2),
               Row(
                 children: [
                   for (int col = 0; col < 3; col++)
@@ -441,6 +471,16 @@ class BudgetScreen extends ConsumerWidget {
   static void _push(BuildContext context, Widget screen) {
     HapticFeedback.selectionClick();
     Navigator.push(context, CupertinoPageRoute(builder: (_) => screen));
+  }
+
+  static void _showCycleSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      isScrollControlled: true,
+      builder: (_) => const _CycleSheetContent(),
+    );
   }
 
   void _showMoneyHubSheet(BuildContext context, WidgetRef ref) {
@@ -481,6 +521,178 @@ class BudgetScreen extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Expense Cycle sheet (accessible from Management grid) ─────────────────────
+
+class _CycleSheetContent extends ConsumerWidget {
+  const _CycleSheetContent();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final useCustom = ref.watch(useCustomCycleProvider);
+    final cycleDay = ref.watch(cycleDayStartProvider);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Text(
+                context.t('settings.customExpenseCycle'),
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.butter,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.calendar_badge_plus,
+                      size: 16,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      context.t('settings.customExpenseCycleSub'),
+                      style: TextStyle(fontSize: 14, color: brand.inkSoft),
+                    ),
+                  ),
+                  CupertinoSwitch(
+                    value: useCustom,
+                    activeTrackColor: AppColors.income,
+                    onChanged: (v) {
+                      HapticFeedback.selectionClick();
+                      ref.read(useCustomCycleProvider.notifier).set(v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            if (useCustom) ...[
+              Container(height: 0.5, color: brand.divider, margin: const EdgeInsets.symmetric(horizontal: 14)),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _pickCycleDay(context, ref, cycleDay, brand),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.mint,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Icon(CupertinoIcons.number, size: 16, color: AppColors.ink),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            context.t('settings.cycleStartsOnDay'),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink),
+                          ),
+                        ),
+                        Text('$cycleDay', style: TextStyle(fontSize: 15, color: brand.inkSoft)),
+                        const SizedBox(width: 6),
+                        Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickCycleDay(BuildContext context, WidgetRef ref, int current, BrandColors brand) async {
+    int selected = current;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        decoration: BoxDecoration(color: brand.surface, borderRadius: BorderRadius.circular(20)),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.t('settings.cycleStartsOnDay'),
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: brand.ink),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: const Text('Done', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0066CC))),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 200,
+                child: StatefulBuilder(
+                  builder: (context, setLocal) => CupertinoPicker(
+                    scrollController: FixedExtentScrollController(initialItem: selected - 1),
+                    itemExtent: 40,
+                    onSelectedItemChanged: (i) {
+                      selected = i + 1;
+                      ref.read(cycleDayStartProvider.notifier).set(selected);
+                    },
+                    children: List.generate(28, (i) => Center(child: Text('${i + 1}', style: TextStyle(fontSize: 18, color: brand.ink)))),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -711,24 +923,24 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
       child: ScaleTransition(
         scale: _press,
         child: SizedBox(
-          height: 82,
+          height: 72,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: widget.item.iconBg,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(
                   widget.item.icon,
                   color: widget.item.iconColor,
-                  size: 21,
+                  size: 20,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 5),
               Text(
                 widget.item.label,
                 style: TextStyle(

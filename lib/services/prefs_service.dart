@@ -51,7 +51,6 @@ class PrefsService {
   ];
 
   static const defaultStatsSections = <String>[
-    'lineChart',
     'importantData',
     'donutChart',
   ];
