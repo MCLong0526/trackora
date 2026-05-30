@@ -349,25 +349,6 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
           final lensW = lensBaseW + lerpDouble(0, 8, jelly)!;
           final lensH = lensBaseH - lerpDouble(0, 3, jelly)!;
           final cx = _currentX;
-          final blurSigma = isDark
-              ? lerpDouble(24.0, 36.0, t)!
-              : lerpDouble(28.0, 44.0, t)!;
-          // Dark mode: rich dark frosted glass matching WhatsApp reference
-          final bgTopAlpha = isDark
-              ? lerpDouble(0.12, 0.16, t)!
-              : lerpDouble(0.48, 0.58, t)!;
-          final bgBotAlpha = isDark
-              ? lerpDouble(0.06, 0.09, t)!
-              : lerpDouble(0.30, 0.38, t)!;
-          final borderAlpha = isDark
-              ? lerpDouble(0.20, 0.28, t)!
-              : lerpDouble(0.68, 0.82, t)!;
-          final shadowAlpha = isDark
-              ? lerpDouble(0.26, 0.34, t)!
-              : lerpDouble(0.08, 0.12, t)!;
-          final specularPeak = isDark
-              ? lerpDouble(0.28, 0.40, t)!
-              : lerpDouble(0.60, 0.80, t)!;
 
           // Stack with Clip.none allows circle to overflow bar bounds
           return SizedBox(
@@ -375,79 +356,30 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // ── Layer 1: Glass bar background (clipped pill) ──────────
+                // ── Layer 1: Solid bar background (iOS 26 style) ──────────
                 Positioned.fill(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(36),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(
-                        sigmaX: blurSigma,
-                        sigmaY: blurSigma,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withValues(alpha: bgTopAlpha),
-                              Colors.white.withValues(alpha: bgBotAlpha),
-                            ],
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                        borderRadius: BorderRadius.circular(36),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.40 : 0.10,
+                            ),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
                           ),
-                          borderRadius: BorderRadius.circular(36),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: borderAlpha),
-                            width: 1.0,
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.18 : 0.04,
+                            ),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: shadowAlpha,
-                              ),
-                              blurRadius: lerpDouble(24.0, 34.0, t)!,
-                              offset: const Offset(0, 10),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: shadowAlpha * 0.45,
-                              ),
-                              blurRadius: lerpDouble(7.0, 10.0, t)!,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          children: [
-                            // Specular highlight line at top edge
-                            Positioned(
-                              top: 0,
-                              left: 8,
-                              right: 8,
-                              height: 1.5,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.white.withValues(
-                                        alpha: specularPeak - 0.08,
-                                      ),
-                                      Colors.white.withValues(
-                                        alpha: specularPeak,
-                                      ),
-                                      Colors.white.withValues(
-                                        alpha: specularPeak - 0.08,
-                                      ),
-                                      Colors.transparent,
-                                    ],
-                                    stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-                                  ),
-                                  borderRadius: BorderRadius.circular(1),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -574,12 +506,12 @@ class _NavItem extends StatelessWidget {
         ? accent
         : (isDark
               ? Colors.white.withValues(alpha: 0.48)
-              : brand.ink.withValues(alpha: 0.38));
+              : brand.ink.withValues(alpha: 0.45));
     final labelColor = selected
         ? accent
         : (isDark
               ? Colors.white.withValues(alpha: 0.42)
-              : brand.ink.withValues(alpha: 0.36));
+              : brand.ink.withValues(alpha: 0.45));
     final iconSz = lerpDouble(25.0, 26.0, glassExpand)!;
     final labelSz = lerpDouble(10.5, 11.0, glassExpand)!;
 
@@ -647,10 +579,10 @@ class _LiquidGlassLens extends StatelessWidget {
     final glowShift = lerpDouble(0, 6, jelly)! * direction;
     final tintTop = isDark
         ? lerpDouble(0.22, 0.30, t)!
-        : lerpDouble(0.70, 0.82, t)!;
+        : lerpDouble(0.0, 0.15, t)!;
     final tintBottom = isDark
         ? lerpDouble(0.12, 0.18, t)!
-        : lerpDouble(0.50, 0.60, t)!;
+        : lerpDouble(0.0, 0.08, t)!;
 
     return Transform.translate(
       offset: Offset(glowShift * 0.16, 0),
