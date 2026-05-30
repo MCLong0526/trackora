@@ -349,14 +349,16 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
           final lensW = lensBaseW + lerpDouble(0, 8, jelly)!;
           final lensH = lensBaseH - lerpDouble(0, 3, jelly)!;
           final cx = _currentX;
-          final blurSigma = lerpDouble(24.0, 36.0, t)!;
+          final blurSigma = isDark
+              ? lerpDouble(24.0, 36.0, t)!
+              : lerpDouble(28.0, 44.0, t)!;
           // Dark mode: rich dark frosted glass matching WhatsApp reference
           final bgTopAlpha = isDark
               ? lerpDouble(0.12, 0.16, t)!
-              : lerpDouble(0.42, 0.50, t)!;
+              : lerpDouble(0.48, 0.58, t)!;
           final bgBotAlpha = isDark
               ? lerpDouble(0.06, 0.09, t)!
-              : lerpDouble(0.28, 0.34, t)!;
+              : lerpDouble(0.30, 0.38, t)!;
           final borderAlpha = isDark
               ? lerpDouble(0.20, 0.28, t)!
               : lerpDouble(0.68, 0.82, t)!;
@@ -364,8 +366,8 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
               ? lerpDouble(0.26, 0.34, t)!
               : lerpDouble(0.08, 0.12, t)!;
           final specularPeak = isDark
-              ? lerpDouble(0.22, 0.32, t)!
-              : lerpDouble(0.48, 0.62, t)!;
+              ? lerpDouble(0.28, 0.40, t)!
+              : lerpDouble(0.60, 0.80, t)!;
 
           // Stack with Clip.none allows circle to overflow bar bounds
           return SizedBox(
@@ -419,9 +421,9 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                             // Specular highlight line at top edge
                             Positioned(
                               top: 0,
-                              left: 12,
-                              right: 12,
-                              height: 1.0,
+                              left: 8,
+                              right: 8,
+                              height: 1.5,
                               child: Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
@@ -706,6 +708,30 @@ class _LiquidGlassLens extends StatelessWidget {
                 ),
               ),
             ),
+            // Radial inner luminosity — iOS 26 glass "inner bubble" glow
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.2),
+                      radius: 0.85,
+                      colors: [
+                        Colors.white.withValues(
+                          alpha: (isDark ? 0.20 : 0.34) * t,
+                        ),
+                        Colors.white.withValues(
+                          alpha: (isDark ? 0.06 : 0.12) * t,
+                        ),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.42, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
             CustomPaint(
               painter: _LiquidGlassRimPainter(
                 opacity: rimOpacity,
@@ -716,10 +742,10 @@ class _LiquidGlassLens extends StatelessWidget {
               ),
             ),
             Positioned(
-              left: 12 + glowShift.clamp(-3.0, 3.0),
-              top: 8,
-              right: 14 - glowShift.clamp(-3.0, 3.0),
-              height: 13,
+              left: 10 + glowShift.clamp(-3.0, 3.0),
+              top: 7,
+              right: 12 - glowShift.clamp(-3.0, 3.0),
+              height: 16,
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -728,7 +754,7 @@ class _LiquidGlassLens extends StatelessWidget {
                       colors: [
                         Colors.white.withValues(alpha: 0.0),
                         Colors.white.withValues(
-                          alpha: lerpDouble(0.08, 0.22, t)!,
+                          alpha: lerpDouble(0.16, 0.36, t)!,
                         ),
                         Colors.white.withValues(alpha: 0.0),
                       ],
