@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
@@ -274,6 +275,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 .where((e) => _inRange(e, range))
                 .toList();
 
+            final accounts = ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
+
             return SingleChildScrollView(
               controller: sc,
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
@@ -287,6 +290,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                     allExpenses: allExpenses,
                     range: range,
                     symbol: symbol,
+                    accounts: accounts,
                     rangeLabel: range.label,
                     showNav: _period != _StatsPeriod.all &&
                         _period != _StatsPeriod.custom,
@@ -385,6 +389,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     required List<Expense> allExpenses,
     required _StatsRange range,
     required String symbol,
+    List<Account> accounts = const [],
     bool forReport = false,
     String rangeLabel = '',
     bool showNav = false,
@@ -394,21 +399,37 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     const showLine = false;
     final showDonut = visibleSections.contains('donutChart');
 
-    if (!showLine && !showDonut) return const SizedBox.shrink();
-
-    return _ChartsCarousel(
-      showLine: showLine,
-      showDonut: showDonut,
-      allExpenses: allExpenses,
-      rangedExpenses: rangedExpenses,
-      range: range,
-      period: _period,
-      symbol: symbol,
-      stacked: forReport,
-      rangeLabel: rangeLabel,
-      showNav: showNav,
-      onPrev: onPrev,
-      onNext: onNext,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showDonut || showLine)
+          _ChartsCarousel(
+            showLine: showLine,
+            showDonut: showDonut,
+            allExpenses: allExpenses,
+            rangedExpenses: rangedExpenses,
+            range: range,
+            period: _period,
+            symbol: symbol,
+            stacked: forReport,
+            rangeLabel: rangeLabel,
+            showNav: showNav,
+            onPrev: onPrev,
+            onNext: onNext,
+          ),
+        if (accounts.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _AccountActivityCard(
+            accounts: accounts,
+            rangedExpenses: [...rangedExpenses, ...rangedIncome],
+            allExpenses: allExpenses,
+            range: range,
+            period: _period,
+            symbol: symbol,
+          ),
+        ],
+      ],
     );
   }
 
@@ -675,7 +696,7 @@ class _PeriodPills extends StatelessWidget {
     return Row(
       children: () {
           final periods = _StatsPeriod.values
-              .where((p) => p != _StatsPeriod.custom)
+              .where((p) => p != _StatsPeriod.custom && p != _StatsPeriod.all)
               .toList();
           return <Widget>[
             for (int i = 0; i < periods.length; i++) ...[
@@ -2736,6 +2757,247 @@ class _VisibilitySwitchRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Account activity card ────────────────────────────────────────
+
+class _AccountActivityCard extends StatelessWidget {
+  final List<Account> accounts;
+  final List<Expense> rangedExpenses;
+  final List<Expense> allExpenses;
+  final _StatsRange range;
+  final _StatsPeriod period;
+  final String symbol;
+
+  const _AccountActivityCard({
+    required this.accounts,
+    required this.rangedExpenses,
+    required this.allExpenses,
+    required this.range,
+    required this.period,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+
+    // Compute per-account income/expense within the selected range
+    final Map<String, double> incomeByAccount = {};
+    final Map<String, double> expenseByAccount = {};
+
+    for (final e in rangedExpenses) {
+      final aid = e.accountId;
+      if (aid == null) continue;
+      if (e.type == EntryType.income) {
+        incomeByAccount[aid] = (incomeByAccount[aid] ?? 0) + e.convertedAmount;
+      } else if (e.type == EntryType.expense) {
+        expenseByAccount[aid] = (expenseByAccount[aid] ?? 0) + e.convertedAmount;
+      }
+    }
+
+    // Compute running balance for each account (from all expenses up to range end)
+    final Map<String, double> balances = {};
+    for (final a in accounts) {
+      balances[a.id] = a.openingBalance;
+    }
+    final cutoff = range.endExclusive;
+    for (final e in allExpenses) {
+      if (cutoff != null) {
+        final d = DateTime(e.date.year, e.date.month, e.date.day);
+        if (!d.isBefore(cutoff)) continue;
+      }
+      final aid = e.accountId;
+      if (aid != null && balances.containsKey(aid)) {
+        balances[aid] = (balances[aid] ?? 0) + (e.type.isInflow ? e.convertedAmount : -e.convertedAmount);
+      }
+      final toId = e.toAccountId;
+      if (toId != null && balances.containsKey(toId)) {
+        balances[toId] = (balances[toId] ?? 0) + e.convertedAmount;
+      }
+    }
+
+    // Only show accounts that have any activity OR non-zero balance
+    final activeAccounts = accounts.where((a) =>
+      (incomeByAccount[a.id] ?? 0) > 0 ||
+      (expenseByAccount[a.id] ?? 0) > 0 ||
+      (balances[a.id] ?? 0) != 0,
+    ).toList();
+
+    if (activeAccounts.isEmpty) return const SizedBox.shrink();
+
+    return _FloatCard(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ACCOUNT OVERVIEW',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: brand.inkSoft,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < activeAccounts.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 4),
+              Divider(height: 1, color: brand.divider),
+              const SizedBox(height: 8),
+            ],
+            _AccountActivityRow(
+              account: activeAccounts[i],
+              balance: balances[activeAccounts[i].id] ?? 0,
+              income: incomeByAccount[activeAccounts[i].id] ?? 0,
+              expense: expenseByAccount[activeAccounts[i].id] ?? 0,
+              symbol: symbol,
+            ),
+          ],
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountActivityRow extends StatelessWidget {
+  final Account account;
+  final double balance;
+  final double income;
+  final double expense;
+  final String symbol;
+
+  const _AccountActivityRow({
+    required this.account,
+    required this.balance,
+    required this.income,
+    required this.expense,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final net = income - expense;
+    final isPositive = net >= 0;
+    final hasActivity = income > 0 || expense > 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: brand.background,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _accountIcon(account.type),
+              size: 17,
+              color: brand.inkSoft,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  account.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  balance >= 0
+                      ? formatMoney(symbol, balance)
+                      : '−${formatMoney(symbol, balance.abs())}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: balance < 0 ? AppColors.expense : brand.inkSoft,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (hasActivity)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (income > 0)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.arrow_down, size: 10, color: AppColors.income),
+                      const SizedBox(width: 3),
+                      Text(
+                        formatMoney(symbol, income),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.income,
+                        ),
+                      ),
+                    ],
+                  ),
+                if (expense > 0) ...[
+                  if (income > 0) const SizedBox(height: 1),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.arrow_up, size: 10, color: AppColors.expense),
+                      const SizedBox(width: 3),
+                      Text(
+                        formatMoney(symbol, expense),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.expense,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (income > 0 && expense > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '${isPositive ? '+' : ''}${formatMoney(symbol, net)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isPositive ? AppColors.income : AppColors.expense,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _accountIcon(AccountType? type) {
+    switch (type) {
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.savings:
+        return CupertinoIcons.lock_shield_fill;
+      default:
+        return CupertinoIcons.building_2_fill;
+    }
   }
 }
 

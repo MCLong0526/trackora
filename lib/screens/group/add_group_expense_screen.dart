@@ -116,7 +116,19 @@ class _AddGroupExpenseScreenState
       // Infer split mode: prefer explicit splitPercents, fall back to splitBetween.
       if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
         _splitCustomPercents = Map<String, double>.from(e.splitPercents!);
-        _splitMode = _SplitMode.byAmount;
+        // Restore the exact split mode that was saved.
+        switch (e.splitModeType) {
+          case 'byPercent':
+            _splitMode = _SplitMode.byPercent;
+          case 'byAmount':
+            _splitMode = _SplitMode.byAmount;
+          default:
+            _splitMode = _SplitMode.byAmount;
+        }
+      } else if (e.splitModeType == 'youOwe') {
+        _splitMode = _SplitMode.youOwe;
+      } else if (e.splitModeType == 'theyOwe') {
+        _splitMode = _SplitMode.theyOwe;
       } else if (e.splitBetween.length == widget.group.memberUids.length) {
         _splitMode = _SplitMode.even;
       } else if (e.splitBetween.length == 1) {
@@ -125,8 +137,10 @@ class _AddGroupExpenseScreenState
             : _SplitMode.theyOwe;
       }
       // Sync the YOU/PARTNER sub-amount fields once the first frame is laid out.
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _syncSubAmounts());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _syncSubAmounts();
+        if (mounted) setState(() {});
+      });
     }
   }
 
@@ -228,6 +242,14 @@ class _AddGroupExpenseScreenState
     }
   }
 
+  String _splitModeTypeString(_SplitMode mode) => switch (mode) {
+    _SplitMode.even => 'even',
+    _SplitMode.byPercent => 'byPercent',
+    _SplitMode.byAmount => 'byAmount',
+    _SplitMode.youOwe => 'youOwe',
+    _SplitMode.theyOwe => 'theyOwe',
+  };
+
   void _setSplitMode(_SplitMode mode, {Map<String, double>? customPercents}) {
     final user = ref.read(authStateProvider).valueOrNull;
     setState(() {
@@ -289,6 +311,7 @@ class _AddGroupExpenseScreenState
         splitPercents: _splitCustomPercents.isNotEmpty
             ? _splitCustomPercents
             : null,
+        splitModeType: _splitModeTypeString(_splitMode),
         category: _category,
         date: _date,
         createdBy: widget.existing?.createdBy ?? user.uid,
@@ -606,8 +629,9 @@ class _AddGroupExpenseScreenState
       splitBadgeBg = const Color(0xFFEAE3F8);
       splitBadgeFg = const Color(0xFF5A4AAB);
     } else if (_splitMode == _SplitMode.byAmount) {
-      final myAmt = amount > 0 ? (amount * ((_splitCustomPercents[user?.uid] ?? 50.0) / 100)) : 0.0;
-      splitLabel = '$symbol${myAmt.toStringAsFixed(2)} / me';
+      final myPct = _splitCustomPercents[user?.uid] ?? 50.0;
+      final partnerPct = 100 - myPct;
+      splitLabel = '${myPct.toStringAsFixed(0)}% / ${partnerPct.toStringAsFixed(0)}%';
       splitBadgeBg = const Color(0xFFFFF1D2);
       splitBadgeFg = const Color(0xFF9A6B00);
     } else if (_splitMode == _SplitMode.youOwe) {
@@ -1900,6 +1924,9 @@ class _SplitSheetState extends State<_SplitSheet> {
       ),
     ];
 
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+
     return Container(
       decoration: const BoxDecoration(
         color: _kBg,
@@ -1908,12 +1935,12 @@ class _SplitSheetState extends State<_SplitSheet> {
           topRight: Radius.circular(30),
         ),
       ),
-      padding: EdgeInsets.fromLTRB(
-          24, 14, 24, MediaQuery.of(context).padding.bottom + 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, 14, 24, keyboardH + safeBottom + 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Center(
             child: Container(
               width: 40,
@@ -2171,6 +2198,7 @@ class _SplitSheetState extends State<_SplitSheet> {
             ),
           ],
         ],
+        ),
       ),
     );
   }

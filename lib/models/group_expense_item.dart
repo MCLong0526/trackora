@@ -10,6 +10,8 @@ class GroupExpenseItem {
   final List<String> splitBetween;
   // Optional: maps uid → percent (0–100). When present, overrides equal split.
   final Map<String, double>? splitPercents;
+  // Persisted split mode: 'even' | 'byPercent' | 'byAmount' | 'youOwe' | 'theyOwe'
+  final String? splitModeType;
   final String category;
   final DateTime date;
   final String createdBy;
@@ -27,6 +29,7 @@ class GroupExpenseItem {
     this.paidByAccountId,
     required this.splitBetween,
     this.splitPercents,
+    this.splitModeType,
     required this.category,
     required this.date,
     required this.createdBy,
@@ -52,6 +55,7 @@ class GroupExpenseItem {
       splitPercents: (data['splitPercents'] as Map?)?.map(
         (k, v) => MapEntry(k as String, (v as num).toDouble()),
       ),
+      splitModeType: data['splitModeType'] as String?,
       category: data['category'] as String? ?? 'Others',
       date: ExpenseGroup.readDate(data['date']),
       createdBy: data['createdBy'] as String? ?? '',
@@ -72,6 +76,7 @@ class GroupExpenseItem {
       if (paidByAccountId != null) 'paidByAccountId': paidByAccountId,
       'splitBetween': splitBetween,
       if (splitPercents != null) 'splitPercents': splitPercents,
+      if (splitModeType != null) 'splitModeType': splitModeType,
       'category': category,
       'date': date.toIso8601String(),
       'createdBy': createdBy,
@@ -91,6 +96,7 @@ class GroupExpenseItem {
     Object? paidByAccountId = _sentinel,
     List<String>? splitBetween,
     Object? splitPercents = _sentinel,
+    Object? splitModeType = _sentinel,
     String? category,
     DateTime? date,
     Object? notes = _sentinel,
@@ -110,6 +116,9 @@ class GroupExpenseItem {
       splitPercents: identical(splitPercents, _sentinel)
           ? this.splitPercents
           : splitPercents as Map<String, double>?,
+      splitModeType: identical(splitModeType, _sentinel)
+          ? this.splitModeType
+          : splitModeType as String?,
       category: category ?? this.category,
       date: date ?? this.date,
       createdBy: createdBy,

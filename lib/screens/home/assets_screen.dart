@@ -331,7 +331,7 @@ class _CreditCardSection extends StatelessWidget {
             balance: balances[card.id] ?? 0,
             symbol: symbol,
             visible: visible,
-            onPay: () => _openPaySheet(ctx, card),
+            onPay: () => _openPaySheet(ctx, card, balances[card.id] ?? 0),
           ),
           if (card != creditCards.last) const SizedBox(height: 8),
         ],
@@ -339,7 +339,7 @@ class _CreditCardSection extends StatelessWidget {
     );
   }
 
-  void _openPaySheet(BuildContext ctx, Account card) {
+  void _openPaySheet(BuildContext ctx, Account card, double balance) {
     HapticFeedback.selectionClick();
     Navigator.push(
       ctx,
@@ -347,6 +347,7 @@ class _CreditCardSection extends StatelessWidget {
         builder: (_) => AddEditExpenseScreen(
           initialType: EntryType.transfer,
           initialToAccountId: card.id,
+          initialAmount: balance < 0 ? balance.abs() : null,
         ),
       ),
     );
