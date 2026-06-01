@@ -108,7 +108,7 @@ class AppStrings {
     'home.recent': 'Recent activity',
     'home.noEntries': 'No entries yet',
     'home.noEntriesThisMonth': 'No entries this month',
-    'home.addFirstExpense': 'Tap + to add your first expense.',
+    'home.addFirstExpense': 'Use Quick Add to record your first expense.',
     'home.allTime': 'all time',
     'home.balanceFormula': 'Savings + Income − Expenses',
     'home.more': 'more',
@@ -274,11 +274,11 @@ class AppStrings {
     'stats.lineChart.yearSubtitle': 'Monthly totals',
     'stats.lineChart.allSubtitle': 'Yearly totals',
 
-    // Money Hub / Budget.
-    'money.title': 'Money\nHub',
+    // Management / Budget.
+    'money.title': 'Management',
     'money.subtitle':
         'Manage commitments, lending, savings and spending limits.',
-    'money.customizeHub': 'Customize Money Hub',
+    'money.customizeHub': 'Customize Management',
     'customize.keepOneVisible': 'At least one item must stay visible.',
     'budget.title': 'Monthly\nbudget',
     'budget.subtitle':
@@ -993,7 +993,7 @@ class AppStrings {
     'home.recent': '最近记录',
     'home.noEntries': '暂无记录',
     'home.noEntriesThisMonth': '本月暂无记录',
-    'home.addFirstExpense': '点 + 添加第一笔支出。',
+    'home.addFirstExpense': '使用快速添加记录第一笔支出。',
     'home.allTime': '全部时间',
     'home.balanceFormula': '储蓄 + 收入 − 支出',
     'home.more': '更多',
@@ -1149,9 +1149,9 @@ class AppStrings {
     'stats.lineChart.yearSubtitle': '每月合计',
     'stats.lineChart.allSubtitle': '每年合计',
 
-    'money.title': '资金\n中心',
+    'money.title': '管理',
     'money.subtitle': '管理分期、借贷、储蓄计划和消费上限。',
-    'money.customizeHub': '自定义资金中心',
+    'money.customizeHub': '自定义管理',
     'customize.keepOneVisible': '至少保留一个项目显示。',
     'budget.title': '月度\n预算',
     'budget.subtitle': '仅用于日常消费。\n账单和分期会单独追踪。',
@@ -1845,7 +1845,7 @@ class AppStrings {
     'home.recent': 'Aktiviti terkini',
     'home.noEntries': 'Tiada rekod',
     'home.noEntriesThisMonth': 'Tiada rekod bulan ini',
-    'home.addFirstExpense': 'Tekan + untuk tambah belanja pertama.',
+    'home.addFirstExpense': 'Gunakan Tambah Pantas untuk rekod belanja pertama.',
     'home.allTime': 'sepanjang masa',
     'home.balanceFormula': 'Simpanan + Pendapatan − Belanja',
     'home.more': 'lagi',
@@ -2007,9 +2007,9 @@ class AppStrings {
     'stats.lineChart.yearSubtitle': 'Jumlah bulanan',
     'stats.lineChart.allSubtitle': 'Jumlah tahunan',
 
-    'money.title': 'Hab\nWang',
+    'money.title': 'Pengurusan',
     'money.subtitle': 'Urus komitmen, pinjaman, simpanan dan had belanja.',
-    'money.customizeHub': 'Sesuaikan Hab Wang',
+    'money.customizeHub': 'Sesuaikan Pengurusan',
     'customize.keepOneVisible':
         'Sekurang-kurangnya satu item mesti dipaparkan.',
     'budget.title': 'Bajet\nbulanan',

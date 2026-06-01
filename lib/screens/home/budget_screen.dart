@@ -374,6 +374,27 @@ class BudgetScreen extends ConsumerWidget {
           label: 'Portfolio',
           onTap: () => _push(context, const InvestmentScreen()),
         ),
+      if (visibleModules.contains('groups'))
+        _BudgetQuickItem(
+          icon: CupertinoIcons.person_2_fill,
+          iconBg: const Color(0xFFEAE3F8),
+          iconColor: const Color(0xFF5A4AAB),
+          label: 'Groups',
+          onTap: () {
+            HapticFeedback.selectionClick();
+            if (groups.isEmpty) {
+              Navigator.push(
+                context,
+                CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
+              );
+            } else {
+              Navigator.push(
+                context,
+                CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
+              );
+            }
+          },
+        ),
       // ── Always-visible tools ──────────────────────────────
       _BudgetQuickItem(
         icon: CupertinoIcons.calendar_badge_plus,
@@ -381,26 +402,6 @@ class BudgetScreen extends ConsumerWidget {
         iconColor: AppColors.ink,
         label: 'Expense Cycle',
         onTap: () => _showCycleSheet(context),
-      ),
-      _BudgetQuickItem(
-        icon: CupertinoIcons.person_2_fill,
-        iconBg: const Color(0xFFEAE3F8),
-        iconColor: const Color(0xFF5A4AAB),
-        label: 'Groups',
-        onTap: () {
-          HapticFeedback.selectionClick();
-          if (groups.isEmpty) {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
-            );
-          } else {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
-            );
-          }
-        },
       ),
     ];
 
@@ -510,6 +511,7 @@ class BudgetScreen extends ConsumerWidget {
             ('people', 'People'),
             ('travelGroups', context.t('travel.title')),
             ('investments', 'Investments'),
+            ('groups', 'Groups'),
           ];
           return SingleChildScrollView(
             child: _VisibilitySheet(

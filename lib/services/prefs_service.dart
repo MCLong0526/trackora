@@ -39,6 +39,7 @@ class PrefsService {
     'people',
     'travelGroups',
     'investments',
+    'groups',
   ];
 
   static const defaultMoneyHubOrder = <String>[
@@ -49,6 +50,7 @@ class PrefsService {
     'people',
     'travelGroups',
     'investments',
+    'groups',
   ];
 
   static const defaultStatsSections = <String>[
