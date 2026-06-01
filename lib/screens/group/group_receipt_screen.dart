@@ -295,6 +295,19 @@ class _GroupReceiptCard extends StatelessWidget {
     }
   }
 
+  // Per-person share for [uid] within [e] — splitPercents if set, else equal.
+  String _shareFor(GroupExpenseItem e, String uid) {
+    final total = e.amount;
+    final percents = e.splitPercents;
+    if (percents != null && percents.containsKey(uid)) {
+      return '$symbol${(total * percents[uid]! / 100).toStringAsFixed(2)}';
+    }
+    if (e.splitBetween.contains(uid) && e.splitBetween.isNotEmpty) {
+      return '$symbol${(total / e.splitBetween.length).toStringAsFixed(2)}';
+    }
+    return '${symbol}0.00';
+  }
+
   String _memberInitials(String uid) {
     final name = uid == userId
         ? group.members.where((m) => m.uid == uid).firstOrNull?.displayName ??
@@ -468,6 +481,27 @@ class _GroupReceiptCard extends StatelessWidget {
                               letterSpacing: 0.2,
                             ),
                           ),
+                          if (e.splitPercents != null ||
+                              e.splitBetween.length > 1)
+                            Builder(builder: (_) {
+                              final otherUid = group.members
+                                  .where((m) => m.uid != userId)
+                                  .firstOrNull
+                                  ?.uid;
+                              final otherName = otherUid != null
+                                  ? _memberName(otherUid).split(' ').first
+                                  : null;
+                              return Text(
+                                otherUid != null
+                                    ? 'You ${_shareFor(e, userId ?? '')}  |  $otherName ${_shareFor(e, otherUid)}'
+                                    : 'You ${_shareFor(e, userId ?? '')}',
+                                style: const TextStyle(
+                                  fontSize: 8,
+                                  color: _kInk60,
+                                  letterSpacing: 0.2,
+                                ),
+                              );
+                            }),
                         ],
                       ),
                     ),

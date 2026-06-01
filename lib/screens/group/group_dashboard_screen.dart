@@ -815,6 +815,20 @@ class _ActivityRow extends StatelessWidget {
   String _memberInitial(String uid) =>
       _memberName(uid).substring(0, 1).toUpperCase();
 
+  // Per-person share for [uid] — from splitPercents if set, else equal split.
+  String _shareFor(String uid) {
+    final total = expense.amount;
+    final percents = expense.splitPercents;
+    if (percents != null && percents.containsKey(uid)) {
+      return '$symbol${(total * percents[uid]! / 100).toStringAsFixed(2)}';
+    }
+    if (expense.splitBetween.contains(uid) &&
+        expense.splitBetween.isNotEmpty) {
+      return '$symbol${(total / expense.splitBetween.length).toStringAsFixed(2)}';
+    }
+    return '${symbol}0.00';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMine = expense.paidBy == userId;
@@ -822,6 +836,11 @@ class _ActivityRow extends StatelessWidget {
     final catStyle = styleFor(expense.category);
     final payerInitial = _memberInitial(expense.paidBy);
     final payerIsMine = expense.paidBy == userId;
+    final otherUid =
+        members.where((m) => m.uid != userId).firstOrNull?.uid;
+    final otherName = otherUid != null
+        ? _memberName(otherUid).split(' ').first
+        : null;
 
     return GestureDetector(
       onTap: onTap,
@@ -898,13 +917,25 @@ class _ActivityRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            '$symbol${expense.amount.toStringAsFixed(2)}',
-            style: TextStyle(
-              color: brand.ink,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$symbol${expense.amount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: brand.ink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (otherUid != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'You ${_shareFor(userId ?? '')} · $otherName ${_shareFor(otherUid)}',
+                  style: TextStyle(color: brand.inkSoft, fontSize: 10),
+                ),
+              ],
+            ],
           ),
         ],
       ),

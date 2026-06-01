@@ -863,6 +863,7 @@ class _RepaymentCard extends ConsumerWidget {
                           child: TextField(
                             controller: ctrl,
                             autofocus: true,
+                            cursorHeight: 32.0,
                             textInputAction: TextInputAction.done,
                             keyboardType:
                                 const TextInputType.numberWithOptions(

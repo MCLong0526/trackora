@@ -112,14 +112,21 @@ class _AddGroupExpenseScreenState
       _notesCtrl.text = e.notes ?? '';
       _category = e.category;
       _date = e.date;
-      // Infer split mode from splitBetween
-      if (e.splitBetween.length == widget.group.memberUids.length) {
+      _paidByAccountId = e.paidByAccountId;
+      // Infer split mode: prefer explicit splitPercents, fall back to splitBetween.
+      if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
+        _splitCustomPercents = Map<String, double>.from(e.splitPercents!);
+        _splitMode = _SplitMode.byAmount;
+      } else if (e.splitBetween.length == widget.group.memberUids.length) {
         _splitMode = _SplitMode.even;
       } else if (e.splitBetween.length == 1) {
         _splitMode = e.splitBetween.first == user?.uid
             ? _SplitMode.youOwe
             : _SplitMode.theyOwe;
       }
+      // Sync the YOU/PARTNER sub-amount fields once the first frame is laid out.
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _syncSubAmounts());
     }
   }
 
@@ -166,6 +173,17 @@ class _AddGroupExpenseScreenState
       _partnerCtrl.clear();
     }
     _syncingAmounts = false;
+  }
+
+  // When the total is first entered, keep the YOU/PARTNER amounts reflecting the
+  // current split mode. If the user has already nudged a per-person amount we are
+  // in byAmount mode and the custom percents are preserved by _syncSubAmounts.
+  // Even-split intent is left untouched here — this is a no-op safeguard so that
+  // typing the total never silently flips the chosen split mode.
+  void _autoSetSplitByAmount() {
+    // Intentionally no-op: split mode is owned by _setSplitMode and the
+    // _onYouAmountChanged / _onPartnerAmountChanged handlers. _syncSubAmounts
+    // already refreshes the displayed per-person amounts for the active mode.
   }
 
   void _onYouAmountChanged() {
@@ -296,7 +314,9 @@ class _AddGroupExpenseScreenState
             description: expense.description,
             amount: expense.amount,
             paidBy: expense.paidBy,
+            paidByAccountId: expense.paidByAccountId,
             splitBetween: expense.splitBetween,
+            splitPercents: expense.splitPercents,
             category: expense.category,
             date: expense.date,
             createdBy: expense.createdBy,
@@ -794,6 +814,7 @@ class _AddGroupExpenseScreenState
                                   child: TextField(
                                     controller: _amountCtrl,
                                     focusNode: _amountFocus,
+                                    cursorHeight: 44.0,
                                     keyboardType:
                                         const TextInputType
                                             .numberWithOptions(
@@ -831,6 +852,7 @@ class _AddGroupExpenseScreenState
                                     onChanged: (_) {
                                       setState(() {});
                                       _syncSubAmounts();
+                                      _autoSetSplitByAmount();
                                     },
                                   ),
                                 ),
@@ -885,6 +907,7 @@ class _AddGroupExpenseScreenState
                                                 Expanded(
                                                   child: TextField(
                                                     controller: _youCtrl,
+                                                    cursorHeight: 15.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                                     style: const TextStyle(
                                                       fontSize: 15,
@@ -957,6 +980,7 @@ class _AddGroupExpenseScreenState
                                                 Expanded(
                                                   child: TextField(
                                                     controller: _partnerCtrl,
+                                                    cursorHeight: 15.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                                     style: const TextStyle(
                                                       fontSize: 15,
@@ -1320,6 +1344,7 @@ class _AddGroupExpenseScreenState
                                       Expanded(
                                         child: TextField(
                                           controller: _notesCtrl,
+                                          cursorHeight: 17.0,
                                           textCapitalization:
                                               TextCapitalization
                                                   .sentences,

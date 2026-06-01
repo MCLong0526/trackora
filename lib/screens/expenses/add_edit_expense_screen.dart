@@ -1529,6 +1529,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         child: TextFormField(
                           controller: _amountController,
                           focusNode: _amountFocus,
+                          cursorHeight: 46.0,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
