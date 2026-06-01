@@ -1022,13 +1022,13 @@ class _CardBack extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                e.type.isInflow
+                                (e.type.isInflow || e.toAccountId == account.id)
                                     ? '+${formatMoney(txnSym, e.amount)}'
                                     : '−${formatMoney(txnSym, e.amount)}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: e.type.isInflow
+                                  color: (e.type.isInflow || e.toAccountId == account.id)
                                       ? const Color(0xFF1B8A4A)
                                       : pal.ink,
                                 ),
