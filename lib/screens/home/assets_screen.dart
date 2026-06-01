@@ -1,54 +1,63 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/account.dart';
-import '../../models/borrow_lending.dart';
+import '../../models/borrow_lending.dart' show BorrowLending, BorrowLendingStatus, BorrowLendingType;
 import '../../models/expense.dart';
-import '../../models/installment.dart';
-import '../../models/saving_plan.dart';
+import '../../models/installment.dart' show Installment, InstallmentStatus;
+import '../../models/precious_metal.dart';
+import '../../models/saving_plan.dart' show SavingPlan, SavingPlanStatus;
+import '../../models/stock_investment.dart';
+import '../../models/travel_group.dart';
 import '../../services/currency_converter.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
-import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
-import '../../theme/app_theme.dart';
-import '../../widgets/masked_amount.dart';
 import '../../widgets/exchange_rate_sheet.dart';
+import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
-import '../../widgets/section_card.dart';
-import '../../widgets/sticky_header_scaffold.dart';
+import '../accounts/accounts_screen.dart';
+import '../borrow_lending/borrow_lending_screen.dart';
+import '../expenses/add_edit_expense_screen.dart';
+import '../installments/installments_screen.dart';
+import '../investments/investment_screen.dart';
+import '../precious_metals/precious_metals_screen.dart';
+import '../savings/saving_plans_screen.dart';
+import '../stocks/stocks_screen.dart';
+import '../travel/travel_groups_screen.dart';
 
-class AssetsScreen extends ConsumerStatefulWidget {
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const _kCard = Colors.white;
+const _kRadius = 20.0;
+const _kGreen = Color(0xFF34C759);
+const _kOrange = Color(0xFFF57C00);
+const _kBlue = Color(0xFF1A6CFF);
+const _kRed = Color(0xFFFF3B30);
+
+class AssetsScreen extends ConsumerWidget {
   const AssetsScreen({super.key});
 
   @override
-  ConsumerState<AssetsScreen> createState() => _AssetsScreenState();
-}
-
-class _AssetsScreenState extends ConsumerState<AssetsScreen> {
-
-  @override
-  Widget build(BuildContext context) {
-    final accountsAsync = ref.watch(accountsProvider);
-    final expensesAsync = ref.watch(allExpensesProvider);
-    final savingPlansAsync = ref.watch(savingPlansProvider);
-    final borrowLendingAsync = ref.watch(borrowLendingProvider);
-    final installmentsAsync = ref.watch(installmentsProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
+    final expenses = ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final savingPlans = ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
+    final borrowLending = ref.watch(borrowLendingProvider).valueOrNull ?? const <BorrowLending>[];
+    final installments = ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
+    final metals = ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    final travelGroups = ref.watch(travelGroupsProvider).valueOrNull ?? const <TravelGroup>[];
+    final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
+    final selectedMonth = ref.watch(selectedMonthProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final visible = ref.watch(balanceVisibleProvider);
-
-    final accounts = accountsAsync.valueOrNull ?? const <Account>[];
-    final expenses = expensesAsync.valueOrNull ?? const <Expense>[];
-    final savingPlans = savingPlansAsync.valueOrNull ?? const <SavingPlan>[];
-    final borrowLending =
-        borrowLendingAsync.valueOrNull ?? const <BorrowLending>[];
-    final installments =
-        installmentsAsync.valueOrNull ?? const <Installment>[];
-
     final converter = ref.watch(currencyConverterProvider).valueOrNull;
     final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
+
     final snapshot = _AssetSnapshot.build(
       accounts: accounts,
       expenses: expenses,
@@ -58,511 +67,682 @@ class _AssetsScreenState extends ConsumerState<AssetsScreen> {
       converter: converter,
       mainCode: mainCode,
     );
-    final isLoading =
-        accountsAsync.maybeWhen(loading: () => true, orElse: () => false);
+
+    // Budget spent this month
+    final monthExpenses = expenses.where((e) =>
+        e.type == EntryType.expense &&
+        e.date.year == selectedMonth.year &&
+        e.date.month == selectedMonth.month &&
+        e.category != 'Bills' &&
+        !(e.note.contains('(installment)'))).toList();
+    final monthlySpent = monthExpenses.fold<double>(0, (s, e) => s + e.convertedAmount);
+    final budgetRemaining = budget - monthlySpent;
+
+    // Savings total
+    final totalSaved = snapshot.savingPlanSaved;
+    final totalGoal = savingPlans
+        .where((p) => p.status == SavingPlanStatus.active)
+        .fold<double>(0, (s, p) => s + p.targetAmount);
+
+    // Borrow & Lend net
+    final borrowNet = snapshot.totalLent - snapshot.totalBorrowed;
+
+    // Installments total remaining
+    final installmentTotal = snapshot.installmentLiability ?? 0.0;
+    final installmentCount = snapshot.activeInstallments.length;
+
+    // Travel groups (no totalSpent on model — just show count)
+    final latestGroup = travelGroups.isNotEmpty ? travelGroups.first : null;
+
+    // Stocks total cost
+    final stockTotal = stocks.fold<double>(0, (s, st) => s + st.totalCost);
+
+    // Precious metals total value
+    final metalsTotal = metals.fold<double>(0, (s, m) {
+      final price = m.pricePerGram ?? 0.0;
+      return s + m.weightGrams * price;
+    });
+    final metalsGrams = metals.fold<double>(0, (s, m) => s + m.weightGrams);
+
+    // Cash total (asset accounts only)
+    final balances = _computeBalances(accounts, expenses);
+    final cashAccounts = accounts.where((a) => !a.type.isLiability).toList();
+    final cashTotal = cashAccounts.fold<double>(0, (s, a) {
+      final bal = balances[a.id] ?? 0;
+      if (bal <= 0) return s;
+      final code = a.currencyCode ?? mainCode;
+      if (converter != null && code != null && code != mainCode) {
+        return s + converter.toBase(bal, code);
+      }
+      return s + bal;
+    });
+
+    // Credit card accounts for Pay Card button
+    final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
+    final assetAccounts = accounts.where((a) => !a.type.isLiability).toList();
 
     return SafeArea(
-      child: StickyHeaderScaffold(
-        header: const Padding(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: _Header(),
-        ),
-        bodyBuilder: (sc) => CustomScrollView(
-          controller: sc,
-          slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 6),
-                if (isLoading && accounts.isEmpty)
-                  const _LoadingCard()
-                else ...[
-                  // ── Net worth overview ─────────────────────────────────
-                  _NetWorthCard(
-                    snapshot: snapshot,
-                    symbol: symbol,
-                    visible: visible,
-                    converter: converter,
-                    mainCode: mainCode,
+      child: Column(
+        children: [
+          // ── Header ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.t('asset.title'),
+                    style: Theme.of(context).textTheme.displayMedium,
                   ),
-                  if (snapshot.hasBorrowLend) ...[
-                    const SizedBox(height: 20),
-                    _SectionLabel(context.t('asset.moneyFlow')),
-                    const SizedBox(height: 8),
-                    _BorrowLendCard(
-                      snapshot: snapshot,
-                      symbol: symbol,
-                      visible: visible,
-                    ),
-                  ],
-                  if (snapshot.activeSavingPlans.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _SectionLabel(context.t('asset.savings')),
-                    const SizedBox(height: 8),
-                    _SavingPlansCard(
-                      snapshot: snapshot,
-                      symbol: symbol,
-                      visible: visible,
-                    ),
-                  ],
-                  if (snapshot.activeInstallments.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _SectionLabel(context.t('asset.installments')),
-                    const SizedBox(height: 8),
-                    _InstallmentsCard(
-                      snapshot: snapshot,
-                      symbol: symbol,
-                      visible: visible,
-                    ),
-                  ],
-                ],
-              ]),
+                ),
+                const FxRateButton(),
+                const SizedBox(width: 8),
+                const ProfileAvatarButton(),
+              ],
             ),
           ),
-          ],        // end slivers
-        ),          // end CustomScrollView
-      ),            // end StickyHeaderScaffold
+
+          // ── Body ──────────────────────────────────────────────
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+              children: [
+                // Credit card pay banner (if user has credit cards)
+                if (creditCards.isNotEmpty) ...[
+                  _CreditCardBanner(
+                    creditCards: creditCards,
+                    assetAccounts: assetAccounts,
+                    balances: balances,
+                    symbol: symbol,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // ── Top row: Net Worth + Budget/Savings ────────
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Net Worth card (left, 2/3 width)
+                      Expanded(
+                        flex: 2,
+                        child: _NetWorthCard(
+                          snapshot: snapshot,
+                          symbol: symbol,
+                          visible: visible,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Budget + Savings (right, 1/3 width)
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: _MiniCard(
+                                icon: CupertinoIcons.timer,
+                                iconBg: const Color(0xFFFFF3E0),
+                                iconColor: _kOrange,
+                                title: 'Budget',
+                                amount: budget > 0
+                                    ? formatMoney(symbol, budgetRemaining)
+                                    : '—',
+                                subtitle: budget > 0
+                                    ? 'left this month'
+                                    : 'not set',
+                                subtitleColor: budget > 0 && budgetRemaining > 0
+                                    ? _kGreen
+                                    : budget > 0
+                                        ? _kRed
+                                        : const Color(0xFF8E8E96),
+                                visible: visible,
+                                onTap: () {},
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Expanded(
+                              child: _MiniCard(
+                                icon: CupertinoIcons.flag_fill,
+                                iconBg: const Color(0xFFE8F5E9),
+                                iconColor: _kGreen,
+                                title: 'Savings',
+                                amount: formatMoney(symbol, totalSaved),
+                                subtitle: totalGoal > 0
+                                    ? '${savingPlans.where((p) => p.status == SavingPlanStatus.active).length} of ${formatMoney(symbol, totalGoal)} goal'
+                                    : 'no active plans',
+                                subtitleColor: totalSaved > 0 ? _kGreen : _kOrange,
+                                visible: visible,
+                                onTap: () => _push(context, const SavingPlansScreen()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ── Middle grid: Borrow & Lend | Installments | Travel ─
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.arrow_up_arrow_down,
+                        iconBg: const Color(0xFFFFF3E0),
+                        iconColor: _kOrange,
+                        title: 'Borrow & Lend',
+                        amount: formatMoney(symbol, borrowNet.abs()),
+                        subtitle: borrowNet >= 0 ? 'net owed to you' : 'you owe, net',
+                        subtitleColor: borrowNet >= 0 ? _kGreen : _kOrange,
+                        visible: visible,
+                        onTap: () => _push(context, const BorrowLendingScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.bolt_fill,
+                        iconBg: const Color(0xFFFCE4EC),
+                        iconColor: const Color(0xFFE91E63),
+                        title: 'Installments',
+                        amount: formatMoney(symbol, installmentTotal),
+                        subtitle: installmentCount > 0 ? '$installmentCount plans' : 'none active',
+                        subtitleColor: const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const InstallmentsScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.airplane,
+                        iconBg: const Color(0xFFE3F2FD),
+                        iconColor: _kBlue,
+                        title: 'Travel Group',
+                        amount: '${travelGroups.length}',
+                        subtitle: latestGroup?.name ?? (travelGroups.isEmpty ? 'no trips' : '${travelGroups.length} trips'),
+                        subtitleColor: const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const TravelGroupsScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Bottom grid: Stocks | Precious Metal | Cash ────
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.chart_bar_square_fill,
+                        iconBg: const Color(0xFFEDE7F6),
+                        iconColor: const Color(0xFF5856D6),
+                        title: 'Stocks',
+                        amount: formatMoney(symbol, stockTotal),
+                        subtitle: stocks.isEmpty ? 'no positions' : '${stocks.length} positions',
+                        subtitleColor: stocks.isNotEmpty ? _kGreen : const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const StocksScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.circle_grid_hex_fill,
+                        iconBg: const Color(0xFFFFF8E1),
+                        iconColor: const Color(0xFFFFA000),
+                        title: 'Precious Metal',
+                        amount: formatMoney(symbol, metalsTotal),
+                        subtitle: metalsGrams > 0 ? '${metalsGrams.toStringAsFixed(1)}g' : 'no holdings',
+                        subtitleColor: metalsGrams > 0 ? _kOrange : const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const PreciousMetalsScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.money_dollar_circle_fill,
+                        iconBg: const Color(0xFFE8F5E9),
+                        iconColor: _kGreen,
+                        title: 'Cash',
+                        amount: formatMoney(symbol, cashTotal),
+                        subtitle: '${cashAccounts.length} accounts',
+                        subtitleColor: const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const AccountsScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Investments card (full width) ─────────────────
+                _FullWidthCard(
+                  icon: CupertinoIcons.bag_fill,
+                  iconBg: const Color(0xFFE8EAF6),
+                  iconColor: const Color(0xFF3F51B5),
+                  title: 'Portfolio',
+                  amount: formatMoney(symbol, stockTotal),
+                  subtitle: 'Manage all investments',
+                  visible: visible,
+                  onTap: () => _push(context, const InvestmentScreen()),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  static void _push(BuildContext context, Widget screen) {
+    HapticFeedback.selectionClick();
+    Navigator.push(context, CupertinoPageRoute(builder: (_) => screen));
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
+// ── Credit card banner ────────────────────────────────────────────────────────
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
+class _CreditCardBanner extends StatelessWidget {
+  final List<Account> creditCards;
+  final List<Account> assetAccounts;
+  final Map<String, double> balances;
+  final String symbol;
+
+  const _CreditCardBanner({
+    required this.creditCards,
+    required this.assetAccounts,
+    required this.balances,
+    required this.symbol,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.6,
-        color: context.brand.inkSoft,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A6CFF).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(_kRadius),
+        border: Border.all(
+          color: const Color(0xFF1A6CFF).withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A6CFF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(CupertinoIcons.creditcard_fill, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  creditCards.length == 1 ? creditCards.first.name : '${creditCards.length} credit cards',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0B0B0F)),
+                ),
+                const Text(
+                  'Tap to pay your card balance',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF5B5B66)),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _showPaySheet(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A6CFF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Pay Card',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaySheet(BuildContext context) {
+    if (creditCards.length == 1) {
+      _openPaySheet(context, creditCards.first);
+    } else {
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (_) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFD1D1D6), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text('Select card to pay', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(height: 12),
+              for (final card in creditCards)
+                ListTile(
+                  leading: const Icon(CupertinoIcons.creditcard_fill, color: Color(0xFF1A6CFF)),
+                  title: Text(card.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Balance: $symbol${(balances[card.id] ?? 0).abs().toStringAsFixed(2)}'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openPaySheet(context, card);
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  void _openPaySheet(BuildContext context, Account card) {
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddEditExpenseScreen(
+          initialType: EntryType.transfer,
+          initialToAccountId: card.id,
+        ),
       ),
     );
   }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
+// ── Net Worth card ────────────────────────────────────────────────────────────
 
-class _Header extends ConsumerWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    final visible = ref.watch(balanceVisibleProvider);
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.t('asset.title'),
-                style: Theme.of(context).textTheme.displayMedium,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                context.t('asset.subtitle'),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: brand.inkSoft,
-                ),
-              ),
-            ],
-          ),
-        ),
-        GestureDetector(
-          onTap: () => ref.read(balanceVisibleProvider.notifier).toggle(),
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: brand.surface,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
-              size: 17,
-              color: brand.inkSoft,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const FxRateButton(),
-        const SizedBox(width: 8),
-        const ProfileAvatarButton(),
-      ],
-    );
-  }
-}
-
-// ── Net Worth Hero Card ───────────────────────────────────────────────────────
-
-class _NetWorthCard extends ConsumerStatefulWidget {
+class _NetWorthCard extends StatelessWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
-  final CurrencyConverter? converter;
-  final String? mainCode;
 
   const _NetWorthCard({
     required this.snapshot,
     required this.symbol,
     required this.visible,
-    this.converter,
-    this.mainCode,
   });
 
   @override
-  ConsumerState<_NetWorthCard> createState() => _NetWorthCardState();
-}
-
-class _NetWorthCardState extends ConsumerState<_NetWorthCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _fade;
-  late Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    );
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _ctrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = brand.surface;
-    final ink = brand.ink;
-    final soft = brand.inkSoft;
-    final excludeInstallments = ref.watch(excludeInstallmentsProvider);
-    final installmentAdj = excludeInstallments
-        ? (widget.snapshot.installmentLiability ?? 0)
-        : 0.0;
-    final adjLiabilities = widget.snapshot.totalLiabilities - installmentAdj;
-    final netWorth = widget.snapshot.totalAssets - adjLiabilities;
-    final netColor = netWorth < 0 ? AppColors.expense : ink;
+    final netWorth = snapshot.netWorth;
+    final totalOwn = snapshot.totalAssets;
+    final totalOwe = snapshot.totalLiabilities;
+    final total = totalOwn + totalOwe;
+    final ownedPct = total > 0 ? (totalOwn / total).clamp(0.0, 1.0) : 1.0;
+    final ownedPctInt = (ownedPct * 100).round();
 
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: SectionCard(
-          color: bg,
-          pastel: !isDark,
-          radius: 26,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final healthLabel = ownedPct >= 0.8
+        ? 'Healthy'
+        : ownedPct >= 0.5
+            ? 'Fair'
+            : 'At risk';
+    final healthColor = ownedPct >= 0.8
+        ? _kGreen
+        : ownedPct >= 0.5
+            ? _kOrange
+            : _kRed;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(_kRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
             children: [
-              // Top row: label + account count
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Icon(CupertinoIcons.chart_pie_fill, size: 10, color: soft),
-                  const SizedBox(width: 4),
-                  Text(
-                    context.t('asset.netWorth'),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.7,
-                      color: soft,
-                    ),
-                  ),
-                  if (widget.snapshot.hasMultiCurrency) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      '(est.)',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: soft,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  Text(
-                    '${widget.snapshot.accounts.length} account${widget.snapshot.accounts.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: soft,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Animated net worth amount
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: netWorth),
-                duration: const Duration(milliseconds: 650),
-                curve: Curves.easeOutCubic,
-                builder: (_, value, _) => MaskedAmount(
-                  visibleText: formatMoney(widget.symbol, value),
-                  visible: widget.visible,
-                  currencyPrefix: widget.symbol,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w700,
-                    color: netColor,
-                    height: 1.0,
-                    letterSpacing: -1,
-                  ),
+              const Text(
+                'TOTAL NET WORTH',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8E8E96),
+                  letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 12),
-              // Asset/liability split bar
-              _AssetLiabilityBar(
-                totalAssets: widget.snapshot.totalAssets,
-                totalLiabilities: adjLiabilities,
-              ),
-              const SizedBox(height: 6),
-              // Split labels
-              Row(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: AppColors.income,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.t('asset.assets'),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: soft,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        context.t('asset.liabilities'),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: soft,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: AppColors.expense,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(height: 0.5, color: soft.withValues(alpha: 0.18)),
-              const SizedBox(height: 12),
-              // Assets & Liabilities tiles
-              Row(
-                children: [
-                  Expanded(
-                    child: _WorthTile(
-                      label: context.t('asset.assets'),
-                      value: widget.snapshot.totalAssets,
-                      symbol: widget.symbol,
-                      visible: widget.visible,
-                      color: AppColors.income,
-                      icon: CupertinoIcons.arrow_up_right,
-                      isDark: isDark,
-                      onTap: () => _showBreakdown(
-                        context,
-                        title: context.t('asset.assets'),
-                        color: AppColors.income,
-                        icon: CupertinoIcons.arrow_up_right,
-                        items: _buildAssetItems(widget.snapshot, context, widget.converter, widget.mainCode),
-                        total: widget.snapshot.totalAssets,
-                        symbol: widget.symbol,
-                        visible: widget.visible,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _WorthTile(
-                      label: context.t('asset.liabilities'),
-                      value: adjLiabilities,
-                      symbol: widget.symbol,
-                      visible: widget.visible,
-                      color: AppColors.expense,
-                      icon: CupertinoIcons.arrow_down_right,
-                      isDark: isDark,
-                      onTap: () => _showBreakdown(
-                        context,
-                        title: context.t('asset.liabilities'),
-                        color: AppColors.expense,
-                        icon: CupertinoIcons.arrow_down_right,
-                        items: _buildLiabilityItems(widget.snapshot, context, widget.converter, widget.mainCode),
-                        total: widget.snapshot.totalLiabilities,
-                        symbol: widget.symbol,
-                        visible: widget.visible,
-                      ),
-                    ),
-                  ),
-                ],
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: healthColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 6, height: 6, decoration: BoxDecoration(color: healthColor, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    Text(healthLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: healthColor)),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
+
+          const SizedBox(height: 8),
+
+          // Net worth amount
+          MaskedAmount(
+            visibleText: formatMoney(symbol, netWorth),
+            visible: visible,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0B0B0F),
+              letterSpacing: -0.5,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Donut chart + legend
+          Row(
+            children: [
+              // Donut
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: CustomPaint(
+                  painter: _DonutPainter(ownedPct: ownedPct),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$ownedPctInt%',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0B0B0F)),
+                        ),
+                        const Text('OWNED', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: Color(0xFF8E8E96), letterSpacing: 0.3)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              // Legend
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(width: 8, height: 8, decoration: BoxDecoration(color: _kGreen, shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        const Text('You own', style: TextStyle(fontSize: 11, color: Color(0xFF5B5B66))),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    MaskedAmount(
+                      visibleText: formatMoney(symbol, totalOwn),
+                      visible: visible,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(width: 8, height: 8, decoration: BoxDecoration(color: _kRed, shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        const Text('You owe', style: TextStyle(fontSize: 11, color: Color(0xFF5B5B66))),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    MaskedAmount(
+                      visibleText: formatMoney(symbol, totalOwe),
+                      visible: visible,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _AssetLiabilityBar extends StatelessWidget {
-  final double totalAssets;
-  final double totalLiabilities;
-  const _AssetLiabilityBar({
-    required this.totalAssets,
-    required this.totalLiabilities,
-  });
+// ── Donut painter ─────────────────────────────────────────────────────────────
+
+class _DonutPainter extends CustomPainter {
+  final double ownedPct; // 0.0–1.0
+
+  const _DonutPainter({required this.ownedPct});
 
   @override
-  Widget build(BuildContext context) {
-    final total = totalAssets + totalLiabilities;
-    final assetRatio = total > 0 ? (totalAssets / total).clamp(0.0, 1.0) : 1.0;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(5),
-          child: SizedBox(
-            height: 7,
-            width: constraints.maxWidth,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: (assetRatio * 100).round(),
-                  child: Container(color: AppColors.income),
-                ),
-                if (assetRatio < 1.0)
-                  Expanded(
-                    flex: ((1 - assetRatio) * 100).round(),
-                    child: Container(color: AppColors.expense),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 6;
+    const strokeWidth = 10.0;
+
+    final bgPaint = Paint()
+      ..color = const Color(0xFFF2F1F6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final ownPaint = Paint()
+      ..color = _kGreen
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final owePaint = Paint()
+      ..color = _kRed
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const startAngle = -math.pi / 2;
+
+    // Background track
+    canvas.drawArc(rect, 0, 2 * math.pi, false, bgPaint);
+
+    // Green arc (owned)
+    if (ownedPct > 0) {
+      canvas.drawArc(rect, startAngle, 2 * math.pi * ownedPct, false, ownPaint);
+    }
+    // Red arc (owed)
+    if (ownedPct < 1) {
+      canvas.drawArc(
+        rect,
+        startAngle + 2 * math.pi * ownedPct,
+        2 * math.pi * (1 - ownedPct),
+        false,
+        owePaint,
+      );
+    }
   }
+
+  @override
+  bool shouldRepaint(_DonutPainter old) => old.ownedPct != ownedPct;
 }
 
-class _WorthTile extends StatelessWidget {
-  final String label;
-  final double value;
-  final String symbol;
-  final bool visible;
-  final Color color;
-  final IconData icon;
-  final bool isDark;
-  final VoidCallback? onTap;
+// ── Mini card (Budget, Savings) ───────────────────────────────────────────────
 
-  const _WorthTile({
-    required this.label,
-    required this.value,
-    required this.symbol,
-    required this.visible,
-    required this.color,
+class _MiniCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String amount;
+  final String subtitle;
+  final Color subtitleColor;
+  final bool visible;
+  final VoidCallback onTap;
+
+  const _MiniCard({
     required this.icon,
-    required this.isDark,
-    this.onTap,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.amount,
+    required this.subtitle,
+    required this.subtitleColor,
+    required this.visible,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
     return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: Container(
-        padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.07)
-              : Colors.white.withValues(alpha: 0.54),
-          borderRadius: BorderRadius.circular(16),
+          color: _kCard,
+          borderRadius: BorderRadius.circular(_kRadius),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 11, color: color),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                  ),
-                ),
-                if (onTap != null)
-                  Icon(CupertinoIcons.chevron_right, size: 10, color: color.withValues(alpha: 0.6)),
-              ],
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: iconColor, size: 15),
             ),
-            const SizedBox(height: 6),
-            MaskedAmount(
-              visibleText: formatMoney(symbol, value),
-              visible: visible,
-              currencyPrefix: symbol,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: brand.ink,
-              ),
-            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E96), fontWeight: FontWeight.w500)),
+            const SizedBox(height: 2),
+            visible
+                ? Text(amount, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)), maxLines: 1, overflow: TextOverflow.ellipsis)
+                : const Text('••••', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF8E8E96))),
+            const SizedBox(height: 2),
+            Text(subtitle, style: TextStyle(fontSize: 10, color: subtitleColor, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -570,535 +750,156 @@ class _WorthTile extends StatelessWidget {
   }
 }
 
+// ── Grid card (3-col) ─────────────────────────────────────────────────────────
 
-// ── Borrow / Lend Card ────────────────────────────────────────────────────────
-
-class _BorrowLendCard extends StatelessWidget {
-  final _AssetSnapshot snapshot;
-  final String symbol;
-  final bool visible;
-
-  const _BorrowLendCard({
-    required this.snapshot,
-    required this.symbol,
-    required this.visible,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _FlowTile(
-              label: context.t('asset.youLent'),
-              sublabel: context.t('asset.othersOweYou'),
-              value: snapshot.totalLent,
-              symbol: symbol,
-              visible: visible,
-              color: AppColors.income,
-              icon: CupertinoIcons.arrow_up_right,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 56,
-            color: context.brand.divider,
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-          ),
-          Expanded(
-            child: _FlowTile(
-              label: context.t('asset.youOwe'),
-              sublabel: context.t('asset.youBorrowed'),
-              value: snapshot.totalBorrowed,
-              symbol: symbol,
-              visible: visible,
-              color: AppColors.expense,
-              icon: CupertinoIcons.arrow_down_right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FlowTile extends StatelessWidget {
-  final String label;
-  final String sublabel;
-  final double value;
-  final String symbol;
-  final bool visible;
-  final Color color;
+class _GridCard extends StatelessWidget {
   final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String amount;
+  final String subtitle;
+  final Color subtitleColor;
+  final bool visible;
+  final VoidCallback onTap;
 
-  const _FlowTile({
-    required this.label,
-    required this.sublabel,
-    required this.value,
-    required this.symbol,
-    required this.visible,
-    required this.color,
+  const _GridCard({
     required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 11, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        MaskedAmount(
-          visibleText: formatMoney(symbol, value),
-          visible: visible,
-          currencyPrefix: symbol,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: brand.ink,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          sublabel,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: brand.inkSoft,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Saving Plans Card ─────────────────────────────────────────────────────────
-
-class _SavingPlansCard extends StatelessWidget {
-  final _AssetSnapshot snapshot;
-  final String symbol;
-  final bool visible;
-
-  const _SavingPlansCard({
-    required this.snapshot,
-    required this.symbol,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.amount,
+    required this.subtitle,
+    required this.subtitleColor,
     required this.visible,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
-    final plans = snapshot.activeSavingPlans;
-
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${plans.length} active plan${plans.length == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ),
-              MaskedAmount(
-                visibleText: formatMoney(symbol, snapshot.savingPlanSaved),
-                visible: visible,
-                currencyPrefix: symbol,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: kCategoryStyles['Groceries']!.accent,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Text(
-                ' ${context.t('asset.savedLabel')}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: kCategoryStyles['Groceries']!.accent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (var i = 0; i < plans.length; i++) ...[
-            _SavingPlanRow(plan: plans[i], symbol: symbol, visible: visible),
-            if (i < plans.length - 1) ...[
-              const SizedBox(height: 10),
-              Divider(height: 1, color: brand.divider),
-              const SizedBox(height: 10),
-            ],
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      onLongPress: () {
+        HapticFeedback.mediumImpact();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: _kCard,
+          borderRadius: BorderRadius.circular(_kRadius),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(9)),
+              child: Icon(icon, color: iconColor, size: 16),
+            ),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E96), fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            visible
+                ? Text(amount, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)), maxLines: 1, overflow: TextOverflow.ellipsis)
+                : const Text('••••', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF8E8E96))),
+            const SizedBox(height: 2),
+            Text(subtitle, style: TextStyle(fontSize: 10, color: subtitleColor, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SavingPlanRow extends StatelessWidget {
-  final SavingPlan plan;
-  final String symbol;
-  final bool visible;
+// ── Full-width card ───────────────────────────────────────────────────────────
 
-  const _SavingPlanRow({
-    required this.plan,
-    required this.symbol,
+class _FullWidthCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String amount;
+  final String subtitle;
+  final bool visible;
+  final VoidCallback onTap;
+
+  const _FullWidthCard({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.amount,
+    required this.subtitle,
     required this.visible,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
-    final progress = plan.progress;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: _kCard,
+          borderRadius: BorderRadius.circular(_kRadius),
+        ),
+        child: Row(
           children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                plan.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: brand.ink,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0B0B0F))),
+                  Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E96))),
+                ],
               ),
             ),
+            visible
+                ? Text(amount, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)))
+                : const Text('••••', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF8E8E96))),
             const SizedBox(width: 8),
-            MaskedAmount(
-              visibleText:
-                  '${formatMoney(symbol, plan.currentAmount)} / ${formatMoney(symbol, plan.targetAmount)}',
-              visible: visible,
-              currencyPrefix: symbol,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: brand.inkSoft,
-              ),
-            ),
+            const Icon(CupertinoIcons.chevron_right, color: Color(0xFFC9C9CF), size: 14),
           ],
         ),
-        const SizedBox(height: 7),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: progress),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, _) => LinearProgressIndicator(
-              value: value,
-              minHeight: 5,
-              backgroundColor: brand.divider,
-              valueColor: AlwaysStoppedAnimation(kCategoryStyles['Groceries']!.accent),
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${(progress * 100).round()}% ${context.t('asset.savedLabel')}',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: brand.inkSoft,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Installments Card ─────────────────────────────────────────────────────────
-
-class _InstallmentsCard extends StatelessWidget {
-  final _AssetSnapshot snapshot;
-  final String symbol;
-  final bool visible;
-
-  const _InstallmentsCard({
-    required this.snapshot,
-    required this.symbol,
-    required this.visible,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final items = snapshot.activeInstallments;
-    final totalRemaining = snapshot.installmentLiability;
-
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${items.length} active plan${items.length == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ),
-              if (totalRemaining != null) ...[
-                MaskedAmount(
-                  visibleText: formatMoney(symbol, totalRemaining),
-                  visible: visible,
-                  currencyPrefix: symbol,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.expense,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Text(
-                  ' ${context.t('asset.remaining')}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.expense,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (var i = 0; i < items.length; i++) ...[
-            _InstallmentRow(
-              item: items[i],
-              symbol: symbol,
-              visible: visible,
-            ),
-            if (i < items.length - 1) ...[
-              const SizedBox(height: 10),
-              Divider(height: 1, color: brand.divider),
-              const SizedBox(height: 10),
-            ],
-          ],
-        ],
       ),
     );
   }
 }
 
-class _InstallmentRow extends StatelessWidget {
-  final Installment item;
-  final String symbol;
-  final bool visible;
-
-  const _InstallmentRow({
-    required this.item,
-    required this.symbol,
-    required this.visible,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final remaining = item.totalRemaining;
-    final progress = item.progress;
-    final hasProgress = item.totalMonths != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                item.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: brand.ink,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                MaskedAmount(
-                  visibleText: formatMoney(symbol, item.amount),
-                  visible: visible,
-                  currencyPrefix: symbol,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
-                ),
-                Text(
-                  context.t('asset.perMonth'),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        if (hasProgress) ...[
-          const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: progress),
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, _) => LinearProgressIndicator(
-                value: value,
-                minHeight: 5,
-                backgroundColor: brand.divider,
-                valueColor: AlwaysStoppedAnimation(AppColors.expense),
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                '${item.paidCount} / ${item.totalMonths} months paid',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: brand.inkSoft,
-                ),
-              ),
-              if (remaining != null) ...[
-                const Spacer(),
-                MaskedAmount(
-                  visibleText: '${formatMoney(symbol, remaining)} ${context.t('asset.remaining')}',
-                  visible: visible,
-                  currencyPrefix: symbol,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.expense,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-// ── Empty / Loading ───────────────────────────────────────────────────────────
-
-class _LoadingCard extends StatelessWidget {
-  const _LoadingCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return SectionCard(
-      radius: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-      child: Row(
-        children: [
-          const CupertinoActivityIndicator(),
-          const SizedBox(width: 12),
-          Text(
-            context.t('asset.loadingAccounts'),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: brand.inkSoft,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Data model ────────────────────────────────────────────────────────────────
+// ── Asset snapshot (computation) ──────────────────────────────────────────────
 
 class _AssetSnapshot {
   final List<_AccountAsset> accounts;
   final double netWorth;
-
-  /// Total assets: positive asset account balances + unsettled lending.
   final double totalAssets;
-
-  /// Total liabilities: negative account balances (all types) +
-  /// borrowed money + installment remaining amounts.
   final double totalLiabilities;
-
-  /// Unsettled money lent to others (receivable) — included in totalAssets.
   final double totalLent;
-
-  /// Unsettled money borrowed from others (payable) — included in totalLiabilities.
   final double totalBorrowed;
-
   final List<SavingPlan> activeSavingPlans;
   final double savingPlanSaved;
-
-  /// Active installments with known remaining amounts treated as liabilities.
   final List<Installment> activeInstallments;
-
-  /// Total remaining for fixed-term active installments (null if all lifetime).
   final double? installmentLiability;
-
-  /// Net income - expense change over the past 7 days.
   final double weeklyChange;
-
-  /// Whether any account uses a different currency (for "(est.)" label).
   final bool hasMultiCurrency;
+
+  bool get hasBorrowLend => totalLent > 0 || totalBorrowed > 0;
 
   const _AssetSnapshot({
     required this.accounts,
@@ -1126,7 +927,6 @@ class _AssetSnapshot {
   }) {
     final balances = _computeBalances(accounts, expenses);
 
-    // Convert a per-account balance to base currency for totals
     double toBase(Account a, double bal) {
       final code = a.currencyCode ?? mainCode;
       if (converter != null && code != null && code != mainCode) {
@@ -1135,17 +935,18 @@ class _AssetSnapshot {
       return bal;
     }
 
-    // Split account balances into assets vs liabilities:
-    // - Asset accounts (bank/eWallet/cash): positive = asset, negative = liability
-    // - Liability accounts (creditCard/loan/etc): negative = liability (never asset)
     double accountAssetsSum = 0;
     double accountLiabilitiesSum = 0;
+    bool multiCurrency = false;
+
     for (final account in accounts) {
+      if (account.currencyCode != null && account.currencyCode != mainCode) {
+        multiCurrency = true;
+      }
       final bal = balances[account.id] ?? 0;
       final baseBal = toBase(account, bal);
       if (account.type.isLiability) {
         if (baseBal < 0) accountLiabilitiesSum += baseBal.abs();
-        // Positive balance on liability account (overpaid) counts as asset credit
         if (baseBal > 0) accountAssetsSum += baseBal;
       } else {
         if (baseBal >= 0) {
@@ -1158,13 +959,9 @@ class _AssetSnapshot {
 
     final accountAssets = <_AccountAsset>[
       for (final account in accounts)
-        _AccountAsset(
-          account: account,
-          balance: balances[account.id] ?? 0,
-        ),
+        _AccountAsset(account: account, balance: balances[account.id] ?? 0),
     ]..sort((a, b) => b.balance.compareTo(a.balance));
 
-    // Borrow/lending: only unsettled, non-cancelled records.
     final activeLending = borrowLending.where(
       (r) =>
           !r.cancelled &&
@@ -1178,17 +975,16 @@ class _AssetSnapshot {
         .where((r) => r.type == BorrowLendingType.borrowed)
         .fold<double>(0, (sum, r) => sum + r.remaining);
 
-    final active = savingPlans
+    final activeSavings = savingPlans
         .where((p) => p.status == SavingPlanStatus.active)
         .toList(growable: false);
-    final planSaved =
-        active.fold<double>(0, (sum, p) => sum + p.currentAmount);
+    final savingPlanSaved =
+        activeSavings.fold<double>(0, (sum, p) => sum + p.currentAmount);
 
     final activeInstallments = installments
         .where((i) => i.status == InstallmentStatus.active)
         .toList(growable: false);
 
-    // Sum remaining for fixed-term installments; ignore lifetime ones.
     double? installmentLiability;
     for (final inst in activeInstallments) {
       final rem = inst.totalRemaining;
@@ -1197,15 +993,14 @@ class _AssetSnapshot {
       }
     }
 
-    // Comprehensive totals including borrow/lending and installments
     final totalAssets = accountAssetsSum + totalLent;
-    final totalLiabilities =
-        accountLiabilitiesSum + totalBorrowed + (installmentLiability ?? 0);
+    final totalLiabilities = accountLiabilitiesSum + totalBorrowed +
+        (installmentLiability ?? 0);
     final netWorth = totalAssets - totalLiabilities;
 
-    // Weekly change: net income - expense for the past 7 days (no transfers)
+    // Weekly change
     final weekStart = DateTime.now().subtract(const Duration(days: 7));
-    var weeklyChange = 0.0;
+    double weeklyChange = 0;
     for (final e in expenses) {
       if (e.date.isAfter(weekStart)) {
         if (e.type == EntryType.income || e.type == EntryType.receive) {
@@ -1216,10 +1011,6 @@ class _AssetSnapshot {
       }
     }
 
-    final hasMultiCurrency = accounts.any(
-      (a) => a.currencyCode != null && a.currencyCode != mainCode,
-    );
-
     return _AssetSnapshot(
       accounts: accountAssets,
       netWorth: netWorth,
@@ -1227,22 +1018,14 @@ class _AssetSnapshot {
       totalLiabilities: totalLiabilities,
       totalLent: totalLent,
       totalBorrowed: totalBorrowed,
-      activeSavingPlans: active,
-      savingPlanSaved: planSaved,
+      activeSavingPlans: activeSavings,
+      savingPlanSaved: savingPlanSaved,
       activeInstallments: activeInstallments,
       installmentLiability: installmentLiability,
       weeklyChange: weeklyChange,
-      hasMultiCurrency: hasMultiCurrency,
+      hasMultiCurrency: multiCurrency,
     );
   }
-
-  List<_AccountAsset> typeAccounts(AccountType type) =>
-      accounts.where((a) => a.account.type == type).toList(growable: false);
-
-  double typeTotal(AccountType type) =>
-      typeAccounts(type).fold<double>(0, (sum, a) => sum + a.balance);
-
-  bool get hasBorrowLend => totalLent > 0 || totalBorrowed > 0;
 }
 
 class _AccountAsset {
@@ -1251,7 +1034,7 @@ class _AccountAsset {
   const _AccountAsset({required this.account, required this.balance});
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Balance computation ───────────────────────────────────────────────────────
 
 double _effectiveAmountForAccount(Expense expense, String? accountCurrencyCode) {
   if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
@@ -1285,398 +1068,4 @@ Map<String, double> _computeBalances(
     }
   }
   return balances;
-}
-
-// ── Breakdown sheet helpers ───────────────────────────────────────────────────
-
-class _BreakdownItem {
-  final String name;
-  final String type;
-  final double amount;
-  final String? originalCurrencyCode;
-  final double? estAmount;
-
-  const _BreakdownItem({
-    required this.name,
-    required this.type,
-    required this.amount,
-    this.originalCurrencyCode,
-    this.estAmount,
-  });
-}
-
-_BreakdownItem _accountItem(
-  _AccountAsset a,
-  String type,
-  CurrencyConverter? converter,
-  String? mainCode, {
-  bool abs = false,
-}) {
-  final bal = abs ? a.balance.abs() : a.balance;
-  final code = a.account.currencyCode;
-  final isForeign = code != null && code != mainCode;
-  final est = (isForeign && converter != null) ? converter.toBase(bal, code) : null;
-  return _BreakdownItem(
-    name: a.account.name,
-    type: type,
-    amount: bal,
-    originalCurrencyCode: isForeign ? code : null,
-    estAmount: est,
-  );
-}
-
-List<_BreakdownItem> _buildAssetItems(
-  _AssetSnapshot snapshot,
-  BuildContext context,
-  CurrencyConverter? converter,
-  String? mainCode,
-) {
-  final items = <_BreakdownItem>[];
-  for (final a in snapshot.accounts) {
-    if (!a.account.type.isLiability && a.balance > 0) {
-      items.add(_accountItem(a, a.account.type.label, converter, mainCode));
-    }
-  }
-  for (final a in snapshot.accounts) {
-    if (a.account.type.isLiability && a.balance > 0) {
-      items.add(_accountItem(a, '${a.account.type.label} (overpaid)', converter, mainCode));
-    }
-  }
-  if (snapshot.totalLent > 0) {
-    items.add(_BreakdownItem(
-      name: context.t('asset.outstandingLending'),
-      type: 'Lending',
-      amount: snapshot.totalLent,
-    ));
-  }
-  return items;
-}
-
-List<_BreakdownItem> _buildLiabilityItems(
-  _AssetSnapshot snapshot,
-  BuildContext context,
-  CurrencyConverter? converter,
-  String? mainCode,
-) {
-  final items = <_BreakdownItem>[];
-  for (final a in snapshot.accounts) {
-    if (a.account.type.isLiability && a.balance < 0) {
-      items.add(_accountItem(a, a.account.type.label, converter, mainCode, abs: true));
-    }
-  }
-  for (final a in snapshot.accounts) {
-    if (!a.account.type.isLiability && a.balance < 0) {
-      items.add(_accountItem(a, '${a.account.type.label} (negative)', converter, mainCode, abs: true));
-    }
-  }
-  if (snapshot.totalBorrowed > 0) {
-    items.add(_BreakdownItem(
-      name: context.t('asset.outstandingBorrowing'),
-      type: 'Borrowing',
-      amount: snapshot.totalBorrowed,
-    ));
-  }
-  if (snapshot.installmentLiability != null && snapshot.installmentLiability! > 0) {
-    items.add(_BreakdownItem(
-      name: context.t('asset.installmentsRemaining'),
-      type: 'Installments',
-      amount: snapshot.installmentLiability!,
-    ));
-  }
-  return items;
-}
-
-void _showBreakdown(
-  BuildContext context, {
-  required String title,
-  required Color color,
-  required IconData icon,
-  required List<_BreakdownItem> items,
-  required double total,
-  required String symbol,
-  required bool visible,
-}) {
-  HapticFeedback.selectionClick();
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => _BreakdownSheet(
-      title: title,
-      color: color,
-      icon: icon,
-      items: items,
-      total: total,
-      symbol: symbol,
-      visible: visible,
-    ),
-  );
-}
-
-class _BreakdownSheet extends ConsumerStatefulWidget {
-  final String title;
-  final Color color;
-  final IconData icon;
-  final List<_BreakdownItem> items;
-  final double total;
-  final String symbol;
-  final bool visible;
-
-  const _BreakdownSheet({
-    required this.title,
-    required this.color,
-    required this.icon,
-    required this.items,
-    required this.total,
-    required this.symbol,
-    required this.visible,
-  });
-
-  @override
-  ConsumerState<_BreakdownSheet> createState() => _BreakdownSheetState();
-}
-
-class _BreakdownSheetState extends ConsumerState<_BreakdownSheet> {
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final excludeInstallments = ref.watch(excludeInstallmentsProvider);
-
-    final hasInstallments =
-        widget.items.any((i) => i.type == 'Installments');
-    final displayItems = excludeInstallments
-        ? widget.items.where((i) => i.type != 'Installments').toList()
-        : widget.items;
-    final displayTotal =
-        displayItems.fold(0.0, (s, i) => s + i.amount);
-
-    return Container(
-      margin: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 40),
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(top: 12, bottom: 16),
-            decoration: BoxDecoration(
-              color: brand.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Header
-                  Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: widget.color
-                              .withValues(alpha: isDark ? 0.18 : 0.12),
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        child: Icon(widget.icon, size: 17, color: widget.color),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.title,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              '${displayItems.length} source${displayItems.length == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: brand.inkSoft,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      MaskedAmount(
-                        visibleText: formatMoney(widget.symbol, displayTotal),
-                        visible: widget.visible,
-                        currencyPrefix: widget.symbol,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: widget.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Exclude installments toggle (only for liabilities sheet)
-                  if (hasInstallments) ...[
-                    const SizedBox(height: 14),
-                    Container(height: 1, color: brand.divider),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            context.t('stats.excludeFixed'),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: brand.inkSoft,
-                            ),
-                          ),
-                        ),
-                        CupertinoSwitch(
-                          value: excludeInstallments,
-                          onChanged: (v) => ref
-                              .read(excludeInstallmentsProvider.notifier)
-                              .set(v),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                  ] else
-                    const SizedBox(height: 18),
-                  if (displayItems.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          context.t('asset.nothingHere'),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SectionCard(
-                      radius: 20,
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          for (var i = 0; i < displayItems.length; i++) ...[
-                            if (i > 0)
-                              Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: brand.divider),
-                            _BreakdownRow(
-                              item: displayItems[i],
-                              symbol: widget.symbol,
-                              visible: widget.visible,
-                              color: widget.color,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BreakdownRow extends StatelessWidget {
-  final _BreakdownItem item;
-  final String symbol;
-  final bool visible;
-  final Color color;
-
-  const _BreakdownRow({
-    required this.item,
-    required this.symbol,
-    required this.visible,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final hasForeign = item.originalCurrencyCode != null && item.estAmount != null;
-    final displaySym = hasForeign
-        ? (kSupportedCurrencies[item.originalCurrencyCode!] ?? item.originalCurrencyCode!)
-        : symbol;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: brand.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.type,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: brand.inkSoft,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              MaskedAmount(
-                visibleText: formatMoney(displaySym, item.amount),
-                visible: visible,
-                currencyPrefix: displaySym,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-              if (hasForeign)
-                Text(
-                  'est. $symbol ${item.estAmount!.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: brand.inkSoft,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -51,6 +51,7 @@ class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? copyFrom;
   final EntryType? initialType;
   final double? initialAmount;
+  final String? initialToAccountId;
 
   const AddEditExpenseScreen({
     super.key,
@@ -58,6 +59,7 @@ class AddEditExpenseScreen extends ConsumerStatefulWidget {
     this.copyFrom,
     this.initialType,
     this.initialAmount,
+    this.initialToAccountId,
   });
 
   @override
@@ -175,6 +177,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     });
 
     _type = widget.initialType ?? EntryType.expense;
+    if (widget.initialToAccountId != null) {
+      _toAccountId = widget.initialToAccountId;
+    }
     final template = widget.expense ?? widget.copyFrom;
     if (template != null) {
       _amountController.text = template.amount.toStringAsFixed(2);
