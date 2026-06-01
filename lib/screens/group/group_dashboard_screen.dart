@@ -587,6 +587,36 @@ class GroupDashboardContent extends ConsumerWidget {
                     ],
                   ),
                 ),
+
+              const SizedBox(height: 14),
+
+              // Generate Receipt — bottom of hero card
+              GestureDetector(
+                onTap: () => showGroupReceiptPicker(context, group!),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F7FA),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.doc_text, color: brand.inkSoft, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Generate Receipt',
+                        style: TextStyle(
+                          color: brand.ink,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -606,31 +636,32 @@ class GroupDashboardContent extends ConsumerWidget {
                 letterSpacing: -0.3,
               ),
             ),
-            // Generate Receipt button
+            // Add Expense button
             GestureDetector(
-              onTap: () => showGroupReceiptPicker(context, group!),
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AddGroupExpenseScreen(group: group!),
+                ),
+              ),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF1A6CFF),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      CupertinoIcons.doc_text,
-                      color: brand.inkSoft,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
+                    Icon(CupertinoIcons.plus, color: Colors.white, size: 14),
+                    SizedBox(width: 4),
                     Text(
-                      'Generate Receipt',
+                      'Add Expense',
                       style: TextStyle(
-                        color: brand.ink,
+                        color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -640,41 +671,6 @@ class GroupDashboardContent extends ConsumerWidget {
               ),
             ),
           ],
-        ),
-
-        const SizedBox(height: 10),
-
-        // Add Expense button (full width, below header)
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            CupertinoPageRoute(
-              builder: (_) => AddGroupExpenseScreen(group: group!),
-            ),
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A6CFF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.plus, color: Colors.white, size: 15),
-                SizedBox(width: 6),
-                Text(
-                  'Add Expense',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
 
         const SizedBox(height: 12),

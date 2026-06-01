@@ -65,6 +65,9 @@ class _AddGroupExpenseScreenState
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _amountFocus = FocusNode();
+  final _youCtrl = TextEditingController();
+  final _partnerCtrl = TextEditingController();
+  bool _syncingAmounts = false;
 
   String _category = 'Food';
   DateTime _date = DateTime.now();
@@ -125,8 +128,86 @@ class _AddGroupExpenseScreenState
     _amountCtrl.dispose();
     _notesCtrl.dispose();
     _amountFocus.dispose();
+    _youCtrl.dispose();
+    _partnerCtrl.dispose();
     _saveBtnCtrl.dispose();
     super.dispose();
+  }
+
+  // Sync the YOU/PARTNER sub-amount fields based on total + split mode.
+  void _syncSubAmounts() {
+    if (_syncingAmounts) return;
+    _syncingAmounts = true;
+    final total = _parsedAmount;
+    final user = ref.read(authStateProvider).valueOrNull;
+    double youAmt;
+    double partnerAmt;
+    switch (_splitMode) {
+      case _SplitMode.even:
+        youAmt = total / 2;
+        partnerAmt = total / 2;
+      case _SplitMode.youOwe:
+        youAmt = 0;
+        partnerAmt = total;
+      case _SplitMode.theyOwe:
+        youAmt = total;
+        partnerAmt = 0;
+      case _SplitMode.byPercent:
+      case _SplitMode.byAmount:
+        final myPct = _splitCustomPercents[user?.uid] ?? 50.0;
+        youAmt = total * myPct / 100;
+        partnerAmt = total - youAmt;
+    }
+    if (total > 0) {
+      _youCtrl.text = youAmt.toStringAsFixed(2);
+      _partnerCtrl.text = partnerAmt.toStringAsFixed(2);
+    } else {
+      _youCtrl.clear();
+      _partnerCtrl.clear();
+    }
+    _syncingAmounts = false;
+  }
+
+  void _onYouAmountChanged() {
+    if (_syncingAmounts) return;
+    final total = _parsedAmount;
+    if (total <= 0) return;
+    final you = (double.tryParse(_youCtrl.text) ?? 0).clamp(0.0, total);
+    final partner = total - you;
+    _syncingAmounts = true;
+    _partnerCtrl.text = partner.toStringAsFixed(2);
+    _syncingAmounts = false;
+    final myPct = you / total * 100;
+    final uid = ref.read(authStateProvider).valueOrNull?.uid;
+    final partnerUid = widget.group.members.where((m) => m.uid != uid).firstOrNull?.uid;
+    if (uid != null && partnerUid != null) {
+      setState(() {
+        _splitMode = _SplitMode.byAmount;
+        _splitCustomPercents = {uid: myPct, partnerUid: 100 - myPct};
+        _splitBetween = widget.group.memberUids.toSet();
+      });
+    }
+  }
+
+  void _onPartnerAmountChanged() {
+    if (_syncingAmounts) return;
+    final total = _parsedAmount;
+    if (total <= 0) return;
+    final partner = (double.tryParse(_partnerCtrl.text) ?? 0).clamp(0.0, total);
+    final you = total - partner;
+    _syncingAmounts = true;
+    _youCtrl.text = you.toStringAsFixed(2);
+    _syncingAmounts = false;
+    final myPct = you / total * 100;
+    final uid = ref.read(authStateProvider).valueOrNull?.uid;
+    final partnerUid = widget.group.members.where((m) => m.uid != uid).firstOrNull?.uid;
+    if (uid != null && partnerUid != null) {
+      setState(() {
+        _splitMode = _SplitMode.byAmount;
+        _splitCustomPercents = {uid: myPct, partnerUid: 100 - myPct};
+        _splitBetween = widget.group.memberUids.toSet();
+      });
+    }
   }
 
   void _setSplitMode(_SplitMode mode, {Map<String, double>? customPercents}) {
@@ -149,6 +230,8 @@ class _AddGroupExpenseScreenState
           _splitBetween = {if (partner != null) partner};
       }
     });
+    // Keep sub-amount fields in sync
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncSubAmounts());
   }
 
   Future<void> _save() async {
@@ -678,6 +761,18 @@ class _AddGroupExpenseScreenState
 
                           const SizedBox(height: 28),
 
+                          // "Total amount" label
+                          const Text(
+                            'Total amount',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: _kGroupInkSoft,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
                           // Amount row
                           GestureDetector(
                             onTap: () => _amountFocus.requestFocus(),
@@ -733,139 +828,166 @@ class _AddGroupExpenseScreenState
                                         TextInputAction.done,
                                     onSubmitted: (_) =>
                                         FocusScope.of(context).unfocus(),
-                                    onChanged: (_) => setState(() {}),
+                                    onChanged: (_) {
+                                      setState(() {});
+                                      _syncSubAmounts();
+                                    },
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                          // Split breakdown pill (visible when amount > 0)
-                          if (amount > 0) ...[
-                            const SizedBox(height: 14),
-                            Container(
-                              padding: const EdgeInsets.fromLTRB(
-                                  14, 10, 14, 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white
-                                    .withValues(alpha: 0.55),
-                                borderRadius:
-                                    BorderRadius.circular(14),
-                              ),
-                              child: Row(
-                                children: [
-                                  // You
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        _GroupAvatar(
-                                            initial: userInitial,
-                                            bg: Colors.white,
-                                            fg: const Color(
-                                                0xFF5A4AAB),
-                                            size: 26),
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .start,
+                          // Split breakdown — interactive YOU / PARTNER inputs
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                // YOU
+                                Expanded(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      _GroupAvatar(
+                                          initial: userInitial,
+                                          bg: Colors.white,
+                                          fg: const Color(0xFF5A4AAB),
+                                          size: 26),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             const Text(
                                               'YOU',
                                               style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                                color:
-                                                    _kGroupInkSoft,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: _kGroupInkSoft,
                                                 letterSpacing: 0.2,
                                               ),
                                             ),
-                                            Text(
-                                              _splitMode ==
-                                                      _SplitMode
-                                                          .theyOwe
-                                                  ? '$symbol${amount.toStringAsFixed(2)}'
-                                                  : _splitMode ==
-                                                          _SplitMode
-                                                              .youOwe
-                                                      ? '${symbol}0.00'
-                                                      : '$symbol${(amount / 2).toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight:
-                                                    FontWeight.w700,
-                                                color: _kGroupInk,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  symbol,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    color: _kGroupInk,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: _youCtrl,
+                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                    style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: _kGroupInk,
+                                                    ),
+                                                    decoration: const InputDecoration(
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding: EdgeInsets.zero,
+                                                      hintText: '0.00',
+                                                      hintStyle: TextStyle(
+                                                        fontSize: 15,
+                                                        color: _kGroupInkSoft,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    onChanged: (_) => _onYouAmountChanged(),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                  // Divider
-                                  Container(
-                                    width: 1,
-                                    height: 36,
-                                    color: const Color(0x2E6B4FB2),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Partner
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        _GroupAvatar(
-                                            initial: partnerInitial,
-                                            bg: Colors.white,
-                                            fg: const Color(
-                                                0xFF1FBE71),
-                                            size: 26),
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .start,
+                                ),
+                                // Divider
+                                Container(
+                                  width: 1,
+                                  height: 36,
+                                  color: const Color(0x2E6B4FB2),
+                                ),
+                                const SizedBox(width: 10),
+                                // PARTNER
+                                Expanded(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      _GroupAvatar(
+                                          initial: partnerInitial,
+                                          bg: Colors.white,
+                                          fg: const Color(0xFF1FBE71),
+                                          size: 26),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              partnerName
-                                                  .toUpperCase()
-                                                  .split(' ')
-                                                  .first,
+                                              partnerName.toUpperCase().split(' ').first,
                                               style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight:
-                                                    FontWeight.w600,
-                                                color:
-                                                    _kGroupInkSoft,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: _kGroupInkSoft,
                                                 letterSpacing: 0.2,
                                               ),
                                             ),
-                                            Text(
-                                              _splitMode ==
-                                                      _SplitMode
-                                                          .youOwe
-                                                  ? '$symbol${amount.toStringAsFixed(2)}'
-                                                  : _splitMode ==
-                                                          _SplitMode
-                                                              .theyOwe
-                                                      ? '${symbol}0.00'
-                                                      : '$symbol${(amount / 2).toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight:
-                                                    FontWeight.w700,
-                                                color: _kGroupInk,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  symbol,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    color: _kGroupInk,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: _partnerCtrl,
+                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                    style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: _kGroupInk,
+                                                    ),
+                                                    decoration: const InputDecoration(
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding: EdgeInsets.zero,
+                                                      hintText: '0.00',
+                                                      hintStyle: TextStyle(
+                                                        fontSize: 15,
+                                                        color: _kGroupInkSoft,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    onChanged: (_) => _onPartnerAmountChanged(),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
 
                           const SizedBox(height: 22),
 

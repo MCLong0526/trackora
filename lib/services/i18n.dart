@@ -274,11 +274,11 @@ class AppStrings {
     'stats.lineChart.yearSubtitle': 'Monthly totals',
     'stats.lineChart.allSubtitle': 'Yearly totals',
 
-    // Management / Budget.
-    'money.title': 'Management',
+    // Manage / Budget.
+    'money.title': 'Manage',
     'money.subtitle':
         'Manage commitments, lending, savings and spending limits.',
-    'money.customizeHub': 'Customize Management',
+    'money.customizeHub': 'Customize Manage Page',
     'customize.keepOneVisible': 'At least one item must stay visible.',
     'budget.title': 'Monthly\nbudget',
     'budget.subtitle':
@@ -1151,7 +1151,7 @@ class AppStrings {
 
     'money.title': '管理',
     'money.subtitle': '管理分期、借贷、储蓄计划和消费上限。',
-    'money.customizeHub': '自定义管理',
+    'money.customizeHub': '自定义管理页面',
     'customize.keepOneVisible': '至少保留一个项目显示。',
     'budget.title': '月度\n预算',
     'budget.subtitle': '仅用于日常消费。\n账单和分期会单独追踪。',
@@ -2009,7 +2009,7 @@ class AppStrings {
 
     'money.title': 'Pengurusan',
     'money.subtitle': 'Urus komitmen, pinjaman, simpanan dan had belanja.',
-    'money.customizeHub': 'Sesuaikan Pengurusan',
+    'money.customizeHub': 'Sesuaikan Halaman Urus',
     'customize.keepOneVisible':
         'Sekurang-kurangnya satu item mesti dipaparkan.',
     'budget.title': 'Bajet\nbulanan',
