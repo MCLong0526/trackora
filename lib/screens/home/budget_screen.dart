@@ -388,10 +388,13 @@ class BudgetScreen extends ConsumerWidget {
                 CupertinoPageRoute(builder: (_) => const CreateGroupScreen()),
               );
             } else {
-              Navigator.push(
-                context,
-                CupertinoPageRoute(builder: (_) => const GroupDashboardScreen()),
+              final activeGroupId = ref.read(activeGroupIdProvider);
+              final activeGroup = groups.firstWhere(
+                (g) => g.id == activeGroupId,
+                orElse: () => groups.first,
               );
+              final user = ref.read(authStateProvider).valueOrNull;
+              showGroupMenu(context, ref, activeGroup, user?.uid);
             }
           },
         ),

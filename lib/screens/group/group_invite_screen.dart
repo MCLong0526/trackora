@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../models/expense_group.dart';
 import '../../services/i18n.dart';
@@ -157,22 +156,6 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
     final display = '${_rawCode!.substring(0, 3)}·${_rawCode!.substring(3)}';
     Clipboard.setData(ClipboardData(text: display));
     AppToast.show(context, 'Code copied!');
-  }
-
-  void _shareMessages() {
-    if (_rawCode == null) return;
-    final display = '${_rawCode!.substring(0, 3)}·${_rawCode!.substring(3)}';
-    Share.share(
-      'Join my group on Trackora!\n\nInvite code: $display\n\nExpires in 10 minutes.',
-    );
-  }
-
-  void _shareWhatsApp() {
-    if (_rawCode == null) return;
-    final display = '${_rawCode!.substring(0, 3)}·${_rawCode!.substring(3)}';
-    Share.share(
-      'Join my group on Trackora! Code: $display',
-    );
   }
 
   @override
@@ -414,35 +397,44 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
 
                     const SizedBox(height: 16),
 
-                    // Share tiles row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _ShareTile(
-                          bg: const Color(0xFF25D366),
-                          icon: CupertinoIcons.chat_bubble_fill,
-                          label: 'WhatsApp',
-                          onTap: _shareWhatsApp,
+                    // Copy code button
+                    SizedBox(
+                      width: double.infinity,
+                      child: GestureDetector(
+                        onTap: _expired ? null : _copyCode,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: _expired
+                                ? const Color(0xFFF4F4F7)
+                                : const Color(0xFF1E1E24),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                CupertinoIcons.doc_on_doc_fill,
+                                size: 16,
+                                color: _expired
+                                    ? const Color(0xFF8E8E96)
+                                    : Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Copy code',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: _expired
+                                      ? const Color(0xFF8E8E96)
+                                      : Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        _ShareTile(
-                          bg: const Color(0xFF1A6CFF),
-                          icon: CupertinoIcons.bubble_left_fill,
-                          label: 'Messages',
-                          onTap: _shareMessages,
-                        ),
-                        _ShareTile(
-                          bg: const Color(0xFF1E1E24),
-                          icon: CupertinoIcons.doc_on_doc_fill,
-                          label: 'Copy code',
-                          onTap: _expired ? null : _copyCode,
-                        ),
-                        _ShareTile(
-                          bg: const Color(0xFF9F8DDB),
-                          icon: CupertinoIcons.share_solid,
-                          label: 'More',
-                          onTap: _shareMessages,
-                        ),
-                      ],
+                      ),
                     ),
 
                     const SizedBox(height: 16),
@@ -547,47 +539,3 @@ class _CodeBox extends StatelessWidget {
   }
 }
 
-// ── Share tile widget ────────────────────────────────────────────────────────
-
-class _ShareTile extends StatelessWidget {
-  final Color bg;
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _ShareTile({
-    required this.bg,
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF5B5B66),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

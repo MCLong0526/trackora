@@ -606,37 +606,82 @@ class GroupDashboardContent extends ConsumerWidget {
                 letterSpacing: -0.3,
               ),
             ),
-            GestureDetector(
-              onTap: () => showGroupReceiptPicker(context, group!),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.doc_text,
-                      color: brand.inkSoft,
-                      size: 16,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Add Expense button
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => AddGroupExpenseScreen(group: group!),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Generate Receipt',
-                      style: TextStyle(
-                        color: brand.ink,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                  ],
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A6CFF),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.plus,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Add Expense',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                // Generate Receipt button
+                GestureDetector(
+                  onTap: () => showGroupReceiptPicker(context, group!),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.doc_text,
+                          color: brand.inkSoft,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Generate Receipt',
+                          style: TextStyle(
+                            color: brand.ink,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1283,6 +1328,70 @@ class _GroupMenuSheet extends ConsumerWidget {
             _MemberRow(member: partner, isYou: false),
           ],
           const SizedBox(height: 20),
+          // Invite partner (only when group has no partner yet)
+          if (group.members.length < 2) ...[
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFFE4ECFE),
+                borderRadius: BorderRadius.circular(14),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => GroupInviteScreen(group: group),
+                    ),
+                  );
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.person_badge_plus,
+                        size: 16, color: Color(0xFF1A6CFF)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Invite partner',
+                      style: TextStyle(
+                        color: Color(0xFF1A6CFF),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // Go to full group dashboard
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              color: const Color(0xFFF4F4F7),
+              borderRadius: BorderRadius.circular(14),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const GroupDashboardScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                'View Group',
+                style: TextStyle(
+                  color: Color(0xFF0B0B0F),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           // When sole member: only show Delete (leaving = deleting anyway).
           // When multiple members: show Leave for everyone, Delete for owner.
           if (group.members.length > 1) ...[

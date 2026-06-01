@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/providers.dart';
@@ -65,6 +66,22 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
         _join();
       }
     }
+  }
+
+  Future<void> _pasteCode() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text == null) return;
+    final cleaned = data!.text!.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (cleaned.isEmpty) return;
+    final limited = cleaned.length > 6 ? cleaned.substring(0, 6) : cleaned;
+    setState(() {
+      _entered = limited;
+      _hiddenController.value = TextEditingValue(
+        text: limited,
+        selection: TextSelection.collapsed(offset: limited.length),
+      );
+    });
+    if (limited.length == 6) _join();
   }
 
   Future<void> _scanQR() async {
@@ -223,7 +240,43 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 16),
+
+                    // Paste from clipboard
+                    GestureDetector(
+                      onTap: _pasteCode,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              CupertinoIcons.doc_on_clipboard,
+                              size: 15,
+                              color: const Color(0xFF1A6CFF),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Paste code',
+                              style: TextStyle(
+                                color: const Color(0xFF1A6CFF),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
 
                     // Scan QR card
                     GestureDetector(
