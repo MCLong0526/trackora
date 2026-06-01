@@ -6,7 +6,10 @@ class GroupExpenseItem {
   final String description;
   final double amount;
   final String paidBy;
+  final String? paidByAccountId;
   final List<String> splitBetween;
+  // Optional: maps uid → percent (0–100). When present, overrides equal split.
+  final Map<String, double>? splitPercents;
   final String category;
   final DateTime date;
   final String createdBy;
@@ -21,7 +24,9 @@ class GroupExpenseItem {
     required this.description,
     required this.amount,
     required this.paidBy,
+    this.paidByAccountId,
     required this.splitBetween,
+    this.splitPercents,
     required this.category,
     required this.date,
     required this.createdBy,
@@ -42,7 +47,11 @@ class GroupExpenseItem {
       description: data['description'] as String? ?? '',
       amount: (data['amount'] as num).toDouble(),
       paidBy: data['paidBy'] as String? ?? '',
+      paidByAccountId: data['paidByAccountId'] as String?,
       splitBetween: List<String>.from(data['splitBetween'] as List? ?? []),
+      splitPercents: (data['splitPercents'] as Map?)?.map(
+        (k, v) => MapEntry(k as String, (v as num).toDouble()),
+      ),
       category: data['category'] as String? ?? 'Others',
       date: ExpenseGroup.readDate(data['date']),
       createdBy: data['createdBy'] as String? ?? '',
@@ -60,7 +69,9 @@ class GroupExpenseItem {
       'description': description,
       'amount': amount,
       'paidBy': paidBy,
+      if (paidByAccountId != null) 'paidByAccountId': paidByAccountId,
       'splitBetween': splitBetween,
+      if (splitPercents != null) 'splitPercents': splitPercents,
       'category': category,
       'date': date.toIso8601String(),
       'createdBy': createdBy,
@@ -77,7 +88,9 @@ class GroupExpenseItem {
     String? description,
     double? amount,
     String? paidBy,
+    Object? paidByAccountId = _sentinel,
     List<String>? splitBetween,
+    Object? splitPercents = _sentinel,
     String? category,
     DateTime? date,
     Object? notes = _sentinel,
@@ -90,7 +103,13 @@ class GroupExpenseItem {
       description: description ?? this.description,
       amount: amount ?? this.amount,
       paidBy: paidBy ?? this.paidBy,
+      paidByAccountId: identical(paidByAccountId, _sentinel)
+          ? this.paidByAccountId
+          : paidByAccountId as String?,
       splitBetween: splitBetween ?? this.splitBetween,
+      splitPercents: identical(splitPercents, _sentinel)
+          ? this.splitPercents
+          : splitPercents as Map<String, double>?,
       category: category ?? this.category,
       date: date ?? this.date,
       createdBy: createdBy,

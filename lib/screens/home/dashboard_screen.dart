@@ -1229,7 +1229,13 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
       ],
     );
 
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _expanded = !_expanded);
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: brand.surface,
         borderRadius: BorderRadius.circular(24),
@@ -1281,28 +1287,23 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
           ),
           const SizedBox(height: 6),
           Center(
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _expanded = !_expanded);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
-                child: AnimatedRotation(
-                  turns: _expanded ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(
-                    CupertinoIcons.chevron_down,
-                    size: 14,
-                    color: brand.inkSoft,
-                  ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
+              child: AnimatedRotation(
+                turns: _expanded ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  CupertinoIcons.chevron_down,
+                  size: 14,
+                  color: brand.inkSoft,
                 ),
               ),
             ),
           ),
         ],
       ),
+    ),
     );
   }
 }

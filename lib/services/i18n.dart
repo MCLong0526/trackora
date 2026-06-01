@@ -87,7 +87,7 @@ class AppStrings {
     'tab.home': 'Home',
     'tab.stats': 'Stats',
     'tab.budget': 'Budget',
-    'tab.money': 'Management',
+    'tab.money': 'Manage',
     'tab.assets': 'Assets',
     'tab.profile': 'Profile',
 
@@ -1825,7 +1825,7 @@ class AppStrings {
     'tab.home': 'Utama',
     'tab.stats': 'Statistik',
     'tab.budget': 'Bajet',
-    'tab.money': 'Pengurusan',
+    'tab.money': 'Urus',
     'tab.assets': 'Aset',
     'tab.profile': 'Profil',
 

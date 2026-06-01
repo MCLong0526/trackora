@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
+import '../../models/account.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
 import '../../repositories/local_expense_group_repository.dart';
@@ -39,7 +40,7 @@ class _CatMeta {
 }
 
 // ── Split mode ────────────────────────────────────────────────────────────────
-enum _SplitMode { even, youOwe, theyOwe }
+enum _SplitMode { even, byPercent, byAmount, youOwe, theyOwe }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -68,8 +69,11 @@ class _AddGroupExpenseScreenState
   String _category = 'Food';
   DateTime _date = DateTime.now();
   String? _paidByUid;
+  String? _paidByAccountId;
   late Set<String> _splitBetween;
   _SplitMode _splitMode = _SplitMode.even;
+  // uid → percent (0–100); only used when _splitMode == byPercent/byAmount
+  Map<String, double> _splitCustomPercents = {};
   bool _saving = false;
   bool _saveSuccess = false;
 
@@ -125,12 +129,16 @@ class _AddGroupExpenseScreenState
     super.dispose();
   }
 
-  void _setSplitMode(_SplitMode mode) {
+  void _setSplitMode(_SplitMode mode, {Map<String, double>? customPercents}) {
     final user = ref.read(authStateProvider).valueOrNull;
     setState(() {
       _splitMode = mode;
+      _splitCustomPercents = customPercents ?? {};
       switch (mode) {
         case _SplitMode.even:
+          _splitBetween = widget.group.memberUids.toSet();
+        case _SplitMode.byPercent:
+        case _SplitMode.byAmount:
           _splitBetween = widget.group.memberUids.toSet();
         case _SplitMode.youOwe:
           _splitBetween = {if (user != null) user.uid};
@@ -175,7 +183,11 @@ class _AddGroupExpenseScreenState
         description: desc,
         amount: amount,
         paidBy: _paidByUid!,
+        paidByAccountId: _paidByAccountId,
         splitBetween: _splitBetween.toList(),
+        splitPercents: _splitCustomPercents.isNotEmpty
+            ? _splitCustomPercents
+            : null,
         category: _category,
         date: _date,
         createdBy: widget.existing?.createdBy ?? user.uid,
@@ -303,6 +315,108 @@ class _AddGroupExpenseScreenState
     );
   }
 
+  void _showAccountSheet(List<Account> accounts) {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null || accounts.isEmpty) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: _kBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+            24, 14, 24, MediaQuery.of(context).padding.bottom + 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1D1D6),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Pay from account',
+              style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w700,
+                color: Color(0xFF0B0B0F), letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...accounts.map((a) {
+              final selected = _paidByAccountId == a.id;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _paidByAccountId = a.id);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: selected ? const Color(0xFF1A6CFF) : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          a.name,
+                          style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600,
+                            color: selected ? const Color(0xFF1A6CFF) : const Color(0xFF0B0B0F),
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        const Icon(CupertinoIcons.check_mark_circled_solid,
+                            color: Color(0xFF1A6CFF), size: 20),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            if (_paidByAccountId != null) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () {
+                  setState(() => _paidByAccountId = null);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Clear selection',
+                      style: TextStyle(color: Color(0xFF8E8E96), fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showPaidBySheet() {
     final user = ref.read(authStateProvider).valueOrNull;
     showModalBottomSheet(
@@ -335,11 +449,12 @@ class _AddGroupExpenseScreenState
         members: widget.group.members,
         currentUserId: user?.uid,
         currentMode: _splitMode,
+        currentPercents: _splitCustomPercents,
         amount: _parsedAmount,
         symbol: symbol,
         partnerName: partner?.displayName ?? 'Partner',
-        onSelected: (mode) {
-          _setSplitMode(mode);
+        onSelected: (mode, percents) {
+          _setSplitMode(mode, customPercents: percents);
           Navigator.pop(context);
         },
       ),
@@ -350,6 +465,7 @@ class _AddGroupExpenseScreenState
   Widget build(BuildContext context) {
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '';
     final user = ref.watch(authStateProvider).valueOrNull;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
     final members = widget.group.members;
     final partner =
         members.where((m) => m.uid != user?.uid).firstOrNull;
@@ -381,6 +497,16 @@ class _AddGroupExpenseScreenState
       splitLabel = '50 / 50';
       splitBadgeBg = const Color(0xFFD7F4E5);
       splitBadgeFg = const Color(0xFF1A8E54);
+    } else if (_splitMode == _SplitMode.byPercent) {
+      final myPct = _splitCustomPercents[user?.uid] ?? 50.0;
+      splitLabel = '${myPct.toStringAsFixed(0)}% / ${(100-myPct).toStringAsFixed(0)}%';
+      splitBadgeBg = const Color(0xFFEAE3F8);
+      splitBadgeFg = const Color(0xFF5A4AAB);
+    } else if (_splitMode == _SplitMode.byAmount) {
+      final myAmt = amount > 0 ? (amount * ((_splitCustomPercents[user?.uid] ?? 50.0) / 100)) : 0.0;
+      splitLabel = '$symbol${myAmt.toStringAsFixed(2)} / me';
+      splitBadgeBg = const Color(0xFFFFF1D2);
+      splitBadgeFg = const Color(0xFF9A6B00);
     } else if (_splitMode == _SplitMode.youOwe) {
       splitLabel = 'You owe';
       splitBadgeBg = const Color(0xFFFBDDE0);
@@ -916,6 +1042,48 @@ class _AddGroupExpenseScreenState
                                     ],
                                   ),
                                 ),
+
+                                // Account picker (only shown when current user is payer and has accounts)
+                                if (_paidByUid == user?.uid && accounts.isNotEmpty) ...[
+                                  _EntryDivider(),
+                                  _EntryRow(
+                                    onTap: () => _showAccountSheet(accounts),
+                                    leading: Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF4F4F7),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        CupertinoIcons.creditcard_fill,
+                                        color: Color(0xFF5B5B66),
+                                        size: 16,
+                                      ),
+                                    ),
+                                    title: 'Account',
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _paidByAccountId != null
+                                              ? (accounts.cast<Account?>().firstWhere(
+                                                    (a) => a?.id == _paidByAccountId,
+                                                    orElse: () => null,
+                                                  )?.name ?? 'Select')
+                                              : 'Select',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            color: Color(0xFF5B5B66),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(CupertinoIcons.chevron_right,
+                                            color: Color(0xFFC9C9CF), size: 14),
+                                      ],
+                                    ),
+                                  ),
+                                ],
 
                                 _EntryDivider(),
 
@@ -1464,19 +1632,21 @@ class _PaidBySheet extends StatelessWidget {
 
 // ── Split Bottom Sheet ────────────────────────────────────────────────────────
 
-class _SplitSheet extends StatelessWidget {
+class _SplitSheet extends StatefulWidget {
   final List<GroupMember> members;
   final String? currentUserId;
   final _SplitMode currentMode;
+  final Map<String, double> currentPercents;
   final double amount;
   final String symbol;
   final String partnerName;
-  final ValueChanged<_SplitMode> onSelected;
+  final void Function(_SplitMode, Map<String, double>?) onSelected;
 
   const _SplitSheet({
     required this.members,
     required this.currentUserId,
     required this.currentMode,
+    required this.currentPercents,
     required this.amount,
     required this.symbol,
     required this.partnerName,
@@ -1484,23 +1654,88 @@ class _SplitSheet extends StatelessWidget {
   });
 
   @override
+  State<_SplitSheet> createState() => _SplitSheetState();
+}
+
+class _SplitSheetState extends State<_SplitSheet> {
+  late _SplitMode _selectedMode;
+  late double _myPercent; // 0–100
+  late TextEditingController _myAmountCtrl;
+
+  String get _partnerUid =>
+      widget.members.firstWhere((m) => m.uid != widget.currentUserId,
+          orElse: () => widget.members.first).uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMode = widget.currentMode;
+    _myPercent = widget.currentPercents[widget.currentUserId] ?? 50.0;
+    final myAmt = widget.amount > 0
+        ? (widget.amount * (_myPercent / 100))
+        : 0.0;
+    _myAmountCtrl = TextEditingController(
+      text: myAmt > 0 ? myAmt.toStringAsFixed(2) : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _myAmountCtrl.dispose();
+    super.dispose();
+  }
+
+  Map<String, double>? _buildPercents() {
+    if (_selectedMode == _SplitMode.byPercent) {
+      return {
+        if (widget.currentUserId != null) widget.currentUserId!: _myPercent,
+        _partnerUid: 100.0 - _myPercent,
+      };
+    } else if (_selectedMode == _SplitMode.byAmount && widget.amount > 0) {
+      final myAmt = double.tryParse(_myAmountCtrl.text) ?? 0.0;
+      final myPct = (myAmt / widget.amount * 100).clamp(0.0, 100.0);
+      return {
+        if (widget.currentUserId != null) widget.currentUserId!: myPct,
+        _partnerUid: 100.0 - myPct,
+      };
+    }
+    return null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final options = [
       _SplitOptionData(
         mode: _SplitMode.even,
         title: 'Split evenly',
-        subtitle: amount > 0
-            ? '$symbol${(amount / 2).toStringAsFixed(2)} each'
+        subtitle: widget.amount > 0
+            ? '${widget.symbol}${(widget.amount / 2).toStringAsFixed(2)} each'
             : 'Equal split between both',
         badge: '50 / 50',
         badgeBg: const Color(0xFFD7F4E5),
         badgeFg: const Color(0xFF1A8E54),
       ),
       _SplitOptionData(
+        mode: _SplitMode.byPercent,
+        title: 'Split by percent',
+        subtitle: 'Set a custom % split between you',
+        badge: 'Custom %',
+        badgeBg: const Color(0xFFEAE3F8),
+        badgeFg: const Color(0xFF5A4AAB),
+      ),
+      _SplitOptionData(
+        mode: _SplitMode.byAmount,
+        title: 'Split by amount',
+        subtitle: 'Enter exact amounts per person',
+        badge: r'Custom $',
+        badgeBg: const Color(0xFFFFF1D2),
+        badgeFg: const Color(0xFF9A6B00),
+      ),
+      _SplitOptionData(
         mode: _SplitMode.youOwe,
-        title: '$partnerName paid, you owe all',
-        subtitle: amount > 0
-            ? 'You owe $symbol${amount.toStringAsFixed(2)}'
+        title: '${widget.partnerName} paid, you owe all',
+        subtitle: widget.amount > 0
+            ? 'You owe ${widget.symbol}${widget.amount.toStringAsFixed(2)}'
             : 'You cover your portion',
         badge: '100% you owe',
         badgeBg: const Color(0xFFFBDDE0),
@@ -1508,9 +1743,9 @@ class _SplitSheet extends StatelessWidget {
       ),
       _SplitOptionData(
         mode: _SplitMode.theyOwe,
-        title: 'You paid, $partnerName owes all',
-        subtitle: amount > 0
-            ? '$partnerName owes $symbol${amount.toStringAsFixed(2)}'
+        title: 'You paid, ${widget.partnerName} owes all',
+        subtitle: widget.amount > 0
+            ? '${widget.partnerName} owes ${widget.symbol}${widget.amount.toStringAsFixed(2)}'
             : 'They cover their portion',
         badge: '100% they owe',
         badgeBg: const Color(0xFFFFF1D2),
@@ -1552,17 +1787,23 @@ class _SplitSheet extends StatelessWidget {
               letterSpacing: -0.4,
             ),
           ),
-          if (amount > 0)
+          if (widget.amount > 0)
             Text(
-              '$symbol${amount.toStringAsFixed(2)} between you & $partnerName',
+              '${widget.symbol}${widget.amount.toStringAsFixed(2)} between you & ${widget.partnerName}',
               style: const TextStyle(
                   fontSize: 14, color: Color(0xFF5B5B66)),
             ),
           const SizedBox(height: 14),
           ...options.map((opt) {
-            final selected = opt.mode == currentMode;
+            final selected = opt.mode == _selectedMode;
             return GestureDetector(
-              onTap: () => onSelected(opt.mode),
+              onTap: () {
+                setState(() => _selectedMode = opt.mode);
+                if (opt.mode != _SplitMode.byPercent &&
+                    opt.mode != _SplitMode.byAmount) {
+                  widget.onSelected(opt.mode, null);
+                }
+              },
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -1686,6 +1927,102 @@ class _SplitSheet extends StatelessWidget {
               ),
             );
           }),
+
+          // Custom percent input
+          if (_selectedMode == _SplitMode.byPercent) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('You: ${_myPercent.toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF5A4AAB))),
+                      const Spacer(),
+                      Text('${widget.partnerName}: ${(100 - _myPercent).toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1FBE71))),
+                    ],
+                  ),
+                  Slider(
+                    value: _myPercent,
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    activeColor: const Color(0xFF1A6CFF),
+                    onChanged: (v) => setState(() => _myPercent = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFF1A6CFF),
+                borderRadius: BorderRadius.circular(16),
+                onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
+                child: const Text('Confirm split', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
+
+          // Custom amount input
+          if (_selectedMode == _SplitMode.byAmount && widget.amount > 0) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Your amount (${widget.symbol})',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66))),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _myAmountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      prefixText: '${widget.symbol}  ',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Builder(builder: (_) {
+                    final myAmt = double.tryParse(_myAmountCtrl.text) ?? 0.0;
+                    final partnerAmt = (widget.amount - myAmt).clamp(0.0, widget.amount);
+                    return Text(
+                      '${widget.partnerName}: ${widget.symbol}${partnerAmt.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFF1A6CFF),
+                borderRadius: BorderRadius.circular(16),
+                onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
+                child: const Text('Confirm split', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
         ],
       ),
     );

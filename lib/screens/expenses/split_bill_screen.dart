@@ -811,8 +811,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   // ─── Mode tab bar ─────────────────────────────────────────────────────────────
 
   Widget _modeTabBar(Color parchmentColor, Color canvasColor) {
-    final modes = SplitMode.values;
-    final labels = ['Equally', 'Amount', 'Percent', 'Shares'];
+    final modes = SplitMode.values
+        .where((m) => m != SplitMode.shares)
+        .toList();
+    final labels = ['Equally', 'Amount', 'Percent'];
     return Container(
       height: 44,
       decoration: BoxDecoration(

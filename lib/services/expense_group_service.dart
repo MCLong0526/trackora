@@ -174,7 +174,12 @@ class ExpenseGroupService {
     }
     for (final e in expenses) {
       paid[e.paidBy] = (paid[e.paidBy] ?? 0) + e.amount;
-      if (e.splitBetween.isNotEmpty) {
+      if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
+        for (final entry in e.splitPercents!.entries) {
+          final share = e.amount * (entry.value / 100.0);
+          owed[entry.key] = (owed[entry.key] ?? 0) + share;
+        }
+      } else if (e.splitBetween.isNotEmpty) {
         final share = e.amount / e.splitBetween.length;
         for (final uid in e.splitBetween) {
           owed[uid] = (owed[uid] ?? 0) + share;

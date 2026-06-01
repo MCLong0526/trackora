@@ -606,84 +606,75 @@ class GroupDashboardContent extends ConsumerWidget {
                 letterSpacing: -0.3,
               ),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Add Expense button
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    CupertinoPageRoute(
-                      builder: (_) => AddGroupExpenseScreen(group: group!),
-                    ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A6CFF),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.plus,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Add Expense',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            // Generate Receipt button
+            GestureDetector(
+              onTap: () => showGroupReceiptPicker(context, group!),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
                 ),
-                const SizedBox(width: 8),
-                // Generate Receipt button
-                GestureDetector(
-                  onTap: () => showGroupReceiptPicker(context, group!),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.doc_text,
+                      color: brand.inkSoft,
+                      size: 16,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Generate Receipt',
+                      style: TextStyle(
+                        color: brand.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.doc_text,
-                          color: brand.inkSoft,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Generate Receipt',
-                          style: TextStyle(
-                            color: brand.ink,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // Add Expense button (full width, below header)
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            CupertinoPageRoute(
+              builder: (_) => AddGroupExpenseScreen(group: group!),
+            ),
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A6CFF),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.plus, color: Colors.white, size: 15),
+                SizedBox(width: 6),
+                Text(
+                  'Add Expense',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
-          ],
+          ),
         ),
 
         const SizedBox(height: 12),
@@ -1365,7 +1356,7 @@ class _GroupMenuSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
           ],
-          // Go to full group dashboard
+          // Go to group view on home tab
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
@@ -1373,13 +1364,9 @@ class _GroupMenuSheet extends ConsumerWidget {
               color: const Color(0xFFF4F4F7),
               borderRadius: BorderRadius.circular(14),
               onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    builder: (_) => const GroupDashboardScreen(),
-                  ),
-                );
+                ref.read(homeModeProvider.notifier).state = HomeMode.group;
+                ref.read(homeTabIndexProvider.notifier).state = 0;
+                Navigator.popUntil(context, (r) => r.isFirst);
               },
               child: const Text(
                 'View Group',
