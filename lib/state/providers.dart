@@ -89,12 +89,13 @@ final isOnlineProvider = Provider<bool>((ref) {
 
 final authServiceProvider = Provider((_) => AuthService());
 
-final accountRepositoryProvider = Provider<AccountRepository>((_) {
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalAccountRepository();
     case StorageMode.firebase:
-      return FirebaseAccountRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseAccountRepository() : LocalAccountRepository();
   }
 });
 
@@ -129,65 +130,70 @@ final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
     return sorted;
   });
 });
-final expenseRepositoryProvider = Provider<ExpenseRepository>((_) {
+final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalExpenseRepository();
     case StorageMode.firebase:
-      return FirebaseExpenseRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseExpenseRepository() : LocalExpenseRepository();
   }
 });
-final installmentRepositoryProvider = Provider<InstallmentRepository>((_) {
+final installmentRepositoryProvider = Provider<InstallmentRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalInstallmentRepository();
     case StorageMode.firebase:
-      return FirebaseInstallmentRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseInstallmentRepository() : LocalInstallmentRepository();
   }
 });
 final expenseServiceProvider = Provider(
-  (ref) => ExpenseService(ref.read(expenseRepositoryProvider)),
+  (ref) => ExpenseService(ref.watch(expenseRepositoryProvider)),
 );
 final installmentServiceProvider = Provider(
   (ref) =>
-      InstallmentService(repository: ref.read(installmentRepositoryProvider)),
+      InstallmentService(repository: ref.watch(installmentRepositoryProvider)),
 );
 
-final borrowLendingRepositoryProvider = Provider<BorrowLendingRepository>((_) {
+final borrowLendingRepositoryProvider = Provider<BorrowLendingRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalBorrowLendingRepository();
     case StorageMode.firebase:
-      return FirebaseBorrowLendingRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseBorrowLendingRepository() : LocalBorrowLendingRepository();
   }
 });
 final borrowLendingServiceProvider = Provider(
-  (ref) => BorrowLendingService(ref.read(borrowLendingRepositoryProvider)),
+  (ref) => BorrowLendingService(ref.watch(borrowLendingRepositoryProvider)),
 );
 
-final savingPlanRepositoryProvider = Provider<SavingPlanRepository>((_) {
+final savingPlanRepositoryProvider = Provider<SavingPlanRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalSavingPlanRepository();
     case StorageMode.firebase:
-      return FirebaseSavingPlanRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseSavingPlanRepository() : LocalSavingPlanRepository();
   }
 });
 final savingPlanServiceProvider = Provider(
-  (ref) => SavingPlanService(ref.read(savingPlanRepositoryProvider)),
+  (ref) => SavingPlanService(ref.watch(savingPlanRepositoryProvider)),
 );
 
-final personRepositoryProvider = Provider<PersonRepository>((_) {
+final personRepositoryProvider = Provider<PersonRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalPersonRepository();
     case StorageMode.firebase:
-      return FirebasePersonRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebasePersonRepository() : LocalPersonRepository();
   }
 });
 
 final personServiceProvider = Provider(
-  (ref) => PersonService(ref.read(personRepositoryProvider)),
+  (ref) => PersonService(ref.watch(personRepositoryProvider)),
 );
 
 final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
@@ -734,12 +740,13 @@ final pendingExpenseChangeCountProvider = Provider.autoDispose<int>((ref) {
   return pendingWrites + pendingDeletes;
 });
 
-final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((_) {
+final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalPreciousMetalRepository();
     case StorageMode.firebase:
-      return FirebasePreciousMetalRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebasePreciousMetalRepository() : LocalPreciousMetalRepository();
   }
 });
 
@@ -771,17 +778,18 @@ final autoSyncProvider = Provider<void>((ref) {
 
 // ── Travel Groups ─────────────────────────────────────────────────────────────
 
-final travelGroupRepositoryProvider = Provider<TravelGroupRepository>((_) {
+final travelGroupRepositoryProvider = Provider<TravelGroupRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalTravelGroupRepository();
     case StorageMode.firebase:
-      return FirebaseTravelGroupRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline ? FirebaseTravelGroupRepository() : LocalTravelGroupRepository();
   }
 });
 
 final travelGroupServiceProvider = Provider<TravelGroupService>((ref) {
-  return TravelGroupService(ref.read(travelGroupRepositoryProvider));
+  return TravelGroupService(ref.watch(travelGroupRepositoryProvider));
 });
 
 final travelGroupsProvider = StreamProvider.autoDispose<List<TravelGroup>>((

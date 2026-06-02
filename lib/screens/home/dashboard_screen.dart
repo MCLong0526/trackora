@@ -108,10 +108,6 @@ class DashboardScreen extends ConsumerWidget {
           }).toList()
         : monthExpenses;
 
-    final monthIncome = cycleAll
-        .where((e) => e.type.isInflow)
-        .fold<double>(0, (s, e) => s + e.convertedAmount);
-
     final budgetableSpent = cycleAll
         .where(
           (e) =>
@@ -267,10 +263,8 @@ class DashboardScreen extends ConsumerWidget {
                   cycleRange != null ? 4 : 12,
                 ),
                 child: _HomeOverviewCard(
-                  balance: totalBalance,
                   symbol: symbol,
                   monthSpent: monthSpent,
-                  monthIncome: monthIncome,
                   budget: budget,
                   budgetSpent: budgetableSpent,
                   selectedMonth: selectedMonth,
@@ -591,20 +585,16 @@ class DashboardScreen extends ConsumerWidget {
 // ── Home overview card ─────────────────────────────────────────
 
 class _HomeOverviewCard extends ConsumerWidget {
-  final double balance;
   final String symbol;
   final double monthSpent;
-  final double monthIncome;
   final double budget;
   final double budgetSpent;
   final DateTime selectedMonth;
   final bool hasForeignExpense;
 
   const _HomeOverviewCard({
-    required this.balance,
     required this.symbol,
     required this.monthSpent,
-    required this.monthIncome,
     required this.budget,
     required this.budgetSpent,
     required this.selectedMonth,
@@ -640,8 +630,6 @@ class _HomeOverviewCard extends ConsumerWidget {
           selectedMonth: selectedMonth,
           symbol: symbol,
           monthSpent: monthSpent,
-          monthIncome: monthIncome,
-          balance: balance,
           background: topBg,
           ink: topInk,
           soft: topSoft,
@@ -652,8 +640,6 @@ class _HomeOverviewCard extends ConsumerWidget {
           budget: budget,
           budgetSpent: budgetSpent,
           budgetProgress: budgetProgress,
-          onBalanceTap: () =>
-              ref.read(homeTabIndexProvider.notifier).state = 3,
           onBudgetTap: () {
             ref.read(homeTabIndexProvider.notifier).state = 2;
             ref.read(openBudgetPopupProvider.notifier).state = true;
@@ -672,8 +658,6 @@ class _SpendingOverviewCard extends StatelessWidget {
   final DateTime selectedMonth;
   final String symbol;
   final double monthSpent;
-  final double monthIncome;
-  final double balance;
   final Color background;
   final Color ink;
   final Color soft;
@@ -684,7 +668,6 @@ class _SpendingOverviewCard extends StatelessWidget {
   final double budget;
   final double budgetSpent;
   final double budgetProgress;
-  final VoidCallback? onBalanceTap;
   final VoidCallback? onBudgetTap;
 
   const _SpendingOverviewCard({
@@ -693,8 +676,6 @@ class _SpendingOverviewCard extends StatelessWidget {
     required this.selectedMonth,
     required this.symbol,
     required this.monthSpent,
-    required this.monthIncome,
-    required this.balance,
     required this.background,
     required this.ink,
     required this.soft,
@@ -705,7 +686,6 @@ class _SpendingOverviewCard extends StatelessWidget {
     this.budget = 0,
     this.budgetSpent = 0,
     this.budgetProgress = 0,
-    this.onBalanceTap,
     this.onBudgetTap,
   });
 
@@ -801,18 +781,6 @@ class _SpendingOverviewCard extends StatelessWidget {
                   ink: ink,
                   soft: soft,
                   hasForeign: hasForeignExpense,
-                ),
-                const SizedBox(height: 16),
-                _TopStatsPill(
-                  background: statPillBg,
-                  divider: soft.withValues(alpha: isDark ? 0.22 : 0.14),
-                  ink: ink,
-                  soft: soft,
-                  visible: visible,
-                  symbol: symbol,
-                  income: monthIncome,
-                  balance: balance,
-                  onBalanceTap: onBalanceTap,
                 ),
                 if (hasBudget) ...[
                   const SizedBox(height: 10),
@@ -949,72 +917,6 @@ class _HeroAmount extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TopStatsPill extends StatelessWidget {
-  final Color background;
-  final Color divider;
-  final Color ink;
-  final Color soft;
-  final bool visible;
-  final String symbol;
-  final double income;
-  final double balance;
-  final VoidCallback? onBalanceTap;
-
-  const _TopStatsPill({
-    required this.background,
-    required this.divider,
-    required this.ink,
-    required this.soft,
-    required this.visible,
-    required this.symbol,
-    required this.income,
-    required this.balance,
-    this.onBalanceTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _TopStat(
-              dotColor: AppColors.income,
-              label: context.t('home.income').toUpperCase(),
-              value: visible ? formatMoney(symbol, income) : '$symbol ****',
-              ink: ink,
-              soft: soft,
-            ),
-          ),
-          Container(width: 1, height: 34, color: divider),
-          const SizedBox(width: 14),
-          Expanded(
-            child: GestureDetector(
-              onTap: onBalanceTap,
-              behavior: HitTestBehavior.opaque,
-              child: _TopStat(
-                dotColor: AppActionBlue.color,
-                label: context.t('account.balance'),
-                value: visible ? formatMoney(symbol, balance) : '$symbol ****',
-                ink: ink,
-                soft: soft,
-                tappable: onBalanceTap != null,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1590,78 +1492,6 @@ class _QuickAddButtonState extends State<_QuickAddButton>
           ),
         ),
       ),
-    );
-  }
-}
-
-class _TopStat extends StatelessWidget {
-  final Color dotColor;
-  final String label;
-  final String value;
-  final Color ink;
-  final Color soft;
-  final bool tappable;
-
-  const _TopStat({
-    required this.dotColor,
-    required this.label,
-    required this.value,
-    required this.ink,
-    required this.soft,
-    this.tappable = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: soft,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (tappable) ...[
-              const SizedBox(width: 4),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 9,
-                color: soft.withValues(alpha: 0.7),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: ink,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
     );
   }
 }

@@ -149,8 +149,23 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
     final myNet = myBalance?.net as double? ?? 0;
     final partner =
         widget.group.members.where((m) => m.uid != userId).firstOrNull;
-    final partnerName =
-        partner?.displayName ?? context.t('group.partnerFallback');
+
+    // Build a live display-name map: prefer Firebase users/{uid}/displayName
+    // over the potentially-stale name stored in the group document.
+    final Map<String, String> liveNames = {};
+    for (final member in widget.group.members) {
+      if (member.uid == userId) {
+        liveNames[member.uid] = userName.isNotEmpty ? userName : member.displayName;
+      } else {
+        final live = ref.watch(memberDisplayNameProvider(member.uid)).valueOrNull ?? '';
+        liveNames[member.uid] = live.isNotEmpty ? live : member.displayName;
+      }
+    }
+
+    final partnerLiveName = partner != null ? (liveNames[partner.uid] ?? '') : '';
+    final partnerName = partnerLiveName.isNotEmpty
+        ? partnerLiveName
+        : context.t('group.partnerFallback');
 
     return Scaffold(
       backgroundColor: bg,
@@ -209,6 +224,7 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
                           partnerName: partnerName,
                           userId: userId,
                           userName: userName,
+                          liveNames: liveNames,
                         ),
                       ),
                     ),
@@ -275,6 +291,7 @@ class _GroupReceiptCard extends StatelessWidget {
   final String partnerName;
   final String? userId;
   final String userName;
+  final Map<String, String> liveNames;
 
   const _GroupReceiptCard({
     required this.group,
@@ -286,22 +303,26 @@ class _GroupReceiptCard extends StatelessWidget {
     required this.partnerName,
     required this.userId,
     this.userName = '',
+    this.liveNames = const {},
   });
 
   String _memberName(String uid) {
+    // Prefer live name from Firebase users/{uid}/displayName
+    final live = liveNames[uid] ?? '';
+    if (live.isNotEmpty) return live;
     if (uid == userId) {
+      if (userName.isNotEmpty) return userName;
       final displayName = group.members
           .where((m) => m.uid == uid)
           .firstOrNull
           ?.displayName ?? '';
-      if (userName.isNotEmpty) return userName;
-      if (displayName.isNotEmpty) return displayName;
-      return 'You';
+      return displayName.isNotEmpty ? displayName : 'You';
     }
     try {
-      return group.members.firstWhere((m) => m.uid == uid).displayName;
+      final name = group.members.firstWhere((m) => m.uid == uid).displayName;
+      return name.isNotEmpty ? name : 'Member';
     } catch (_) {
-      return 'Partner';
+      return 'Member';
     }
   }
 
@@ -319,12 +340,8 @@ class _GroupReceiptCard extends StatelessWidget {
   }
 
   String _memberInitials(String uid) {
-    final name = uid == userId
-        ? group.members.where((m) => m.uid == uid).firstOrNull?.displayName ??
-            'Y'
-        : group.members.where((m) => m.uid == uid).firstOrNull?.displayName ??
-            'P';
-    return name.substring(0, 1).toUpperCase();
+    final resolved = _memberName(uid);
+    return resolved.isEmpty ? '?' : resolved.substring(0, 1).toUpperCase();
   }
 
   @override

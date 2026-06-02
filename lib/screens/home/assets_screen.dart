@@ -20,7 +20,6 @@ import '../../widgets/masked_amount.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
-import '../group/group_dashboard_screen.dart';
 import '../installments/installments_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import '../savings/saving_plans_screen.dart';
@@ -248,7 +247,10 @@ class AssetsScreen extends ConsumerWidget {
                             ? const Color(0xFF1967D2)
                             : const Color(0xFF8E8E96),
                         visible: visible,
-                        onTap: () => _push(context, const GroupDashboardScreen()),
+                        onTap: () {
+                          ref.read(homeModeProvider.notifier).state = HomeMode.group;
+                          ref.read(homeTabIndexProvider.notifier).state = 0;
+                        },
                       ),
                     ),
                   ],

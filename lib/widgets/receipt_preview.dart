@@ -22,8 +22,12 @@ import '../theme/app_theme.dart';
 class ReceiptPreview extends StatelessWidget {
   final String stored;
   final double size;
+  final double? width;
+  final double? height;
 
-  const ReceiptPreview({super.key, required this.stored, this.size = 64});
+  final BoxFit fit;
+
+  const ReceiptPreview({super.key, required this.stored, this.size = 64, this.width, this.height, this.fit = BoxFit.cover});
 
   bool get _isImage {
     if (StorageService.isRemote(stored) ||
@@ -52,10 +56,10 @@ class ReceiptPreview extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          width: size,
-          height: size,
+          width: width ?? size,
+          height: height ?? size,
           color: brand.background,
-          child: _isImage ? _ImageThumb(stored: stored) : const _FileBadge(),
+          child: _isImage ? _ImageThumb(stored: stored, fit: fit) : const _FileBadge(),
         ),
       ),
     );
@@ -66,7 +70,8 @@ class ReceiptPreview extends StatelessWidget {
 
 class _ImageThumb extends StatefulWidget {
   final String stored;
-  const _ImageThumb({required this.stored});
+  final BoxFit fit;
+  const _ImageThumb({required this.stored, this.fit = BoxFit.cover});
 
   @override
   State<_ImageThumb> createState() => _ImageThumbState();
@@ -90,7 +95,7 @@ class _ImageThumbState extends State<_ImageThumb> {
     if (StorageService.isRemote(widget.stored)) {
       return Image.network(
         widget.stored,
-        fit: BoxFit.cover,
+        fit: widget.fit,
         errorBuilder: (_, _, _) => const _FileBadge(),
       );
     }
@@ -108,7 +113,7 @@ class _ImageThumbState extends State<_ImageThumb> {
           }
           return Image.network(
             snap.data!,
-            fit: BoxFit.cover,
+            fit: widget.fit,
             errorBuilder: (_, _, _) => const _FileBadge(missing: true),
           );
         },
@@ -129,7 +134,7 @@ class _ImageThumbState extends State<_ImageThumb> {
         }
         final file = snap.data;
         if (file == null) return const _FileBadge(missing: true);
-        return Image.file(file, fit: BoxFit.cover);
+        return Image.file(file, fit: widget.fit);
       },
     );
   }

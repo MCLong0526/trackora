@@ -64,8 +64,17 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         );
       case _StatsPeriod.month:
         if (useCustomCycle && cycleDayStart > 1 && cycleDayStart <= 28) {
-          final cycleStart = DateTime(_anchor.year, _anchor.month, cycleDayStart);
-          final cycleEnd = DateTime(_anchor.year, _anchor.month + 1, cycleDayStart);
+          // If the anchor is the current calendar month and today is before the
+          // cycle start day, the active cycle started in the previous month.
+          final today = DateTime.now();
+          final isCurrentMonth =
+              _anchor.year == today.year && _anchor.month == today.month;
+          final effectiveMonth =
+              (isCurrentMonth && today.day < cycleDayStart)
+                  ? _anchor.month - 1
+                  : _anchor.month;
+          final cycleStart = DateTime(_anchor.year, effectiveMonth, cycleDayStart);
+          final cycleEnd = DateTime(_anchor.year, effectiveMonth + 1, cycleDayStart);
           return _StatsRange(
             start: cycleStart,
             endExclusive: cycleEnd,
@@ -131,8 +140,15 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         );
       case _StatsPeriod.month:
         if (useCustomCycle && cycleDayStart > 1 && cycleDayStart <= 28) {
-          final prevCycleStart = DateTime(_anchor.year, _anchor.month - 1, cycleDayStart);
-          final prevCycleEnd = DateTime(_anchor.year, _anchor.month, cycleDayStart);
+          final today = DateTime.now();
+          final isCurrentMonth =
+              _anchor.year == today.year && _anchor.month == today.month;
+          final effectiveMonth =
+              (isCurrentMonth && today.day < cycleDayStart)
+                  ? _anchor.month - 1
+                  : _anchor.month;
+          final prevCycleStart = DateTime(_anchor.year, effectiveMonth - 1, cycleDayStart);
+          final prevCycleEnd = DateTime(_anchor.year, effectiveMonth, cycleDayStart);
           return _StatsRange(
             start: prevCycleStart,
             endExclusive: prevCycleEnd,
@@ -420,17 +436,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             onPrev: onPrev,
             onNext: onNext,
           ),
-        if (accounts.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          _AccountActivityCard(
-            accounts: accounts,
-            rangedExpenses: [...rangedExpenses, ...rangedIncome],
-            allExpenses: allExpenses,
-            range: range,
-            period: _period,
-            symbol: symbol,
-          ),
-        ],
         const SizedBox(height: 14),
         _GroupSpendCard(range: range, symbol: symbol),
       ],
@@ -2765,348 +2770,6 @@ class _VisibilitySwitchRow extends StatelessWidget {
           CupertinoSwitch(
             value: visible,
             onChanged: canHide ? onChanged : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Account activity card ────────────────────────────────────────
-
-class _AccountActivityCard extends StatelessWidget {
-  final List<Account> accounts;
-  final List<Expense> rangedExpenses;
-  final List<Expense> allExpenses;
-  final _StatsRange range;
-  final _StatsPeriod period;
-  final String symbol;
-
-  const _AccountActivityCard({
-    required this.accounts,
-    required this.rangedExpenses,
-    required this.allExpenses,
-    required this.range,
-    required this.period,
-    required this.symbol,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-
-    // Compute per-account income/expense within the selected range
-    final Map<String, double> incomeByAccount = {};
-    final Map<String, double> expenseByAccount = {};
-
-    for (final e in rangedExpenses) {
-      final aid = e.accountId;
-      if (aid == null) continue;
-      if (e.type == EntryType.income) {
-        incomeByAccount[aid] = (incomeByAccount[aid] ?? 0) + e.convertedAmount;
-      } else if (e.type == EntryType.expense) {
-        expenseByAccount[aid] = (expenseByAccount[aid] ?? 0) + e.convertedAmount;
-      }
-    }
-
-    // Compute running balance for each account (from all expenses up to range end)
-    final Map<String, double> balances = {};
-    for (final a in accounts) {
-      balances[a.id] = a.openingBalance;
-    }
-    final cutoff = range.endExclusive;
-    for (final e in allExpenses) {
-      if (cutoff != null) {
-        final d = DateTime(e.date.year, e.date.month, e.date.day);
-        if (!d.isBefore(cutoff)) continue;
-      }
-      final aid = e.accountId;
-      if (aid != null && balances.containsKey(aid)) {
-        balances[aid] = (balances[aid] ?? 0) + (e.type.isInflow ? e.convertedAmount : -e.convertedAmount);
-      }
-      final toId = e.toAccountId;
-      if (toId != null && balances.containsKey(toId)) {
-        balances[toId] = (balances[toId] ?? 0) + e.convertedAmount;
-      }
-    }
-
-    // Only show accounts that have any activity OR non-zero balance
-    final activeAccounts = accounts.where((a) =>
-      (incomeByAccount[a.id] ?? 0) > 0 ||
-      (expenseByAccount[a.id] ?? 0) > 0 ||
-      (balances[a.id] ?? 0) != 0,
-    ).toList();
-
-    if (activeAccounts.isEmpty) return const SizedBox.shrink();
-
-    return _FloatCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row: title + count + column labels
-          Row(
-            children: [
-              Text(
-                context.t('stats.accountOverview'),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: brand.background,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${activeAccounts.length}',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: brand.inkSoft),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const SizedBox(width: 50),
-              Expanded(
-                child: Text(
-                  context.t('stats.inOut'),
-                  style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
-                ),
-              ),
-              Text(
-                context.t('stats.balanceChange'),
-                style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          for (int i = 0; i < activeAccounts.length; i++) ...[
-            if (i > 0) ...[
-              const SizedBox(height: 2),
-              Divider(height: 1, color: brand.divider),
-              const SizedBox(height: 2),
-            ],
-            _AccountActivityRow(
-              account: activeAccounts[i],
-              balance: balances[activeAccounts[i].id] ?? 0,
-              income: incomeByAccount[activeAccounts[i].id] ?? 0,
-              expense: expenseByAccount[activeAccounts[i].id] ?? 0,
-              symbol: symbol,
-            ),
-          ],
-          const SizedBox(height: 4),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountActivityRow extends StatelessWidget {
-  final Account account;
-  final double balance;
-  final double income;
-  final double expense;
-  final String symbol;
-
-  const _AccountActivityRow({
-    required this.account,
-    required this.balance,
-    required this.income,
-    required this.expense,
-    required this.symbol,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final net = income - expense;
-    final isPositive = net >= 0;
-    final hasActivity = income > 0 || expense > 0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Account icon with type colour
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _accountBg(account.type),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(
-              _accountIcon(account.type),
-              size: 17,
-              color: _accountColor(account.type),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Name + in/out chips
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  account.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: brand.ink,
-                  ),
-                ),
-                if (hasActivity) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      if (income > 0)
-                        _ActivityChip(
-                          icon: CupertinoIcons.arrow_down,
-                          label: formatMoney(symbol, income),
-                          color: AppColors.income,
-                        ),
-                      if (income > 0 && expense > 0) const SizedBox(width: 4),
-                      if (expense > 0)
-                        _ActivityChip(
-                          icon: CupertinoIcons.arrow_up,
-                          label: formatMoney(symbol, expense),
-                          color: AppColors.expense,
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Balance + net change
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                balance >= 0
-                    ? formatMoney(symbol, balance)
-                    : '−${formatMoney(symbol, balance.abs())}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: balance < 0 ? AppColors.expense : brand.ink,
-                ),
-              ),
-              if (hasActivity) ...[
-                const SizedBox(height: 3),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPositive
-                          ? CupertinoIcons.arrow_up_right
-                          : CupertinoIcons.arrow_down_right,
-                      size: 10,
-                      color: isPositive ? AppColors.income : AppColors.expense,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      formatMoney(symbol, net.abs()),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isPositive ? AppColors.income : AppColors.expense,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _accountIcon(AccountType? type) {
-    switch (type) {
-      case AccountType.cash:
-        return CupertinoIcons.money_dollar_circle_fill;
-      case AccountType.creditCard:
-        return CupertinoIcons.creditcard_fill;
-      case AccountType.savings:
-        return CupertinoIcons.lock_shield_fill;
-      default:
-        return CupertinoIcons.building_2_fill;
-    }
-  }
-
-  Color _accountBg(AccountType? type) {
-    switch (type) {
-      case AccountType.bank:       return const Color(0xFFDBEAFE);
-      case AccountType.eWallet:    return const Color(0xFFEDE9FE);
-      case AccountType.cash:       return const Color(0xFFDCFCE7);
-      case AccountType.investment: return const Color(0xFFFEF3C7);
-      case AccountType.savings:    return const Color(0xFFCFFAFE);
-      case AccountType.creditCard: return const Color(0xFFFEE2E2);
-      case AccountType.crypto:     return const Color(0xFFFEF3C7);
-      case AccountType.forex:      return const Color(0xFFD1FAE5);
-      case AccountType.loan:
-      case AccountType.mortgage:
-      case AccountType.bnpl:
-      case AccountType.otherLiability: return const Color(0xFFF3F4F6);
-      default:                     return const Color(0xFFEFF6FF);
-    }
-  }
-
-  Color _accountColor(AccountType? type) {
-    switch (type) {
-      case AccountType.bank:       return const Color(0xFF2563EB);
-      case AccountType.eWallet:    return const Color(0xFF7C3AED);
-      case AccountType.cash:       return const Color(0xFF16A34A);
-      case AccountType.investment: return const Color(0xFFD97706);
-      case AccountType.savings:    return const Color(0xFF0891B2);
-      case AccountType.creditCard: return const Color(0xFFDC2626);
-      case AccountType.crypto:     return const Color(0xFFF59E0B);
-      case AccountType.forex:      return const Color(0xFF059669);
-      case AccountType.loan:
-      case AccountType.mortgage:
-      case AccountType.bnpl:
-      case AccountType.otherLiability: return const Color(0xFF6B7280);
-      default:                     return const Color(0xFF3B82F6);
-    }
-  }
-}
-
-class _ActivityChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _ActivityChip({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 9, color: color),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
           ),
         ],
       ),

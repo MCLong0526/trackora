@@ -640,7 +640,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       }
 
       if (mounted) {
-        if (!isOnline) _showOfflineSavedBanner();
         FocusScope.of(context).unfocus();
         HapticFeedback.mediumImpact();
         setState(() {
@@ -671,15 +670,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     } finally {
       if (mounted && !_saveSuccess) setState(() => _saving = false);
     }
-  }
-
-  void _showOfflineSavedBanner() {
-    AppToast.show(
-      context,
-      context.t('expense.savedOffline'),
-      type: AppToastType.info,
-      icon: CupertinoIcons.cloud,
-    );
   }
 
   Future<SplitBill?> _saveSplitBill({
@@ -2509,51 +2499,46 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 _newReceipt!,
                 width: 44,
                 height: 44,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
               ),
             ),
           )
         else
-          ReceiptPreview(stored: _existingReceiptUrl!),
+          ReceiptPreview(stored: _existingReceiptUrl!, size: 44, fit: BoxFit.contain),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             hasNew
                 ? context.t('expense.newAttachment')
                 : context.t('expense.savedAttachment'),
-            style: TextStyle(fontSize: 13, color: brand.inkSoft),
+            style: TextStyle(fontSize: 15, color: brand.ink, fontWeight: FontWeight.w500),
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: _pickReceipt,
-              child: Text(
-                context.t('expense.replace'),
-                style: TextStyle(
-                  fontSize: 13,
-                  color: brand.accentDark,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+        GestureDetector(
+          onTap: _pickReceipt,
+          child: Text(
+            context.t('expense.replace'),
+            style: TextStyle(
+              fontSize: 13,
+              color: brand.accentDark,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: () => setState(() {
-                _newReceipt = null;
-                _existingReceiptUrl = null;
-              }),
-              child: Text(
-                context.t('expense.remove'),
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.expense,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: () => setState(() {
+            _newReceipt = null;
+            _existingReceiptUrl = null;
+          }),
+          child: Text(
+            context.t('expense.remove'),
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.expense,
+              fontWeight: FontWeight.w600,
             ),
-          ],
+          ),
         ),
       ],
     );

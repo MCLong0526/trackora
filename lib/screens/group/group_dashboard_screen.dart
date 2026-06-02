@@ -22,11 +22,28 @@ import 'group_invite_screen.dart';
 import 'group_receipt_screen.dart';
 import 'join_group_screen.dart';
 
-class GroupDashboardScreen extends ConsumerWidget {
+class GroupDashboardScreen extends ConsumerStatefulWidget {
   const GroupDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GroupDashboardScreen> createState() => _GroupDashboardScreenState();
+}
+
+class _GroupDashboardScreenState extends ConsumerState<GroupDashboardScreen> {
+  double _scrollOffset = 0.0;
+
+  bool _onScroll(ScrollNotification n) {
+    if (n is ScrollUpdateNotification || n is ScrollStartNotification) {
+      final newOffset = n.metrics.pixels.clamp(0.0, 80.0);
+      if ((newOffset - _scrollOffset).abs() > 0.5) {
+        setState(() => _scrollOffset = newOffset);
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final brand = context.brand;
     final groupsAsync = ref.watch(myGroupsProvider);
     final activeGroupId = ref.watch(activeGroupIdProvider);
@@ -36,7 +53,6 @@ class GroupDashboardScreen extends ConsumerWidget {
     final groups = groupsAsync.valueOrNull ?? const [];
     final visible = ref.watch(balanceVisibleProvider);
 
-    // Auto-select first group if active is null
     if (activeGroupId == null && groups.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeGroupIdProvider.notifier).state = groups.first.id;
@@ -48,101 +64,108 @@ class GroupDashboardScreen extends ConsumerWidget {
       orElse: () => groups.isNotEmpty ? groups.first : null,
     );
 
+    final headerOpacity = (1.0 - _scrollOffset / 60.0).clamp(0.0, 1.0);
+
     return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header (fades on scroll) ──────────────────────────
+            Opacity(
+              opacity: headerOpacity,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      DateFormat('EEEE').format(DateTime.now()),
-                      style: TextStyle(
-                        color: brand.inkSoft,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat('EEEE').format(DateTime.now()),
+                          style: TextStyle(
+                            color: brand.inkSoft,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          context.t('settings.appName'),
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0B0B0F),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.t('settings.appName'),
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0B0B0F),
-                        letterSpacing: -0.5,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => ref
+                              .read(balanceVisibleProvider.notifier)
+                              .toggle(),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: brand.surface,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              visible
+                                  ? CupertinoIcons.eye
+                                  : CupertinoIcons.eye_slash,
+                              size: 17,
+                              color: brand.inkSoft,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const FxRateButton(),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: () =>
+                              showGroupMenu(context, ref, activeGroup, user?.uid),
+                          child: GroupAvatarPill(
+                              group: activeGroup, userId: user?.uid),
+                        ),
+                        const SizedBox(width: 8),
+                        const ProfileAvatarButton(),
+                      ],
                     ),
                   ],
                 ),
-                // Eye + currency + group pill + profile
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => ref
-                          .read(balanceVisibleProvider.notifier)
-                          .toggle(),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: brand.surface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          visible
-                              ? CupertinoIcons.eye
-                              : CupertinoIcons.eye_slash,
-                          size: 17,
-                          color: brand.inkSoft,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    const FxRateButton(),
-                    const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: () =>
-                          showGroupMenu(context, ref, activeGroup, user?.uid),
-                      child: GroupAvatarPill(
-                          group: activeGroup, userId: user?.uid),
-                    ),
-                    const SizedBox(width: 8),
-                    const ProfileAvatarButton(),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // ── Segmented control ─────────────────────────────────
-          if (groups.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: PersonalGroupToggle(brand: brand),
+              ),
             ),
 
-          // ── Scrollable body ───────────────────────────────────
-          Expanded(
-            child: groupsAsync.isLoading
-                ? const Center(child: CupertinoActivityIndicator())
-                : groups.isEmpty
-                ? _IntroView(brand: brand)
-                : GroupDashboardContent(
-                    brand: brand,
-                    group: activeGroup,
-                    symbol: symbol,
-                    userId: user?.uid,
-                  ),
-          ),
-        ],
+            // ── Segmented control ─────────────────────────────────
+            if (groups.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: PersonalGroupToggle(brand: brand),
+              ),
+
+            // ── Scrollable body ───────────────────────────────────
+            Expanded(
+              child: groupsAsync.isLoading
+                  ? const Center(child: CupertinoActivityIndicator())
+                  : groups.isEmpty
+                  ? _IntroView(brand: brand)
+                  : GroupDashboardContent(
+                      brand: brand,
+                      group: activeGroup,
+                      symbol: symbol,
+                      userId: user?.uid,
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

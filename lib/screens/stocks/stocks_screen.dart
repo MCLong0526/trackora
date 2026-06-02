@@ -515,10 +515,17 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
         onSave: (updated) async {
           final user = ref.read(authStateProvider).valueOrNull;
           if (user == null) return;
-          await ref
-              .read(stockInvestmentRepositoryProvider)
-              .update(user.uid, updated);
-          if (mounted) AppToast.show(context, '${updated.symbol} updated');
+          try {
+            await ref
+                .read(stockInvestmentRepositoryProvider)
+                .update(user.uid, updated);
+            if (mounted) AppToast.show(context, '${updated.symbol} updated');
+          } catch (_) {
+            if (mounted) {
+              AppToast.show(context, 'Failed to save. Check connection.',
+                  type: AppToastType.error);
+            }
+          }
         },
       ),
     );
@@ -2824,8 +2831,12 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
       createdAt: now,
       updatedAt: now,
     );
-    await widget.onSave(investment);
-    if (mounted) Navigator.pop(context);
+    try {
+      await widget.onSave(investment);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -3569,8 +3580,12 @@ class _EditStockSheetState extends ConsumerState<_EditStockSheet> {
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       updatedAt: DateTime.now(),
     );
-    await widget.onSave(updated);
-    if (mounted) Navigator.pop(context);
+    try {
+      await widget.onSave(updated);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override

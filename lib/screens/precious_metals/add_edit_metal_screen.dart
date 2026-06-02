@@ -222,17 +222,26 @@ class _State extends ConsumerState<AddEditMetalScreen> {
 
   void _bgSyncAdd(String uid, PreciousMetal m) {
     if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().add(uid, m).catchError((_) {});
+    FirebasePreciousMetalRepository()
+        .add(uid, m)
+        .timeout(const Duration(seconds: 15))
+        .catchError((_) {});
   }
 
   void _bgSyncUpdate(String uid, PreciousMetal m) {
     if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().update(uid, m).catchError((_) {});
+    FirebasePreciousMetalRepository()
+        .update(uid, m)
+        .timeout(const Duration(seconds: 15))
+        .catchError((_) {});
   }
 
   void _bgSyncDelete(String uid, String id) {
     if (storageMode != StorageMode.firebase) return;
-    FirebasePreciousMetalRepository().delete(uid, id).catchError((_) {});
+    FirebasePreciousMetalRepository()
+        .delete(uid, id)
+        .timeout(const Duration(seconds: 15))
+        .catchError((_) {});
   }
 
   Future<void> _pickDate() async {

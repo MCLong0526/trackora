@@ -20,23 +20,25 @@ class FirebaseStockInvestmentRepository implements StockInvestmentRepository {
             .toList());
   }
 
+  static const _kTimeout = Duration(seconds: 8);
+
   @override
   Future<void> add(String userId, StockInvestment investment) async {
     if (investment.id.isEmpty) {
-      await _col(userId).add(investment.toMap());
+      await _col(userId).add(investment.toMap()).timeout(_kTimeout);
     } else {
-      await _col(userId).doc(investment.id).set(investment.toMap());
+      await _col(userId).doc(investment.id).set(investment.toMap()).timeout(_kTimeout);
     }
   }
 
   @override
   Future<void> update(String userId, StockInvestment investment) async {
     if (investment.id.isEmpty) return;
-    await _col(userId).doc(investment.id).set(investment.toMap());
+    await _col(userId).doc(investment.id).set(investment.toMap()).timeout(_kTimeout);
   }
 
   @override
   Future<void> delete(String userId, String id) async {
-    await _col(userId).doc(id).delete();
+    await _col(userId).doc(id).delete().timeout(_kTimeout);
   }
 }
