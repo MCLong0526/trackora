@@ -4,9 +4,9 @@ import '../theme/app_theme.dart';
 
 /// Wraps a screen in a sticky header + scrollable body pattern.
 ///
-/// The header stays pinned at the top. When the body is scrolled past
-/// the top edge a thin divider line fades in beneath the header,
-/// visually separating it from the content below (iOS-style).
+/// The header stays pinned at the top. As the user scrolls, a gradient
+/// fades in at the top of the body so content vanishes softly behind
+/// the header edge instead of cutting off at a hard line.
 class StickyHeaderScaffold extends StatefulWidget {
   final Widget header;
   final Widget Function(ScrollController controller) bodyBuilder;
@@ -23,7 +23,7 @@ class StickyHeaderScaffold extends StatefulWidget {
 
 class _StickyHeaderScaffoldState extends State<StickyHeaderScaffold> {
   final _scrollController = ScrollController();
-  bool _scrolled = false;
+  double _fadeRatio = 0.0;
 
   @override
   void initState() {
@@ -32,8 +32,8 @@ class _StickyHeaderScaffoldState extends State<StickyHeaderScaffold> {
   }
 
   void _onScroll() {
-    final scrolled = _scrollController.offset > 0;
-    if (scrolled != _scrolled) setState(() => _scrolled = scrolled);
+    final ratio = (_scrollController.offset / 24.0).clamp(0.0, 1.0);
+    if (ratio != _fadeRatio) setState(() => _fadeRatio = ratio);
   }
 
   @override
@@ -46,27 +46,39 @@ class _StickyHeaderScaffoldState extends State<StickyHeaderScaffold> {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: brand.background,
-            border: Border(
-              bottom: BorderSide(
-                color: isDark
-                    ? Colors.white.withValues(alpha: _scrolled ? 0.09 : 0.0)
-                    : Colors.black.withValues(alpha: _scrolled ? 0.07 : 0.0),
-                width: 0.5,
-              ),
-            ),
+        widget.header,
+        Expanded(
+          child: Stack(
+            children: [
+              widget.bodyBuilder(_scrollController),
+              // Gradient fade — content dissolves into the header colour as it scrolls up
+              if (_fadeRatio > 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 32,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            brand.background.withValues(alpha: _fadeRatio),
+                            brand.background.withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          child: widget.header,
         ),
-        Expanded(child: widget.bodyBuilder(_scrollController)),
       ],
     );
   }

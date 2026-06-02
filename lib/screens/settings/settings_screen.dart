@@ -22,6 +22,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/masked_amount.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
@@ -61,11 +62,10 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: brand.background,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-          children: [
-            // ── Page title ───────────────────────────────────────
-            Row(
+        child: StickyHeaderScaffold(
+          header: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Row(
               children: [
                 if (canPop) ...[
                   CircleIconButton(
@@ -87,7 +87,11 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+          ),
+          bodyBuilder: (controller) => ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                children: [
 
             // ── Cloud Sync ───────────────────────────────────────
             const _CloudSyncSection(),
@@ -118,26 +122,6 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: userName.isNotEmpty ? userName : context.t('settings.notSet'),
                   onTap: () => _showEditUserName(context, ref, userName),
                 ),
-                _GroupDivider(),
-                _Tile(
-                  icon: CupertinoIcons.money_dollar,
-                  iconColor: AppColors.mint,
-                  label: context.t('settings.currency'),
-                  trailing: '$symbol  $code',
-                  onTap: () => _pickCurrency(context, ref),
-                ),
-                _GroupDivider(),
-                _Tile(
-                  icon: CupertinoIcons.bell,
-                  iconColor: AppColors.sky,
-                  label: context.t('settings.reminders'),
-                  trailing: context.t('settings.dailyAt8PM'),
-                  onTap: () {},
-                ),
-                if (defaultTargetPlatform == TargetPlatform.iOS) ...[
-                  _GroupDivider(),
-                  _LiveActivityToggleTile(currency: symbol),
-                ],
                 if (email.isNotEmpty && email != localUserEmail) ...[
                   _GroupDivider(),
                   _Tile(
@@ -147,6 +131,18 @@ class SettingsScreen extends ConsumerWidget {
                     trailing: email,
                     onTap: () => _showChangeEmail(context, ref, email),
                   ),
+                ],
+                _GroupDivider(),
+                _Tile(
+                  icon: CupertinoIcons.money_dollar,
+                  iconColor: AppColors.mint,
+                  label: context.t('settings.currency'),
+                  trailing: '$symbol  $code',
+                  onTap: () => _pickCurrency(context, ref),
+                ),
+                if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+                  _GroupDivider(),
+                  _LiveActivityToggleTile(currency: symbol),
                 ],
               ],
             ),
@@ -274,7 +270,8 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          ],
+                ],
+          ),
         ),
       ),
     );

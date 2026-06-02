@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
@@ -820,7 +821,7 @@ class _SpendingHeader extends StatelessWidget {
         ? ((currentTotal - prevTotal) / prevTotal * 100)
         : 0.0;
     final isIncrease = pctChange > 0;
-    final periodHeader = _buildPeriodHeader();
+    final periodHeader = _buildPeriodHeader(context);
 
     return _FloatCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -904,7 +905,10 @@ class _SpendingHeader extends StatelessWidget {
           if (hasComparison) ...[
             const SizedBox(height: 6),
             Text(
-              'vs $prevLabel · ${formatMoney(symbol, prevTotal)}',
+              context
+                  .t('stats.vsPrevious')
+                  .replaceAll('{label}', prevLabel)
+                  .replaceAll('{amount}', formatMoney(symbol, prevTotal)),
               style: TextStyle(
                 fontSize: 12,
                 color: brand.inkSoft,
@@ -917,20 +921,23 @@ class _SpendingHeader extends StatelessWidget {
     );
   }
 
-  String _buildPeriodHeader() {
+  String _buildPeriodHeader(BuildContext context) {
     switch (period) {
       case _StatsPeriod.week:
-        return '${DateFormat('MMM d').format(anchor).toUpperCase()} · TOTAL SPENDING';
+        return context.t('stats.periodHeader.week').replaceAll(
+            '{date}', DateFormat('MMM d').format(anchor).toUpperCase());
       case _StatsPeriod.month:
-        return '${DateFormat('MMMM').format(anchor).toUpperCase()} · TOTAL SPENDING';
+        return context.t('stats.periodHeader.month').replaceAll(
+            '{month}', DateFormat('MMMM').format(anchor).toUpperCase());
       case _StatsPeriod.sixMonth:
-        return 'LAST 6 MONTHS · TOTAL SPENDING';
+        return context.t('stats.periodHeader.sixMonth');
       case _StatsPeriod.year:
-        return '${DateFormat('yyyy').format(anchor)} · TOTAL SPENDING';
+        return context.t('stats.periodHeader.year').replaceAll(
+            '{year}', DateFormat('yyyy').format(anchor));
       case _StatsPeriod.all:
-        return 'ALL TIME · TOTAL SPENDING';
+        return context.t('stats.periodHeader.all');
       case _StatsPeriod.custom:
-        return 'CUSTOM RANGE · TOTAL SPENDING';
+        return context.t('stats.periodHeader.custom');
     }
   }
 
@@ -1096,6 +1103,7 @@ class _LineChartCardState extends State<_LineChartCard>
               child: AnimatedBuilder(
                 animation: _animProgress,
                 builder: (ctx, _) => _buildChart(
+                  context: ctx,
                   series: series,
                   chartMax: chartMax,
                   accent: chartAccent,
@@ -1219,6 +1227,7 @@ class _LineChartCardState extends State<_LineChartCard>
   }
 
   Widget _buildChart({
+    required BuildContext context,
     required _LineSeries series,
     required double chartMax,
     required Color accent,
@@ -1286,7 +1295,7 @@ class _LineChartCardState extends State<_LineChartCard>
               final i = spot.x.toInt();
               final label = i < series.labels.length ? series.labels[i] : '';
               final displayLabel = widget.period == _StatsPeriod.month
-                  ? 'Day $label'
+                  ? context.t('stats.day').replaceAll('{label}', label)
                   : label;
               return LineTooltipItem(
                 '$displayLabel\n',
@@ -1930,7 +1939,7 @@ class _CategoryCardState extends State<_CategoryCard> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'BY CATEGORY',
+                      context.t('stats.byCategoryHeader'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -1970,7 +1979,7 @@ class _CategoryCardState extends State<_CategoryCard> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'BY CATEGORY',
+                context.t('stats.byCategoryHeader'),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -2037,7 +2046,7 @@ class _CenterTotalLabel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'SPENT',
+            context.t('stats.spent'),
             style: TextStyle(
               fontSize: 9,
               color: brand.inkSoft,
@@ -2408,7 +2417,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     final today = DateTime(now.year, now.month, now.day);
 
     String rangeLabel() {
-      if (_start == null) return 'Select start date';
+      if (_start == null) return context.t('stats.selectStartDate');
       if (_end == null) return '${DateFormat('d MMM yyyy').format(_start!)} — ?';
       return '${DateFormat('d MMM').format(_start!)} – ${DateFormat('d MMM yyyy').format(_end!)}';
     }
@@ -2516,7 +2525,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Select Range',
+                          context.t('stats.selectRange'),
                           style: TextStyle(
                             fontSize: 13,
                             color: brand.inkSoft,
@@ -2547,9 +2556,9 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                         widget.onConfirm(_start!, _end!);
                         Navigator.pop(context);
                       },
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(
+                      child: Text(
+                        context.t('budget.done'),
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -2839,7 +2848,7 @@ class _AccountActivityCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'ACCOUNT OVERVIEW',
+                context.t('stats.accountOverview'),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -2867,12 +2876,12 @@ class _AccountActivityCard extends StatelessWidget {
               const SizedBox(width: 50),
               Expanded(
                 child: Text(
-                  'In / Out',
+                  context.t('stats.inOut'),
                   style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
                 ),
               ),
               Text(
-                'Balance / Change',
+                context.t('stats.balanceChange'),
                 style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
               ),
             ],
@@ -3107,6 +3116,56 @@ class _ActivityChip extends StatelessWidget {
 
 // ── Group Spend card ─────────────────────────────────────────────────────────
 
+const _kMemberBgs = [
+  Color(0xFFEAE3F8), Color(0xFFD7F4E5), Color(0xFFDBEAFE),
+  Color(0xFFFEF3C7), Color(0xFFFFEDD5), Color(0xFFFCE7F3),
+];
+const _kMemberFgs = [
+  Color(0xFF5A4AAB), Color(0xFF1FBE71), Color(0xFF2563EB),
+  Color(0xFFD97706), Color(0xFFEA580C), Color(0xFFDB2777),
+];
+
+// Returns each member's consumed share for the given expenses.
+Map<String, double> _memberShares(
+  List<GroupExpenseItem> expenses,
+  List<String> memberUids,
+) {
+  final result = <String, double>{for (final uid in memberUids) uid: 0};
+  for (final e in expenses) {
+    if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
+      for (final entry in e.splitPercents!.entries) {
+        result[entry.key] = (result[entry.key] ?? 0) + e.amount * (entry.value / 100.0);
+      }
+    } else if (e.splitBetween.isNotEmpty) {
+      final share = e.amount / e.splitBetween.length;
+      for (final uid in e.splitBetween) {
+        result[uid] = (result[uid] ?? 0) + share;
+      }
+    }
+  }
+  return result;
+}
+
+// Returns a specific member's consumed share per category.
+Map<String, double> _memberCategoryShares(
+  List<GroupExpenseItem> expenses,
+  String uid,
+) {
+  final result = <String, double>{};
+  for (final e in expenses) {
+    double share;
+    if (e.splitPercents != null && e.splitPercents!.containsKey(uid)) {
+      share = e.amount * (e.splitPercents![uid]! / 100.0);
+    } else if (e.splitBetween.contains(uid)) {
+      share = e.amount / e.splitBetween.length;
+    } else {
+      continue;
+    }
+    result[e.category] = (result[e.category] ?? 0) + share;
+  }
+  return result;
+}
+
 class _GroupSpendCard extends ConsumerWidget {
   final _StatsRange range;
   final String symbol;
@@ -3126,30 +3185,56 @@ class _GroupSpendCard extends ConsumerWidget {
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? [];
     if (groups.isEmpty) return const SizedBox.shrink();
 
-    final List<({String name, double total, int count})> rows = [];
-    double overallTotal = 0;
+    final groupData = <({
+      String id,
+      String name,
+      List<GroupMember> members,
+      List<GroupExpenseItem> expenses,
+      double total,
+    })>[];
 
     for (final group in groups) {
       final expenses = ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? [];
       final ranged = expenses.where(_inRange).toList();
       final total = ranged.fold(0.0, (s, e) => s + e.amount);
-      if (total > 0) {
-        rows.add((name: group.name, total: total, count: ranged.length));
-        overallTotal += total;
+      if (total == 0) continue;
+      groupData.add((
+        id: group.id,
+        name: group.name,
+        members: group.members,
+        expenses: ranged,
+        total: total,
+      ));
+    }
+
+    if (groupData.isEmpty) return const SizedBox.shrink();
+
+    // Resolve live display names for every member across all groups.
+    final resolvedNames = <String, String>{};
+    final currentUid = ref.watch(authStateProvider).valueOrNull?.uid;
+    final myLiveName = ref.watch(userNameProvider);
+    for (final g in groupData) {
+      for (final m in g.members) {
+        if (m.uid == currentUid && myLiveName.isNotEmpty) {
+          resolvedNames[m.uid] = myLiveName;
+        } else {
+          final live = ref.watch(memberDisplayNameProvider(m.uid)).valueOrNull ?? '';
+          resolvedNames[m.uid] = live.isNotEmpty ? live : m.displayName;
+        }
       }
     }
 
-    if (overallTotal == 0) return const SizedBox.shrink();
+    final overallTotal = groupData.fold(0.0, (s, g) => s + g.total);
 
     return _FloatCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Text(
-                'GROUP SPENDING',
+                context.t('stats.groupSpending'),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -3165,74 +3250,38 @@ class _GroupSpendCard extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${rows.length}',
+                  '${groupData.length}',
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: brand.inkSoft),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          for (int i = 0; i < rows.length; i++) ...[
-            if (i > 0) ...[
-              const SizedBox(height: 2),
-              Divider(height: 1, color: brand.divider),
-              const SizedBox(height: 2),
-            ],
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F0FE),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: const Icon(CupertinoIcons.person_3_fill, size: 16, color: Color(0xFF1967D2)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          rows[i].name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.ink),
-                        ),
-                        const SizedBox(height: 3),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1967D2).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${rows[i].count} expense${rows[i].count == 1 ? '' : 's'}',
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF1967D2)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    formatMoney(symbol, rows[i].total),
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
-                  ),
-                ],
-              ),
+
+          for (int gi = 0; gi < groupData.length; gi++) ...[
+            const SizedBox(height: 16),
+            _GroupSectionView(
+              groupId: groupData[gi].id,
+              groupName: groupData.length > 1 ? groupData[gi].name : null,
+              members: groupData[gi].members,
+              expenses: groupData[gi].expenses,
+              total: groupData[gi].total,
+              symbol: symbol,
+              resolvedNames: resolvedNames,
             ),
+            if (gi < groupData.length - 1) ...[
+              const SizedBox(height: 14),
+              Divider(height: 2, color: brand.divider),
+            ],
           ],
-          const SizedBox(height: 6),
+
+          const SizedBox(height: 14),
           Divider(height: 1, color: brand.divider),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Total Group Spend',
+                context.t('stats.totalGroupSpend'),
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brand.inkSoft),
               ),
               Text(
@@ -3241,7 +3290,459 @@ class _GroupSpendCard extends ConsumerWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Per-group section with vertical bar chart + filterable donut ──────────────
+
+class _GroupSectionView extends StatefulWidget {
+  final String groupId;
+  final String? groupName;
+  final List<GroupMember> members;
+  final List<GroupExpenseItem> expenses;
+  final double total;
+  final String symbol;
+  final Map<String, String> resolvedNames;
+
+  const _GroupSectionView({
+    required this.groupId,
+    this.groupName,
+    required this.members,
+    required this.expenses,
+    required this.total,
+    required this.symbol,
+    required this.resolvedNames,
+  });
+
+  @override
+  State<_GroupSectionView> createState() => _GroupSectionViewState();
+}
+
+class _GroupSectionViewState extends State<_GroupSectionView> {
+  String? _selectedUid; // null = All
+
+  List<({String uid, String displayName, double spend, int colorIndex})> get _memberRows {
+    final memberUids = widget.members.map((m) => m.uid).toList();
+    final shares = _memberShares(widget.expenses, memberUids);
+    final rows = widget.members.asMap().entries.map((e) => (
+      uid: e.value.uid,
+      displayName: widget.resolvedNames[e.value.uid] ?? e.value.displayName,
+      spend: shares[e.value.uid] ?? 0,
+      colorIndex: e.key,
+    )).toList()
+      ..sort((a, b) => b.spend.compareTo(a.spend));
+    return rows;
+  }
+
+  Map<String, double> get _categoryData {
+    if (_selectedUid != null) {
+      return _memberCategoryShares(widget.expenses, _selectedUid!);
+    }
+    // All: total per category
+    final result = <String, double>{};
+    for (final e in widget.expenses) {
+      result[e.category] = (result[e.category] ?? 0) + e.amount;
+    }
+    return result;
+  }
+
+  double get _categoryTotal {
+    if (_selectedUid != null) {
+      return _categoryData.values.fold(0.0, (s, v) => s + v);
+    }
+    return widget.total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final rows = _memberRows;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Optional group sub-header
+        if (widget.groupName != null) ...[
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F0FE),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(CupertinoIcons.person_3_fill, size: 12, color: Color(0xFF1967D2)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.groupName!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: brand.ink),
+                ),
+              ),
+              Text(
+                formatMoney(widget.symbol, widget.total),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+
+        // Vertical bar chart
+        _GroupVerticalBars(
+          rows: rows,
+          total: widget.total,
+          symbol: widget.symbol,
+        ),
+
+        const SizedBox(height: 16),
+        Divider(height: 1, color: brand.divider),
+        const SizedBox(height: 14),
+
+        // Category section header + member filter pills
+        Row(
+          children: [
+            Text(
+              context.t('stats.byCategoryHeader'),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: brand.inkSoft,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterPill(
+                      label: context.t('stats.filterAllPeople'),
+                      selected: _selectedUid == null,
+                      color: const Color(0xFF1967D2),
+                      onTap: () => setState(() => _selectedUid = null),
+                    ),
+                    ...rows.map((m) => _FilterPill(
+                      label: m.displayName.split(' ').first,
+                      selected: _selectedUid == m.uid,
+                      color: _kMemberFgs[m.colorIndex % _kMemberFgs.length],
+                      onTap: () => setState(() =>
+                          _selectedUid = _selectedUid == m.uid ? null : m.uid),
+                    )),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 14),
+
+        // Donut chart
+        _GroupCategoryDonut(
+          key: ValueKey('${widget.groupId}_${_selectedUid ?? 'all'}'),
+          byCategory: _categoryData,
+          total: _categoryTotal,
+          symbol: widget.symbol,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Vertical bar chart ────────────────────────────────────────────────────────
+
+class _GroupVerticalBars extends StatelessWidget {
+  final List<({String uid, String displayName, double spend, int colorIndex})> rows;
+  final double total;
+  final String symbol;
+
+  const _GroupVerticalBars({
+    required this.rows,
+    required this.total,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    const maxBarHeight = 90.0;
+    final maxSpend = rows.fold(0.0, (m, r) => r.spend > m ? r.spend : m);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: rows.map((m) {
+        final ratio = maxSpend > 0 ? (m.spend / maxSpend).clamp(0.0, 1.0) : 0.0;
+        final fg = _kMemberFgs[m.colorIndex % _kMemberFgs.length];
+        final bg = _kMemberBgs[m.colorIndex % _kMemberBgs.length];
+        final initial = m.displayName.isNotEmpty ? m.displayName[0].toUpperCase() : '?';
+        final pct = total > 0 ? (m.spend / total * 100).toStringAsFixed(0) : '0';
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Amount label above bar
+                Text(
+                  formatMoney(symbol, m.spend),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                // % label
+                Text(
+                  '$pct%',
+                  style: TextStyle(fontSize: 9, color: brand.inkSoft, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                // Animated bar
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  tween: Tween(begin: 0.0, end: ratio),
+                  builder: (_, v, child) => SizedBox(
+                    height: maxBarHeight,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            width: double.infinity,
+                            height: (v * maxBarHeight).clamp(6.0, maxBarHeight),
+                            color: fg,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Avatar circle
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Name label
+                Text(
+                  m.displayName.split(' ').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: brand.inkSoft),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── Member filter pill ────────────────────────────────────────────────────────
+
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? color : color.withValues(alpha: 0.35),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Category donut (group) ────────────────────────────────────────────────────
+
+class _GroupCategoryDonut extends StatelessWidget {
+  final Map<String, double> byCategory;
+  final double total;
+  final String symbol;
+
+  const _GroupCategoryDonut({
+    super.key,
+    required this.byCategory,
+    required this.total,
+    required this.symbol,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final sorted = byCategory.entries.where((e) => e.value > 0).toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (sorted.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: Text(
+            context.t('stats.noExpensesPeriod'),
+            style: TextStyle(fontSize: 13, color: brand.inkSoft),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: AnimatedDonutChart(
+            size: 160,
+            strokeWidth: 28,
+            segments: sorted
+                .map((e) => DonutSegment(value: e.value, color: _donutColorFor(e.key)))
+                .toList(),
+            centerChild: _GroupDonutCenter(total: total, symbol: symbol),
+          ),
+        ),
+        const SizedBox(height: 14),
+        ...sorted.take(6).map((e) {
+          final c = _donutColorFor(e.key);
+          final pct = total > 0 ? e.value / total : 0.0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        context.categoryLabel(e.key),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
+                      ),
+                    ),
+                    Text(
+                      '${(pct * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      formatMoney(symbol, e.value),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brand.ink),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: pct.clamp(0.0, 1.0),
+                    minHeight: 3,
+                    backgroundColor: brand.background,
+                    valueColor: AlwaysStoppedAnimation<Color>(c),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _GroupDonutCenter extends StatelessWidget {
+  final double total;
+  final String symbol;
+
+  const _GroupDonutCenter({required this.total, required this.symbol});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return SizedBox(
+      width: 80,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            context.t('stats.total'),
+            style: TextStyle(
+              fontSize: 9,
+              color: brand.inkSoft,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
           const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              formatMoney(symbol, total),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );

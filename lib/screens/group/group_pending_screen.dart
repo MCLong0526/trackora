@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -59,7 +60,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
 
   String _timeRemaining() {
     final diff = widget.expiresAt.difference(DateTime.now());
-    if (diff.isNegative) return 'Expired';
+    if (diff.isNegative) return context.t('group.expired');
     final m = diff.inMinutes;
     final s = diff.inSeconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
@@ -70,7 +71,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
 
   void _copyCode() {
     Clipboard.setData(ClipboardData(text: _displayCode));
-    AppToast.show(context, 'Code copied!');
+    AppToast.show(context, context.t('group.codeCopied'));
   }
 
   @override
@@ -104,7 +105,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
           ),
         ),
         title: Text(
-          'Invite a partner',
+          context.t('group.invitePartnerTitle'),
           style: TextStyle(
             color: brand.ink,
             fontSize: 17,
@@ -232,7 +233,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
 
               // Title
               Text(
-                'Waiting for them to join',
+                context.t('group.pendingWaiting'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: brand.ink,
@@ -245,7 +246,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
               const SizedBox(height: 10),
 
               Text(
-                'Share your code and wait for your partner to enter it in Trackora.',
+                context.t('group.pendingShareDesc'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: const Color(0xFF5B5B66),
@@ -270,9 +271,9 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'YOUR CODE',
-                            style: TextStyle(
+                          Text(
+                            context.t('group.yourCode'),
+                            style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF8E8E96),
@@ -299,9 +300,9 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                       color: const Color(0xFF1A6CFF),
                       borderRadius: BorderRadius.circular(12),
                       onPressed: _copyCode,
-                      child: const Text(
-                        'Share again',
-                        style: TextStyle(
+                      child: Text(
+                        context.t('group.shareAgain'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -332,7 +333,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Expires in $timeStr',
+                      context.t('group.inviteExpiry').replaceAll('{time}', timeStr),
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -362,7 +363,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                     ),
                     child: Center(
                       child: Text(
-                        'Cancel invite',
+                        context.t('group.cancelInvite'),
                         style: TextStyle(
                           color: brand.ink,
                           fontSize: 15,

@@ -9,6 +9,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../models/account.dart';
 import '../models/expense.dart';
+import '../models/group_expense_item.dart';
 import '../services/money_format.dart';
 import '../services/prefs_service.dart';
 import '../state/providers.dart';
@@ -17,7 +18,49 @@ import '../theme/app_theme.dart';
 import 'currency_picker.dart';
 import 'masked_amount.dart';
 import '../screens/accounts/add_edit_account_screen.dart';
+import '../screens/expenses/add_edit_expense_screen.dart';
 import 'app_toast.dart';
+
+// Unified display representation for both personal and group transactions.
+class _AccountTxn {
+  final String title;
+  final DateTime date;
+  final double amount;
+  final bool isInflow;
+  final bool isGroup;
+  final String? originalCurrency;
+
+  const _AccountTxn({
+    required this.title,
+    required this.date,
+    required this.amount,
+    required this.isInflow,
+    required this.isGroup,
+    this.originalCurrency,
+  });
+
+  static _AccountTxn fromExpense(Expense e, String accountId) {
+    final isTo = e.toAccountId == accountId;
+    return _AccountTxn(
+      title: e.note.isNotEmpty ? e.note : e.category,
+      date: e.date,
+      amount: e.amount,
+      isInflow: e.type.isInflow || isTo,
+      isGroup: false,
+      originalCurrency: e.originalCurrency,
+    );
+  }
+
+  static _AccountTxn fromGroupExpense(GroupExpenseItem g) {
+    return _AccountTxn(
+      title: g.description.isNotEmpty ? g.description : g.category,
+      date: g.date,
+      amount: g.amount,
+      isInflow: false,
+      isGroup: true,
+    );
+  }
+}
 
 const _kCustomLabel = 'Other / Custom';
 
@@ -146,7 +189,7 @@ _Pal _paletteForAccountType(AccountType type) {
 
 // ── Public wrapper ────────────────────────────────────────────
 /// Drop-in carousel section used on both AccountsScreen and AssetsScreen.
-class AccountCarouselSection extends StatelessWidget {
+class AccountCarouselSection extends ConsumerWidget {
   final List<Account> accounts;
   final Map<String, double> balances;
   final List<Expense> allExpenses;
@@ -163,13 +206,68 @@ class AccountCarouselSection extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (accounts.isEmpty) return const SizedBox.shrink();
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (accounts.isEmpty) {
+      final brand = context.brand;
+      return GestureDetector(
+        onTap: () => showAddAccountSheet(context),
+        child: Container(
+          height: 110,
+          decoration: BoxDecoration(
+            color: brand.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppActionBlue.color.withValues(alpha: 0.25),
+              width: 1.5,
+              strokeAlign: BorderSide.strokeAlignInside,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppActionBlue.color.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(CupertinoIcons.creditcard, size: 18, color: AppActionBlue.color),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.t('account.addAccount'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppActionBlue.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Watch group expenses for the active group (if any).
+    final groupId = ref.watch(activeGroupIdProvider);
+    final currentUser = ref.watch(authStateProvider).valueOrNull;
+    final groupExpenses = groupId != null
+        ? (ref.watch(groupExpensesProvider(groupId)).valueOrNull ?? const <GroupExpenseItem>[])
+        : const <GroupExpenseItem>[];
+    // Only show group expenses where the current user is the payer and used an account.
+    final myGroupExpenses = groupExpenses
+        .where((e) =>
+            e.paidByAccountId != null &&
+            (currentUser == null || e.paidBy == currentUser.uid))
+        .toList();
+
     return LayoutBuilder(
       builder: (ctx, constraints) => _AccountCarousel(
         accounts: accounts,
         balances: balances,
         allExpenses: allExpenses,
+        groupExpenses: myGroupExpenses,
         symbol: symbol,
         visible: visible,
         availableWidth: constraints.maxWidth,
@@ -183,6 +281,7 @@ class _AccountCarousel extends StatefulWidget {
   final List<Account> accounts;
   final Map<String, double> balances;
   final List<Expense> allExpenses;
+  final List<GroupExpenseItem> groupExpenses;
   final String symbol;
   final bool visible;
   final double availableWidth;
@@ -191,6 +290,7 @@ class _AccountCarousel extends StatefulWidget {
     required this.accounts,
     required this.balances,
     required this.allExpenses,
+    required this.groupExpenses,
     required this.symbol,
     required this.visible,
     required this.availableWidth,
@@ -397,10 +497,17 @@ class _AccountCarouselState extends State<_AccountCarousel>
     final account = widget.accounts[i];
     final balance = widget.balances[account.id] ?? 0.0;
     final pal = _paletteForAccountType(account.type);
-    final recentTxns = widget.allExpenses
-        .where(
-            (e) => e.accountId == account.id || e.toAccountId == account.id)
-        .toList()
+
+    // Merge personal + group transactions for this account, sorted by date.
+    final personalTxns = widget.allExpenses
+        .where((e) => e.accountId == account.id || e.toAccountId == account.id)
+        .map((e) => _AccountTxn.fromExpense(e, account.id))
+        .toList();
+    final groupTxns = widget.groupExpenses
+        .where((e) => e.paidByAccountId == account.id)
+        .map(_AccountTxn.fromGroupExpense)
+        .toList();
+    final allTxns = [...personalTxns, ...groupTxns]
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return AnimatedPositioned(
@@ -429,7 +536,8 @@ class _AccountCarouselState extends State<_AccountCarousel>
               isCenter: isCenter,
               flipAnim: _flipAnim,
               fanDeg: fanDeg,
-              recentTxns: recentTxns.take(3).toList(),
+              recentTxns: allTxns.take(3).toList(),
+              allTxns: allTxns,
               onClose: _unflip,
               onEdit: () async {
                 final accountId = account.id;
@@ -467,7 +575,8 @@ class _FlipCard extends StatelessWidget {
   final bool isCenter;
   final Animation<double> flipAnim;
   final double fanDeg;
-  final List<Expense> recentTxns;
+  final List<_AccountTxn> recentTxns;
+  final List<_AccountTxn> allTxns;
   final VoidCallback onClose;
   final VoidCallback onEdit;
 
@@ -481,6 +590,7 @@ class _FlipCard extends StatelessWidget {
     required this.flipAnim,
     required this.fanDeg,
     required this.recentTxns,
+    required this.allTxns,
     required this.onClose,
     required this.onEdit,
   });
@@ -534,6 +644,7 @@ class _FlipCard extends StatelessWidget {
                     visible: visible,
                     pal: pal,
                     recentTxns: recentTxns,
+                    allTxns: allTxns,
                     onClose: onClose,
                     onEdit: onEdit,
                   ),
@@ -662,30 +773,37 @@ class _CardFront extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.t(pal.labelKey),
-                          style: TextStyle(
-                            fontSize: 9,
-                            letterSpacing: 1.3,
-                            color: pal.ink.withValues(alpha: 0.60),
-                            fontWeight: FontWeight.w700,
+                    // Left: account type + name — flexible so balance always fits
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.t(pal.labelKey),
+                            style: TextStyle(
+                              fontSize: 9,
+                              letterSpacing: 1.3,
+                              color: pal.ink.withValues(alpha: 0.60),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          account.name,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: pal.ink,
-                            letterSpacing: -0.1,
+                          const SizedBox(height: 2),
+                          Text(
+                            account.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: pal.ink,
+                              letterSpacing: -0.1,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    // Right: date + eye toggle + balance — always shows fully
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -794,26 +912,41 @@ class _AccountBalanceDisplay extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        MaskedAmount(
-          visibleText: formatMoney(acctSymbol, balance),
-          visible: visible,
-          currencyPrefix: acctSymbol,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-            color: isNeg ? AppColors.expense : pal.ink,
-            letterSpacing: -0.2,
+        // FittedBox lets the balance shrink to fit without overflowing the card
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 160),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: MaskedAmount(
+              visibleText: formatMoney(acctSymbol, balance),
+              visible: visible,
+              currencyPrefix: acctSymbol,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                color: isNeg ? AppColors.expense : pal.ink,
+                letterSpacing: -0.2,
+              ),
+            ),
           ),
         ),
         if (isForeign && estimatedBase != null)
-          MaskedAmount(
-            visibleText: '≈ ${formatMoney(mainSymbol, estimatedBase)}',
-            visible: visible,
-            currencyPrefix: mainSymbol,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: pal.ink.withValues(alpha: 0.55),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: MaskedAmount(
+                visibleText: '≈ ${formatMoney(mainSymbol, estimatedBase)}',
+                visible: visible,
+                currencyPrefix: mainSymbol,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: pal.ink.withValues(alpha: 0.55),
+                ),
+              ),
             ),
           ),
       ],
@@ -828,7 +961,8 @@ class _CardBack extends StatelessWidget {
   final String symbol;
   final bool visible;
   final _Pal pal;
-  final List<Expense> recentTxns;
+  final List<_AccountTxn> recentTxns;
+  final List<_AccountTxn> allTxns;
   final VoidCallback onClose;
   final VoidCallback onEdit;
 
@@ -839,6 +973,7 @@ class _CardBack extends StatelessWidget {
     required this.visible,
     required this.pal,
     required this.recentTxns,
+    required this.allTxns,
     required this.onClose,
     required this.onEdit,
   });
@@ -947,17 +1082,53 @@ class _CardBack extends StatelessWidget {
               isNeg: isNeg,
               fontSize: 24,
             ),
-            const SizedBox(height: 14),
-            _EditPill(ink: pal.ink, onTap: onEdit),
-            const SizedBox(height: 16),
-            Text(
-              context.t('account.recent'),
-              style: TextStyle(
-                fontSize: 10,
-                letterSpacing: 1.2,
-                color: pal.ink.withValues(alpha: 0.70),
-                fontWeight: FontWeight.w700,
-              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _EditPill(ink: pal.ink, onTap: onEdit),
+                if (account.type == AccountType.creditCard && balance < 0) ...[
+                  const SizedBox(width: 8),
+                  _PayCardPill(
+                    amount: balance.abs(),
+                    accountId: account.id,
+                    ink: pal.ink,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  context.t('account.recent'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    color: pal.ink.withValues(alpha: 0.70),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (allTxns.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => _showAllTransactions(context, acctSymbol),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.40),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        context.t('account.viewAll'),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: pal.ink,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 6),
             if (recentTxns.isEmpty)
@@ -980,10 +1151,10 @@ class _CardBack extends StatelessWidget {
                 child: Column(
                   children: recentTxns.asMap().entries.map((entry) {
                     final idx = entry.key;
-                    final e = entry.value;
+                    final txn = entry.value;
                     final isLast = idx == recentTxns.length - 1;
-                    final txnSym = e.originalCurrency != null
-                        ? (kSupportedCurrencies[e.originalCurrency!] ?? e.originalCurrency!)
+                    final txnSym = txn.originalCurrency != null
+                        ? (kSupportedCurrencies[txn.originalCurrency!] ?? txn.originalCurrency!)
                         : acctSymbol;
                     return Column(
                       children: [
@@ -997,24 +1168,45 @@ class _CardBack extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      e.note.isNotEmpty
-                                          ? e.note
-                                          : e.category,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: pal.ink,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                    Row(
+                                      children: [
+                                        if (txn.isGroup) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: pal.accent.withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              context.t('common.group'),
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w700,
+                                                color: pal.accent,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 5),
+                                        ],
+                                        Expanded(
+                                          child: Text(
+                                            txn.title,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: pal.ink,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
-                                      DateFormat('MMM d').format(e.date),
+                                      DateFormat('MMM d').format(txn.date),
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color:
-                                            pal.ink.withValues(alpha: 0.55),
+                                        color: pal.ink.withValues(alpha: 0.55),
                                       ),
                                     ),
                                   ],
@@ -1022,13 +1214,13 @@ class _CardBack extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                (e.type.isInflow || e.toAccountId == account.id)
-                                    ? '+${formatMoney(txnSym, e.amount)}'
-                                    : '−${formatMoney(txnSym, e.amount)}',
+                                txn.isInflow
+                                    ? '+${formatMoney(txnSym, txn.amount)}'
+                                    : '−${formatMoney(txnSym, txn.amount)}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: (e.type.isInflow || e.toAccountId == account.id)
+                                  color: txn.isInflow
                                       ? const Color(0xFF1B8A4A)
                                       : pal.ink,
                                 ),
@@ -1039,8 +1231,7 @@ class _CardBack extends StatelessWidget {
                         if (!isLast)
                           Container(
                             height: 0.5,
-                            margin:
-                                const EdgeInsets.symmetric(horizontal: 12),
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
                             color: pal.ink.withValues(alpha: 0.10),
                           ),
                       ],
@@ -1049,6 +1240,305 @@ class _CardBack extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showAllTransactions(BuildContext context, String acctSymbol) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => _AllTransactionsSheet(
+        account: account,
+        allTxns: allTxns,
+        acctSymbol: acctSymbol,
+        pal: pal,
+      ),
+    );
+  }
+}
+
+// ── All Transactions Sheet ─────────────────────────────────────
+class _AllTransactionsSheet extends StatefulWidget {
+  final Account account;
+  final List<_AccountTxn> allTxns;
+  final String acctSymbol;
+  final _Pal pal;
+
+  const _AllTransactionsSheet({
+    required this.account,
+    required this.allTxns,
+    required this.acctSymbol,
+    required this.pal,
+  });
+
+  @override
+  State<_AllTransactionsSheet> createState() => _AllTransactionsSheetState();
+}
+
+class _AllTransactionsSheetState extends State<_AllTransactionsSheet> {
+  bool _showPersonal = true;
+  bool _showGroup = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final filtered = widget.allTxns.where((t) {
+      if (t.isGroup && !_showGroup) return false;
+      if (!t.isGroup && !_showPersonal) return false;
+      return true;
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: brand.inkSoft.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.account.name,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        '${widget.allTxns.length} ${context.t('account.transactions')}',
+                        style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(CupertinoIcons.xmark, size: 14, color: brand.ink),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Filter pills
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: Row(
+              children: [
+                _FilterPill(
+                  label: context.t('common.personal'),
+                  active: _showPersonal,
+                  color: widget.pal.accent,
+                  onTap: () => setState(() => _showPersonal = !_showPersonal),
+                ),
+                const SizedBox(width: 8),
+                _FilterPill(
+                  label: context.t('common.group'),
+                  active: _showGroup,
+                  color: const Color(0xFF6B40A8),
+                  onTap: () => setState(() => _showGroup = !_showGroup),
+                ),
+              ],
+            ),
+          ),
+          // Transaction list
+          Flexible(
+            child: filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Text(
+                      context.t('account.noTransactions'),
+                      style: TextStyle(color: brand.inkSoft, fontSize: 15),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    shrinkWrap: true,
+                    itemCount: filtered.length,
+                    separatorBuilder: (context, index) => Divider(
+                      height: 1,
+                      color: brand.divider,
+                      indent: 56,
+                    ),
+                    itemBuilder: (ctx, i) {
+                      final txn = filtered[i];
+                      final txnSym = txn.originalCurrency != null
+                          ? (kSupportedCurrencies[txn.originalCurrency!] ?? txn.originalCurrency!)
+                          : widget.acctSymbol;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            // Icon circle
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: txn.isGroup
+                                    ? const Color(0xFF6B40A8).withValues(alpha: 0.12)
+                                    : (txn.isInflow
+                                        ? AppColors.income.withValues(alpha: 0.12)
+                                        : widget.pal.accent.withValues(alpha: 0.12)),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                txn.isGroup
+                                    ? CupertinoIcons.person_2_fill
+                                    : (txn.isInflow
+                                        ? CupertinoIcons.arrow_down_left
+                                        : CupertinoIcons.arrow_up_right),
+                                size: 16,
+                                color: txn.isGroup
+                                    ? const Color(0xFF6B40A8)
+                                    : (txn.isInflow ? AppColors.income : widget.pal.accent),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      if (txn.isGroup) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF6B40A8).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            context.t('common.group'),
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF6B40A8),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          txn.title,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: brand.ink,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    DateFormat('MMM d, yyyy').format(txn.date),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: brand.inkSoft,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              txn.isInflow
+                                  ? '+${formatMoney(txnSym, txn.amount)}'
+                                  : '−${formatMoney(txnSym, txn.amount)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: txn.isInflow
+                                    ? AppColors.income
+                                    : brand.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Filter pill ───────────────────────────────────────────────
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final bool active;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.label,
+    required this.active,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.14) : brand.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? color.withValues(alpha: 0.40) : brand.divider,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: active ? color : brand.inkSoft,
+          ),
         ),
       ),
     );
@@ -1090,6 +1580,56 @@ class _EditPill extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Pay Card pill (credit cards with negative balance) ─────────
+class _PayCardPill extends StatelessWidget {
+  final double amount;
+  final String accountId;
+  final Color ink;
+
+  const _PayCardPill({required this.amount, required this.accountId, required this.ink});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        Navigator.push(
+          context,
+          CupertinoPageRoute(
+            builder: (_) => AddEditExpenseScreen(
+              initialType: EntryType.transfer,
+              initialToAccountId: accountId,
+              initialAmount: amount,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppColors.expense.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.creditcard_fill, size: 14, color: AppColors.expense),
+            const SizedBox(width: 6),
+            Text(
+              context.t('account.payCard'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.expense,
               ),
             ),
           ],

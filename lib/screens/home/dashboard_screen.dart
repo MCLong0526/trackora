@@ -654,8 +654,10 @@ class _HomeOverviewCard extends ConsumerWidget {
           budgetProgress: budgetProgress,
           onBalanceTap: () =>
               ref.read(homeTabIndexProvider.notifier).state = 3,
-          onBudgetTap: () =>
-              ref.read(homeTabIndexProvider.notifier).state = 2,
+          onBudgetTap: () {
+            ref.read(homeTabIndexProvider.notifier).state = 2;
+            ref.read(openBudgetPopupProvider.notifier).state = true;
+          },
         ),
         const SizedBox(height: 12),
         const _QuickAddCard(),

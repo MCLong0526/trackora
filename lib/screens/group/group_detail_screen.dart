@@ -70,7 +70,7 @@ class GroupDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverFillRemaining(
               child: Center(
                 child: Text(
-                  'Error loading expenses',
+                  context.t('group.errorLoadingExpenses'),
                   style: TextStyle(color: brand.inkSoft),
                 ),
               ),
@@ -227,9 +227,13 @@ class GroupDetailScreen extends ConsumerWidget {
         await ref
             .read(expenseGroupServiceProvider)
             .deleteExpense(expense.groupId, expense.id);
-        if (context.mounted) AppToast.show(context, 'Expense deleted');
+        if (context.mounted) {
+          AppToast.show(context, context.t('group.expenseDeleted'));
+        }
       } catch (e) {
-        if (context.mounted) AppToast.show(context, 'Failed to delete');
+        if (context.mounted) {
+          AppToast.show(context, context.t('group.failedToDeleteExpense'));
+        }
       }
     }
   }
@@ -265,9 +269,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   context: context,
                   builder: (_) => CupertinoAlertDialog(
                     title: Text(context.t('group.deleteGroup')),
-                    content: const Text(
-                      'This will remove all expenses. This cannot be undone.',
-                    ),
+                    content: Text(context.t('group.deleteGroupRemoveAll')),
                     actions: [
                       CupertinoDialogAction(
                         isDefaultAction: true,
@@ -297,7 +299,8 @@ class GroupDetailScreen extends ConsumerWidget {
                     if (context.mounted) Navigator.pop(context);
                   } catch (e) {
                     if (context.mounted) {
-                      AppToast.show(context, 'Failed to delete group');
+                      AppToast.show(
+                          context, context.t('group.failedToDelete'));
                     }
                   }
                 }
@@ -382,7 +385,9 @@ class _SummaryHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    myNet >= 0 ? 'You\'re owed' : context.t('group.youOwe'),
+                    myNet >= 0
+                        ? context.t('group.youreOwed')
+                        : context.t('group.youOwe'),
                     style: TextStyle(color: brand.inkSoft, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
@@ -494,7 +499,8 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final net = balance.net as double;
-    final name = (balance.displayName as String) + (isMe ? ' (you)' : '');
+    final name = (balance.displayName as String) +
+        (isMe ? ' ${context.t('group.youSuffix')}' : '');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -532,7 +538,9 @@ class _MemberRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Paid $symbol${(balance.totalPaid as double).toStringAsFixed(2)}',
+                  context.t('group.paidAmount').replaceAll(
+                      '{amount}',
+                      '$symbol${(balance.totalPaid as double).toStringAsFixed(2)}'),
                   style: TextStyle(color: brand.inkSoft, fontSize: 12),
                 ),
               ],
@@ -615,14 +623,14 @@ class _SettlementSection extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: tx.fromUid == userId
-                                ? 'You'
+                                ? context.t('group.you')
                                 : tx.fromName as String,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const TextSpan(text: ' → '),
                           TextSpan(
                             text: tx.toUid == userId
-                                ? 'you'
+                                ? context.t('group.you').toLowerCase()
                                 : tx.toName as String,
                           ),
                         ],
@@ -695,6 +703,7 @@ class _ExpensesCard extends StatelessWidget {
               brand: brand,
               expense: expenses[i],
               paidByName: _memberName(expenses[i].paidBy),
+              members: members,
               symbol: symbol,
               userId: userId,
               onEdit: () => onEdit(expenses[i]),
@@ -711,6 +720,7 @@ class _ExpenseRow extends StatelessWidget {
   final BrandColors brand;
   final GroupExpenseItem expense;
   final String paidByName;
+  final List<GroupMember> members;
   final String symbol;
   final String? userId;
   final VoidCallback onEdit;
@@ -720,64 +730,73 @@ class _ExpenseRow extends StatelessWidget {
     required this.brand,
     required this.expense,
     required this.paidByName,
+    required this.members,
     required this.symbol,
     required this.userId,
     required this.onEdit,
     required this.onDelete,
   });
 
+  double _memberAmount(String uid) {
+    final percents = expense.splitPercents;
+    if (percents != null && percents.isNotEmpty) {
+      final pct = percents[uid] ?? 0.0;
+      return expense.amount * pct / 100;
+    }
+    if (expense.splitBetween.isEmpty) return 0.0;
+    return expense.amount / expense.splitBetween.length;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMine = expense.paidBy == userId;
     final dateStr = DateFormat('MMM d').format(expense.date);
-    final perPerson = expense.splitBetween.isEmpty
-        ? 0.0
-        : expense.amount / expense.splitBetween.length;
+    final splitUids = expense.splitBetween;
 
     return GestureDetector(
       onLongPress: () => _showMenu(context),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: brand.background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                child: Text(
-                  _categoryEmoji(expense.category),
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    expense.description,
-                    style: TextStyle(
-                      color: brand.ink,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: brand.background,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _categoryEmoji(expense.category),
+                      style: const TextStyle(fontSize: 20),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$dateStr · Paid by ${isMine ? 'you' : paidByName}',
-                    style: TextStyle(color: brand.inkSoft, fontSize: 12),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        expense.description,
+                        style: TextStyle(
+                          color: brand.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$dateStr · ${context.t('group.paidByLabel').replaceAll('{name}', isMine ? context.t('group.you').toLowerCase() : paidByName)}',
+                        style: TextStyle(color: brand.inkSoft, fontSize: 12),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
+                ),
                 Text(
                   '$symbol${expense.amount.toStringAsFixed(2)}',
                   style: TextStyle(
@@ -786,13 +805,47 @@ class _ExpenseRow extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (expense.splitBetween.isNotEmpty)
-                  Text(
-                    '$symbol${perPerson.toStringAsFixed(2)}/each',
-                    style: TextStyle(color: brand.inkSoft, fontSize: 11),
-                  ),
               ],
             ),
+            // Split breakdown row
+            if (splitUids.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: splitUids.map((uid) {
+                  final memberName = (() {
+                    try {
+                      final m = members.firstWhere((m) => m.uid == uid);
+                      return uid == userId
+                          ? context.t('group.you')
+                          : m.displayName.split(' ').first;
+                    } catch (_) {
+                      return context.t('group.unknownMember');
+                    }
+                  })();
+                  final amt = _memberAmount(uid);
+                  final isMe = uid == userId;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? AppActionBlue.color.withValues(alpha: 0.10)
+                          : brand.background,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$memberName $symbol${amt.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isMe ? FontWeight.w600 : FontWeight.w400,
+                        color: isMe ? AppActionBlue.color : brand.inkSoft,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
           ],
         ),
       ),

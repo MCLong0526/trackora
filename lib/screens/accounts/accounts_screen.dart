@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:flutter/services.dart';
+
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/precious_metal.dart';
@@ -11,6 +13,7 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/masked_amount.dart';
+import '../expenses/add_edit_expense_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
 
 // ── AccountsScreen ────────────────────────────────────────────
@@ -30,6 +33,9 @@ class AccountsScreen extends ConsumerWidget {
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final balances = _computeBalances(accounts, allExpenses);
+
+    final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
+    final negativeCards = creditCards.where((a) => (balances[a.id] ?? 0) < 0).toList();
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -69,6 +75,40 @@ class AccountsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+            // ── Credit card pay section ────────────────────────
+            if (negativeCards.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                  child: Text(
+                    'CREDIT CARDS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: brand.inkSoft,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _CreditCardPayTile(
+                        card: negativeCards[i],
+                        balance: balances[negativeCards[i].id] ?? 0,
+                        symbol: symbol,
+                        visible: visible,
+                      ),
+                    ),
+                    childCount: negativeCards.length,
+                  ),
+                ),
+              ),
+            ],
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
@@ -335,6 +375,110 @@ class _MetalChip extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: color,
         ),
+      ),
+    );
+  }
+}
+
+// ── Credit card pay tile ──────────────────────────────────────
+
+class _CreditCardPayTile extends StatelessWidget {
+  final Account card;
+  final double balance;
+  final String symbol;
+  final bool visible;
+
+  const _CreditCardPayTile({
+    required this.card,
+    required this.balance,
+    required this.symbol,
+    required this.visible,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final debt = balance.abs();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.blush,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              CupertinoIcons.creditcard_fill,
+              size: 18,
+              color: AppColors.expense,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                MaskedAmount(
+                  visibleText: '−${formatMoney(symbol, debt)}',
+                  visible: visible,
+                  currencyPrefix: symbol,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.expense,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AddEditExpenseScreen(
+                    initialType: EntryType.transfer,
+                    initialToAccountId: card.id,
+                    initialAmount: debt,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.expense.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Pay Card',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.expense,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

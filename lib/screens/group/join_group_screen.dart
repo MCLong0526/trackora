@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -104,7 +105,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
   Future<void> _join() async {
     final raw = _entered;
     if (raw.length != 6) {
-      AppToast.show(context, 'Please enter the full 6-character code');
+      AppToast.show(context, context.t('group.enterFullCode'));
       return;
     }
 
@@ -117,7 +118,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       final groupId = await service.joinGroup(
         rawCode: raw,
         userId: user.uid,
-        displayName: user.email?.split('@').first ?? 'Someone',
+        displayName: ref.read(userNameProvider).isNotEmpty
+            ? ref.read(userNameProvider)
+            : (user.email?.split('@').first ?? 'Someone'),
       );
       if (mounted) {
         ref.read(removedExpenseGroupIdsProvider.notifier).state =
@@ -129,10 +132,10 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
     } catch (e) {
       if (mounted) {
         final msg = e.toString().contains('expired')
-            ? 'Invite code expired'
+            ? context.t('group.codeExpiredMsg')
             : e.toString().contains('used')
-            ? 'Invite code already used'
-            : 'Invalid or expired code';
+            ? context.t('group.codeAlreadyUsed')
+            : context.t('group.invalidCode');
         AppToast.show(context, msg);
         setState(() {
           _entered = '';
@@ -172,7 +175,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
           ),
         ),
         title: Text(
-          'Join group',
+          context.t('joinGroup.title'),
           style: TextStyle(
             color: brand.ink,
             fontSize: 17,
@@ -193,7 +196,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                   children: [
                     // Title
                     Text(
-                      'Enter the invite code',
+                      context.t('group.enterInviteCode'),
                       style: TextStyle(
                         color: brand.ink,
                         fontSize: 26,
@@ -203,9 +206,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Ask your partner to open Group Expenses and share their 6-character code.',
-                      style: TextStyle(
-                        color: const Color(0xFF5B5B66),
+                      context.t('group.askPartnerCode'),
+                      style: const TextStyle(
+                        color: Color(0xFF5B5B66),
                         fontSize: 15,
                         height: 1.5,
                       ),
@@ -257,16 +260,16 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                            const Icon(
                               CupertinoIcons.doc_on_clipboard,
                               size: 15,
-                              color: const Color(0xFF1A6CFF),
+                              color: Color(0xFF1A6CFF),
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Paste code',
-                              style: TextStyle(
-                                color: const Color(0xFF1A6CFF),
+                              context.t('group.pasteCode'),
+                              style: const TextStyle(
+                                color: Color(0xFF1A6CFF),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -313,7 +316,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Scan QR instead',
+                                    context.t('group.scanQRInstead'),
                                     style: TextStyle(
                                       color: brand.ink,
                                       fontSize: 15,
@@ -321,7 +324,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                                     ),
                                   ),
                                   Text(
-                                    'Use your camera to scan their code',
+                                    context.t('group.scanQRDesc'),
                                     style: TextStyle(
                                       color: brand.inkSoft,
                                       fontSize: 13,
@@ -353,7 +356,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Codes are private & expire in 10 minutes',
+                          context.t('group.codesPrivateNote'),
                           style: TextStyle(color: brand.inkSoft, fontSize: 13),
                         ),
                       ],

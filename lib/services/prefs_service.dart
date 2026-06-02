@@ -101,6 +101,23 @@ class PrefsService {
     }
   }
 
+  // Per-user display name cache — avoids cross-account name bleed.
+  Future<String> userNameForUid(String uid) async {
+    final p = await _prefsOrNull();
+    if (p == null) return '';
+    return p.getString('${_kUserName}_$uid') ?? '';
+  }
+
+  Future<void> setUserNameForUid(String uid, String name) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    if (name.trim().isEmpty) {
+      await p.remove('${_kUserName}_$uid');
+    } else {
+      await p.setString('${_kUserName}_$uid', name.trim());
+    }
+  }
+
   Future<bool> isDragHintShown() async {
     final p = await _prefsOrNull();
     if (p == null) return true;

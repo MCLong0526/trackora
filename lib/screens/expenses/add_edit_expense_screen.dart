@@ -107,6 +107,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   File? _newReceipt;
   String? _existingReceiptUrl;
 
+  bool _swipeHintVisible = true;
+
   bool _splitBillEnabled = false;
   List<SplitMember> _splitMembers = [];
   SplitMode _splitMode = SplitMode.equally;
@@ -179,6 +181,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _type = widget.initialType ?? EntryType.expense;
     if (widget.initialToAccountId != null) {
       _toAccountId = widget.initialToAccountId;
+      // Auto-enable account transfer mode when a destination account is pre-set
+      // (e.g. navigating from the credit card "Pay Card" button).
+      if (_type == EntryType.transfer) {
+        _isAccountTransfer = true;
+      }
     }
     final template = widget.expense ?? widget.copyFrom;
     if (template != null) {
@@ -302,18 +309,31 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           _snapBack();
         }
       },
-      child: SizedBox(
-        height: 24,
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: pillW,
-            height: 4,
-            decoration: BoxDecoration(
-              color: brand.inkSoft.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(2),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: pillW,
+              height: 4,
+              decoration: BoxDecoration(
+                color: brand.inkSoft.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
+            const SizedBox(height: 5),
+            Text(
+              'swipe down to close',
+              style: TextStyle(
+                fontSize: 11,
+                color: brand.inkSoft.withValues(alpha: 0.45),
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1050,60 +1070,31 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     children: [
                       Column(
                         children: [
-                          // ── Inline header (replaces AppBar so whole page animates) ──
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-                            child: Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: _animatedClose,
+                          // ── Edit-mode delete button (top-right only when editing) ──
+                          if (_isEdit)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: GestureDetector(
+                                  onTap: _delete,
                                   child: Container(
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: brand.surface,
+                                      color: AppColors.blush,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(
-                                      CupertinoIcons.xmark,
+                                    child: const Icon(
+                                      CupertinoIcons.delete,
                                       size: 17,
-                                      color: brand.ink,
+                                      color: AppColors.expense,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _isEdit
-                                        ? context.t('expense.edit')
-                                        : context.t('expense.new'),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 18,
-                                    ),
-                                  ),
-                                ),
-                                if (_isEdit)
-                                  GestureDetector(
-                                    onTap: _delete,
-                                    child: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.blush,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        CupertinoIcons.delete,
-                                        size: 17,
-                                        color: AppColors.expense,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
-                          ),
-                          // ── Drag handle ──────────────────────────────────────────
+                          // ── Drag handle + close hint ──────────────────────────────
                           _buildDragHandle(brand),
                           Expanded(
                             child: PageView.builder(
@@ -1120,9 +1111,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           _pageIndicator(brand),
-                          const SizedBox(height: 100),
+                          const SizedBox(height: 6),
+                          _swipeHint(brand),
+                          const SizedBox(height: 80),
                         ],
                       ),
                       // Type picker chips — float above the bottom bar
@@ -1174,6 +1167,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     HapticFeedback.selectionClick();
     setState(() {
       _type = t;
+      _swipeHintVisible = false;
       _isAccountTransfer = false;
       _toAccountId = null;
       if (!(t == EntryType.transfer || t == EntryType.receive)) {
@@ -1203,6 +1197,34 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ),
         );
       }),
+    );
+  }
+
+  // ─── Swipe Hint ───────────────────────────────────────────────────────────────
+
+  Widget _swipeHint(BrandColors brand) {
+    return AnimatedOpacity(
+      opacity: _swipeHintVisible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(CupertinoIcons.chevron_left, size: 10, color: brand.inkSoft.withValues(alpha: 0.5)),
+          const SizedBox(width: 4),
+          Text(
+            context.t('expense.swipeToSwitch'),
+            style: TextStyle(
+              fontSize: 11,
+              color: brand.inkSoft.withValues(alpha: 0.5),
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(CupertinoIcons.chevron_right, size: 10, color: brand.inkSoft.withValues(alpha: 0.5)),
+        ],
+      ),
     );
   }
 
@@ -1319,6 +1341,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     HapticFeedback.selectionClick();
     setState(() {
       _typeMenuOpen = false;
+      _swipeHintVisible = false;
       _typeMenuCtrl.reverse();
     });
     final targetType = _kTypes[index];
@@ -1386,7 +1409,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final cardChild = Container(
-      margin: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(28),
@@ -1448,8 +1471,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required List<Account> accounts,
     required bool isDark,
   }) {
+    const sectionGap = 10.0;
+    const iconSize = 40.0;
+    const iconRadius = 12.0;
+    const iconInner = 20.0;
+    const labelFontSize = 19.0;
+    final compact = type == EntryType.income ||
+        type == EntryType.transfer ||
+        type == EntryType.receive;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1457,15 +1490,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: iconSize,
+                height: iconSize,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(iconRadius),
                 ),
-                child: Icon(icon, size: 26, color: accent),
+                child: Icon(icon, size: iconInner, color: accent),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1473,7 +1506,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: labelFontSize,
                         fontWeight: FontWeight.w600,
                         color: accent,
                         letterSpacing: -0.5,
@@ -1482,7 +1515,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: accent.withValues(alpha: 0.65),
                       ),
@@ -1492,7 +1525,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: sectionGap),
           // Amount field
           Builder(
             builder: (context) {
@@ -1518,7 +1551,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         child: Text(
                           entrySymbol,
                           style: TextStyle(
-                            fontSize: 26,
+                            fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: brand.inkSoft,
                           ),
@@ -1529,12 +1562,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         child: TextFormField(
                           controller: _amountController,
                           focusNode: _amountFocus,
-                          cursorHeight: 46.0,
+                          cursorHeight: 40.0,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
                           style: TextStyle(
-                            fontSize: 46,
+                            fontSize: 40,
                             fontWeight: FontWeight.w600,
                             letterSpacing: -2,
                             color: brand.ink,
@@ -1545,7 +1578,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             hintStyle: TextStyle(
                               color: brand.inkSoft.withValues(alpha: 0.5),
                               fontWeight: FontWeight.w600,
-                              fontSize: 46,
+                              fontSize: 40,
                               letterSpacing: -2,
                             ),
                             contentPadding: EdgeInsets.zero,
@@ -1597,22 +1630,22 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               );
             },
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: sectionGap),
           // Category section (expense / income)
           if (type == EntryType.expense || type == EntryType.income) ...[
             Padding(
-              padding: const EdgeInsets.only(left: 2, bottom: 10),
+              padding: EdgeInsets.only(left: 2, bottom: compact ? 6 : 10),
               child: Text(
                 context.t('expense.category'),
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: accent.withValues(alpha: 0.85),
-                  fontSize: 14,
+                  fontSize: compact ? 12 : 14,
                 ),
               ),
             ),
-            _categorySelector(brand),
-            const SizedBox(height: 8),
+            _categorySelector(brand, compact: compact),
+            const SizedBox(height: 6),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               transitionBuilder: (child, anim) => FadeTransition(
@@ -1640,7 +1673,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   Text(
                     context.categoryLabel(_category),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: compact ? 12 : 13,
                       fontWeight: FontWeight.w600,
                       color: styleFor(_category).accent,
                     ),
@@ -1648,21 +1681,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: compact ? 8 : 12),
           ],
           // Transfer-specific
           if (type == EntryType.transfer) ...[
-            _accountTransferToggle(brand),
-            const SizedBox(height: 12),
+            _accountTransferToggle(brand, compact: compact),
+            SizedBox(height: compact ? 8 : 12),
             if (!_isAccountTransfer) ...[
               _counterpartField(brand),
-              const SizedBox(height: 12),
+              SizedBox(height: compact ? 8 : 12),
             ],
           ],
           // Receive-specific
           if (type == EntryType.receive) ...[
             _counterpartField(brand),
-            const SizedBox(height: 12),
+            SizedBox(height: compact ? 8 : 12),
           ],
           // Details card (account / date / note / receipt)
           _groupedDetailsCard(
@@ -1671,6 +1704,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             dateLabel: dateLabel,
             isAccountTransfer: type == EntryType.transfer && _isAccountTransfer,
             entryType: type,
+            compact: true,
           ),
         ],
       ),
@@ -1751,10 +1785,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Category Selector ───────────────────────────────────────────────────────
 
-  Widget _categorySelector(BrandColors brand) {
+  Widget _categorySelector(BrandColors brand, {bool compact = false}) {
     final cats = _categories;
+    final itemSize = compact ? 44.0 : 52.0;
     return SizedBox(
-      height: 64,
+      height: compact ? 50 : 64,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
@@ -1775,15 +1810,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
-                width: 52,
-                height: 52,
+                width: itemSize,
+                height: itemSize,
                 decoration: BoxDecoration(
                   color: selected ? s.accent : brand.surface,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   s.icon,
-                  size: 20,
+                  size: compact ? 17 : 20,
                   color: selected ? Colors.white : s.accent,
                 ),
               ),
@@ -1903,7 +1938,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Account Transfer Toggle ──────────────────────────────────────────────────
 
-  Widget _accountTransferToggle(BrandColors brand) {
+  Widget _accountTransferToggle(BrandColors brand, {bool compact = false}) {
     return SectionCard(
       child: Row(
         children: [
@@ -1962,7 +1997,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required String dateLabel,
     required bool isAccountTransfer,
     EntryType? entryType,
+    bool compact = false,
   }) {
+    final rowVPad = compact ? 9.0 : 13.0;
     final divider = Container(
       height: 0.5,
       margin: const EdgeInsets.only(left: 46),
@@ -1986,6 +2023,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 selectedId: _accountId,
                 excludeId: _toAccountId,
                 onSelect: (id) => setState(() => _accountId = id),
+                rowVPad: rowVPad,
               ),
               divider,
               _inlineAccountRow(
@@ -1995,6 +2033,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 selectedId: _toAccountId,
                 excludeId: _accountId,
                 onSelect: (id) => setState(() => _toAccountId = id),
+                rowVPad: rowVPad,
               ),
             ] else ...[
               _inlineAccountRow(
@@ -2003,6 +2042,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 label: context.t('expense.account'),
                 selectedId: _accountId,
                 onSelect: (id) => setState(() => _accountId = id),
+                rowVPad: rowVPad,
               ),
             ],
             divider,
@@ -2010,9 +2050,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             InkWell(
               onTap: _pickDate,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 13,
+                  vertical: rowVPad,
                 ),
                 child: Row(
                   children: [
@@ -2070,7 +2110,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(top: 14),
+                    padding: EdgeInsets.only(top: rowVPad),
                     child: Icon(
                       CupertinoIcons.doc_text,
                       size: 18,
@@ -2081,7 +2121,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   Expanded(
                     child: TextFormField(
                       controller: _noteController,
-                      maxLines: 2,
+                      maxLines: compact ? 1 : 2,
                       style: const TextStyle(fontSize: 15),
                       decoration: InputDecoration(
                         hintText: context.t('expense.note'),
@@ -2093,8 +2133,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 13,
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: rowVPad,
                         ),
                       ),
                     ),
@@ -2109,9 +2149,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ? _pickReceipt
                   : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: compact ? 9.0 : 12.0,
                 ),
                 child: _receiptInlineContent(brand),
               ),
@@ -2360,6 +2400,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required String? selectedId,
     String? excludeId,
     required void Function(String? id) onSelect,
+    double rowVPad = 13.0,
   }) {
     final available = excludeId != null
         ? accounts.where((a) => a.id != excludeId).toList()
@@ -2383,7 +2424,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         );
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: rowVPad),
         child: Row(
           children: [
             Icon(

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -29,7 +30,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       final currency = ref.read(currencyCodeProvider).valueOrNull ?? 'USD';
       final id = await service.createGroup(
         userId: user.uid,
-        displayName: user.email?.split('@').first ?? 'You',
+        displayName: ref.read(userNameProvider).isNotEmpty
+            ? ref.read(userNameProvider)
+            : (user.email?.split('@').first ?? 'You'),
         groupName: 'Our Group',
         currency: currency,
       );
@@ -61,8 +64,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       if (mounted) {
         // Show specific error to help diagnose (permission-denied = deploy Firestore rules)
         final msg = e.toString().contains('permission-denied')
-            ? 'Permission denied — please deploy Firestore rules'
-            : 'Failed to create group: $e';
+            ? context.t('group.permissionDenied')
+            : context.t('group.failedToCreate').replaceAll('{error}', '$e');
         AppToast.show(context, msg);
       }
     } finally {
@@ -97,7 +100,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           ),
         ),
         title: Text(
-          'Group Expenses',
+          context.t('group.title'),
           style: TextStyle(
             color: brand.ink,
             fontSize: 17,
@@ -219,7 +222,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
               // Title
               Text(
-                'Track expenses together',
+                context.t('group.heroTitle'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: brand.ink,
@@ -233,7 +236,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
               // Subtitle
               Text(
-                'Connect with one other person to share a group budget. Your personal expenses stay private.',
+                context.t('group.heroSubtitle'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: const Color(0xFF5B5B66),
@@ -260,17 +263,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   children: [
                     _FeaturePill(
                       dotColor: const Color(0xFF1FBE71),
-                      text: 'Private invite — only one person can join',
+                      text: context.t('group.featurePrivate'),
                     ),
                     const SizedBox(height: 10),
                     _FeaturePill(
                       dotColor: const Color(0xFF1A6CFF),
-                      text: 'Switch between Personal & Group any time',
+                      text: context.t('group.featureSwitch'),
                     ),
                     const SizedBox(height: 10),
                     _FeaturePill(
                       dotColor: const Color(0xFF9F8DDB),
-                      text: 'Each expense shows who paid',
+                      text: context.t('group.featurePaid'),
                     ),
                   ],
                 ),
@@ -288,9 +291,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   onPressed: _creating ? null : _createInvite,
                   child: _creating
                       ? const CupertinoActivityIndicator(color: Colors.white)
-                      : const Text(
-                          'Create invite',
-                          style: TextStyle(
+                      : Text(
+                          context.t('group.createInvite'),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -308,9 +311,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   context,
                   CupertinoPageRoute(builder: (_) => const JoinGroupScreen()),
                 ),
-                child: const Text(
-                  'I have a code — join instead',
-                  style: TextStyle(
+                child: Text(
+                  context.t('group.haveCode'),
+                  style: const TextStyle(
                     color: Color(0xFF1A6CFF),
                     fontSize: 15,
                     fontWeight: FontWeight.w500,

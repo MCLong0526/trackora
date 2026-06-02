@@ -40,18 +40,21 @@ class _CatMeta {
 }
 
 // ── Split mode ────────────────────────────────────────────────────────────────
-enum _SplitMode { even, byPercent, byAmount, youOwe, theyOwe }
+enum _SplitMode { noSplit, even, byPercent, byAmount, youOwe, theyOwe }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class AddGroupExpenseScreen extends ConsumerStatefulWidget {
   final ExpenseGroup group;
   final GroupExpenseItem? existing;
+  /// When set, pre-fills all fields from this expense but saves as a NEW record.
+  final GroupExpenseItem? copyFrom;
 
   const AddGroupExpenseScreen({
     super.key,
     required this.group,
     this.existing,
+    this.copyFrom,
   });
 
   @override
@@ -102,12 +105,20 @@ class _AddGroupExpenseScreenState
 
     final user = ref.read(authStateProvider).valueOrNull;
     _paidByUid = widget.existing?.paidBy ?? user?.uid;
-    _splitBetween = widget.existing != null
-        ? widget.existing!.splitBetween.toSet()
-        : widget.group.memberUids.toSet();
 
     if (widget.existing != null) {
-      final e = widget.existing!;
+      _splitBetween = widget.existing!.splitBetween.toSet();
+    } else {
+      // Default: no split — the payer records their own expense in the group
+      // without creating any debt between members.
+      _splitMode = _SplitMode.noSplit;
+      _splitBetween = {?_paidByUid};
+    }
+
+    // copyFrom: pre-fills as a new entry (same logic, but _isEdit stays false)
+    final template = widget.existing ?? widget.copyFrom;
+    if (template != null) {
+      final e = template;
       _amountCtrl.text = e.amount.toStringAsFixed(2);
       _notesCtrl.text = e.notes ?? '';
       _category = e.category;
@@ -125,6 +136,8 @@ class _AddGroupExpenseScreenState
           default:
             _splitMode = _SplitMode.byAmount;
         }
+      } else if (e.splitModeType == 'noSplit') {
+        _splitMode = _SplitMode.noSplit;
       } else if (e.splitModeType == 'youOwe') {
         _splitMode = _SplitMode.youOwe;
       } else if (e.splitModeType == 'theyOwe') {
@@ -164,6 +177,9 @@ class _AddGroupExpenseScreenState
     double youAmt;
     double partnerAmt;
     switch (_splitMode) {
+      case _SplitMode.noSplit:
+        youAmt = total;
+        partnerAmt = 0;
       case _SplitMode.even:
         youAmt = total / 2;
         partnerAmt = total / 2;
@@ -243,6 +259,7 @@ class _AddGroupExpenseScreenState
   }
 
   String _splitModeTypeString(_SplitMode mode) => switch (mode) {
+    _SplitMode.noSplit => 'noSplit',
     _SplitMode.even => 'even',
     _SplitMode.byPercent => 'byPercent',
     _SplitMode.byAmount => 'byAmount',
@@ -256,6 +273,8 @@ class _AddGroupExpenseScreenState
       _splitMode = mode;
       _splitCustomPercents = customPercents ?? {};
       switch (mode) {
+        case _SplitMode.noSplit:
+          _splitBetween = {if (user != null) user.uid};
         case _SplitMode.even:
           _splitBetween = widget.group.memberUids.toSet();
         case _SplitMode.byPercent:
@@ -265,9 +284,9 @@ class _AddGroupExpenseScreenState
           _splitBetween = {if (user != null) user.uid};
         case _SplitMode.theyOwe:
           final partner = widget.group.memberUids
-              .where((uid) => uid != user?.uid)
+              .where ((uid) => uid != user?.uid)
               .firstOrNull;
-          _splitBetween = {if (partner != null) partner};
+          _splitBetween = {?partner};
       }
     });
     // Keep sub-amount fields in sync
@@ -284,11 +303,11 @@ class _AddGroupExpenseScreenState
       return;
     }
     if (_paidByUid == null) {
-      AppToast.show(context, 'Select who paid');
+      AppToast.show(context, context.t('groupExpense.selectWhoPaid'));
       return;
     }
     if (_splitBetween.isEmpty) {
-      AppToast.show(context, 'Select at least one person to split with');
+      AppToast.show(context, context.t('groupExpense.selectSplit'));
       return;
     }
 
@@ -360,7 +379,9 @@ class _AddGroupExpenseScreenState
         if (mounted) {
           AppToast.show(
             context,
-            _isEdit ? 'Entry updated' : 'Entry saved',
+            _isEdit
+                ? context.t('group.entryUpdated')
+                : context.t('group.entrySaved'),
             type: AppToastType.success,
           );
         }
@@ -384,17 +405,17 @@ class _AddGroupExpenseScreenState
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Delete expense?'),
-        content: const Text('This will permanently remove this expense.'),
+        title: Text(context.t('group.deleteExpense')),
+        content: Text(context.t('group.deleteExpensePermanent')),
         actions: [
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(context.t('common.delete')),
           ),
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(context.t('common.cancel')),
           ),
         ],
       ),
@@ -410,7 +431,8 @@ class _AddGroupExpenseScreenState
             .deleteExpense(widget.group.id, widget.existing!.id);
       }
       if (mounted) {
-        AppToast.show(context, 'Entry deleted', type: AppToastType.success);
+        AppToast.show(context, context.t('group.entryDeleted'),
+            type: AppToastType.success);
         await Future.delayed(const Duration(milliseconds: 480));
         if (mounted) Navigator.pop(context, true);
       }
@@ -418,7 +440,7 @@ class _AddGroupExpenseScreenState
       if (mounted) {
         AppToast.show(
           context,
-          'Failed to delete entry',
+          context.t('group.failedToDeleteEntry'),
           type: AppToastType.error,
         );
       }
@@ -469,9 +491,9 @@ class _AddGroupExpenseScreenState
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Pay from account',
-              style: TextStyle(
+            Text(
+              context.t('groupExpense.payFromAccount'),
+              style: const TextStyle(
                 fontSize: 20, fontWeight: FontWeight.w700,
                 color: Color(0xFF0B0B0F), letterSpacing: -0.3,
               ),
@@ -528,10 +550,11 @@ class _AddGroupExpenseScreenState
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'Clear selection',
-                      style: TextStyle(color: Color(0xFF8E8E96), fontSize: 14),
+                      context.t('groupExpense.clearSelection'),
+                      style: const TextStyle(
+                          color: Color(0xFF8E8E96), fontSize: 14),
                     ),
                   ),
                 ),
@@ -567,22 +590,26 @@ class _AddGroupExpenseScreenState
         .where((m) => m.uid != user?.uid)
         .firstOrNull;
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '';
+    final screenHeight = MediaQuery.of(context).size.height;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _SplitSheet(
-        members: widget.group.members,
-        currentUserId: user?.uid,
-        currentMode: _splitMode,
-        currentPercents: _splitCustomPercents,
-        amount: _parsedAmount,
-        symbol: symbol,
-        partnerName: partner?.displayName ?? 'Partner',
-        onSelected: (mode, percents) {
-          _setSplitMode(mode, customPercents: percents);
-          Navigator.pop(context);
-        },
+      builder: (_) => ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: screenHeight * 0.70),
+        child: _SplitSheet(
+          members: widget.group.members,
+          currentUserId: user?.uid,
+          currentMode: _splitMode,
+          currentPercents: _splitCustomPercents,
+          amount: _parsedAmount,
+          symbol: symbol,
+          partnerName: partner?.displayName ?? context.t('group.partnerFallback'),
+          onSelected: (mode, percents) {
+            _setSplitMode(mode, customPercents: percents);
+            Navigator.pop(context);
+          },
+        ),
       ),
     );
   }
@@ -595,7 +622,7 @@ class _AddGroupExpenseScreenState
     final members = widget.group.members;
     final partner =
         members.where((m) => m.uid != user?.uid).firstOrNull;
-    final partnerName = partner?.displayName ?? 'Partner';
+    final partnerName = partner?.displayName ?? context.t('group.partnerFallback');
     final partnerInitial =
         partnerName.isNotEmpty ? partnerName[0].toUpperCase() : 'P';
     final userMember =
@@ -612,15 +639,19 @@ class _AddGroupExpenseScreenState
     final amount = _parsedAmount;
     final paidByMember = members.where((m) => m.uid == _paidByUid).firstOrNull;
     final paidByName = paidByMember?.uid == user?.uid
-        ? 'You'
-        : paidByMember?.displayName ?? 'Select';
+        ? context.t('group.you')
+        : paidByMember?.displayName ?? context.t('groupExpense.select');
 
     // Split label & badge
     final String splitLabel;
     final Color splitBadgeBg;
     final Color splitBadgeFg;
-    if (_splitMode == _SplitMode.even) {
-      splitLabel = '50 / 50';
+    if (_splitMode == _SplitMode.noSplit) {
+      splitLabel = context.t('groupExpense.splitNoSplit');
+      splitBadgeBg = const Color(0xFFEEEEF1);
+      splitBadgeFg = const Color(0xFF5B5B66);
+    } else if (_splitMode == _SplitMode.even) {
+      splitLabel = context.t('groupExpense.fiftyFifty');
       splitBadgeBg = const Color(0xFFD7F4E5);
       splitBadgeFg = const Color(0xFF1A8E54);
     } else if (_splitMode == _SplitMode.byPercent) {
@@ -635,11 +666,11 @@ class _AddGroupExpenseScreenState
       splitBadgeBg = const Color(0xFFFFF1D2);
       splitBadgeFg = const Color(0xFF9A6B00);
     } else if (_splitMode == _SplitMode.youOwe) {
-      splitLabel = 'You owe';
+      splitLabel = context.t('groupExpense.youOweBadgeShort');
       splitBadgeBg = const Color(0xFFFBDDE0);
       splitBadgeFg = const Color(0xFFC03340);
     } else {
-      splitLabel = 'They owe';
+      splitLabel = context.t('groupExpense.theyOweBadgeShort');
       splitBadgeBg = const Color(0xFFFFF1D2);
       splitBadgeFg = const Color(0xFF9A6B00);
     }
@@ -679,7 +710,9 @@ class _AddGroupExpenseScreenState
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      _isEdit ? context.t('common.edit') : 'New entry',
+                      _isEdit
+                          ? context.t('common.edit')
+                          : context.t('groupExpense.newEntry'),
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
@@ -715,7 +748,7 @@ class _AddGroupExpenseScreenState
             Expanded(
               child: SingleChildScrollView(
                 padding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    const EdgeInsets.fromLTRB(14, 0, 14, 14),
                 child: Column(
                   children: [
                     // ── Outer purple card ────────────────────
@@ -723,10 +756,10 @@ class _AddGroupExpenseScreenState
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: _kGroupTint,
-                        borderRadius: BorderRadius.circular(32),
+                        borderRadius: BorderRadius.circular(28),
                       ),
                       padding: const EdgeInsets.fromLTRB(
-                          18, 20, 18, 20),
+                          16, 14, 16, 14),
                       child: Column(
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
@@ -735,18 +768,18 @@ class _AddGroupExpenseScreenState
                           Row(
                             children: [
                               Container(
-                                width: 60,
-                                height: 60,
+                                width: 48,
+                                height: 48,
                                 decoration: BoxDecoration(
                                   color: Colors.white
                                       .withValues(alpha: 0.55),
                                   borderRadius:
-                                      BorderRadius.circular(16),
+                                      BorderRadius.circular(14),
                                 ),
                                 child: Center(
                                   child: SizedBox(
-                                    width: partner != null ? 46 : 30,
-                                    height: 30,
+                                    width: partner != null ? 40 : 26,
+                                    height: 26,
                                     child: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
@@ -755,44 +788,46 @@ class _AddGroupExpenseScreenState
                                             bg: Colors.white,
                                             fg: const Color(
                                                 0xFF5A4AAB),
-                                            size: 30),
+                                            size: 26),
                                         if (partner != null)
                                           Positioned(
-                                            left: 16,
+                                            left: 14,
                                             child: _GroupAvatar(
                                                 initial:
                                                     partnerInitial,
                                                 bg: Colors.white,
                                                 fg: const Color(
                                                     0xFF1FBE71),
-                                                size: 30),
+                                                size: 26),
                                           ),
                                       ],
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Group expense',
-                                      style: TextStyle(
-                                        fontSize: 26,
+                                    Text(
+                                      context.t('groupExpense.title'),
+                                      style: const TextStyle(
+                                        fontSize: 20,
                                         fontWeight: FontWeight.w700,
                                         color: _kGroupInk,
-                                        letterSpacing: -0.5,
+                                        letterSpacing: -0.4,
                                         height: 1.1,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 2),
                                     Text(
-                                      'Splitting with $partnerName',
+                                      context
+                                          .t('groupExpense.splittingWith')
+                                          .replaceAll('{name}', partnerName),
                                       style: const TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 12,
                                         color: _kGroupInkSoft,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -803,19 +838,19 @@ class _AddGroupExpenseScreenState
                             ],
                           ),
 
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 16),
 
                           // "Total amount" label
-                          const Text(
-                            'Total amount',
-                            style: TextStyle(
-                              fontSize: 13,
+                          Text(
+                            context.t('groupExpense.totalAmount'),
+                            style: const TextStyle(
+                              fontSize: 11,
                               fontWeight: FontWeight.w500,
                               color: _kGroupInkSoft,
                               letterSpacing: 0.2,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
 
                           // Amount row
                           GestureDetector(
@@ -828,42 +863,41 @@ class _AddGroupExpenseScreenState
                                 Text(
                                   symbol,
                                   style: const TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w600,
                                     color: _kGroupInk,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 4),
                                 Expanded(
                                   child: TextField(
                                     controller: _amountCtrl,
                                     focusNode: _amountFocus,
-                                    cursorHeight: 44.0,
+                                    cursorHeight: 34.0,
                                     keyboardType:
                                         const TextInputType
                                             .numberWithOptions(
                                                 decimal: true),
                                     style: TextStyle(
-                                      fontSize: 44,
+                                      fontSize: 34,
                                       fontWeight: FontWeight.w700,
                                       color: amount > 0
                                           ? _kGroupInk
                                           : const Color(
                                               0x516B4FB2),
-                                      letterSpacing: -1.5,
+                                      letterSpacing: -1.0,
                                       height: 1.0,
                                     ),
                                     decoration: const InputDecoration(
                                       border: InputBorder.none,
-                                      // Override theme-level fill
                                       filled: false,
                                       fillColor: Colors.transparent,
                                       hintText: '0.00',
                                       hintStyle: TextStyle(
-                                        fontSize: 44,
+                                        fontSize: 34,
                                         fontWeight: FontWeight.w600,
                                         color: Color(0x516B4FB2),
-                                        letterSpacing: -1.5,
+                                        letterSpacing: -1.0,
                                         height: 1.0,
                                       ),
                                       isDense: true,
@@ -885,12 +919,12 @@ class _AddGroupExpenseScreenState
                           ),
 
                           // Split breakdown — interactive YOU / PARTNER inputs
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
                               children: [
@@ -903,16 +937,16 @@ class _AddGroupExpenseScreenState
                                           initial: userInitial,
                                           bg: Colors.white,
                                           fg: const Color(0xFF5A4AAB),
-                                          size: 26),
-                                      const SizedBox(width: 8),
+                                          size: 22),
+                                      const SizedBox(width: 6),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text(
-                                              'YOU',
-                                              style: TextStyle(
-                                                fontSize: 10,
+                                            Text(
+                                              context.t('groupExpense.you'),
+                                              style: const TextStyle(
+                                                fontSize: 9,
                                                 fontWeight: FontWeight.w600,
                                                 color: _kGroupInkSoft,
                                                 letterSpacing: 0.2,
@@ -923,7 +957,7 @@ class _AddGroupExpenseScreenState
                                                 Text(
                                                   symbol,
                                                   style: const TextStyle(
-                                                    fontSize: 13,
+                                                    fontSize: 12,
                                                     color: _kGroupInk,
                                                     fontWeight: FontWeight.w600,
                                                   ),
@@ -931,10 +965,10 @@ class _AddGroupExpenseScreenState
                                                 Expanded(
                                                   child: TextField(
                                                     controller: _youCtrl,
-                                                    cursorHeight: 15.0,
+                                                    cursorHeight: 13.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                                     style: const TextStyle(
-                                                      fontSize: 15,
+                                                      fontSize: 13,
                                                       fontWeight: FontWeight.w700,
                                                       color: _kGroupInk,
                                                     ),
@@ -944,7 +978,7 @@ class _AddGroupExpenseScreenState
                                                       contentPadding: EdgeInsets.zero,
                                                       hintText: '0.00',
                                                       hintStyle: TextStyle(
-                                                        fontSize: 15,
+                                                        fontSize: 13,
                                                         color: _kGroupInkSoft,
                                                         fontWeight: FontWeight.w600,
                                                       ),
@@ -963,10 +997,10 @@ class _AddGroupExpenseScreenState
                                 // Divider
                                 Container(
                                   width: 1,
-                                  height: 36,
+                                  height: 30,
                                   color: const Color(0x2E6B4FB2),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 8),
                                 // PARTNER
                                 Expanded(
                                   child: Row(
@@ -976,8 +1010,8 @@ class _AddGroupExpenseScreenState
                                           initial: partnerInitial,
                                           bg: Colors.white,
                                           fg: const Color(0xFF1FBE71),
-                                          size: 26),
-                                      const SizedBox(width: 8),
+                                          size: 22),
+                                      const SizedBox(width: 6),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -985,7 +1019,7 @@ class _AddGroupExpenseScreenState
                                             Text(
                                               partnerName.toUpperCase().split(' ').first,
                                               style: const TextStyle(
-                                                fontSize: 10,
+                                                fontSize: 9,
                                                 fontWeight: FontWeight.w600,
                                                 color: _kGroupInkSoft,
                                                 letterSpacing: 0.2,
@@ -996,7 +1030,7 @@ class _AddGroupExpenseScreenState
                                                 Text(
                                                   symbol,
                                                   style: const TextStyle(
-                                                    fontSize: 13,
+                                                    fontSize: 12,
                                                     color: _kGroupInk,
                                                     fontWeight: FontWeight.w600,
                                                   ),
@@ -1004,10 +1038,10 @@ class _AddGroupExpenseScreenState
                                                 Expanded(
                                                   child: TextField(
                                                     controller: _partnerCtrl,
-                                                    cursorHeight: 15.0,
+                                                    cursorHeight: 13.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                                     style: const TextStyle(
-                                                      fontSize: 15,
+                                                      fontSize: 13,
                                                       fontWeight: FontWeight.w700,
                                                       color: _kGroupInk,
                                                     ),
@@ -1017,7 +1051,7 @@ class _AddGroupExpenseScreenState
                                                       contentPadding: EdgeInsets.zero,
                                                       hintText: '0.00',
                                                       hintStyle: TextStyle(
-                                                        fontSize: 15,
+                                                        fontSize: 13,
                                                         color: _kGroupInkSoft,
                                                         fontWeight: FontWeight.w600,
                                                       ),
@@ -1037,18 +1071,18 @@ class _AddGroupExpenseScreenState
                             ),
                           ),
 
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 14),
 
                           // Category label
-                          const Text(
-                            'Category',
-                            style: TextStyle(
-                              fontSize: 18,
+                          Text(
+                            context.t('groupExpense.category'),
+                            style: const TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: _kGroupInk,
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 8),
 
                           // Category circles (horizontal scroll)
                           SingleChildScrollView(
@@ -1065,13 +1099,13 @@ class _AddGroupExpenseScreenState
                                   },
                                   child: Container(
                                     margin: const EdgeInsets.only(
-                                        right: 14),
+                                        right: 10),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Container(
-                                          width: 56,
-                                          height: 56,
+                                          width: 44,
+                                          height: 44,
                                           decoration: BoxDecoration(
                                             color: active
                                                 ? cat.color
@@ -1098,14 +1132,14 @@ class _AddGroupExpenseScreenState
                                             color: active
                                                 ? Colors.white
                                                 : cat.color,
-                                            size: 24,
+                                            size: 18,
                                           ),
                                         ),
-                                        const SizedBox(height: 6),
+                                        const SizedBox(height: 4),
                                         Text(
                                           cat.label,
                                           style: TextStyle(
-                                            fontSize: 11,
+                                            fontSize: 9,
                                             color: active
                                                 ? _kGroupInk
                                                 : _kGroupInkSoft,
@@ -1123,7 +1157,7 @@ class _AddGroupExpenseScreenState
                           ),
 
                           if (_category.isNotEmpty) ...[
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 8),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               transitionBuilder: (child, anim) =>
@@ -1141,18 +1175,18 @@ class _AddGroupExpenseScreenState
                                 key: ValueKey(_category),
                                 children: [
                                   Container(
-                                    width: 6,
-                                    height: 6,
+                                    width: 5,
+                                    height: 5,
                                     decoration: BoxDecoration(
                                       color: catMeta.color,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Text(
                                     context.categoryLabel(_category),
                                     style: TextStyle(
-                                      fontSize: 15,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                       color: catMeta.color,
                                     ),
@@ -1162,14 +1196,14 @@ class _AddGroupExpenseScreenState
                             ),
                           ],
 
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 12),
 
                           // ── Inner white card ─────────────────
                           Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius:
-                                  BorderRadius.circular(22),
+                                  BorderRadius.circular(18),
                             ),
                             child: Column(
                               children: [
@@ -1190,16 +1224,16 @@ class _AddGroupExpenseScreenState
                                                 : partnerInitial)),
                                     bg: const Color(0xFFEAE3F8),
                                     fg: const Color(0xFF5A4AAB),
-                                    size: 32,
+                                    size: 28,
                                   ),
-                                  title: 'Paid by',
+                                  title: context.t('groupExpense.paidBy'),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
                                         paidByName,
                                         style: const TextStyle(
-                                          fontSize: 16,
+                                          fontSize: 14,
                                           color: Color(0xFF5B5B66),
                                         ),
                                       ),
@@ -1219,8 +1253,8 @@ class _AddGroupExpenseScreenState
                                   _EntryRow(
                                     onTap: () => _showAccountSheet(accounts),
                                     leading: Container(
-                                      width: 32,
-                                      height: 32,
+                                      width: 28,
+                                      height: 28,
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF4F4F7),
                                         borderRadius: BorderRadius.circular(8),
@@ -1228,10 +1262,10 @@ class _AddGroupExpenseScreenState
                                       child: const Icon(
                                         CupertinoIcons.creditcard_fill,
                                         color: Color(0xFF5B5B66),
-                                        size: 16,
+                                        size: 14,
                                       ),
                                     ),
-                                    title: 'Account',
+                                    title: context.t('groupExpense.account'),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -1240,10 +1274,10 @@ class _AddGroupExpenseScreenState
                                               ? (accounts.cast<Account?>().firstWhere(
                                                     (a) => a?.id == _paidByAccountId,
                                                     orElse: () => null,
-                                                  )?.name ?? 'Select')
-                                              : 'Select',
+                                                  )?.name ?? context.t('groupExpense.select'))
+                                              : context.t('groupExpense.select'),
                                           style: const TextStyle(
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             color: Color(0xFF5B5B66),
                                           ),
                                         ),
@@ -1257,12 +1291,12 @@ class _AddGroupExpenseScreenState
 
                                 _EntryDivider(),
 
-                                // Split
+                                // Split — badge auto-reflects current percentages whenever YOU/PARTNER amounts change
                                 _EntryRow(
                                   onTap: _showSplitSheet,
                                   leading: Container(
-                                    width: 32,
-                                    height: 32,
+                                    width: 28,
+                                    height: 28,
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF4F4F7),
                                       borderRadius:
@@ -1272,27 +1306,27 @@ class _AddGroupExpenseScreenState
                                       CupertinoIcons
                                           .arrow_left_right,
                                       color: Color(0xFF5B5B66),
-                                      size: 16,
+                                      size: 14,
                                     ),
                                   ),
-                                  title: 'Split',
+                                  title: context.t('groupExpense.split'),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
                                         padding:
                                             const EdgeInsets.fromLTRB(
-                                                10, 4, 10, 4),
+                                                8, 3, 8, 3),
                                         decoration: BoxDecoration(
                                           color: splitBadgeBg,
                                           borderRadius:
                                               BorderRadius.circular(
-                                                  8),
+                                                  7),
                                         ),
                                         child: Text(
                                           splitLabel,
                                           style: TextStyle(
-                                            fontSize: 13,
+                                            fontSize: 12,
                                             fontWeight:
                                                 FontWeight.w700,
                                             color: splitBadgeFg,
@@ -1315,13 +1349,13 @@ class _AddGroupExpenseScreenState
                                 // Date
                                 _EntryRow(
                                   onTap: _pickDate,
-                                  leading: Container(
-                                    width: 32,
-                                    height: 32,
-                                    child: const Icon(
+                                  leading: const SizedBox(
+                                    width: 28,
+                                    height: 28,
+                                    child: Icon(
                                       CupertinoIcons.calendar,
                                       color: Color(0xFF0B0B0F),
-                                      size: 22,
+                                      size: 20,
                                     ),
                                   ),
                                   title: context.t('expense.date'),
@@ -1332,7 +1366,7 @@ class _AddGroupExpenseScreenState
                                         DateFormat('MMM d, yyyy')
                                             .format(_date),
                                         style: const TextStyle(
-                                          fontSize: 16,
+                                          fontSize: 14,
                                           color: Color(0xFF8E8E96),
                                         ),
                                       ),
@@ -1352,48 +1386,43 @@ class _AddGroupExpenseScreenState
                                 Padding(
                                   padding:
                                       const EdgeInsets.fromLTRB(
-                                          20, 14, 20, 14),
+                                          16, 10, 16, 10),
                                   child: Row(
                                     children: [
-                                      Container(
-                                        width: 32,
-                                        height: 32,
-                                        child: const Icon(
+                                      const SizedBox(
+                                        width: 28,
+                                        height: 28,
+                                        child: Icon(
                                           CupertinoIcons.doc,
                                           color: Color(0xFF0B0B0F),
-                                          size: 20,
+                                          size: 18,
                                         ),
                                       ),
-                                      const SizedBox(width: 16),
+                                      const SizedBox(width: 12),
                                       Expanded(
                                         child: TextField(
                                           controller: _notesCtrl,
-                                          cursorHeight: 17.0,
+                                          cursorHeight: 15.0,
                                           textCapitalization:
                                               TextCapitalization
                                                   .sentences,
                                           style: const TextStyle(
-                                            fontSize: 17,
+                                            fontSize: 14,
                                             color: Color(0xFF0B0B0F),
                                             fontWeight:
                                                 FontWeight.w600,
                                           ),
-                                          decoration:
-                                              const InputDecoration(
-                                            border:
-                                                InputBorder.none,
-                                            hintText:
-                                                'Note (optional)',
-                                            hintStyle: TextStyle(
-                                              fontSize: 17,
-                                              color:
-                                                  Color(0xFF8E8E96),
-                                              fontWeight:
-                                                  FontWeight.w400,
+                                          decoration: InputDecoration(
+                                            border: InputBorder.none,
+                                            hintText: context
+                                                .t('groupExpense.note'),
+                                            hintStyle: const TextStyle(
+                                              fontSize: 14,
+                                              color: Color(0xFF8E8E96),
+                                              fontWeight: FontWeight.w400,
                                             ),
                                             isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.zero,
+                                            contentPadding: EdgeInsets.zero,
                                           ),
                                           textInputAction:
                                               TextInputAction.done,
@@ -1492,8 +1521,8 @@ class _AddGroupExpenseScreenState
                                         const SizedBox(width: 9),
                                         Text(
                                           _isEdit
-                                              ? 'Entry updated'
-                                              : 'Entry saved',
+                                              ? context.t('group.entryUpdated')
+                                              : context.t('group.entrySaved'),
                                           style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w700,
@@ -1529,8 +1558,10 @@ class _AddGroupExpenseScreenState
                                             const SizedBox(width: 9),
                                             Text(
                                               _isEdit
-                                                  ? 'Update entry'
-                                                  : 'Save entry',
+                                                  ? context
+                                                      .t('groupExpense.update')
+                                                  : context
+                                                      .t('groupExpense.save'),
                                               style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight:
@@ -1609,18 +1640,18 @@ class _EntryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(
           children: [
             leading,
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 17,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF0B0B0F),
                   letterSpacing: -0.2,
@@ -1688,9 +1719,9 @@ class _PaidBySheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Who paid?',
-            style: TextStyle(
+          Text(
+            context.t('groupExpense.whoPaid'),
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,
               color: Color(0xFF0B0B0F),
@@ -1698,15 +1729,15 @@ class _PaidBySheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Pick the person whose money left the account.',
-            style: TextStyle(fontSize: 14, color: Color(0xFF5B5B66)),
+          Text(
+            context.t('groupExpense.whoPaidDesc'),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF5B5B66)),
           ),
           const SizedBox(height: 18),
           ...members.map((m) {
             final isYou = m.uid == currentUserId;
             final name =
-                isYou ? 'You' : m.displayName;
+                isYou ? context.t('group.you') : m.displayName;
             final initial = name.isNotEmpty
                 ? name[0].toUpperCase()
                 : '?';
@@ -1877,48 +1908,69 @@ class _SplitSheetState extends State<_SplitSheet> {
   Widget build(BuildContext context) {
     final options = [
       _SplitOptionData(
+        mode: _SplitMode.noSplit,
+        title: context.t('groupExpense.splitNoSplit'),
+        subtitle: context.t('groupExpense.splitNoSplitDesc'),
+        badge: context.t('groupExpense.splitNoSplitBadge'),
+        badgeBg: const Color(0xFFEEEEF1),
+        badgeFg: const Color(0xFF5B5B66),
+      ),
+      _SplitOptionData(
         mode: _SplitMode.even,
-        title: 'Split evenly',
+        title: context.t('groupExpense.splitEvenly'),
         subtitle: widget.amount > 0
-            ? '${widget.symbol}${(widget.amount / 2).toStringAsFixed(2)} each'
-            : 'Equal split between both',
-        badge: '50 / 50',
+            ? context.t('groupExpense.splitEvenlyAmt').replaceAll(
+                '{amount}',
+                '${widget.symbol}${(widget.amount / 2).toStringAsFixed(2)}')
+            : context.t('groupExpense.splitEqualBoth'),
+        badge: context.t('groupExpense.fiftyFifty'),
         badgeBg: const Color(0xFFD7F4E5),
         badgeFg: const Color(0xFF1A8E54),
       ),
       _SplitOptionData(
         mode: _SplitMode.byPercent,
-        title: 'Split by percent',
-        subtitle: 'Set a custom % split between you',
-        badge: 'Custom %',
+        title: context.t('groupExpense.splitByPercent'),
+        subtitle: context.t('groupExpense.splitByPercentDesc'),
+        badge: context.t('groupExpense.splitByPercentBadge'),
         badgeBg: const Color(0xFFEAE3F8),
         badgeFg: const Color(0xFF5A4AAB),
       ),
       _SplitOptionData(
         mode: _SplitMode.byAmount,
-        title: 'Split by amount',
-        subtitle: 'Enter exact amounts per person',
-        badge: r'Custom $',
+        title: context.t('groupExpense.splitByAmount'),
+        subtitle: context.t('groupExpense.splitByAmountDesc'),
+        badge: context.t('groupExpense.splitByAmountBadge'),
         badgeBg: const Color(0xFFFFF1D2),
         badgeFg: const Color(0xFF9A6B00),
       ),
       _SplitOptionData(
         mode: _SplitMode.youOwe,
-        title: '${widget.partnerName} paid, you owe all',
+        title: context
+            .t('groupExpense.youOweAll')
+            .replaceAll('{partner}', widget.partnerName),
         subtitle: widget.amount > 0
-            ? 'You owe ${widget.symbol}${widget.amount.toStringAsFixed(2)}'
-            : 'You cover your portion',
-        badge: '100% you owe',
+            ? context.t('groupExpense.youOweAllDesc').replaceAll(
+                '{amount}',
+                '${widget.symbol}${widget.amount.toStringAsFixed(2)}')
+            : context.t('groupExpense.youCover'),
+        badge: context.t('groupExpense.youOweBadge'),
         badgeBg: const Color(0xFFFBDDE0),
         badgeFg: const Color(0xFFC03340),
       ),
       _SplitOptionData(
         mode: _SplitMode.theyOwe,
-        title: 'You paid, ${widget.partnerName} owes all',
+        title: context
+            .t('groupExpense.theyOweAll')
+            .replaceAll('{partner}', widget.partnerName),
         subtitle: widget.amount > 0
-            ? '${widget.partnerName} owes ${widget.symbol}${widget.amount.toStringAsFixed(2)}'
-            : 'They cover their portion',
-        badge: '100% they owe',
+            ? context
+                .t('groupExpense.theyOweAllDesc')
+                .replaceAll('{partner}', widget.partnerName)
+                .replaceAll(
+                    '{amount}',
+                    '${widget.symbol}${widget.amount.toStringAsFixed(2)}')
+            : context.t('groupExpense.theyCover'),
+        badge: context.t('groupExpense.theyOweBadge'),
         badgeBg: const Color(0xFFFFF1D2),
         badgeFg: const Color(0xFF9A6B00),
       ),
@@ -1935,39 +1987,63 @@ class _SplitSheetState extends State<_SplitSheet> {
           topRight: Radius.circular(30),
         ),
       ),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(24, 14, 24, keyboardH + safeBottom + 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD1D1D6),
-                borderRadius: BorderRadius.circular(3),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Fixed header — swipe down here to close ─────────
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragEnd: (d) {
+              if ((d.primaryVelocity ?? 0) > 150) Navigator.pop(context);
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1D1D6),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    context.t('groupExpense.howToSplit'),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0B0B0F),
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  if (widget.amount > 0)
+                    Text(
+                      context
+                          .t('groupExpense.amountBetween')
+                          .replaceAll('{amount}',
+                              '${widget.symbol}${widget.amount.toStringAsFixed(2)}')
+                          .replaceAll('{partner}', widget.partnerName),
+                      style: const TextStyle(
+                          fontSize: 14, color: Color(0xFF5B5B66)),
+                    ),
+                  const SizedBox(height: 4),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'How to split?',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0B0B0F),
-              letterSpacing: -0.4,
-            ),
-          ),
-          if (widget.amount > 0)
-            Text(
-              '${widget.symbol}${widget.amount.toStringAsFixed(2)} between you & ${widget.partnerName}',
-              style: const TextStyle(
-                  fontSize: 14, color: Color(0xFF5B5B66)),
-            ),
-          const SizedBox(height: 14),
+          // ── Scrollable content ──────────────────────────────
+          Flexible(
+            child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(24, 4, 24, keyboardH + safeBottom + 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           ...options.map((opt) {
             final selected = opt.mode == _selectedMode;
             return GestureDetector(
@@ -2116,7 +2192,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                 children: [
                   Row(
                     children: [
-                      Text('You: ${_myPercent.toStringAsFixed(0)}%',
+                      Text('${context.t('group.you')}: ${_myPercent.toStringAsFixed(0)}%',
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF5A4AAB))),
                       const Spacer(),
                       Text('${widget.partnerName}: ${(100 - _myPercent).toStringAsFixed(0)}%',
@@ -2142,13 +2218,13 @@ class _SplitSheetState extends State<_SplitSheet> {
                 color: const Color(0xFF1A6CFF),
                 borderRadius: BorderRadius.circular(16),
                 onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
-                child: const Text('Confirm split', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                child: Text(context.t('groupExpense.confirmSplit'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
             ),
           ],
 
-          // Custom amount input
-          if (_selectedMode == _SplitMode.byAmount && widget.amount > 0) ...[
+          // Custom amount input — always show when byAmount is selected
+          if (_selectedMode == _SplitMode.byAmount) ...[
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2159,7 +2235,7 @@ class _SplitSheetState extends State<_SplitSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your amount (${widget.symbol})',
+                  Text(context.t('groupExpense.yourAmount').replaceAll('{symbol}', widget.symbol),
                       style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66))),
                   const SizedBox(height: 8),
                   TextField(
@@ -2193,14 +2269,17 @@ class _SplitSheetState extends State<_SplitSheet> {
                 color: const Color(0xFF1A6CFF),
                 borderRadius: BorderRadius.circular(16),
                 onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
-                child: const Text('Confirm split', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                child: Text(context.t('groupExpense.confirmSplit'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
             ),
           ],
         ],
         ),
-      ),
-    );
+        ), // end SingleChildScrollView
+          ), // end Flexible
+        ],
+      ), // end Column
+    ); // end Container
   }
 }
 

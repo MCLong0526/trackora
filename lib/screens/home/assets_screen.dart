@@ -17,6 +17,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/masked_amount.dart';
+import '../../widgets/sticky_header_scaffold.dart';
 import '../../widgets/profile_avatar_button.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../group/group_dashboard_screen.dart';
@@ -102,30 +103,26 @@ class AssetsScreen extends ConsumerWidget {
     final metalsGrams = metals.fold<double>(0, (s, m) => s + m.weightGrams);
 
     return SafeArea(
-      child: Column(
-        children: [
-          // ── Header ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.t('asset.title'),
-                    style: Theme.of(context).textTheme.displayMedium,
-                  ),
+      child: StickyHeaderScaffold(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.t('asset.title'),
+                  style: Theme.of(context).textTheme.displayMedium,
                 ),
-                const FxRateButton(),
-                const SizedBox(width: 8),
-                const ProfileAvatarButton(),
-              ],
-            ),
+              ),
+              const FxRateButton(),
+              const SizedBox(width: 8),
+              const ProfileAvatarButton(),
+            ],
           ),
-
-          // ── Body ──────────────────────────────────────────────
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+        ),
+        bodyBuilder: (controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
               children: [
                 // ── Net Worth (full width) ─────────────────────
                 _NetWorthCard(
@@ -144,11 +141,11 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.chart_pie_fill,
                         iconBg: const Color(0xFFF3EEFF),
                         iconColor: const Color(0xFF8B5CF6),
-                        title: 'Budget',
+                        title: context.t('asset.budget'),
                         amount: budget > 0 ? formatMoney(symbol, budgetRemaining) : '—',
                         subtitle: budget > 0
-                            ? budgetRemaining >= 0 ? 'left this month' : 'over budget'
-                            : 'not set',
+                            ? budgetRemaining >= 0 ? context.t('asset.leftThisMonth') : context.t('asset.overBudget')
+                            : context.t('asset.notSet'),
                         subtitleColor: budget > 0 && budgetRemaining > 0
                             ? _kGreen
                             : budget > 0
@@ -164,11 +161,13 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.flag_fill,
                         iconBg: const Color(0xFFE8F5E9),
                         iconColor: _kGreen,
-                        title: 'Savings',
+                        title: context.t('asset.savingsLabel'),
                         amount: formatMoney(symbol, totalSaved),
                         subtitle: totalGoal > 0
-                            ? '${savingPlans.where((p) => p.status == SavingPlanStatus.active).length} of ${formatMoney(symbol, totalGoal)}'
-                            : 'no active plans',
+                            ? context.t('asset.ofTarget')
+                                .replaceAll('{count}', '${savingPlans.where((p) => p.status == SavingPlanStatus.active).length}')
+                                .replaceAll('{amount}', formatMoney(symbol, totalGoal))
+                            : context.t('asset.noActivePlans'),
                         subtitleColor: totalSaved > 0 ? _kGreen : _kOrange,
                         visible: visible,
                         onTap: () => _push(context, const SavingPlansScreen()),
@@ -187,9 +186,9 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.arrow_up_arrow_down,
                         iconBg: const Color(0xFFFFF3E0),
                         iconColor: _kOrange,
-                        title: 'Borrow & Lend',
+                        title: context.t('asset.borrowLend'),
                         amount: formatMoney(symbol, borrowNet.abs()),
-                        subtitle: borrowNet >= 0 ? 'owed to you' : 'you owe, net',
+                        subtitle: borrowNet >= 0 ? context.t('asset.owedToYou') : context.t('asset.youOweNet'),
                         subtitleColor: borrowNet >= 0 ? _kGreen : _kOrange,
                         visible: visible,
                         onTap: () => _push(context, const BorrowLendingScreen()),
@@ -201,9 +200,9 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.bolt_fill,
                         iconBg: const Color(0xFFFCE4EC),
                         iconColor: const Color(0xFFE91E63),
-                        title: 'Installments',
+                        title: context.t('asset.installmentsLabel'),
                         amount: formatMoney(symbol, installmentTotal),
-                        subtitle: installmentCount > 0 ? '$installmentCount plans' : 'none active',
+                        subtitle: installmentCount > 0 ? context.t('asset.activePlansCount').replaceAll('{count}', '$installmentCount') : context.t('asset.noneActive'),
                         subtitleColor: installmentCount > 0
                             ? const Color(0xFFE91E63)
                             : const Color(0xFF8E8E96),
@@ -224,9 +223,9 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.airplane,
                         iconBg: const Color(0xFFE3F2FD),
                         iconColor: _kBlue,
-                        title: 'Travel Group',
+                        title: context.t('asset.travelGroup'),
                         amount: travelGroups.length.toString(),
-                        subtitle: latestGroup?.name ?? (travelGroups.isEmpty ? 'no trips' : '${travelGroups.length} trips'),
+                        subtitle: latestGroup?.name ?? (travelGroups.isEmpty ? context.t('asset.noTrips') : context.t('asset.tripCount').replaceAll('{count}', '${travelGroups.length}')),
                         subtitleColor: travelGroups.isNotEmpty ? _kBlue : const Color(0xFF8E8E96),
                         visible: visible,
                         onTap: () => _push(context, const TravelGroupsScreen()),
@@ -238,13 +237,13 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.person_3_fill,
                         iconBg: const Color(0xFFE8F0FE),
                         iconColor: const Color(0xFF1967D2),
-                        title: 'Groups',
+                        title: context.t('asset.groups'),
                         amount: expenseGroups.length.toString(),
                         subtitle: expenseGroups.isEmpty
-                            ? 'no groups'
+                            ? context.t('asset.noGroups')
                             : expenseGroups.length == 1
-                                ? '1 group'
-                                : '${expenseGroups.length} groups',
+                                ? context.t('asset.oneGroup')
+                                : context.t('asset.groupsCount').replaceAll('{count}', '${expenseGroups.length}'),
                         subtitleColor: expenseGroups.isNotEmpty
                             ? const Color(0xFF1967D2)
                             : const Color(0xFF8E8E96),
@@ -265,9 +264,9 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.chart_bar_square_fill,
                         iconBg: const Color(0xFFEDE7F6),
                         iconColor: const Color(0xFF5856D6),
-                        title: 'Stocks',
+                        title: context.t('asset.stocks'),
                         amount: formatMoney(symbol, stockTotal),
-                        subtitle: stocks.isEmpty ? 'no positions' : '${stocks.length} positions',
+                        subtitle: stocks.isEmpty ? context.t('asset.noPositions') : context.t('asset.positionsCount').replaceAll('{count}', '${stocks.length}'),
                         subtitleColor: stocks.isNotEmpty ? _kGreen : const Color(0xFF8E8E96),
                         visible: visible,
                         onTap: () => _push(context, const StocksScreen()),
@@ -279,9 +278,9 @@ class AssetsScreen extends ConsumerWidget {
                         icon: CupertinoIcons.circle_grid_hex_fill,
                         iconBg: const Color(0xFFFFF8E1),
                         iconColor: const Color(0xFFFFA000),
-                        title: 'Precious Metal',
+                        title: context.t('asset.preciousMetal'),
                         amount: formatMoney(symbol, metalsTotal),
-                        subtitle: metalsGrams > 0 ? '${metalsGrams.toStringAsFixed(1)}g' : 'no holdings',
+                        subtitle: metalsGrams > 0 ? context.t('asset.weightInGrams').replaceAll('{weight}', metalsGrams.toStringAsFixed(1)) : context.t('asset.noHoldings'),
                         subtitleColor: metalsGrams > 0 ? _kOrange : const Color(0xFF8E8E96),
                         visible: visible,
                         onTap: () => _push(context, const PreciousMetalsScreen()),
@@ -291,9 +290,7 @@ class AssetsScreen extends ConsumerWidget {
                 ),
 
               ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -345,10 +342,10 @@ class _NetWorthCard extends StatelessWidget {
     final owedPctInt = 100 - ownedPctInt;
 
     final healthLabel = ownedPct >= 0.8
-        ? 'Healthy'
+        ? context.t('asset.healthy')
         : ownedPct >= 0.5
-            ? 'Fair'
-            : 'At risk';
+            ? context.t('asset.fair')
+            : context.t('asset.atRisk');
     final healthColor = ownedPct >= 0.8
         ? _kGreen
         : ownedPct >= 0.5
@@ -367,9 +364,9 @@ class _NetWorthCard extends StatelessWidget {
           // Header row
           Row(
             children: [
-              const Text(
-                'NET WORTH',
-                style: TextStyle(
+              Text(
+                context.t('asset.netWorth'),
+                style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF8E8E96),
@@ -456,9 +453,9 @@ class _NetWorthCard extends StatelessWidget {
                   decoration: const BoxDecoration(color: _kGreen, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Assets',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
+                Text(
+                  context.t('asset.assets'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
                 ),
                 const Spacer(),
                 MaskedAmount(
@@ -489,9 +486,9 @@ class _NetWorthCard extends StatelessWidget {
                   decoration: const BoxDecoration(color: _kRed, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Liabilities',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
+                Text(
+                  context.t('asset.liabilities'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
                 ),
                 const Spacer(),
                 MaskedAmount(
@@ -533,7 +530,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAssets = showAssets;
     final accentColor = isAssets ? _kGreen : _kRed;
-    final title = isAssets ? 'Assets Breakdown' : 'Liabilities Breakdown';
+    final title = isAssets ? context.t('asset.assetsBreakdown') : context.t('asset.liabilitiesBreakdown');
     final total = isAssets ? snapshot.totalAssets : snapshot.totalLiabilities;
 
     final assetRows = <({String label, double amount, IconData icon, Color bg, Color color})>[];
@@ -553,7 +550,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
       }
       if (snapshot.totalLent > 0) {
         assetRows.add((
-          label: 'Lent Out',
+          label: context.t('asset.lentOut'),
           amount: snapshot.totalLent,
           icon: CupertinoIcons.arrow_up_right_circle_fill,
           bg: const Color(0xFFE8F5E9),
@@ -583,7 +580,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
       }
       if (snapshot.totalBorrowed > 0) {
         assetRows.add((
-          label: 'Borrowed',
+          label: context.t('asset.borrowedLabel'),
           amount: snapshot.totalBorrowed,
           icon: CupertinoIcons.arrow_down_left_circle_fill,
           bg: const Color(0xFFFEE2E2),
@@ -592,7 +589,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
       }
       if ((snapshot.installmentLiability ?? 0) > 0) {
         assetRows.add((
-          label: 'Installments',
+          label: context.t('asset.installmentsItem'),
           amount: snapshot.installmentLiability!,
           icon: CupertinoIcons.bolt_fill,
           bg: const Color(0xFFFCE4EC),
@@ -646,7 +643,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Text(
-                'Nothing to show',
+                context.t('asset.nothingToShow'),
                 style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
             )

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -79,9 +80,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             ),
           ),
         ),
-        title: const Text(
-          'Scan QR code',
-          style: TextStyle(
+        title: Text(
+          context.t('group.scanQrTitle'),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 17,
             fontWeight: FontWeight.w600,
@@ -118,7 +119,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             child: Column(
               children: [
                 Text(
-                  'Point at your partner\'s QR code',
+                  context.t('group.scanQrHint'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.85),
@@ -128,7 +129,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'The code will be scanned automatically',
+                  context.t('group.scanQrAuto'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.55),

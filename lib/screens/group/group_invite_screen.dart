@@ -64,7 +64,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Not signed in';
+          _error = context.t('group.errorNotSignedIn');
         });
       }
       return;
@@ -81,8 +81,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
         if (mounted) {
           setState(() {
             _loading = false;
-            _error =
-                'Your group is not synced yet. Make sure you\'re online and the group was created while online.';
+            _error = context.t('group.errorNotSynced');
           });
         }
         return;
@@ -107,19 +106,17 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
         String message;
         switch (e.code) {
           case 'permission-denied':
-            message = 'You need to be online to generate a code.';
+            message = context.t('group.errorOnlineForCode');
             break;
           case 'unavailable':
           case 'deadline-exceeded':
-            message =
-                'Network unavailable. Check your connection and try again.';
+            message = context.t('group.errorNetwork');
             break;
           case 'not-found':
-            message =
-                'Your group is not synced yet. Make sure you\'re online and the group was created while online.';
+            message = context.t('group.errorNotSynced');
             break;
           default:
-            message = 'Could not generate invite code. Tap to retry.';
+            message = context.t('group.codeGenErrorRetry');
         }
         setState(() {
           _loading = false;
@@ -132,7 +129,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not generate invite code. Tap to retry.';
+          _error = context.t('group.codeGenErrorRetry');
           _errorDetail = kDebugMode ? e.toString() : null;
         });
       }
@@ -155,7 +152,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
     if (_rawCode == null) return;
     final display = '${_rawCode!.substring(0, 3)}·${_rawCode!.substring(3)}';
     Clipboard.setData(ClipboardData(text: display));
-    AppToast.show(context, 'Code copied!');
+    AppToast.show(context, context.t('group.codeCopied'));
   }
 
   @override
@@ -186,7 +183,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
           ),
         ),
         title: Text(
-          'Invite a partner',
+          context.t('group.invitePartnerTitle'),
           style: TextStyle(
             color: brand.ink,
             fontSize: 17,
@@ -209,7 +206,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                               size: 44, color: Color(0xFF8E8E96)),
                           const SizedBox(height: 16),
                           Text(
-                            'Could not generate invite code',
+                            context.t('group.codeGenError'),
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w600,
@@ -240,7 +237,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                           const SizedBox(height: 24),
                           CupertinoButton.filled(
                             onPressed: _generateCode,
-                            child: const Text('Try again'),
+                            child: Text(context.t('group.tryAgain')),
                           ),
                         ],
                       ),
@@ -262,7 +259,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                         children: [
                           // SCAN TO JOIN label
                           Text(
-                            'SCAN TO JOIN',
+                            context.t('group.scanToJoin'),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -340,7 +337,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 12),
                                 child: Text(
-                                  'OR ENTER CODE',
+                                  context.t('group.orEnterCode'),
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -381,7 +378,9 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Private · expires in $timeStr',
+                                  context
+                                      .t('group.privateExpiresIn')
+                                      .replaceAll('{time}', timeStr),
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
@@ -422,7 +421,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Copy code',
+                                context.t('group.copyCode'),
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -456,7 +455,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              'Cancel invite',
+                              context.t('group.cancelInvite'),
                               style: TextStyle(
                                 color: brand.ink,
                                 fontSize: 15,

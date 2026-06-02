@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/group_expense_item.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
@@ -100,11 +101,11 @@ Future<void> showMonthlyBudgetEditor(
     try {
       await ref.read(expenseRepositoryProvider).setMonthlyBudget(userId, result);
       if (context.mounted) {
-        AppToast.show(context, 'Budget updated', type: AppToastType.success);
+        AppToast.show(context, context.t('budget.updated'), type: AppToastType.success);
       }
     } catch (_) {
       if (context.mounted) {
-        AppToast.show(context, 'Failed to save budget', type: AppToastType.error);
+        AppToast.show(context, context.t('budget.failedToSave'), type: AppToastType.error);
       }
     }
   }
@@ -283,11 +284,16 @@ Future<void> showMonthlyBudgetDetails(
   }
 }
 
-class BudgetScreen extends ConsumerWidget {
+class BudgetScreen extends ConsumerStatefulWidget {
   const BudgetScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BudgetScreen> createState() => _BudgetScreenState();
+}
+
+class _BudgetScreenState extends ConsumerState<BudgetScreen> {
+  @override
+  Widget build(BuildContext context) {
     final expenses =
         ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
@@ -295,14 +301,45 @@ class BudgetScreen extends ConsumerWidget {
     final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
+
+    // Open the budget popup when navigated from the home budget bar.
+    final openPopup = ref.watch(openBudgetPopupProvider);
+    if (openPopup) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(openBudgetPopupProvider.notifier).state = false;
+        final discretionarySpent = expenses
+            .where(_isDiscretionary)
+            .fold<double>(0, (s, e) => s + e.convertedAmount);
+        showMonthlyBudgetDetails(
+          context, ref,
+          budget: budget,
+          spent: discretionarySpent,
+          symbol: symbol,
+          userId: user?.uid,
+          month: month,
+        );
+      });
+    }
     // Accounts for carousel
     final accounts =
         ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
     final allExpenses =
         ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
     final visible = ref.watch(balanceVisibleProvider);
-    final accountBalances = _computeBalances(accounts, allExpenses);
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
+
+    // Include group expenses paid via an account in the balance calculation.
+    final activeGroupId = ref.watch(activeGroupIdProvider);
+    final currentUserId = user?.uid;
+    final allGroupExpenses = activeGroupId != null
+        ? (ref.watch(groupExpensesProvider(activeGroupId)).valueOrNull ?? const <GroupExpenseItem>[])
+        : const <GroupExpenseItem>[];
+    final myGroupExpenses = allGroupExpenses
+        .where((e) => e.paidByAccountId != null &&
+            (currentUserId == null || e.paidBy == currentUserId))
+        .toList();
+    final accountBalances = _computeBalances(accounts, allExpenses, myGroupExpenses);
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
@@ -329,24 +366,24 @@ class BudgetScreen extends ConsumerWidget {
       if (visibleModules.contains('savingPlans'))
         _BudgetQuickItem(
           icon: CupertinoIcons.flag_fill,
-          iconBg: AppColors.mint,
-          iconColor: kCategoryStyles['Groceries']!.accent,
+          iconBg: const Color(0xFFE8F5E9),
+          iconColor: const Color(0xFF34C759),
           label: context.t('budget.badgeSavings'),
           onTap: () => _push(context, const SavingPlansScreen()),
         ),
       if (visibleModules.contains('borrowLending'))
         _BudgetQuickItem(
           icon: CupertinoIcons.arrow_up_arrow_down,
-          iconBg: AppColors.sky,
-          iconColor: kCategoryStyles['Transport']!.accent,
+          iconBg: const Color(0xFFFFF3E0),
+          iconColor: const Color(0xFFF57C00),
           label: context.t('budget.badgeLending'),
           onTap: () => _push(context, const BorrowLendingScreen()),
         ),
       if (visibleModules.contains('installments'))
         _BudgetQuickItem(
-          icon: CupertinoIcons.calendar_today,
-          iconBg: AppColors.peach,
-          iconColor: kCategoryStyles['Food']!.accent,
+          icon: CupertinoIcons.bolt_fill,
+          iconBg: const Color(0xFFFCE4EC),
+          iconColor: const Color(0xFFE91E63),
           label: context.t('budget.badgeInstallments'),
           onTap: () => _push(context, const InstallmentsScreen()),
         ),
@@ -361,17 +398,17 @@ class BudgetScreen extends ConsumerWidget {
       if (visibleModules.contains('travelGroups'))
         _BudgetQuickItem(
           icon: CupertinoIcons.airplane,
-          iconBg: AppColors.sky,
-          iconColor: const Color(0xFF3478F6),
+          iconBg: const Color(0xFFE3F2FD),
+          iconColor: const Color(0xFF0066CC),
           label: context.t('travel.title'),
           onTap: () => _push(context, const TravelGroupsScreen()),
         ),
       if (visibleModules.contains('investments'))
         _BudgetQuickItem(
           icon: CupertinoIcons.chart_bar_square_fill,
-          iconBg: const Color(0xFFEBEAFF),
+          iconBg: const Color(0xFFEDE7F6),
           iconColor: const Color(0xFF5856D6),
-          label: 'Portfolio',
+          label: context.t('budget.portfolio'),
           onTap: () => _push(context, const InvestmentScreen()),
         ),
       if (visibleModules.contains('groups'))
@@ -379,7 +416,7 @@ class BudgetScreen extends ConsumerWidget {
           icon: CupertinoIcons.person_2_fill,
           iconBg: const Color(0xFFEAE3F8),
           iconColor: const Color(0xFF5A4AAB),
-          label: 'Groups',
+          label: context.t('budget.groupsLabel'),
           onTap: () {
             HapticFeedback.selectionClick();
             if (groups.isEmpty) {
@@ -403,7 +440,7 @@ class BudgetScreen extends ConsumerWidget {
         icon: CupertinoIcons.calendar_badge_plus,
         iconBg: AppColors.butter,
         iconColor: AppColors.ink,
-        label: 'Expense Cycle',
+        label: context.t('budget.expenseCycle'),
         onTap: () => _showCycleSheet(context),
       ),
     ];
@@ -453,25 +490,38 @@ class BudgetScreen extends ConsumerWidget {
             visible: visible,
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
-          // ── Management quick-icon grid ────────────────────
-          _GroupHeader(label: context.t('budget.management')),
-          const SizedBox(height: 10),
+          // ── Quick-action card ─────────────────────────────
           if (quickItems.isNotEmpty)
-            for (int row = 0; row * 3 < quickItems.length; row++) ...[
-              if (row > 0) const SizedBox(height: 4),
-              Row(
-                children: [
-                  for (int col = 0; col < 3; col++)
-                    Expanded(
-                      child: (row * 3 + col) < quickItems.length
-                          ? _BudgetQuickButton(item: quickItems[row * 3 + col])
-                          : const SizedBox(),
-                    ),
-                ],
-              ),
-            ],
+            Builder(builder: (ctx) {
+              final brand = ctx.brand;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int row = 0; row * 3 < quickItems.length; row++) ...[
+                      if (row > 0) const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          for (int col = 0; col < 3; col++)
+                            Expanded(
+                              child: (row * 3 + col) < quickItems.length
+                                  ? _BudgetQuickButton(item: quickItems[row * 3 + col])
+                                  : const SizedBox(),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ],  // end ListView children
         ),   // end ListView
       ),     // end StickyHeaderScaffold
@@ -511,10 +561,10 @@ class BudgetScreen extends ConsumerWidget {
             ('borrowLending', context.t('tools.borrowLending')),
             ('savingPlans', context.t('tools.savingPlans')),
             ('monthlyBudget', context.t('home.budget')),
-            ('people', 'People'),
+            ('people', context.t('budget.people')),
             ('travelGroups', context.t('travel.title')),
-            ('investments', 'Investments'),
-            ('groups', 'Groups'),
+            ('investments', context.t('budget.investments')),
+            ('groups', context.t('budget.groupsLabel')),
           ];
           return SingleChildScrollView(
             child: _VisibilitySheet(
@@ -682,7 +732,7 @@ class _CycleSheetContent extends ConsumerWidget {
                     ),
                     GestureDetector(
                       onTap: () => Navigator.pop(ctx),
-                      child: const Text('Done', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0066CC))),
+                      child: Text(context.t('budget.done'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0066CC))),
                     ),
                   ],
                 ),
@@ -992,6 +1042,7 @@ double _effectiveAmountForAccount(
 Map<String, double> _computeBalances(
   List<Account> accounts,
   List<Expense> expenses,
+  List<GroupExpenseItem> groupExpenses,
 ) {
   final currencyCodes = <String, String?>{
     for (final a in accounts) a.id: a.currencyCode,
@@ -1013,6 +1064,13 @@ Map<String, double> _computeBalances(
     if (to != null && balances.containsKey(to)) {
       balances[to] = (balances[to] ?? 0) +
           _effectiveAmountForAccount(expense, currencyCodes[to]);
+    }
+  }
+  // Deduct group expenses from the paying account balance.
+  for (final ge in groupExpenses) {
+    final aid = ge.paidByAccountId!;
+    if (balances.containsKey(aid)) {
+      balances[aid] = (balances[aid] ?? 0) - ge.amount;
     }
   }
   return balances;

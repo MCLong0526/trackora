@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -108,14 +109,22 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
               );
         await Share.shareXFiles(
           [XFile(file.path, mimeType: 'image/png')],
-          subject: 'Group receipt – $_periodLabel',
+          subject: context
+              .t('groupReceipt.shareSubject')
+              .replaceAll('{period}', _periodLabel),
           sharePositionOrigin: origin,
         );
       } finally {
         img?.dispose();
       }
     } catch (e) {
-      if (mounted) AppToast.show(context, 'Could not share receipt: $e');
+      if (mounted) {
+        AppToast.show(
+            context,
+            context
+                .t('groupReceipt.shareError')
+                .replaceAll('{error}', '$e'));
+      }
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -140,7 +149,8 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
     final myNet = myBalance?.net as double? ?? 0;
     final partner =
         widget.group.members.where((m) => m.uid != userId).firstOrNull;
-    final partnerName = partner?.displayName ?? 'Partner';
+    final partnerName =
+        partner?.displayName ?? context.t('group.partnerFallback');
 
     return Scaffold(
       backgroundColor: bg,
@@ -162,9 +172,9 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
                     ),
                   ),
                   const Spacer(),
-                  const Text(
-                    'Receipt',
-                    style: TextStyle(
+                  Text(
+                    context.t('groupReceipt.title'),
+                    style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
                       color: _kInk,
@@ -224,18 +234,18 @@ class _GroupReceiptScreenState extends ConsumerState<GroupReceiptScreen> {
                       ? const CupertinoActivityIndicator(
                           color: Colors.white,
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                            const Icon(
                               CupertinoIcons.share,
                               color: Colors.white,
                               size: 16,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
-                              'Share Receipt',
-                              style: TextStyle(
+                              context.t('groupReceipt.share'),
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -358,9 +368,9 @@ class _GroupReceiptCard extends StatelessWidget {
                       color: _kPurple,
                     ),
                     const SizedBox(width: 5),
-                    const Text(
-                      'TRACKORA',
-                      style: TextStyle(
+                    Text(
+                      context.t('settings.appName').toUpperCase(),
+                      style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 3.5,
@@ -370,9 +380,9 @@ class _GroupReceiptCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  'Group Expense Receipt',
-                  style: TextStyle(
+                Text(
+                  context.t('groupReceipt.receiptTitle'),
+                  style: const TextStyle(
                     fontSize: 9,
                     letterSpacing: 0.8,
                     color: _kInk60,
@@ -389,11 +399,15 @@ class _GroupReceiptCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
             child: Column(
               children: [
-                _InfoRow('GROUP', group.name),
+                _InfoRow(context.t('groupReceipt.group'), group.name),
                 const SizedBox(height: 4),
-                _InfoRow('PERIOD', periodLabel),
+                _InfoRow(context.t('groupReceipt.period'), periodLabel),
                 const SizedBox(height: 4),
-                _InfoRow('TYPE', isDaily ? 'Daily' : 'Monthly'),
+                _InfoRow(
+                    context.t('groupReceipt.type'),
+                    isDaily
+                        ? context.t('group.daily')
+                        : context.t('group.monthly')),
               ],
             ),
           ),
@@ -407,8 +421,8 @@ class _GroupReceiptCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   isDaily
-                      ? 'No expenses on this day'
-                      : 'No expenses this month',
+                      ? context.t('groupReceipt.noExpensesDay')
+                      : context.t('groupReceipt.noExpensesMonth'),
                   style: const TextStyle(
                     fontSize: 13,
                     color: _kInk60,
@@ -423,8 +437,8 @@ class _GroupReceiptCard extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'EXPENSES',
-                  style: TextStyle(
+                  context.t('groupReceipt.expenses'),
+                  style: const TextStyle(
                     fontSize: 7,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
@@ -527,7 +541,7 @@ class _GroupReceiptCard extends StatelessWidget {
               child: Column(
                 children: [
                   _AmountRow(
-                    label: 'TOTAL SPENT',
+                    label: context.t('groupReceipt.totalSpent'),
                     value: '$symbol${total.toStringAsFixed(2)}',
                     color: _kInk,
                     large: true,
@@ -566,10 +580,10 @@ class _GroupReceiptCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       myNet.abs() < 0.005
-                          ? 'All settled up'
+                          ? context.t('groupReceipt.allSettledUp')
                           : myNet > 0
-                              ? '$partnerName owes you  $symbol${myNet.abs().toStringAsFixed(2)}'
-                              : '${userName.isNotEmpty ? userName : 'You'} owe $partnerName  $symbol${myNet.abs().toStringAsFixed(2)}',
+                              ? '${context.t('group.partnerOwesYou').replaceAll('{name}', partnerName)}$symbol${myNet.abs().toStringAsFixed(2)}'
+                              : '${context.t('group.youOwePartner').replaceAll('{name}', userName.isNotEmpty ? '$userName → $partnerName' : partnerName)}$symbol${myNet.abs().toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -589,9 +603,9 @@ class _GroupReceiptCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
             child: Column(
               children: [
-                const Text(
-                  'Generated by Trackora',
-                  style: TextStyle(
+                Text(
+                  context.t('groupReceipt.generatedBy'),
+                  style: const TextStyle(
                     fontSize: 9,
                     color: _kInk60,
                     letterSpacing: 0.4,

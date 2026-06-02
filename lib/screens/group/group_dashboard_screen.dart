@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../repositories/local_expense_group_repository.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -67,9 +70,9 @@ class GroupDashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
-                      'Trackora',
-                      style: TextStyle(
+                    Text(
+                      context.t('settings.appName'),
+                      style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF0B0B0F),
@@ -147,20 +150,27 @@ class GroupDashboardScreen extends ConsumerWidget {
 
 // ── Group avatar pair pill ───────────────────────────────────────────────────
 
-class GroupAvatarPill extends StatelessWidget {
+class GroupAvatarPill extends ConsumerWidget {
   final ExpenseGroup? group;
   final String? userId;
 
   const GroupAvatarPill({super.key, required this.group, required this.userId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final me = group?.members.where((m) => m.uid == userId).firstOrNull;
     final partner = group?.members.where((m) => m.uid != userId).firstOrNull;
-    final myInitial = (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
+    final myLive = ref.watch(userNameProvider);
+    final myInitial = myLive.isNotEmpty
+        ? myLive.substring(0, 1).toUpperCase()
+        : (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
     final hasPartner = partner != null;
+    final partnerLive = hasPartner
+        ? (ref.watch(memberDisplayNameProvider(partner.uid)).valueOrNull ?? '')
+        : null;
     final partnerInitial = hasPartner
-        ? partner.displayName.substring(0, 1).toUpperCase()
+        ? (partnerLive!.isNotEmpty ? partnerLive : partner.displayName)
+              .substring(0, 1).toUpperCase()
         : null;
 
     return Container(
@@ -378,12 +388,27 @@ class GroupDashboardContent extends ConsumerWidget {
 
     final me = group!.members.where((m) => m.uid == userId).firstOrNull;
     final partner = group!.members.where((m) => m.uid != userId).firstOrNull;
-    final myInitial = (me?.displayName.substring(0, 1) ?? 'Y').toUpperCase();
-    final partnerInitial = (partner?.displayName.substring(0, 1) ?? 'J')
-        .toUpperCase();
-    final partnerName = partner?.displayName ?? 'Partner';
+    final profileName = ref.watch(userNameProvider);
+    final myDisplayName = profileName.isNotEmpty
+        ? profileName
+        : (me?.displayName ?? 'You');
+    final myInitial = myDisplayName.substring(0, 1).toUpperCase();
+    final partnerLive = partner != null
+        ? (ref.watch(memberDisplayNameProvider(partner.uid)).valueOrNull ?? '')
+        : '';
+    final partnerName = partnerLive.isNotEmpty
+        ? partnerLive
+        : (partner?.displayName.isNotEmpty == true ? partner!.displayName : 'Partner');
+    final partnerInitial = partnerName.substring(0, 1).toUpperCase();
+
+    // Consumption = what each person actually owes/spent based on split,
+    // not just who handed over the cash.
+    // Formula: consumed = totalPaid − net  (net = totalPaid − splitAmount)
     final myPaid = myBalance?.totalPaid as double? ?? 0;
     final partnerPaid = partnerBalance?.totalPaid as double? ?? 0;
+    final partnerNet = partnerBalance?.net as double? ?? 0;
+    final mySpent = (myPaid - myNet).clamp(0.0, double.infinity);
+    final partnerSpent = (partnerPaid - partnerNet).clamp(0.0, double.infinity);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
@@ -415,7 +440,7 @@ class GroupDashboardContent extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'Group',
+                        context.t('group.group'),
                         style: TextStyle(
                           color: brand.inkSoft,
                           fontSize: 12,
@@ -423,7 +448,7 @@ class GroupDashboardContent extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        'Spent',
+                        context.t('group.spent'),
                         style: TextStyle(
                           color: brand.inkSoft,
                           fontSize: 12,
@@ -486,7 +511,7 @@ class GroupDashboardContent extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'You paid',
+                            context.t('group.youSpent'),
                             style: TextStyle(
                               color: brand.inkSoft,
                               fontSize: 11,
@@ -494,7 +519,7 @@ class GroupDashboardContent extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            '$symbol${myPaid.toStringAsFixed(2)}',
+                            '$symbol${mySpent.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: brand.ink,
                               fontSize: 15,
@@ -522,7 +547,9 @@ class GroupDashboardContent extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$partnerName paid',
+                            context
+                                .t('group.spentBy')
+                                .replaceAll('{name}', partnerName),
                             style: TextStyle(
                               color: brand.inkSoft,
                               fontSize: 11,
@@ -530,7 +557,7 @@ class GroupDashboardContent extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            '$symbol${partnerPaid.toStringAsFixed(2)}',
+                            '$symbol${partnerSpent.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: brand.ink,
                               fontSize: 15,
@@ -564,8 +591,12 @@ class GroupDashboardContent extends ConsumerWidget {
                     children: [
                       Text(
                         myNet > 0
-                            ? '$partnerName owes you  '
-                            : 'You owe $partnerName  ',
+                            ? context
+                                .t('group.partnerOwesYou')
+                                .replaceAll('{name}', partnerName)
+                            : context
+                                .t('group.youOwePartner')
+                                .replaceAll('{name}', partnerName),
                         style: TextStyle(
                           color: myNet > 0
                               ? const Color(0xFF1FBE71)
@@ -606,7 +637,7 @@ class GroupDashboardContent extends ConsumerWidget {
                       Icon(CupertinoIcons.doc_text, color: brand.inkSoft, size: 16),
                       const SizedBox(width: 8),
                       Text(
-                        'Generate Receipt',
+                        context.t('group.generateReceipt'),
                         style: TextStyle(
                           color: brand.ink,
                           fontSize: 14,
@@ -627,9 +658,9 @@ class GroupDashboardContent extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Activity',
-              style: TextStyle(
+            Text(
+              context.t('group.activity'),
+              style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF0B0B0F),
@@ -653,14 +684,14 @@ class GroupDashboardContent extends ConsumerWidget {
                   color: const Color(0xFF1A6CFF),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(CupertinoIcons.plus, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
+                    const Icon(CupertinoIcons.plus, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
                     Text(
-                      'Add Expense',
-                      style: TextStyle(
+                      context.t('group.addExpense'),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -693,7 +724,7 @@ class GroupDashboardContent extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'No expenses yet',
+                    context.t('group.noExpensesYet'),
                     style: TextStyle(color: brand.inkSoft, fontSize: 14),
                   ),
                 ],
@@ -706,35 +737,31 @@ class GroupDashboardContent extends ConsumerWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(28),
             ),
-            child: Column(
-              children: [
-                for (int i = 0; i < expenses.take(10).length; i++) ...[
-                  if (i > 0)
-                    Divider(
-                      height: 1,
-                      thickness: 0.5,
-                      indent: 74,
-                      endIndent: 18,
-                      color: brand.divider,
-                    ),
-                  _ActivityRow(
-                    brand: brand,
-                    expense: expenses[i],
-                    members: group!.members,
-                    symbol: symbol,
-                    userId: userId,
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (_) => AddGroupExpenseScreen(
-                          group: group!,
-                          existing: expenses[i],
-                        ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Column(
+                children: [
+                  for (int i = 0; i < expenses.take(10).length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        indent: 74,
+                        endIndent: 18,
+                        color: brand.divider,
                       ),
+                    _SwipeableActivityRow(
+                      brand: brand,
+                      expense: expenses[i],
+                      group: group!,
+                      members: group!.members,
+                      symbol: symbol,
+                      userId: userId,
+                      ref: ref,
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
 
@@ -759,18 +786,18 @@ class GroupDashboardContent extends ConsumerWidget {
                   width: 1,
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
+                  const Icon(
                     CupertinoIcons.person_badge_plus,
                     color: Color(0xFF1A6CFF),
                     size: 16,
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
-                    'Invite partner',
-                    style: TextStyle(
+                    context.t('group.invitePartner'),
+                    style: const TextStyle(
                       color: Color(0xFF1A6CFF),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -785,9 +812,279 @@ class GroupDashboardContent extends ConsumerWidget {
   }
 }
 
+// ── Swipeable activity row ────────────────────────────────────────────────────
+
+class _SwipeableActivityRow extends StatefulWidget {
+  final BrandColors brand;
+  final GroupExpenseItem expense;
+  final ExpenseGroup group;
+  final List<GroupMember> members;
+  final String symbol;
+  final String? userId;
+  final WidgetRef ref;
+
+  const _SwipeableActivityRow({
+    required this.brand,
+    required this.expense,
+    required this.group,
+    required this.members,
+    required this.symbol,
+    required this.userId,
+    required this.ref,
+  });
+
+  @override
+  State<_SwipeableActivityRow> createState() => _SwipeableActivityRowState();
+}
+
+class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  static const double _rightWidth = 148.0; // Edit + Delete
+  static const double _leftWidth = 80.0;   // Copy
+  static const double _snapThreshold = 55.0;
+
+  double _drag = 0.0;
+  int _dir = 0; // -1 left, 1 right, 0 neutral
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+    _anim = Tween<double>(begin: 0, end: 0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _animateTo(double target) {
+    _anim = Tween<double>(begin: _anim.value, end: target)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward(from: 0);
+  }
+
+  void _close() => _animateTo(0);
+
+  Future<void> _delete() async {
+    _close();
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        title: Text(context.t('group.deleteExpense')),
+        content: Text(widget.expense.description),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.t('common.cancel')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.t('common.delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.ref.read(expenseGroupServiceProvider).deleteExpense(
+        widget.expense.groupId, widget.expense.id,
+      );
+      if (storageMode == StorageMode.firebase) {
+        await LocalExpenseGroupRepository().deleteExpense(
+          widget.expense.groupId, widget.expense.id,
+        );
+      }
+      if (mounted) AppToast.show(context, context.t('group.expenseDeleted'));
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, context.t('group.failedToDeleteExpense'),
+            type: AppToastType.error);
+      }
+    }
+  }
+
+  void _edit() {
+    _close();
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddGroupExpenseScreen(group: widget.group, existing: widget.expense),
+      ),
+    );
+  }
+
+  void _duplicate() {
+    _close();
+    // Open the add expense form pre-filled with the existing expense's values
+    // so the user can review/edit before saving (same UX as personal copy).
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AddGroupExpenseScreen(
+          group: widget.group,
+          copyFrom: widget.expense,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragStart: (_) {
+        _ctrl.stop();
+        _drag = _anim.value;
+        _dir = 0;
+      },
+      onHorizontalDragUpdate: (d) {
+        if (_dir == 0) {
+          if (d.delta.dx < 0) _dir = -1;
+          if (d.delta.dx > 0) _dir = 1;
+        }
+        setState(() {
+          _drag += d.delta.dx;
+          _drag = _dir == -1
+              ? _drag.clamp(-_rightWidth, 0.0)
+              : _drag.clamp(0.0, _leftWidth);
+        });
+      },
+      onHorizontalDragEnd: (d) {
+        final vel = d.primaryVelocity ?? 0;
+        final shouldOpen = _drag.abs() > _snapThreshold || vel.abs() > 300;
+        if (_dir == -1) {
+          shouldOpen ? _animateTo(-_rightWidth) : _animateTo(0);
+        } else {
+          if (shouldOpen) {
+            _animateTo(0);
+            HapticFeedback.mediumImpact();
+            _duplicate();
+          } else {
+            _animateTo(0);
+          }
+        }
+      },
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (context2, unused) {
+          final offset = _dir == 0 ? _drag : _anim.value;
+          final copyOpacity = (offset / _leftWidth).clamp(0.0, 1.0);
+          final rightOpacity = (-offset / _rightWidth).clamp(0.0, 1.0);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Left action (copy) — same style as personal record
+              Positioned(
+                left: 16,
+                top: 0,
+                bottom: 0,
+                width: _leftWidth - 8,
+                child: Opacity(
+                  opacity: copyOpacity,
+                  child: GestureDetector(
+                    onTap: () { _animateTo(0); _duplicate(); },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.income,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(CupertinoIcons.doc_on_doc, color: Colors.white, size: 20),
+                          const SizedBox(height: 4),
+                          Text(context.t('metal.copy'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Right actions (edit + delete) — same style as personal record
+              Positioned(
+                right: 16,
+                top: 0,
+                bottom: 0,
+                width: _rightWidth - 8,
+                child: Opacity(
+                  opacity: rightOpacity,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _edit,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF5B8AF4),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(CupertinoIcons.pencil, color: Colors.white, size: 20),
+                                const SizedBox(height: 4),
+                                Text(context.t('common.edit'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _delete,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.expense,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(CupertinoIcons.delete, color: Colors.white, size: 20),
+                                const SizedBox(height: 4),
+                                Text(context.t('common.delete'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Main content — slides with gesture
+              Transform.translate(
+                offset: Offset(_dir == 0 ? _drag : _anim.value, 0),
+                child: _ActivityRow(
+                  brand: widget.brand,
+                  expense: widget.expense,
+                  members: widget.members,
+                  symbol: widget.symbol,
+                  userId: widget.userId,
+                  onTap: _edit,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ── Activity row ─────────────────────────────────────────────────────────────
 
-class _ActivityRow extends StatelessWidget {
+class _ActivityRow extends ConsumerWidget {
   final BrandColors brand;
   final GroupExpenseItem expense;
   final List<GroupMember> members;
@@ -804,16 +1101,13 @@ class _ActivityRow extends StatelessWidget {
     this.onTap,
   });
 
-  String _memberName(String uid) {
+  String _fallbackName(String uid) {
     try {
       return members.firstWhere((m) => m.uid == uid).displayName;
     } catch (_) {
       return 'Someone';
     }
   }
-
-  String _memberInitial(String uid) =>
-      _memberName(uid).substring(0, 1).toUpperCase();
 
   // Per-person share for [uid] — from splitPercents if set, else equal split.
   String _shareFor(String uid) {
@@ -830,63 +1124,67 @@ class _ActivityRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Resolve live display names for every member in this expense's group.
+    String resolveName(String uid) {
+      final live = ref.watch(memberDisplayNameProvider(uid)).valueOrNull ?? '';
+      return live.isNotEmpty ? live : _fallbackName(uid);
+    }
+
     final isMine = expense.paidBy == userId;
     final dateStr = DateFormat('MMM d').format(expense.date);
     final catStyle = styleFor(expense.category);
-    final payerInitial = _memberInitial(expense.paidBy);
+    final payerName = resolveName(expense.paidBy);
+    final payerInitial = payerName.substring(0, 1).toUpperCase();
     final payerIsMine = expense.paidBy == userId;
     final otherUid =
         members.where((m) => m.uid != userId).firstOrNull?.uid;
-    final otherName = otherUid != null
-        ? _memberName(otherUid).split(' ').first
-        : null;
+
+    // Short version of "You" label and other member's first name
+    final myName = isMine ? context.t('group.you') : payerName.split(' ').first;
+    final otherFirstName = otherUid != null ? resolveName(otherUid).split(' ').first : null;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Category icon tile
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: catStyle.background,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              catStyle.icon,
-              color: catStyle.accent,
-              size: 20,
-            ),
+            child: Icon(catStyle.icon, color: catStyle.accent, size: 19),
           ),
-          const SizedBox(width: 14),
-          // Description + payer
+          const SizedBox(width: 12),
+          // Description + payer (takes remaining space)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  expense.description,
+                  style: TextStyle(
+                    color: brand.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        expense.description,
-                        style: TextStyle(
-                          color: brand.ink,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
                     // Payer mini avatar
                     Container(
-                      width: 16,
-                      height: 16,
+                      width: 14,
+                      height: 14,
                       decoration: BoxDecoration(
                         color: payerIsMine
                             ? const Color(0xFFEAE3F8)
@@ -900,42 +1198,56 @@ class _ActivityRow extends StatelessWidget {
                             color: payerIsMine
                                 ? const Color(0xFF5A4AAB)
                                 : const Color(0xFF1FBE71),
-                            fontSize: 9,
+                            fontSize: 8,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$myName · $dateStr',
+                      style: TextStyle(color: brand.inkSoft, fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${isMine ? 'You' : _memberName(expense.paidBy)} paid · $dateStr',
-                  style: TextStyle(color: brand.inkSoft, fontSize: 12),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$symbol${expense.amount.toStringAsFixed(2)}',
-                style: TextStyle(
-                  color: brand.ink,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (otherUid != null) ...[
-                const SizedBox(height: 2),
+          const SizedBox(width: 10),
+          // Amount + split amounts (constrained width)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Text(
-                  'You ${_shareFor(userId ?? '')} · $otherName ${_shareFor(otherUid)}',
-                  style: TextStyle(color: brand.inkSoft, fontSize: 10),
+                  '$symbol${expense.amount.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: brand.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
+                if (otherFirstName != null && expense.splitBetween.isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    '${context.t('group.you')} ${_shareFor(userId ?? '')}',
+                    style: TextStyle(color: brand.inkSoft, fontSize: 10),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '$otherFirstName ${_shareFor(otherUid!)}',
+                    style: TextStyle(color: brand.inkSoft, fontSize: 10),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),
@@ -1091,7 +1403,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
             ),
             const SizedBox(height: 18),
             Text(
-              'Generate receipt',
+              context.t('group.generateReceiptTitle'),
               style: TextStyle(
                 color: brand.ink,
                 fontSize: 24,
@@ -1101,7 +1413,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Choose a daily or monthly group receipt.',
+              context.t('group.chooseReceiptType'),
               style: TextStyle(color: brand.inkSoft, fontSize: 14),
             ),
             const SizedBox(height: 18),
@@ -1142,13 +1454,13 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
                         Row(
                           children: [
                             _PeriodTab(
-                              label: 'Daily',
+                              label: context.t('group.daily'),
                               selected: isDaily,
                               onTap: () => setState(
                                   () => _period = GroupReceiptPeriod.day),
                             ),
                             _PeriodTab(
-                              label: 'Month',
+                              label: context.t('group.month'),
                               selected: !isDaily,
                               onTap: () => setState(
                                   () => _period = GroupReceiptPeriod.month),
@@ -1194,7 +1506,9 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isDaily ? 'Receipt date' : 'Receipt month',
+                            isDaily
+                                ? context.t('group.receiptDate')
+                                : context.t('group.receiptMonth'),
                             style: TextStyle(
                               color: brand.inkSoft,
                               fontSize: 12,
@@ -1236,9 +1550,9 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
                 color: const Color(0xFF1A6CFF),
                 borderRadius: BorderRadius.circular(18),
                 onPressed: _generate,
-                child: const Text(
-                  'Generate receipt',
-                  style: TextStyle(
+                child: Text(
+                  context.t('group.generateReceiptTitle'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -1335,7 +1649,10 @@ class _GroupMenuSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${group.members.length} member${group.members.length == 1 ? '' : 's'}',
+            (group.members.length == 1
+                    ? context.t('group.memberCount')
+                    : context.t('group.memberCountPlural'))
+                .replaceAll('{count}', '${group.members.length}'),
             style: TextStyle(color: brand.inkSoft, fontSize: 13),
           ),
           const SizedBox(height: 20),
@@ -1363,15 +1680,15 @@ class _GroupMenuSheet extends ConsumerWidget {
                     ),
                   );
                 },
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(CupertinoIcons.person_badge_plus,
+                    const Icon(CupertinoIcons.person_badge_plus,
                         size: 16, color: Color(0xFF1A6CFF)),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text(
-                      'Invite partner',
-                      style: TextStyle(
+                      context.t('group.invitePartner'),
+                      style: const TextStyle(
                         color: Color(0xFF1A6CFF),
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1395,9 +1712,9 @@ class _GroupMenuSheet extends ConsumerWidget {
                 ref.read(homeTabIndexProvider.notifier).state = 0;
                 Navigator.popUntil(context, (r) => r.isFirst);
               },
-              child: const Text(
-                'View Group',
-                style: TextStyle(
+              child: Text(
+                context.t('group.viewGroup'),
+                style: const TextStyle(
                   color: Color(0xFF0B0B0F),
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -1419,19 +1736,17 @@ class _GroupMenuSheet extends ConsumerWidget {
                   final confirmed = await showCupertinoDialog<bool>(
                     context: context,
                     builder: (dialogCtx) => CupertinoAlertDialog(
-                      title: const Text('Leave group?'),
-                      content: const Text(
-                        'You will lose access to this group\'s expenses.',
-                      ),
+                      title: Text('${context.t('group.leaveGroup')}?'),
+                      content: Text(context.t('group.leaveGroupConfirm')),
                       actions: [
                         CupertinoDialogAction(
                           isDestructiveAction: true,
                           onPressed: () => Navigator.pop(dialogCtx, true),
-                          child: const Text('Leave'),
+                          child: Text(context.t('group.leave')),
                         ),
                         CupertinoDialogAction(
                           onPressed: () => Navigator.pop(dialogCtx, false),
-                          child: const Text('Cancel'),
+                          child: Text(context.t('common.cancel')),
                         ),
                       ],
                     ),
@@ -1455,7 +1770,7 @@ class _GroupMenuSheet extends ConsumerWidget {
                       clearGroupState();
                       if (context.mounted) {
                         Navigator.pop(context);
-                        AppToast.show(context, 'Left group');
+                        AppToast.show(context, context.t('group.leftGroup'));
                       }
                     } on FirebaseException catch (e) {
                       if (e.code == 'not-found' ||
@@ -1463,23 +1778,25 @@ class _GroupMenuSheet extends ConsumerWidget {
                         clearGroupState();
                         if (context.mounted) {
                           Navigator.pop(context);
-                          AppToast.show(context, 'Left group');
+                          AppToast.show(context, context.t('group.leftGroup'));
                         }
                       } else {
                         if (context.mounted) {
-                          AppToast.show(context, 'Failed to leave group');
+                          AppToast.show(
+                              context, context.t('group.failedToLeave'));
                         }
                       }
                     } catch (_) {
                       if (context.mounted) {
-                        AppToast.show(context, 'Failed to leave group');
+                        AppToast.show(
+                            context, context.t('group.failedToLeave'));
                       }
                     }
                   }
                 },
-                child: const Text(
-                  'Leave group',
-                  style: TextStyle(
+                child: Text(
+                  context.t('group.leaveGroup'),
+                  style: const TextStyle(
                     color: Color(0xFFD93025),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -1501,19 +1818,17 @@ class _GroupMenuSheet extends ConsumerWidget {
                   final confirmed = await showCupertinoDialog<bool>(
                     context: context,
                     builder: (dialogCtx) => CupertinoAlertDialog(
-                      title: const Text('Delete group?'),
-                      content: const Text(
-                        'This will permanently delete the group and all its expenses for everyone.',
-                      ),
+                      title: Text('${context.t('group.deleteGroup')}?'),
+                      content: Text(context.t('group.deleteGroupPermanent')),
                       actions: [
                         CupertinoDialogAction(
                           isDestructiveAction: true,
                           onPressed: () => Navigator.pop(dialogCtx, true),
-                          child: const Text('Delete'),
+                          child: Text(context.t('common.delete')),
                         ),
                         CupertinoDialogAction(
                           onPressed: () => Navigator.pop(dialogCtx, false),
-                          child: const Text('Cancel'),
+                          child: Text(context.t('common.cancel')),
                         ),
                       ],
                     ),
@@ -1537,7 +1852,7 @@ class _GroupMenuSheet extends ConsumerWidget {
                       clearGroupState();
                       if (context.mounted) {
                         Navigator.pop(context);
-                        AppToast.show(context, 'Group deleted');
+                        AppToast.show(context, context.t('group.groupDeleted'));
                       }
                     } on FirebaseException catch (e) {
                       if (e.code == 'not-found' ||
@@ -1545,23 +1860,26 @@ class _GroupMenuSheet extends ConsumerWidget {
                         clearGroupState();
                         if (context.mounted) {
                           Navigator.pop(context);
-                          AppToast.show(context, 'Group deleted');
+                          AppToast.show(
+                              context, context.t('group.groupDeleted'));
                         }
                       } else {
                         if (context.mounted) {
-                          AppToast.show(context, 'Failed to delete group');
+                          AppToast.show(
+                              context, context.t('group.failedToDelete'));
                         }
                       }
                     } catch (_) {
                       if (context.mounted) {
-                        AppToast.show(context, 'Failed to delete group');
+                        AppToast.show(
+                            context, context.t('group.failedToDelete'));
                       }
                     }
                   }
                 },
-                child: const Text(
-                  'Delete group',
-                  style: TextStyle(
+                child: Text(
+                  context.t('group.deleteGroup'),
+                  style: const TextStyle(
                     color: Color(0xFFD93025),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -1576,14 +1894,24 @@ class _GroupMenuSheet extends ConsumerWidget {
   }
 }
 
-class _MemberRow extends StatelessWidget {
+class _MemberRow extends ConsumerWidget {
   final GroupMember member;
   final bool isYou;
   const _MemberRow({required this.member, required this.isYou});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final liveFromProfile = isYou ? ref.watch(userNameProvider) : '';
+    final liveFromFirestore = isYou
+        ? ''
+        : (ref.watch(memberDisplayNameProvider(member.uid)).valueOrNull ?? '');
+    final displayName = liveFromProfile.isNotEmpty
+        ? liveFromProfile
+        : liveFromFirestore.isNotEmpty
+            ? liveFromFirestore
+            : member.displayName;
+
     return Row(
       children: [
         Container(
@@ -1595,7 +1923,7 @@ class _MemberRow extends StatelessWidget {
           ),
           child: Center(
             child: Text(
-              member.displayName.substring(0, 1).toUpperCase(),
+              displayName.substring(0, 1).toUpperCase(),
               style: TextStyle(
                 color: isYou
                     ? const Color(0xFF5A4AAB)
@@ -1614,7 +1942,7 @@ class _MemberRow extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    member.displayName,
+                    displayName,
                     style: TextStyle(
                       color: brand.ink,
                       fontSize: 15,
@@ -1632,9 +1960,9 @@ class _MemberRow extends StatelessWidget {
                         color: const Color(0xFFEAE3F8),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text(
-                        'You',
-                        style: TextStyle(
+                      child: Text(
+                        context.t('group.you'),
+                        style: const TextStyle(
                           color: Color(0xFF5A4AAB),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1645,7 +1973,9 @@ class _MemberRow extends StatelessWidget {
                 ],
               ),
               Text(
-                'Joined ${DateFormat('MMM d, yyyy').format(member.joinedAt)}',
+                context.t('group.joined').replaceAll(
+                    '{date}',
+                    DateFormat('MMM d, yyyy').format(member.joinedAt)),
                 style: TextStyle(color: brand.inkSoft, fontSize: 12),
               ),
             ],

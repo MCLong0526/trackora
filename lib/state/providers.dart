@@ -220,47 +220,78 @@ final watchServiceProvider = Provider((_) => WatchService());
 
 class UserNameNotifier extends StateNotifier<String> {
   UserNameNotifier(this._prefs, this._ref) : super('') {
-    _load();
+    // Reload name whenever the authenticated user changes so names don't
+    // bleed between accounts when one user logs out and another logs in.
+    _ref.listen<AsyncValue<AppUser?>>(
+      authStateProvider,
+      (previous, next) {
+        final prevUid = previous?.valueOrNull?.uid;
+        final nextUid = next.valueOrNull?.uid;
+        if (prevUid != nextUid) {
+          if (nextUid == null) {
+            state = ''; // signed out — clear immediately
+          } else {
+            state = ''; // clear stale name before loading new user's name
+            _load(nextUid);
+          }
+        }
+      },
+    );
+    // Initial load for the current user (if already signed in at startup).
+    final uid = _ref.read(authStateProvider).valueOrNull?.uid;
+    if (uid != null) _load(uid);
   }
 
   final PrefsService _prefs;
   final Ref _ref;
 
-  Future<void> _load() async {
-    // Try local first for instant startup, then sync from Firebase
-    state = await _prefs.userName();
+  Future<void> _load(String uid) async {
+    // Try user-specific local cache first for instant display.
+    final local = await _prefs.userNameForUid(uid);
+    if (local.isNotEmpty && mounted) state = local;
+    // Always sync from Firestore as the source of truth.
     try {
-      final user = _ref.read(authStateProvider).valueOrNull;
-      if (user == null) return;
       final doc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(uid)
           .get();
       final remote = doc.data()?['displayName'] as String?;
-      if (remote != null && remote.trim().isNotEmpty) {
+      if (remote != null && remote.trim().isNotEmpty && mounted) {
         state = remote.trim();
-        await _prefs.setUserName(remote.trim());
+        await _prefs.setUserNameForUid(uid, remote.trim());
       }
     } catch (_) {}
   }
 
   Future<void> set(String name) async {
     state = name.trim();
-    await _prefs.setUserName(name.trim());
-    try {
-      final user = _ref.read(authStateProvider).valueOrNull;
-      if (user == null) return;
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set({'displayName': name.trim()}, SetOptions(merge: true));
-    } catch (_) {}
+    final user = _ref.read(authStateProvider).valueOrNull;
+    if (user != null) {
+      await _prefs.setUserNameForUid(user.uid, name.trim());
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({'displayName': name.trim()}, SetOptions(merge: true));
+      } catch (_) {}
+    }
   }
 }
 
 final userNameProvider = StateNotifierProvider<UserNameNotifier, String>(
   (ref) => UserNameNotifier(ref.read(prefsServiceProvider), ref),
 );
+
+/// Live display name for any user UID, read from `users/{uid}/displayName`.
+/// Falls back to an empty string if the document doesn't exist or has no name.
+final memberDisplayNameProvider =
+    StreamProvider.family.autoDispose<String, String>((ref, uid) {
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .snapshots()
+      .map((snap) => (snap.data()?['displayName'] as String?)?.trim() ?? '');
+});
 
 final authStateProvider = StreamProvider<AppUser?>(
   (ref) => ref.read(authServiceProvider).authStateChanges,
@@ -273,6 +304,9 @@ final selectedMonthProvider = StateProvider<DateTime>((_) {
 
 /// Controls which HomeShell tab is shown (0=Home, 1=Stats, 2=Budget, 3=Assets).
 final homeTabIndexProvider = StateProvider<int>((_) => 0);
+
+/// When true, BudgetScreen opens the monthly budget popup on its next build.
+final openBudgetPopupProvider = StateProvider<bool>((_) => false);
 
 final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
