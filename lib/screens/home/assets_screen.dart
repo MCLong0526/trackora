@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,8 +18,10 @@ import '../../state/providers.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
+import '../accounts/accounts_screen.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import '../group/group_dashboard_screen.dart';
 import '../installments/installments_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import '../savings/saving_plans_screen.dart';
@@ -49,6 +49,7 @@ class AssetsScreen extends ConsumerWidget {
     final metals = ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
     final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
     final travelGroups = ref.watch(travelGroupsProvider).valueOrNull ?? const <TravelGroup>[];
+    final expenseGroups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
     final selectedMonth = ref.watch(selectedMonthProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
@@ -134,73 +135,61 @@ class AssetsScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
               children: [
-                // ── Top row: Net Worth + Budget/Savings ────────
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Net Worth card (left, 2/3 width)
-                      Expanded(
-                        flex: 2,
-                        child: _NetWorthCard(
-                          snapshot: snapshot,
-                          symbol: symbol,
-                          visible: visible,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Budget + Savings (right, 1/3 width)
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _MiniCard(
-                                icon: CupertinoIcons.timer,
-                                iconBg: const Color(0xFFFFF3E0),
-                                iconColor: _kOrange,
-                                title: 'Budget',
-                                amount: budget > 0
-                                    ? formatMoney(symbol, budgetRemaining)
-                                    : '—',
-                                subtitle: budget > 0
-                                    ? 'left this month'
-                                    : 'not set',
-                                subtitleColor: budget > 0 && budgetRemaining > 0
-                                    ? _kGreen
-                                    : budget > 0
-                                        ? _kRed
-                                        : const Color(0xFF8E8E96),
-                                visible: visible,
-                                onTap: () {},
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Expanded(
-                              child: _MiniCard(
-                                icon: CupertinoIcons.flag_fill,
-                                iconBg: const Color(0xFFE8F5E9),
-                                iconColor: _kGreen,
-                                title: 'Savings',
-                                amount: formatMoney(symbol, totalSaved),
-                                subtitle: totalGoal > 0
-                                    ? '${savingPlans.where((p) => p.status == SavingPlanStatus.active).length} of ${formatMoney(symbol, totalGoal)} goal'
-                                    : 'no active plans',
-                                subtitleColor: totalSaved > 0 ? _kGreen : _kOrange,
-                                visible: visible,
-                                onTap: () => _push(context, const SavingPlansScreen()),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                // ── Net Worth (full width) ─────────────────────
+                _NetWorthCard(
+                  snapshot: snapshot,
+                  symbol: symbol,
+                  visible: visible,
+                  onAssetsTap: () => _push(context, const AccountsScreen()),
+                  onLiabilitiesTap: () => _push(context, const AccountsScreen()),
                 ),
 
                 const SizedBox(height: 10),
 
-                // ── Middle grid: Borrow & Lend | Installments | Travel ─
+                // ── Row 1: Budget | Savings ────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.chart_pie_fill,
+                        iconBg: const Color(0xFFF3EEFF),
+                        iconColor: const Color(0xFF8B5CF6),
+                        title: 'Budget',
+                        amount: budget > 0 ? formatMoney(symbol, budgetRemaining) : '—',
+                        subtitle: budget > 0
+                            ? budgetRemaining >= 0 ? 'left this month' : 'over budget'
+                            : 'not set',
+                        subtitleColor: budget > 0 && budgetRemaining > 0
+                            ? _kGreen
+                            : budget > 0
+                                ? _kRed
+                                : const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () {},
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.flag_fill,
+                        iconBg: const Color(0xFFE8F5E9),
+                        iconColor: _kGreen,
+                        title: 'Savings',
+                        amount: formatMoney(symbol, totalSaved),
+                        subtitle: totalGoal > 0
+                            ? '${savingPlans.where((p) => p.status == SavingPlanStatus.active).length} of ${formatMoney(symbol, totalGoal)}'
+                            : 'no active plans',
+                        subtitleColor: totalSaved > 0 ? _kGreen : _kOrange,
+                        visible: visible,
+                        onTap: () => _push(context, const SavingPlansScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Row 2: Borrow & Lend | Installments ───────
                 Row(
                   children: [
                     Expanded(
@@ -210,7 +199,7 @@ class AssetsScreen extends ConsumerWidget {
                         iconColor: _kOrange,
                         title: 'Borrow & Lend',
                         amount: formatMoney(symbol, borrowNet.abs()),
-                        subtitle: borrowNet >= 0 ? 'net owed to you' : 'you owe, net',
+                        subtitle: borrowNet >= 0 ? 'owed to you' : 'you owe, net',
                         subtitleColor: borrowNet >= 0 ? _kGreen : _kOrange,
                         visible: visible,
                         onTap: () => _push(context, const BorrowLendingScreen()),
@@ -225,23 +214,11 @@ class AssetsScreen extends ConsumerWidget {
                         title: 'Installments',
                         amount: formatMoney(symbol, installmentTotal),
                         subtitle: installmentCount > 0 ? '$installmentCount plans' : 'none active',
-                        subtitleColor: const Color(0xFF8E8E96),
+                        subtitleColor: installmentCount > 0
+                            ? const Color(0xFFE91E63)
+                            : const Color(0xFF8E8E96),
                         visible: visible,
                         onTap: () => _push(context, const InstallmentsScreen()),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _GridCard(
-                        icon: CupertinoIcons.airplane,
-                        iconBg: const Color(0xFFE3F2FD),
-                        iconColor: _kBlue,
-                        title: 'Travel Group',
-                        amount: '${travelGroups.length}',
-                        subtitle: latestGroup?.name ?? (travelGroups.isEmpty ? 'no trips' : '${travelGroups.length} trips'),
-                        subtitleColor: const Color(0xFF8E8E96),
-                        visible: visible,
-                        onTap: () => _push(context, const TravelGroupsScreen()),
                       ),
                     ),
                   ],
@@ -249,7 +226,48 @@ class AssetsScreen extends ConsumerWidget {
 
                 const SizedBox(height: 8),
 
-                // ── Bottom grid: Stocks | Precious Metal ──────────
+                // ── Row 3: Travel Group | Groups ───────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.airplane,
+                        iconBg: const Color(0xFFE3F2FD),
+                        iconColor: _kBlue,
+                        title: 'Travel Group',
+                        amount: travelGroups.length.toString(),
+                        subtitle: latestGroup?.name ?? (travelGroups.isEmpty ? 'no trips' : '${travelGroups.length} trips'),
+                        subtitleColor: travelGroups.isNotEmpty ? _kBlue : const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const TravelGroupsScreen()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _GridCard(
+                        icon: CupertinoIcons.person_3_fill,
+                        iconBg: const Color(0xFFE8F0FE),
+                        iconColor: const Color(0xFF1967D2),
+                        title: 'Groups',
+                        amount: expenseGroups.length.toString(),
+                        subtitle: expenseGroups.isEmpty
+                            ? 'no groups'
+                            : expenseGroups.length == 1
+                                ? '1 group'
+                                : '${expenseGroups.length} groups',
+                        subtitleColor: expenseGroups.isNotEmpty
+                            ? const Color(0xFF1967D2)
+                            : const Color(0xFF8E8E96),
+                        visible: visible,
+                        onTap: () => _push(context, const GroupDashboardScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Row 4: Stocks | Precious Metal ─────────────
                 Row(
                   children: [
                     Expanded(
@@ -510,11 +528,15 @@ class _NetWorthCard extends StatelessWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
+  final VoidCallback onAssetsTap;
+  final VoidCallback onLiabilitiesTap;
 
   const _NetWorthCard({
     required this.snapshot,
     required this.symbol,
     required this.visible,
+    required this.onAssetsTap,
+    required this.onLiabilitiesTap,
   });
 
   @override
@@ -525,6 +547,7 @@ class _NetWorthCard extends StatelessWidget {
     final total = totalOwn + totalOwe;
     final ownedPct = total > 0 ? (totalOwn / total).clamp(0.0, 1.0) : 1.0;
     final ownedPctInt = (ownedPct * 100).round();
+    final owedPctInt = 100 - ownedPctInt;
 
     final healthLabel = ownedPct >= 0.8
         ? 'Healthy'
@@ -538,7 +561,7 @@ class _NetWorthCard extends StatelessWidget {
             : _kRed;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: BoxDecoration(
         color: _kCard,
         borderRadius: BorderRadius.circular(_kRadius),
@@ -550,12 +573,12 @@ class _NetWorthCard extends StatelessWidget {
           Row(
             children: [
               const Text(
-                'TOTAL NET WORTH',
+                'NET WORTH',
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF8E8E96),
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.6,
                 ),
               ),
               const Spacer(),
@@ -584,77 +607,117 @@ class _NetWorthCard extends StatelessWidget {
             visibleText: formatMoney(symbol, netWorth),
             visible: visible,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.w800,
               color: Color(0xFF0B0B0F),
               letterSpacing: -0.5,
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Donut chart + legend
-          Row(
-            children: [
-              // Donut
-              SizedBox(
-                width: 80,
-                height: 80,
-                child: CustomPaint(
-                  painter: _DonutPainter(ownedPct: ownedPct),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$ownedPctInt%',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0B0B0F)),
-                        ),
-                        const Text('OWNED', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: Color(0xFF8E8E96), letterSpacing: 0.3)),
-                      ],
-                    ),
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: [
+                  Flexible(
+                    flex: ownedPctInt,
+                    child: Container(color: _kGreen),
+                  ),
+                  Flexible(
+                    flex: owedPctInt > 0 ? owedPctInt : 0,
+                    child: Container(color: _kRed),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            '$ownedPctInt% assets · $owedPctInt% liabilities',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E96), fontWeight: FontWeight.w500),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Divider
+          Container(height: 1, color: const Color(0xFFF0F0F5)),
+
+          const SizedBox(height: 12),
+
+          // Assets row (tappable)
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onAssetsTap();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: const BoxDecoration(color: _kGreen, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Assets',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
+                ),
+                const Spacer(),
+                MaskedAmount(
+                  visibleText: formatMoney(symbol, totalOwn),
+                  visible: visible,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0B0B0F),
                   ),
                 ),
-              ),
+                const SizedBox(width: 6),
+                const Icon(CupertinoIcons.chevron_right, size: 12, color: Color(0xFFB0B0B8)),
+              ],
+            ),
+          ),
 
-              const SizedBox(width: 14),
+          const SizedBox(height: 10),
 
-              // Legend
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(width: 8, height: 8, decoration: BoxDecoration(color: _kGreen, shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        const Text('You own', style: TextStyle(fontSize: 11, color: Color(0xFF5B5B66))),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    MaskedAmount(
-                      visibleText: formatMoney(symbol, totalOwn),
-                      visible: visible,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(width: 8, height: 8, decoration: BoxDecoration(color: _kRed, shape: BoxShape.circle)),
-                        const SizedBox(width: 6),
-                        const Text('You owe', style: TextStyle(fontSize: 11, color: Color(0xFF5B5B66))),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    MaskedAmount(
-                      visibleText: formatMoney(symbol, totalOwe),
-                      visible: visible,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
-                    ),
-                  ],
+          // Liabilities row (tappable)
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onLiabilitiesTap();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: const BoxDecoration(color: _kRed, shape: BoxShape.circle),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                const Text(
+                  'Liabilities',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF5B5B66)),
+                ),
+                const Spacer(),
+                MaskedAmount(
+                  visibleText: formatMoney(symbol, totalOwe),
+                  visible: visible,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0B0B0F),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(CupertinoIcons.chevron_right, size: 12, color: Color(0xFFB0B0B8)),
+              ],
+            ),
           ),
         ],
       ),
@@ -662,126 +725,7 @@ class _NetWorthCard extends StatelessWidget {
   }
 }
 
-// ── Donut painter ─────────────────────────────────────────────────────────────
-
-class _DonutPainter extends CustomPainter {
-  final double ownedPct; // 0.0–1.0
-
-  const _DonutPainter({required this.ownedPct});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 6;
-    const strokeWidth = 10.0;
-
-    final bgPaint = Paint()
-      ..color = const Color(0xFFF2F1F6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final ownPaint = Paint()
-      ..color = _kGreen
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final owePaint = Paint()
-      ..color = _kRed
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    const startAngle = -math.pi / 2;
-
-    // Background track
-    canvas.drawArc(rect, 0, 2 * math.pi, false, bgPaint);
-
-    // Green arc (owned)
-    if (ownedPct > 0) {
-      canvas.drawArc(rect, startAngle, 2 * math.pi * ownedPct, false, ownPaint);
-    }
-    // Red arc (owed)
-    if (ownedPct < 1) {
-      canvas.drawArc(
-        rect,
-        startAngle + 2 * math.pi * ownedPct,
-        2 * math.pi * (1 - ownedPct),
-        false,
-        owePaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DonutPainter old) => old.ownedPct != ownedPct;
-}
-
-// ── Mini card (Budget, Savings) ───────────────────────────────────────────────
-
-class _MiniCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final String title;
-  final String amount;
-  final String subtitle;
-  final Color subtitleColor;
-  final bool visible;
-  final VoidCallback onTap;
-
-  const _MiniCard({
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.title,
-    required this.amount,
-    required this.subtitle,
-    required this.subtitleColor,
-    required this.visible,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: _kCard,
-          borderRadius: BorderRadius.circular(_kRadius),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: iconColor, size: 15),
-            ),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E96), fontWeight: FontWeight.w500)),
-            const SizedBox(height: 2),
-            visible
-                ? Text(amount, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)), maxLines: 1, overflow: TextOverflow.ellipsis)
-                : const Text('••••', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF8E8E96))),
-            const SizedBox(height: 2),
-            Text(subtitle, style: TextStyle(fontSize: 10, color: subtitleColor, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Grid card (3-col) ─────────────────────────────────────────────────────────
+// ── Grid card (2-col) ─────────────────────────────────────────────────────────
 
 class _GridCard extends StatelessWidget {
   final IconData icon;

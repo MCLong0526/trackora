@@ -2828,25 +2828,58 @@ class _AccountActivityCard extends StatelessWidget {
     if (activeAccounts.isEmpty) return const SizedBox.shrink();
 
     return _FloatCard(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ACCOUNT OVERVIEW',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: brand.inkSoft,
-              letterSpacing: 0.8,
-            ),
+          // Header row: title + count + column labels
+          Row(
+            children: [
+              Text(
+                'ACCOUNT OVERVIEW',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: brand.background,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${activeAccounts.length}',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const SizedBox(width: 50),
+              Expanded(
+                child: Text(
+                  'In / Out',
+                  style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
+                ),
+              ),
+              Text(
+                'Balance / Change',
+                style: TextStyle(fontSize: 10, color: brand.inkSoft.withValues(alpha: 0.6), fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           for (int i = 0; i < activeAccounts.length; i++) ...[
             if (i > 0) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Divider(height: 1, color: brand.divider),
-              const SizedBox(height: 8),
+              const SizedBox(height: 2),
             ],
             _AccountActivityRow(
               account: activeAccounts[i],
@@ -2856,7 +2889,7 @@ class _AccountActivityCard extends StatelessWidget {
               symbol: symbol,
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
         ],
       ),
     );
@@ -2886,15 +2919,17 @@ class _AccountActivityRow extends StatelessWidget {
     final hasActivity = income > 0 || expense > 0;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Account icon
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: brand.background,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(
               _accountIcon(account.type),
@@ -2902,7 +2937,8 @@ class _AccountActivityRow extends StatelessWidget {
               color: brand.inkSoft,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
+          // Name + in/out chips
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2917,71 +2953,70 @@ class _AccountActivityRow extends StatelessWidget {
                     color: brand.ink,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  balance >= 0
-                      ? formatMoney(symbol, balance)
-                      : '−${formatMoney(symbol, balance.abs())}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: balance < 0 ? AppColors.expense : brand.inkSoft,
+                if (hasActivity) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (income > 0)
+                        _ActivityChip(
+                          icon: CupertinoIcons.arrow_down,
+                          label: formatMoney(symbol, income),
+                          color: AppColors.income,
+                        ),
+                      if (income > 0 && expense > 0) const SizedBox(width: 4),
+                      if (expense > 0)
+                        _ActivityChip(
+                          icon: CupertinoIcons.arrow_up,
+                          label: formatMoney(symbol, expense),
+                          color: AppColors.expense,
+                        ),
+                    ],
                   ),
-                ),
+                ],
               ],
             ),
           ),
-          if (hasActivity)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (income > 0)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(CupertinoIcons.arrow_down, size: 10, color: AppColors.income),
-                      const SizedBox(width: 3),
-                      Text(
-                        formatMoney(symbol, income),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.income,
-                        ),
-                      ),
-                    ],
-                  ),
-                if (expense > 0) ...[
-                  if (income > 0) const SizedBox(height: 1),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(CupertinoIcons.arrow_up, size: 10, color: AppColors.expense),
-                      const SizedBox(width: 3),
-                      Text(
-                        formatMoney(symbol, expense),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.expense,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (income > 0 && expense > 0) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    '${isPositive ? '+' : ''}${formatMoney(symbol, net)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+          const SizedBox(width: 8),
+          // Balance + net change
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                balance >= 0
+                    ? formatMoney(symbol, balance)
+                    : '−${formatMoney(symbol, balance.abs())}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: balance < 0 ? AppColors.expense : brand.ink,
+                ),
+              ),
+              if (hasActivity) ...[
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isPositive
+                          ? CupertinoIcons.arrow_up_right
+                          : CupertinoIcons.arrow_down_right,
+                      size: 10,
                       color: isPositive ? AppColors.income : AppColors.expense,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 2),
+                    Text(
+                      formatMoney(symbol, net.abs()),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isPositive ? AppColors.income : AppColors.expense,
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -2998,6 +3033,36 @@ class _AccountActivityRow extends StatelessWidget {
       default:
         return CupertinoIcons.building_2_fill;
     }
+  }
+}
+
+class _ActivityChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _ActivityChip({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 9, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
   }
 }
 
