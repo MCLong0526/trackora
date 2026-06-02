@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/group_expense_item.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
@@ -429,6 +430,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             symbol: symbol,
           ),
         ],
+        const SizedBox(height: 14),
+        _GroupSpendCard(range: range, symbol: symbol),
       ],
     );
   }
@@ -2923,18 +2926,18 @@ class _AccountActivityRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Account icon
+          // Account icon with type colour
           Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: brand.background,
+              color: _accountBg(account.type),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(
               _accountIcon(account.type),
               size: 17,
-              color: brand.inkSoft,
+              color: _accountColor(account.type),
             ),
           ),
           const SizedBox(width: 10),
@@ -3034,6 +3037,42 @@ class _AccountActivityRow extends StatelessWidget {
         return CupertinoIcons.building_2_fill;
     }
   }
+
+  Color _accountBg(AccountType? type) {
+    switch (type) {
+      case AccountType.bank:       return const Color(0xFFDBEAFE);
+      case AccountType.eWallet:    return const Color(0xFFEDE9FE);
+      case AccountType.cash:       return const Color(0xFFDCFCE7);
+      case AccountType.investment: return const Color(0xFFFEF3C7);
+      case AccountType.savings:    return const Color(0xFFCFFAFE);
+      case AccountType.creditCard: return const Color(0xFFFEE2E2);
+      case AccountType.crypto:     return const Color(0xFFFEF3C7);
+      case AccountType.forex:      return const Color(0xFFD1FAE5);
+      case AccountType.loan:
+      case AccountType.mortgage:
+      case AccountType.bnpl:
+      case AccountType.otherLiability: return const Color(0xFFF3F4F6);
+      default:                     return const Color(0xFFEFF6FF);
+    }
+  }
+
+  Color _accountColor(AccountType? type) {
+    switch (type) {
+      case AccountType.bank:       return const Color(0xFF2563EB);
+      case AccountType.eWallet:    return const Color(0xFF7C3AED);
+      case AccountType.cash:       return const Color(0xFF16A34A);
+      case AccountType.investment: return const Color(0xFFD97706);
+      case AccountType.savings:    return const Color(0xFF0891B2);
+      case AccountType.creditCard: return const Color(0xFFDC2626);
+      case AccountType.crypto:     return const Color(0xFFF59E0B);
+      case AccountType.forex:      return const Color(0xFF059669);
+      case AccountType.loan:
+      case AccountType.mortgage:
+      case AccountType.bnpl:
+      case AccountType.otherLiability: return const Color(0xFF6B7280);
+      default:                     return const Color(0xFF3B82F6);
+    }
+  }
 }
 
 class _ActivityChip extends StatelessWidget {
@@ -3060,6 +3099,149 @@ class _ActivityChip extends StatelessWidget {
             label,
             style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Group Spend card ─────────────────────────────────────────────────────────
+
+class _GroupSpendCard extends ConsumerWidget {
+  final _StatsRange range;
+  final String symbol;
+
+  const _GroupSpendCard({required this.range, required this.symbol});
+
+  bool _inRange(GroupExpenseItem e) {
+    final d = DateTime(e.date.year, e.date.month, e.date.day);
+    if (range.start != null && d.isBefore(range.start!)) return false;
+    if (range.endExclusive != null && !d.isBefore(range.endExclusive!)) return false;
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final groups = ref.watch(myGroupsProvider).valueOrNull ?? [];
+    if (groups.isEmpty) return const SizedBox.shrink();
+
+    final List<({String name, double total, int count})> rows = [];
+    double overallTotal = 0;
+
+    for (final group in groups) {
+      final expenses = ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? [];
+      final ranged = expenses.where(_inRange).toList();
+      final total = ranged.fold(0.0, (s, e) => s + e.amount);
+      if (total > 0) {
+        rows.add((name: group.name, total: total, count: ranged.length));
+        overallTotal += total;
+      }
+    }
+
+    if (overallTotal == 0) return const SizedBox.shrink();
+
+    return _FloatCard(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'GROUP SPENDING',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: brand.inkSoft,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: brand.background,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${rows.length}',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (int i = 0; i < rows.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 2),
+              Divider(height: 1, color: brand.divider),
+              const SizedBox(height: 2),
+            ],
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F0FE),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(CupertinoIcons.person_3_fill, size: 16, color: Color(0xFF1967D2)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rows[i].name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.ink),
+                        ),
+                        const SizedBox(height: 3),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1967D2).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${rows[i].count} expense${rows[i].count == 1 ? '' : 's'}',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF1967D2)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    formatMoney(symbol, rows[i].total),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Divider(height: 1, color: brand.divider),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total Group Spend',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brand.inkSoft),
+              ),
+              Text(
+                formatMoney(symbol, overallTotal),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: brand.ink),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
         ],
       ),
     );

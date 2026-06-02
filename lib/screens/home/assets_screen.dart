@@ -18,9 +18,7 @@ import '../../state/providers.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/profile_avatar_button.dart';
-import '../accounts/accounts_screen.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
-import '../expenses/add_edit_expense_screen.dart';
 import '../group/group_dashboard_screen.dart';
 import '../installments/installments_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
@@ -103,12 +101,6 @@ class AssetsScreen extends ConsumerWidget {
     });
     final metalsGrams = metals.fold<double>(0, (s, m) => s + m.weightGrams);
 
-    // Balances for credit card display
-    final balances = _computeBalances(accounts, expenses);
-
-    // Credit card accounts
-    final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
-
     return SafeArea(
       child: Column(
         children: [
@@ -140,8 +132,6 @@ class AssetsScreen extends ConsumerWidget {
                   snapshot: snapshot,
                   symbol: symbol,
                   visible: visible,
-                  onAssetsTap: () => _push(context, const AccountsScreen()),
-                  onLiabilitiesTap: () => _push(context, const AccountsScreen()),
                 ),
 
                 const SizedBox(height: 10),
@@ -300,16 +290,6 @@ class AssetsScreen extends ConsumerWidget {
                   ],
                 ),
 
-                // ── Credit Card section ────────────────────────────
-                if (creditCards.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _CreditCardSection(
-                    creditCards: creditCards,
-                    balances: balances,
-                    symbol: symbol,
-                    visible: visible,
-                  ),
-                ],
               ],
             ),
           ),
@@ -324,203 +304,7 @@ class AssetsScreen extends ConsumerWidget {
   }
 }
 
-// ── Credit Card section ───────────────────────────────────────────────────────
 
-class _CreditCardSection extends StatelessWidget {
-  final List<Account> creditCards;
-  final Map<String, double> balances;
-  final String symbol;
-  final bool visible;
-
-  const _CreditCardSection({
-    required this.creditCards,
-    required this.balances,
-    required this.symbol,
-    required this.visible,
-  });
-
-  @override
-  Widget build(BuildContext ctx) {
-    return Column(
-      children: [
-        for (final card in creditCards) ...[
-          _CreditCardTile(
-            card: card,
-            balance: balances[card.id] ?? 0,
-            symbol: symbol,
-            visible: visible,
-            onPay: () => _openPaySheet(ctx, card, balances[card.id] ?? 0),
-          ),
-          if (card != creditCards.last) const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
-
-  void _openPaySheet(BuildContext ctx, Account card, double balance) {
-    HapticFeedback.selectionClick();
-    Navigator.push(
-      ctx,
-      CupertinoPageRoute(
-        builder: (_) => AddEditExpenseScreen(
-          initialType: EntryType.transfer,
-          initialToAccountId: card.id,
-          initialAmount: balance < 0 ? balance.abs() : null,
-        ),
-      ),
-    );
-  }
-}
-
-// ── Single credit card tile ───────────────────────────────────────────────────
-
-class _CreditCardTile extends StatelessWidget {
-  final Account card;
-  final double balance;
-  final String symbol;
-  final bool visible;
-  final VoidCallback onPay;
-
-  const _CreditCardTile({
-    required this.card,
-    required this.balance,
-    required this.symbol,
-    required this.visible,
-    required this.onPay,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Credit card has a negative balance when in use (debt)
-    final isDebt = balance < 0;
-    final displayBalance = balance.abs();
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(_kRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top row: icon + type label + card name
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isDebt
-                      ? const Color(0xFFFFEEEE)
-                      : const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(
-                  CupertinoIcons.creditcard_fill,
-                  size: 16,
-                  color: isDebt ? _kRed : _kGreen,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'CREDIT CARD',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF8E8E96),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      card.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0B0B0F),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Balance row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isDebt ? 'Amount owed' : 'Credit balance',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF8E8E96),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    MaskedAmount(
-                      visibleText: '${isDebt ? '−' : ''}${formatMoney(symbol, displayBalance)}',
-                      visible: visible,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: isDebt ? _kRed : _kGreen,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Pay Card button
-              GestureDetector(
-                onTap: onPay,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isDebt
-                        ? const Color(0xFF1A6CFF)
-                        : const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.arrow_up_circle_fill,
-                        size: 15,
-                        color: isDebt ? Colors.white : _kGreen,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Pay Card',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDebt ? Colors.white : _kGreen,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Net Worth card ────────────────────────────────────────────────────────────
 
@@ -528,16 +312,27 @@ class _NetWorthCard extends StatelessWidget {
   final _AssetSnapshot snapshot;
   final String symbol;
   final bool visible;
-  final VoidCallback onAssetsTap;
-  final VoidCallback onLiabilitiesTap;
 
   const _NetWorthCard({
     required this.snapshot,
     required this.symbol,
     required this.visible,
-    required this.onAssetsTap,
-    required this.onLiabilitiesTap,
   });
+
+  void _showPopup(BuildContext context, {required bool isAssets}) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _NetWorthDetailSheet(
+        snapshot: snapshot,
+        symbol: symbol,
+        visible: visible,
+        showAssets: isAssets,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -652,10 +447,7 @@ class _NetWorthCard extends StatelessWidget {
 
           // Assets row (tappable)
           GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onAssetsTap();
-            },
+            onTap: () => _showPopup(context, isAssets: true),
             behavior: HitTestBehavior.opaque,
             child: Row(
               children: [
@@ -688,10 +480,7 @@ class _NetWorthCard extends StatelessWidget {
 
           // Liabilities row (tappable)
           GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onLiabilitiesTap();
-            },
+            onTap: () => _showPopup(context, isAssets: false),
             behavior: HitTestBehavior.opaque,
             child: Row(
               children: [
@@ -722,6 +511,212 @@ class _NetWorthCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Net Worth detail popup sheet ──────────────────────────────────────────────
+
+class _NetWorthDetailSheet extends StatelessWidget {
+  final _AssetSnapshot snapshot;
+  final String symbol;
+  final bool visible;
+  final bool showAssets;
+
+  const _NetWorthDetailSheet({
+    required this.snapshot,
+    required this.symbol,
+    required this.visible,
+    required this.showAssets,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isAssets = showAssets;
+    final accentColor = isAssets ? _kGreen : _kRed;
+    final title = isAssets ? 'Assets Breakdown' : 'Liabilities Breakdown';
+    final total = isAssets ? snapshot.totalAssets : snapshot.totalLiabilities;
+
+    final assetRows = <({String label, double amount, IconData icon, Color bg, Color color})>[];
+
+    if (isAssets) {
+      for (final a in snapshot.accounts) {
+        final base = a.balance;
+        if (!a.account.type.isLiability && base > 0) {
+          assetRows.add((
+            label: a.account.name,
+            amount: base,
+            icon: _iconForType(a.account.type),
+            bg: _bgForType(a.account.type),
+            color: _colorForType(a.account.type),
+          ));
+        }
+      }
+      if (snapshot.totalLent > 0) {
+        assetRows.add((
+          label: 'Lent Out',
+          amount: snapshot.totalLent,
+          icon: CupertinoIcons.arrow_up_right_circle_fill,
+          bg: const Color(0xFFE8F5E9),
+          color: _kGreen,
+        ));
+      }
+    } else {
+      for (final a in snapshot.accounts) {
+        final base = a.balance;
+        if (a.account.type.isLiability && base < 0) {
+          assetRows.add((
+            label: a.account.name,
+            amount: base.abs(),
+            icon: _iconForType(a.account.type),
+            bg: _bgForType(a.account.type),
+            color: _colorForType(a.account.type),
+          ));
+        } else if (!a.account.type.isLiability && base < 0) {
+          assetRows.add((
+            label: a.account.name,
+            amount: base.abs(),
+            icon: _iconForType(a.account.type),
+            bg: const Color(0xFFFEE2E2),
+            color: _kRed,
+          ));
+        }
+      }
+      if (snapshot.totalBorrowed > 0) {
+        assetRows.add((
+          label: 'Borrowed',
+          amount: snapshot.totalBorrowed,
+          icon: CupertinoIcons.arrow_down_left_circle_fill,
+          bg: const Color(0xFFFEE2E2),
+          color: _kRed,
+        ));
+      }
+      if ((snapshot.installmentLiability ?? 0) > 0) {
+        assetRows.add((
+          label: 'Installments',
+          amount: snapshot.installmentLiability!,
+          icon: CupertinoIcons.bolt_fill,
+          bg: const Color(0xFFFCE4EC),
+          color: const Color(0xFFE91E63),
+        ));
+      }
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E0E6),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Title + total
+          Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(color: accentColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
+              ),
+              const Spacer(),
+              MaskedAmount(
+                visibleText: formatMoney(symbol, total),
+                visible: visible,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: accentColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (assetRows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                'Nothing to show',
+                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              ),
+            )
+          else
+            for (int i = 0; i < assetRows.length; i++) ...[
+              if (i > 0) Divider(height: 1, color: Colors.grey[100]),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: assetRows[i].bg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(assetRows[i].icon, size: 16, color: assetRows[i].color),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        assetRows[i].label,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF0B0B0F)),
+                      ),
+                    ),
+                    MaskedAmount(
+                      visibleText: formatMoney(symbol, assetRows[i].amount),
+                      visible: visible,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0B0B0F)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForType(AccountType? type) {
+    switch (type) {
+      case AccountType.cash:       return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.creditCard: return CupertinoIcons.creditcard_fill;
+      case AccountType.savings:    return CupertinoIcons.lock_shield_fill;
+      default:                     return CupertinoIcons.building_2_fill;
+    }
+  }
+
+  Color _bgForType(AccountType? type) {
+    switch (type) {
+      case AccountType.bank:       return const Color(0xFFDBEAFE);
+      case AccountType.eWallet:    return const Color(0xFFEDE9FE);
+      case AccountType.cash:       return const Color(0xFFDCFCE7);
+      case AccountType.savings:    return const Color(0xFFCFFAFE);
+      case AccountType.creditCard: return const Color(0xFFFEE2E2);
+      case AccountType.investment: return const Color(0xFFFEF3C7);
+      default:                     return const Color(0xFFF3F4F6);
+    }
+  }
+
+  Color _colorForType(AccountType? type) {
+    switch (type) {
+      case AccountType.bank:       return const Color(0xFF2563EB);
+      case AccountType.eWallet:    return const Color(0xFF7C3AED);
+      case AccountType.cash:       return const Color(0xFF16A34A);
+      case AccountType.savings:    return const Color(0xFF0891B2);
+      case AccountType.creditCard: return const Color(0xFFDC2626);
+      case AccountType.investment: return const Color(0xFFD97706);
+      default:                     return const Color(0xFF6B7280);
+    }
   }
 }
 
