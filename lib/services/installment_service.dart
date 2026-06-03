@@ -1,5 +1,7 @@
 import '../models/installment.dart';
 import '../repositories/installment_repository.dart';
+import '../repositories/local_installment_repository.dart';
+import 'sync_service.dart';
 
 class InstallmentService {
   final InstallmentRepository _repository;
@@ -19,8 +21,10 @@ class InstallmentService {
     return _repository.update(userId, installment);
   }
 
-  Future<void> delete(String userId, String id) {
-    return _repository.delete(userId, id);
+  Future<void> delete(String userId, String id) async {
+    await _repository.delete(userId, id);
+    await LocalInstallmentRepository().delete(userId, id);
+    await SyncService.markEntityPendingDelete(userId, 'inst', id);
   }
 
   /// Marks the installment paid for `month`. Expense creation is handled

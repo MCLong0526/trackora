@@ -30,7 +30,7 @@ TextStyle _eyebrow({Color? color}) =>
 
 // ── Split mode ────────────────────────────────────────────────────────────────
 
-enum _SplitMode { equally, amount, percent, shares }
+enum _SplitMode { equally, amount, percent }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -123,9 +123,6 @@ class _AddTravelExpenseScreenState
             case _SplitMode.percent:
               final pct = e.amount > 0 ? (entry.value / e.amount * 100) : 0.0;
               ctrl.text = pct.toStringAsFixed(1);
-            case _SplitMode.shares:
-              // Use raw amounts as share units (proportional, not absolute)
-              ctrl.text = entry.value.toStringAsFixed(2);
             case _SplitMode.amount:
               ctrl.text = entry.value.toStringAsFixed(2);
             case _SplitMode.equally:
@@ -167,7 +164,6 @@ class _AddTravelExpenseScreenState
         final entered = double.tryParse(value) ?? 0;
         final remainder = (_parsedAmount - entered).clamp(0.0, _parsedAmount);
         _customCtrls[other]?.text = remainder.toStringAsFixed(2);
-      case _SplitMode.shares:
       case _SplitMode.equally:
         break;
     }
@@ -183,11 +179,6 @@ class _AddTravelExpenseScreenState
       case _SplitMode.percent:
         final pct = double.tryParse(_customCtrls[memberId]?.text.trim() ?? '') ?? 0;
         return _parsedAmount * pct / 100;
-      case _SplitMode.shares:
-        final myShares = double.tryParse(_customCtrls[memberId]?.text.trim() ?? '') ?? 0;
-        final totalShares = _splitAmong.fold(0.0, (sum, id) =>
-            sum + (double.tryParse(_customCtrls[id]?.text.trim() ?? '') ?? 0));
-        return totalShares > 0 ? _parsedAmount * myShares / totalShares : 0;
     }
   }
 
@@ -704,8 +695,6 @@ class _AddTravelExpenseScreenState
                                         case _SplitMode.percent:
                                           _customCtrls[m.id]?.text = _splitAmong.isNotEmpty
                                               ? (100 / _splitAmong.length).toStringAsFixed(1) : '0';
-                                        case _SplitMode.shares:
-                                          _customCtrls[m.id]?.text = '1';
                                         case _SplitMode.equally:
                                           break;
                                       }
@@ -848,8 +837,7 @@ class _AddTravelExpenseScreenState
                                                 contentPadding: const EdgeInsets.symmetric(
                                                     horizontal: 10, vertical: 8),
                                                 hintText: _splitMode == _SplitMode.percent
-                                                    ? '%' : _splitMode == _SplitMode.shares
-                                                        ? 'shares' : '0.00',
+                                                    ? '%' : '0.00',
                                                 hintStyle: _body(13, color: _ink48),
                                                 isDense: true,
                                               ),
@@ -915,7 +903,6 @@ class _AddTravelExpenseScreenState
       case _SplitMode.equally: return 'Equally';
       case _SplitMode.amount: return 'Amount';
       case _SplitMode.percent: return 'Percent';
-      case _SplitMode.shares: return 'Shares';
     }
   }
 }

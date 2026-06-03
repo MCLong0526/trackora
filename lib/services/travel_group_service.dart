@@ -1,8 +1,12 @@
 import 'dart:math';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../models/travel_expense.dart';
 import '../models/travel_group.dart';
+import '../repositories/local_travel_group_repository.dart';
 import '../repositories/travel_group_repository.dart';
+import 'sync_service.dart';
 
 class MemberBalance {
   final String memberId;
@@ -90,7 +94,14 @@ class TravelGroupService {
   Future<void> updateGroup(TravelGroup group) =>
       _repo.updateGroup(group.copyWith(updatedAt: DateTime.now()));
 
-  Future<void> deleteGroup(String groupId) => _repo.deleteGroup(groupId);
+  Future<void> deleteGroup(String groupId) async {
+    await _repo.deleteGroup(groupId);
+    await LocalTravelGroupRepository().deleteGroup(groupId);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await SyncService.markEntityPendingDelete(uid, 'tg', groupId);
+    }
+  }
 
   // ── Members ─────────────────────────────────────────────────────────────────
 

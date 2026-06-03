@@ -510,7 +510,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.4),
-      builder: (_) => _EditStockSheet(
+      builder: (_) => EditStockSheet(
         stock: stock,
         onSave: (updated) async {
           final user = ref.read(authStateProvider).valueOrNull;
@@ -2816,6 +2816,17 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
   Future<void> _save() async {
     if (_units <= 0) return;
+    // Stocks are Firebase-only (no offline Hive queue). When offline the
+    // Firestore write never completes, leaving the button spinning forever.
+    // Bail out early with a clear message instead.
+    if (!ref.read(isOnlineProvider)) {
+      AppToast.show(
+        context,
+        'You\'re offline — connect to the internet to record a stock.',
+        type: AppToastType.error,
+      );
+      return;
+    }
     setState(() => _saving = true);
     final now = DateTime.now();
     final investment = StockInvestment(
@@ -2832,10 +2843,17 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
       updatedAt: now,
     );
     try {
-      await widget.onSave(investment);
+      await widget.onSave(investment).timeout(const Duration(seconds: 10));
       if (mounted) Navigator.pop(context);
     } catch (_) {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        AppToast.show(
+          context,
+          'Failed to save. Check your connection and try again.',
+          type: AppToastType.error,
+        );
+      }
     }
   }
 
@@ -3502,7 +3520,7 @@ class StockAvatarBadge extends StatelessWidget {
   final String symbol;
   final double size;
 
-  const StockAvatarBadge({required this.symbol, required this.size});
+  const StockAvatarBadge({super.key, required this.symbol, required this.size});
 
   @override
   Widget build(BuildContext context) {
@@ -3531,17 +3549,17 @@ class StockAvatarBadge extends StatelessWidget {
 
 // ── Edit stock sheet ──────────────────────────────────────────────────────────
 
-class _EditStockSheet extends ConsumerStatefulWidget {
+class EditStockSheet extends ConsumerStatefulWidget {
   final StockInvestment stock;
   final Future<void> Function(StockInvestment) onSave;
 
-  const _EditStockSheet({required this.stock, required this.onSave});
+  const EditStockSheet({super.key, required this.stock, required this.onSave});
 
   @override
-  ConsumerState<_EditStockSheet> createState() => _EditStockSheetState();
+  ConsumerState<EditStockSheet> createState() => _EditStockSheetState();
 }
 
-class _EditStockSheetState extends ConsumerState<_EditStockSheet> {
+class _EditStockSheetState extends ConsumerState<EditStockSheet> {
   late final TextEditingController _qtyCtrl;
   late final TextEditingController _priceCtrl;
   late final TextEditingController _notesCtrl;

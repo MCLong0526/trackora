@@ -1,5 +1,7 @@
 import '../models/person.dart';
+import '../repositories/local_person_repository.dart';
 import '../repositories/person_repository.dart';
+import 'sync_service.dart';
 
 class PersonService {
   final PersonRepository _repository;
@@ -13,6 +15,9 @@ class PersonService {
   Future<void> update(String userId, Person person) =>
       _repository.update(userId, person);
 
-  Future<void> delete(String userId, String id) =>
-      _repository.delete(userId, id);
+  Future<void> delete(String userId, String id) async {
+    await _repository.delete(userId, id);
+    await LocalPersonRepository().delete(userId, id);
+    await SyncService.markEntityPendingDelete(userId, 'person', id);
+  }
 }

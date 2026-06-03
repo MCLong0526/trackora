@@ -99,27 +99,30 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
     return Scaffold(
       backgroundColor: brand.background,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // ── App bar ────────────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
-                        child: Icon(CupertinoIcons.chevron_left, size: 16, color: brand.ink),
-                      ),
+        child: Column(
+          children: [
+            // Fixed back button header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+                      child: Icon(CupertinoIcons.chevron_left, size: 16, color: brand.ink),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-
+            // Scrollable content with top fade
+            Expanded(
+              child: Stack(
+                children: [
+                  CustomScrollView(
+                    slivers: [
             // ── Hero section ───────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
@@ -321,6 +324,27 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                     isDark: isDark,
                   ),
                 ]),
+              ),
+            ),
+                    ],
+                  ),
+                  // Top fade gradient
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [brand.background, brand.background.withValues(alpha: 0)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

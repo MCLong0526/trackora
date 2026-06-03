@@ -125,10 +125,31 @@ int _compareAccounts(Account a, Account b) {
 final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(accountRepositoryProvider).getAll(user.uid).map((list) {
+  final repo = ref.watch(accountRepositoryProvider);
+  final stream = repo.getAll(user.uid).map((list) {
     final sorted = list.toList()..sort(_compareAccounts);
     return sorted;
   });
+  // Mirror Firebase data to local Hive so accounts remain visible offline.
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalAccountRepository();
+      final pendingDeleteIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'account').toSet();
+      // Update local with current Firebase data (skip pending-deleted accounts).
+      // Do NOT delete local-only entries here — they may be offline-created
+      // accounts that haven't synced to Firebase yet.
+      for (final a in items) {
+        if (a.id.isNotEmpty && !pendingDeleteIds.contains(a.id)) {
+          await local.update(user.uid, a);
+        }
+      }
+      return pendingDeleteIds.isEmpty
+          ? items
+          : items.where((a) => !pendingDeleteIds.contains(a.id)).toList();
+    });
+  }
+  return stream;
 });
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   switch (storageMode) {
@@ -199,7 +220,23 @@ final personServiceProvider = Provider(
 final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(personServiceProvider).getAll(user.uid);
+  final stream = ref.watch(personServiceProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalPersonRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'person').toSet();
+      for (final p in items) {
+        if (p.id.isNotEmpty && !deletedIds.contains(p.id)) {
+          await local.update(user.uid, p);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((p) => !deletedIds.contains(p.id)).toList();
+    });
+  }
+  return stream;
 });
 
 /// Stream of all borrow / lending records for the active user.
@@ -208,14 +245,46 @@ final borrowLendingProvider = StreamProvider.autoDispose<List<BorrowLending>>((
 ) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(borrowLendingServiceProvider).getAll(user.uid);
+  final stream = ref.watch(borrowLendingServiceProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalBorrowLendingRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'bl').toSet();
+      for (final r in items) {
+        if (r.id.isNotEmpty && !deletedIds.contains(r.id)) {
+          await local.update(user.uid, r);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((r) => !deletedIds.contains(r.id)).toList();
+    });
+  }
+  return stream;
 });
 
 /// Stream of all saving plans for the active user.
 final savingPlansProvider = StreamProvider.autoDispose<List<SavingPlan>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(savingPlanServiceProvider).getAll(user.uid);
+  final stream = ref.watch(savingPlanServiceProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalSavingPlanRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'plan').toSet();
+      for (final p in items) {
+        if (p.id.isNotEmpty && !deletedIds.contains(p.id)) {
+          await local.update(user.uid, p);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((p) => !deletedIds.contains(p.id)).toList();
+    });
+  }
+  return stream;
 });
 final storageServiceProvider = Provider((_) => StorageService());
 final prefsServiceProvider = Provider((_) => PrefsService());
@@ -447,7 +516,23 @@ final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
 ) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value([]);
-  return ref.read(installmentServiceProvider).getAll(user.uid);
+  final stream = ref.watch(installmentServiceProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalInstallmentRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'inst').toSet();
+      for (final i in items) {
+        if (i.id.isNotEmpty && !deletedIds.contains(i.id)) {
+          await local.update(user.uid, i);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((i) => !deletedIds.contains(i.id)).toList();
+    });
+  }
+  return stream;
 });
 
 final budgetProvider = StreamProvider.autoDispose<double>((ref) {
@@ -458,8 +543,15 @@ final budgetProvider = StreamProvider.autoDispose<double>((ref) {
     if (!isOnline) {
       return LocalExpenseRepository().getMonthlyBudget(user.uid);
     }
+    // Mirror Firebase budget to local so it's available offline
+    return FirebaseExpenseRepository()
+        .getMonthlyBudget(user.uid)
+        .asyncMap((amount) async {
+      await LocalExpenseRepository().setMonthlyBudget(user.uid, amount);
+      return amount;
+    });
   }
-  return ref.read(expenseRepositoryProvider).getMonthlyBudget(user.uid);
+  return ref.watch(expenseRepositoryProvider).getMonthlyBudget(user.uid);
 });
 
 final currencySymbolProvider = FutureProvider<String>(
@@ -797,17 +889,62 @@ final travelGroupsProvider = StreamProvider.autoDispose<List<TravelGroup>>((
 ) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(travelGroupRepositoryProvider).getGroups(user.uid);
+  final stream = ref.watch(travelGroupServiceProvider).getGroups(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((groups) async {
+      final local = LocalTravelGroupRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'tg').toSet();
+      for (final g in groups) {
+        if (g.id.isNotEmpty && !deletedIds.contains(g.id)) {
+          await local.updateGroup(g);
+        }
+      }
+      return deletedIds.isEmpty
+          ? groups
+          : groups.where((g) => !deletedIds.contains(g.id)).toList();
+    });
+  }
+  return stream;
 });
 
 final travelGroupMembersProvider = StreamProvider.autoDispose
     .family<List<TravelGroupMember>, String>((ref, groupId) {
-      return ref.read(travelGroupRepositoryProvider).getMembers(groupId);
+      final stream = ref.watch(travelGroupRepositoryProvider).getMembers(groupId);
+      if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+        return stream.asyncMap((members) async {
+          final local = LocalTravelGroupRepository();
+          for (final m in members) {
+            if (m.id.isNotEmpty) await local.updateMember(groupId, m);
+          }
+          return members;
+        });
+      }
+      return stream;
     });
 
 final travelGroupExpensesProvider = StreamProvider.autoDispose
     .family<List<TravelExpense>, String>((ref, groupId) {
-      return ref.read(travelGroupRepositoryProvider).getExpenses(groupId);
+      final stream = ref.watch(travelGroupRepositoryProvider).getExpenses(groupId);
+      if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+        return stream.asyncMap((expenses) async {
+          final local = LocalTravelGroupRepository();
+          // Remove local expenses no longer in Firebase (deletions).
+          final localExpenses = await local.getExpenses(groupId).first;
+          final firebaseIds = expenses.map((e) => e.id).toSet();
+          for (final le in localExpenses) {
+            if (le.id.isNotEmpty && !firebaseIds.contains(le.id)) {
+              await local.deleteExpense(groupId, le.id);
+            }
+          }
+          // Update local with current Firebase data.
+          for (final e in expenses) {
+            if (e.id.isNotEmpty) await local.updateExpense(groupId, e);
+          }
+          return expenses;
+        });
+      }
+      return stream;
     });
 
 // ── Custom Expense Cycle ──────────────────────────────────────────────────────
@@ -904,31 +1041,44 @@ final removedExpenseGroupIdsProvider = StateProvider<Set<String>>(
   (_) => const <String>{},
 );
 
-final expenseGroupRepositoryProvider = Provider<ExpenseGroupRepository>((_) {
+final expenseGroupRepositoryProvider = Provider<ExpenseGroupRepository>((ref) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalExpenseGroupRepository();
     case StorageMode.firebase:
-      return FirebaseExpenseGroupRepository();
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline
+          ? FirebaseExpenseGroupRepository()
+          : LocalExpenseGroupRepository();
   }
 });
 
 final expenseGroupServiceProvider = Provider<ExpenseGroupService>((ref) {
-  return ExpenseGroupService(ref.read(expenseGroupRepositoryProvider));
+  return ExpenseGroupService(ref.watch(expenseGroupRepositoryProvider));
 });
 
 final myGroupsProvider = StreamProvider.autoDispose<List<ExpenseGroup>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   final removedGroupIds = ref.watch(removedExpenseGroupIdsProvider);
   if (user == null) return Stream.value(const []);
-  return ref
-      .read(expenseGroupServiceProvider)
+  final stream = ref
+      .watch(expenseGroupServiceProvider)
       .getGroups(user.uid)
       .map(
         (groups) => groups
             .where((group) => !removedGroupIds.contains(group.id))
             .toList(),
       );
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((groups) async {
+      final local = LocalExpenseGroupRepository();
+      for (final g in groups) {
+        if (g.id.isNotEmpty) await local.updateGroup(g);
+      }
+      return groups;
+    });
+  }
+  return stream;
 });
 
 final activeGroupProvider = StreamProvider.autoDispose<ExpenseGroup?>((ref) {

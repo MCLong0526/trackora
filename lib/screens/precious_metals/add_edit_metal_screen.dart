@@ -5,12 +5,18 @@ import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/account.dart';
+import '../../models/expense.dart';
 import '../../models/precious_metal.dart';
 import '../../repositories/firebase_precious_metal_repository.dart';
+import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_precious_metal_repository.dart';
 import '../../state/providers.dart';
 import '../../services/i18n.dart';
+import '../../services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+
+enum _MetalField { weight, price, total }
 
 class AddEditMetalScreen extends ConsumerStatefulWidget {
   final PreciousMetal? metal;
@@ -43,7 +49,8 @@ class _State extends ConsumerState<AddEditMetalScreen> {
   late DateTime _date;
   String? _accountId;
   bool _saving = false;
-  bool _manualTotal = false;
+  bool _calculating = false;
+  _MetalField? _lastEdited;
 
   bool get _isEdit => widget.metal != null && widget.metal!.id.isNotEmpty;
 
@@ -61,10 +68,11 @@ class _State extends ConsumerState<AddEditMetalScreen> {
       if (m.pricePerGram != null) _priceCtrl.text = _fmt(m.pricePerGram!);
       if (m.totalAmount > 0) _totalCtrl.text = _fmt(m.totalAmount);
     }
-    _notesCtrl.text = widget.metal?.notes ?? '';
+    _notesCtrl.text = widget.metal?.notes ?? (_isEdit ? '' : _metalType.label);
 
-    _weightCtrl.addListener(_autoCalc);
-    _priceCtrl.addListener(_autoCalc);
+    _weightCtrl.addListener(_onWeightChanged);
+    _priceCtrl.addListener(_onPriceChanged);
+    _totalCtrl.addListener(_onTotalChanged);
   }
 
   @override
@@ -90,14 +98,52 @@ class _State extends ConsumerState<AddEditMetalScreen> {
     c.selection = TextSelection(baseOffset: 0, extentOffset: c.text.length);
   }
 
+  void _onWeightChanged() {
+    if (_calculating) return;
+    _lastEdited = _MetalField.weight;
+    _autoCalc();
+  }
+
+  void _onPriceChanged() {
+    if (_calculating) return;
+    _lastEdited = _MetalField.price;
+    _autoCalc();
+  }
+
+  void _onTotalChanged() {
+    if (_calculating) return;
+    _lastEdited = _MetalField.total;
+    _autoCalc();
+  }
+
   void _autoCalc() {
-    if (_manualTotal) return;
-    final w = double.tryParse(_weightCtrl.text);
-    final p = double.tryParse(_priceCtrl.text);
-    if (w != null && p != null) {
-      _totalCtrl.text = (w * p).toStringAsFixed(2);
-    } else if (_weightCtrl.text.isEmpty || _priceCtrl.text.isEmpty) {
-      _totalCtrl.text = '';
+    if (_calculating) return;
+    _calculating = true;
+    try {
+      final w = double.tryParse(_weightCtrl.text);
+      final p = double.tryParse(_priceCtrl.text);
+      final t = double.tryParse(_totalCtrl.text);
+      if (_lastEdited == _MetalField.weight) {
+        if (w != null && p != null) {
+          _totalCtrl.text = (w * p).toStringAsFixed(2);
+        } else if (w != null && w > 0 && t != null) {
+          _priceCtrl.text = (t / w).toStringAsFixed(2);
+        }
+      } else if (_lastEdited == _MetalField.price) {
+        if (w != null && p != null) {
+          _totalCtrl.text = (w * p).toStringAsFixed(2);
+        } else if (p != null && p > 0 && t != null) {
+          _weightCtrl.text = _fmt(t / p);
+        }
+      } else if (_lastEdited == _MetalField.total) {
+        if (t != null && w != null && w > 0) {
+          _priceCtrl.text = (t / w).toStringAsFixed(2);
+        } else if (t != null && p != null && p > 0) {
+          _weightCtrl.text = _fmt(t / p);
+        }
+      }
+    } finally {
+      _calculating = false;
     }
   }
 
@@ -119,12 +165,60 @@ class _State extends ConsumerState<AddEditMetalScreen> {
     setState(() => _saving = true);
     try {
       final repo = ref.read(preciousMetalRepositoryProvider);
+      // Primary: Firebase when online, Hive when offline — drives reactive streams
+      final expenseRepo = ref.read(expenseRepositoryProvider);
+      // Cache: always Hive — ensures offline fallback
+      final localExpenseRepo = LocalExpenseRepository();
       final now = DateTime.now();
       final pricePerGram = double.tryParse(_priceCtrl.text);
       final notes = _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
 
       if (_isEdit) {
-        final updated = widget.metal!.copyWith(
+        final oldMetal = widget.metal!;
+        final oldExpenseId = oldMetal.expenseId;
+        String? newExpenseId = oldExpenseId;
+
+        if (_accountId != null) {
+          final expenseNote = _metalType.label;
+          final entryType = _action == MetalAction.buy ? EntryType.expense : EntryType.income;
+          if (oldExpenseId != null && oldExpenseId.isNotEmpty) {
+            final updatedExp = Expense(
+              id: oldExpenseId,
+              amount: total,
+              category: 'Precious Metals',
+              note: expenseNote,
+              date: _date,
+              type: entryType,
+              accountId: _accountId,
+              createdAt: now,
+              updatedAt: now,
+            );
+            await expenseRepo.updateExpense(user.uid, updatedExp);
+            await localExpenseRepo.updateExpense(user.uid, updatedExp);
+          } else {
+            final expId = '${now.microsecondsSinceEpoch}_metal';
+            final newExp = Expense(
+              id: expId,
+              amount: total,
+              category: 'Precious Metals',
+              note: expenseNote,
+              date: _date,
+              type: entryType,
+              accountId: _accountId,
+              createdAt: now,
+              updatedAt: now,
+            );
+            await expenseRepo.addExpense(user.uid, newExp);
+            await localExpenseRepo.addExpense(user.uid, newExp);
+            newExpenseId = expId;
+          }
+        } else if (oldExpenseId != null && oldExpenseId.isNotEmpty) {
+          await expenseRepo.deleteExpense(user.uid, oldExpenseId);
+          await localExpenseRepo.deleteExpense(user.uid, oldExpenseId);
+          newExpenseId = null;
+        }
+
+        final updated = oldMetal.copyWith(
           metalType: _metalType,
           action: _action,
           weightGrams: weight,
@@ -133,6 +227,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           date: _date,
           notes: notes,
           accountId: _accountId,
+          expenseId: newExpenseId,
         );
         await repo.update(user.uid, updated);
         _bgSyncUpdate(user.uid, updated);
@@ -142,6 +237,28 @@ class _State extends ConsumerState<AddEditMetalScreen> {
         }
       } else {
         final id = now.microsecondsSinceEpoch.toString();
+        String? expenseId;
+
+        if (_accountId != null) {
+          final expId = '${id}_metal';
+          final expenseNote = _metalType.label;
+          final entryType = _action == MetalAction.buy ? EntryType.expense : EntryType.income;
+          final newExp = Expense(
+            id: expId,
+            amount: total,
+            category: 'Precious Metals',
+            note: expenseNote,
+            date: _date,
+            type: entryType,
+            accountId: _accountId,
+            createdAt: now,
+            updatedAt: now,
+          );
+          await expenseRepo.addExpense(user.uid, newExp);
+          await localExpenseRepo.addExpense(user.uid, newExp);
+          expenseId = expId;
+        }
+
         final newM = PreciousMetal(
           id: id,
           metalType: _metalType,
@@ -153,6 +270,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           notes: notes,
           accountId: _accountId,
           createdAt: now,
+          expenseId: expenseId,
         );
         await repo.add(user.uid, newM);
         _bgSyncAdd(user.uid, newM);
@@ -205,9 +323,23 @@ class _State extends ConsumerState<AddEditMetalScreen> {
 
     setState(() => _saving = true);
     try {
-      final id = widget.metal!.id;
-      await ref.read(preciousMetalRepositoryProvider).delete(user.uid, id);
-      _bgSyncDelete(user.uid, id);
+      final metal = widget.metal!;
+      // Always remove from local Hive immediately so the UI updates offline.
+      await LocalPreciousMetalRepository().delete(user.uid, metal.id);
+      await ref.read(preciousMetalRepositoryProvider).delete(user.uid, metal.id);
+      final isOnline = ref.read(isOnlineProvider);
+      if (storageMode == StorageMode.firebase) {
+        if (isOnline) {
+          _bgSyncDelete(user.uid, metal.id);
+        } else {
+          // Offline: queue the Firestore delete so it syncs on reconnect.
+          await SyncService.markEntityPendingDelete(user.uid, 'metal', metal.id);
+        }
+      }
+      if (metal.expenseId != null && metal.expenseId!.isNotEmpty) {
+        await ref.read(expenseRepositoryProvider).deleteExpense(user.uid, metal.expenseId!);
+        await LocalExpenseRepository().deleteExpense(user.uid, metal.expenseId!);
+      }
       if (mounted) {
         AppToast.show(context, context.t('metal.deletedToast'), type: AppToastType.success);
         Navigator.pop(context, 'deleted');
@@ -355,10 +487,14 @@ class _State extends ConsumerState<AddEditMetalScreen> {
               _MetalActionToggle(
                 metalType: _metalType,
                 action: _action,
-                onMetalChanged: (t) => setState(() {
-                  _metalType = t;
-                  _manualTotal = false;
-                }),
+                onMetalChanged: (t) {
+                  final wasLabel = _notesCtrl.text == _metalType.label;
+                  setState(() {
+                    _metalType = t;
+                    _lastEdited = null;
+                  });
+                  if (wasLabel) _notesCtrl.text = t.label;
+                },
                 onActionChanged: (a) => setState(() => _action = a),
               ),
               const SizedBox(height: 14),
@@ -403,11 +539,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
                   hint: context.t('metal.hintAmount'),
                   prefix: symbol,
                   accent: metalColor,
-                  onTap: () {
-                    _selectAll(_totalCtrl);
-                    setState(() => _manualTotal = true);
-                  },
-                  onChanged: (_) => setState(() => _manualTotal = true),
+                  onTap: () => _selectAll(_totalCtrl),
                   isLast: true,
                 ),
               ],
@@ -759,7 +891,6 @@ class _Field extends StatelessWidget {
   final String? prefix;
   final String? suffix;
   final VoidCallback? onTap;
-  final ValueChanged<String>? onChanged;
   final FocusNode? nextFocus;
   final bool isLast;
   final Color? accent;
@@ -772,7 +903,6 @@ class _Field extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.onTap,
-    this.onChanged,
     this.nextFocus,
     this.isLast = false,
     this.accent,
@@ -808,7 +938,6 @@ class _Field extends StatelessWidget {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: nextFocus != null ? TextInputAction.next : TextInputAction.done,
                   onTap: onTap,
-                  onChanged: onChanged,
                   onSubmitted: (_) {
                     if (nextFocus != null) FocusScope.of(context).requestFocus(nextFocus);
                   },

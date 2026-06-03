@@ -99,6 +99,8 @@ class PreciousMetal {
   final String? notes;
   final String? accountId;
   final DateTime createdAt;
+  /// ID of the linked Expense transaction (created when accountId is set).
+  final String? expenseId;
 
   const PreciousMetal({
     required this.id,
@@ -111,6 +113,7 @@ class PreciousMetal {
     this.notes,
     this.accountId,
     required this.createdAt,
+    this.expenseId,
   });
 
   factory PreciousMetal.fromMap(Map<String, dynamic> data, {required String id}) {
@@ -125,6 +128,7 @@ class PreciousMetal {
       notes: data['notes'] as String?,
       accountId: data['accountId'] as String?,
       createdAt: _readDate(data['createdAt']),
+      expenseId: data['expenseId'] as String?,
     );
   }
 
@@ -140,8 +144,11 @@ class PreciousMetal {
       if (notes != null && notes!.isNotEmpty) 'notes': notes,
       if (accountId != null && accountId!.isNotEmpty) 'accountId': accountId,
       'createdAt': createdAt.toIso8601String(),
+      if (expenseId != null && expenseId!.isNotEmpty) 'expenseId': expenseId,
     };
   }
+
+  static const _sentinel = Object();
 
   PreciousMetal copyWith({
     String? id,
@@ -152,8 +159,9 @@ class PreciousMetal {
     double? totalAmount,
     DateTime? date,
     String? notes,
-    String? accountId,
+    Object? accountId = _sentinel,
     DateTime? createdAt,
+    Object? expenseId = _sentinel,
   }) {
     return PreciousMetal(
       id: id ?? this.id,
@@ -164,8 +172,9 @@ class PreciousMetal {
       totalAmount: totalAmount ?? this.totalAmount,
       date: date ?? this.date,
       notes: notes ?? this.notes,
-      accountId: accountId ?? this.accountId,
+      accountId: identical(accountId, _sentinel) ? this.accountId : accountId as String?,
       createdAt: createdAt ?? this.createdAt,
+      expenseId: identical(expenseId, _sentinel) ? this.expenseId : expenseId as String?,
     );
   }
 

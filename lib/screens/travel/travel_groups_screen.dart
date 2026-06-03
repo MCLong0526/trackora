@@ -69,10 +69,59 @@ class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: async.when(
-          loading: () => const Center(child: CupertinoActivityIndicator()),
-          error: (e, _) => _ErrorBody(error: e),
-          data: (groups) => _Body(groups: groups, isDark: isDark),
+        child: Column(
+          children: [
+            // Fixed header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _CircleBtn(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(CupertinoIcons.back, size: 16, color: _inkColor),
+                  ),
+                  _CircleBtn(
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        fullscreenDialog: true,
+                        builder: (_) => const AddEditTravelGroupScreen(),
+                      ),
+                    ),
+                    child: const Icon(CupertinoIcons.add, size: 18, color: _inkColor),
+                  ),
+                ],
+              ),
+            ),
+            // Scrollable content with top fade
+            Expanded(
+              child: Stack(
+                children: [
+                  async.when(
+                    loading: () => const Center(child: CupertinoActivityIndicator()),
+                    error: (e, _) => _ErrorBody(error: e),
+                    data: (groups) => _Body(groups: groups, isDark: isDark),
+                  ),
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [bg, bg.withValues(alpha: 0)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -124,30 +173,6 @@ class _Body extends ConsumerWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // ── Top utility row ───────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _CircleBtn(
-                onTap: () => Navigator.pop(context),
-                child: const Icon(CupertinoIcons.back, size: 16, color: _inkColor),
-              ),
-              _CircleBtn(
-                onTap: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    fullscreenDialog: true,
-                    builder: (_) => const AddEditTravelGroupScreen(),
-                  ),
-                ),
-                child: const Icon(CupertinoIcons.add, size: 18, color: _inkColor),
-              ),
-            ],
-          ),
-        ),
-
         // ── Hero ─────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),

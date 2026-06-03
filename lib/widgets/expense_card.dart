@@ -14,7 +14,11 @@ import '../theme/app_theme.dart';
 ///
 /// Right-to-left: reveals Edit + Delete buttons.
 /// Left-to-right: triggers copy action.
+///
+/// Call [ExpenseCard.closeAll] from a scroll listener to dismiss any open row.
 class ExpenseCard extends StatefulWidget {
+  /// Closes any currently-open swipe row across all visible ExpenseCards.
+  static void closeAll() => _ExpenseCardState._closeAllOpen();
   final Expense expense;
   final String currencySymbol;
   final VoidCallback onTap;
@@ -30,6 +34,12 @@ class ExpenseCard extends StatefulWidget {
   /// When true, shows a small split-bill indicator in the trailing row.
   final bool hasSplitBill;
 
+  /// Optional coordinator for one-at-a-time swipe behavior.
+  final ValueNotifier<String?>? coordinator;
+
+  /// Unique ID for this row within the coordinator.
+  final String? rowId;
+
   const ExpenseCard({
     super.key,
     required this.expense,
@@ -42,6 +52,8 @@ class ExpenseCard extends StatefulWidget {
     this.account,
     this.flat = false,
     this.hasSplitBill = false,
+    this.coordinator,
+    this.rowId,
   });
 
   @override
@@ -50,6 +62,14 @@ class ExpenseCard extends StatefulWidget {
 
 class _ExpenseCardState extends State<ExpenseCard>
     with SingleTickerProviderStateMixin {
+  static final Set<_ExpenseCardState> _openInstances = {};
+
+  static void _closeAllOpen() {
+    for (final s in Set.of(_openInstances)) {
+      if (s.mounted) s._closeActions();
+    }
+  }
+
   late AnimationController _controller;
   late Animation<double> _offsetAnimation;
 
@@ -61,6 +81,7 @@ class _ExpenseCardState extends State<ExpenseCard>
   static const double _snapThreshold = 60.0;
 
   double _dragOffset = 0.0;
+  double _dragStartOffset = 0.0;
   // -1 = sliding left (reveal right actions), 1 = sliding right (reveal left actions), 0 = neutral
   int _direction = 0;
 
@@ -74,18 +95,29 @@ class _ExpenseCardState extends State<ExpenseCard>
     _offsetAnimation = Tween<double>(begin: 0, end: 0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
+    widget.coordinator?.addListener(_onCoordChange);
   }
 
   @override
   void dispose() {
+    _openInstances.remove(this);
+    widget.coordinator?.removeListener(_onCoordChange);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onCoordChange() {
+    if (widget.coordinator!.value != widget.rowId && _dragOffset != 0) {
+      _closeActions();
+    }
   }
 
   void _onHorizontalDragStart(DragStartDetails _) {
     _controller.stop();
     _dragOffset = _offsetAnimation.value;
+    _dragStartOffset = _dragOffset;
     _direction = 0;
+    widget.coordinator?.value = widget.rowId;
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
@@ -96,7 +128,7 @@ class _ExpenseCardState extends State<ExpenseCard>
 
     setState(() {
       _dragOffset += details.delta.dx;
-      if (_direction == -1) {
+      if (_dragStartOffset < 0 || _direction == -1) {
         _dragOffset = _dragOffset.clamp(-_rightActionWidth, 0.0);
       } else {
         _dragOffset = _dragOffset.clamp(0.0, _leftActionWidth);
@@ -108,24 +140,21 @@ class _ExpenseCardState extends State<ExpenseCard>
     final velocity = details.primaryVelocity ?? 0;
     final shouldOpen = _dragOffset.abs() > _snapThreshold || velocity.abs() > 300;
 
-    if (_direction == -1) {
-      // Swiping left → reveal right actions
+    final rightInvolved = _dragStartOffset < 0 || (_direction == -1 && _dragStartOffset == 0);
+    if (rightInvolved) {
+      // Right panel: snap open or close
       if (shouldOpen && (widget.onDelete != null || widget.onEdit != null)) {
         _animateTo(-_rightActionWidth);
       } else {
         _animateTo(0);
       }
-    } else if (_direction == 1) {
-      // Swiping right → copy action trigger
+    } else {
+      // Left panel: snap open — user must tap the button to copy
       if (shouldOpen && widget.onCopy != null) {
-        _animateTo(0);
-        HapticFeedback.mediumImpact();
-        widget.onCopy!();
+        _animateTo(_leftActionWidth);
       } else {
         _animateTo(0);
       }
-    } else {
-      _animateTo(0);
     }
   }
 
@@ -136,6 +165,11 @@ class _ExpenseCardState extends State<ExpenseCard>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward(from: 0);
     setState(() => _dragOffset = target);
+    if (target == 0) {
+      _openInstances.remove(this);
+    } else {
+      _openInstances.add(this);
+    }
   }
 
   void _closeActions() => _animateTo(0);

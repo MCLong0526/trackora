@@ -39,10 +39,12 @@ const kExpenseCategories = [
   'Entertainment',
   'Health',
   'Bills',
+  'PreciousMetal',
+  'Stock',
   'Others',
 ];
 
-const kIncomeCategories = ['Salary', 'Others'];
+const kIncomeCategories = ['Salary', 'PreciousMetal', 'Stock', 'Others'];
 
 class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? expense;
@@ -1060,30 +1062,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     children: [
                       Column(
                         children: [
-                          // ── Edit-mode delete button (top-right only when editing) ──
-                          if (_isEdit)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: GestureDetector(
-                                  onTap: _delete,
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.blush,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      CupertinoIcons.delete,
-                                      size: 17,
-                                      color: AppColors.expense,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                           // ── Drag handle + close hint ──────────────────────────────
                           _buildDragHandle(brand),
                           Expanded(
@@ -1123,6 +1101,25 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
+                            if (_isEdit) ...[
+                              GestureDetector(
+                                onTap: _delete,
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.blush,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    CupertinoIcons.delete,
+                                    size: 20,
+                                    color: AppColors.expense,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             _typeMenuButton(brand),
                             const SizedBox(width: 12),
                             Expanded(child: _floatingSavePill(brand)),

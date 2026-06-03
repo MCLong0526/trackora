@@ -121,38 +121,57 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
           ),
           // List
           Expanded(
-            child: async.when(
-              loading: () => const Center(child: CupertinoActivityIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
-              data: (all) {
-                final list = _filtered(all);
-                if (all.isEmpty) {
-                  return _EmptyState(onAdd: () => _openAdd(context));
-                }
-                if (list.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No results',
-                      style: TextStyle(color: brand.inkSoft),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  itemCount: list.length,
-                  separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
-                  itemBuilder: (ctx, i) => _PersonSwipeActions(
-                    person: list[i],
-                    userId: user?.uid,
-                    coordinator: _coordinator,
-                    onEdit: () => _openEdit(context, list[i]),
-                    child: _PersonCard(
-                      person: list[i],
-                      onTap: () => _openEdit(context, list[i]),
+            child: Stack(
+              children: [
+                async.when(
+                  loading: () => const Center(child: CupertinoActivityIndicator()),
+                  error: (e, _) => Center(child: Text('Error: $e')),
+                  data: (all) {
+                    final list = _filtered(all);
+                    if (all.isEmpty) {
+                      return _EmptyState(onAdd: () => _openAdd(context));
+                    }
+                    if (list.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No results',
+                          style: TextStyle(color: brand.inkSoft),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      itemCount: list.length,
+                      separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) => _PersonSwipeActions(
+                        person: list[i],
+                        userId: user?.uid,
+                        coordinator: _coordinator,
+                        onEdit: () => _openEdit(context, list[i]),
+                        child: _PersonCard(
+                          person: list[i],
+                          onTap: () => _openEdit(context, list[i]),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Positioned(
+                  top: 0, left: 0, right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [brand.background, brand.background.withValues(alpha: 0)],
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],

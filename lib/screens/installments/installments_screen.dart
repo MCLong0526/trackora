@@ -102,7 +102,9 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
                   item.status == InstallmentStatus.cancelled,
               }).toList();
 
-              return ListView(
+              return Stack(
+                children: [
+              ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                 children: [
                   _SummaryCard(items: items, symbol: symbol),
@@ -179,6 +181,23 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
                             ],
                           ),
                   ),
+                ],
+              ),
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [brand.background, brand.background.withValues(alpha: 0)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
                 ],
               );
             },
@@ -582,6 +601,7 @@ class _InstallmentSwipeActionsState
   late final AnimationController _ctrl;
   late final CurvedAnimation _curve;
   double _offset = 0;
+  double _dragStartOffset = 0;
   double _animStart = 0;
   double _animTarget = 0;
 
@@ -631,6 +651,7 @@ class _InstallmentSwipeActionsState
 
   void _onDragStart(DragStartDetails _) {
     _ctrl.stop();
+    _dragStartOffset = _offset;
     widget.coordinator.openRow(widget.installment.id);
   }
 
@@ -642,24 +663,22 @@ class _InstallmentSwipeActionsState
 
   void _onDragEnd(DragEndDetails d) {
     final v = d.primaryVelocity ?? 0;
-    if (_offset < 0) {
+    final rightInvolved = _dragStartOffset < 0 || (_dragStartOffset == 0 && _offset < 0);
+    if (rightInvolved) {
       (_offset < -_rightPanelW * 0.35 || v < -500)
           ? _springAnimate(-_rightPanelW)
           : _springAnimate(0);
     } else {
       (_offset > _leftPanelW * 0.35 || v > 500)
-          ? _handleEditSwipe()
+          ? _springAnimate(_leftPanelW)
           : _springAnimate(0);
     }
   }
 
   Future<void> _handleEditSwipe() async {
     HapticFeedback.selectionClick();
-    _springAnimate(_leftPanelW);
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    _springAnimate(0);
-    await Future.delayed(const Duration(milliseconds: 180));
+    _close();
+    await Future.delayed(const Duration(milliseconds: 200));
     if (!mounted) return;
     Navigator.push(
       context,

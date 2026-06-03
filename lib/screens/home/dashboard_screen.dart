@@ -8,7 +8,10 @@ import '../../app_config.dart';
 import '../../models/expense.dart';
 import '../../models/expense_group.dart';
 import '../../models/installment.dart';
+import '../../models/precious_metal.dart';
+import '../../models/stock_investment.dart';
 import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_precious_metal_repository.dart';
 import '../../repositories/local_split_bill_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
@@ -24,6 +27,8 @@ import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
+import '../precious_metals/precious_metals_screen.dart';
+import '../stocks/stock_detail_screen.dart';
 import '../travel/travel_groups_screen.dart';
 import '../../widgets/personal_group_toggle.dart';
 import 'calendar_screen.dart';
@@ -43,6 +48,10 @@ class DashboardScreen extends ConsumerWidget {
     final appLocale = ref.watch(localeProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final allMetals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final allStocks = ref.watch(stockInvestmentsProvider).valueOrNull ??
+        const <StockInvestment>[];
     final mode = ref.watch(homeModeProvider);
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
     final hasGroups = groups.isNotEmpty;
@@ -140,6 +149,21 @@ class DashboardScreen extends ConsumerWidget {
 
     final sortedRecent = [...allExpenses]
       ..sort((a, b) => b.date.compareTo(a.date));
+
+    // Build a combined activity list for the selected month: expenses +
+    // precious metal buy/sell + stock buy/sell, sorted by date (newest first).
+    bool inSelectedMonth(DateTime d) =>
+        d.year == selectedMonth.year && d.month == selectedMonth.month;
+    final activityItems = <_ActivityItem>[
+      for (final e in monthExpenses) _ActivityItem.expense(e),
+      for (final m in allMetals)
+        if (inSelectedMonth(m.date)) _ActivityItem.metal(m),
+      for (final s in allStocks)
+        for (final tx in s.transactions)
+          if (_stockTxnDate(tx) != null && inSelectedMonth(_stockTxnDate(tx)!))
+            _ActivityItem.stock(s, tx),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+
     ref
         .read(widgetSyncServiceProvider)
         .push(
@@ -351,122 +375,138 @@ class DashboardScreen extends ConsumerWidget {
 
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-            if (monthExpenses.isEmpty)
+            if (activityItems.isEmpty)
               SliverToBoxAdapter(child: _empty(context))
             else ...[
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: brand.surface,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Column(
-                        children: [
-                          for (
-                            var i = 0;
-                            i < monthExpenses.length.clamp(0, 5);
-                            i++
-                          ) ...[
-                            if (i > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 70),
-                                child: Container(
-                                  height: 0.5,
-                                  color: brand.divider,
-                                ),
-                              ),
-                            Builder(
-                              builder: (ctx) {
-                                final expense = monthExpenses[i];
-                                final acct = accounts
-                                    .where((a) => a.id == expense.accountId)
-                                    .firstOrNull;
-                                return ExpenseCard(
-                                  key: ValueKey(expense.id),
-                                  expense: expense,
-                                  currencySymbol: symbol,
-                                  account: acct,
-                                  flat: true,
-                                  hasSplitBill:
-                                      user != null &&
-                                      LocalSplitBillRepository.hasSplitBillSync(
-                                        user.uid,
-                                        expense.id,
-                                      ),
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    CupertinoPageRoute(
-                                      builder: (_) => AddEditExpenseScreen(
-                                        expense: expense,
-                                      ),
+                  child: _CoordinatedList(
+                    builder: (coordinator) => GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => coordinator.value = null,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Column(
+                            children: [
+                              for (
+                                var i = 0;
+                                i < activityItems.length.clamp(0, 5);
+                                i++
+                              ) ...[
+                                if (i > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 70),
+                                    child: Container(
+                                      height: 0.5,
+                                      color: brand.divider,
                                     ),
                                   ),
-                                  onEdit: () => Navigator.push(
-                                    context,
-                                    CupertinoPageRoute(
-                                      builder: (_) => AddEditExpenseScreen(
-                                        expense: expense,
-                                      ),
-                                    ),
-                                  ),
-                                  onDelete: () async {
-                                    if (user == null) return;
-                                    final uid = user.uid;
-                                    try {
-                                      if (storageMode == StorageMode.firebase) {
-                                        final isOnline = ref.read(
-                                          isOnlineProvider,
-                                        );
-                                        await SyncService().deleteExpense(
-                                          userId: uid,
-                                          expenseId: expense.id,
-                                          isOnline: isOnline,
-                                        );
-                                      } else {
-                                        await LocalExpenseRepository()
-                                            .deleteExpense(uid, expense.id);
-                                      }
-                                      if (!context.mounted) return;
-                                      AppToast.show(
-                                        context,
-                                        context.t('expense.entryDeleted'),
-                                        type: AppToastType.info,
-                                        icon: CupertinoIcons.trash,
-                                      );
-                                    } catch (_) {
-                                      if (!context.mounted) return;
-                                      AppToast.show(
-                                        context,
-                                        context.t('common.error'),
-                                        type: AppToastType.error,
-                                        icon: CupertinoIcons
-                                            .exclamationmark_circle_fill,
+                                Builder(
+                                  builder: (ctx) {
+                                    final item = activityItems[i];
+                                    final expense = item.expense;
+                                    if (expense == null) {
+                                      // Precious metal or stock transaction row.
+                                      return _AssetActivityRow(
+                                        item: item,
+                                        symbol: symbol,
                                       );
                                     }
+                                    final acct = accounts
+                                        .where((a) => a.id == expense.accountId)
+                                        .firstOrNull;
+                                    return ExpenseCard(
+                                      key: ValueKey(expense.id),
+                                      coordinator: coordinator,
+                                      rowId: expense.id,
+                                      expense: expense,
+                                      currencySymbol: symbol,
+                                      account: acct,
+                                      flat: true,
+                                      hasSplitBill:
+                                          user != null &&
+                                          LocalSplitBillRepository.hasSplitBillSync(
+                                            user.uid,
+                                            expense.id,
+                                          ),
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        CupertinoPageRoute(
+                                          builder: (_) => AddEditExpenseScreen(
+                                            expense: expense,
+                                          ),
+                                        ),
+                                      ),
+                                      onEdit: () => Navigator.push(
+                                        context,
+                                        CupertinoPageRoute(
+                                          builder: (_) => AddEditExpenseScreen(
+                                            expense: expense,
+                                          ),
+                                        ),
+                                      ),
+                                      onDelete: () async {
+                                        if (user == null) return;
+                                        final uid = user.uid;
+                                        try {
+                                          if (storageMode == StorageMode.firebase) {
+                                            final isOnline = ref.read(
+                                              isOnlineProvider,
+                                            );
+                                            await SyncService().deleteExpense(
+                                              userId: uid,
+                                              expenseId: expense.id,
+                                              isOnline: isOnline,
+                                            );
+                                          } else {
+                                            await LocalExpenseRepository()
+                                                .deleteExpense(uid, expense.id);
+                                          }
+                                          if (!context.mounted) return;
+                                          AppToast.show(
+                                            context,
+                                            context.t('expense.entryDeleted'),
+                                            type: AppToastType.info,
+                                            icon: CupertinoIcons.trash,
+                                          );
+                                        } catch (_) {
+                                          if (!context.mounted) return;
+                                          AppToast.show(
+                                            context,
+                                            context.t('common.error'),
+                                            type: AppToastType.error,
+                                            icon: CupertinoIcons
+                                                .exclamationmark_circle_fill,
+                                          );
+                                        }
+                                      },
+                                      onCopy: () => _copyRecord(context, expense),
+                                    );
                                   },
-                                  onCopy: () => _copyRecord(context, expense),
-                                );
-                              },
-                            ),
-                          ],
-                        ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-              if (monthExpenses.length > 5)
+              if (activityItems.length > 5)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: GestureDetector(
                       onTap: () => _showAllBillsSheet(
                         context,
-                        monthExpenses,
+                        activityItems,
                         symbol,
                         selectedMonth,
                       ),
@@ -479,7 +519,7 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          '${context.t('home.allBills')} · ${monthExpenses.length} ${context.t('common.entries')}',
+                          '${context.t('home.allBills')} · ${activityItems.length} ${context.t('common.entries')}',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -550,14 +590,14 @@ class DashboardScreen extends ConsumerWidget {
 
   void _showAllBillsSheet(
     BuildContext context,
-    List<Expense> expenses,
+    List<_ActivityItem> items,
     String symbol,
     DateTime month,
   ) {
-    final sorted = [...expenses]..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = [...items]..sort((a, b) => b.date.compareTo(a.date));
     final total = sorted
-        .where((e) => e.type == EntryType.expense)
-        .fold<double>(0, (s, e) => s + e.convertedAmount);
+        .where((i) => i.expense?.type == EntryType.expense)
+        .fold<double>(0, (s, i) => s + i.expense!.convertedAmount);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -571,11 +611,266 @@ class DashboardScreen extends ConsumerWidget {
             maxHeight: MediaQuery.sizeOf(ctx).height * 0.85,
           ),
           child: _AllBillsSheet(
-            expenses: sorted,
+            items: sorted,
             total: total,
             symbol: symbol,
             month: month,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Activity item (union: expense / metal / stock) ─────────────
+
+DateTime? _stockTxnDate(Map<String, dynamic> tx) {
+  final raw = tx['date'];
+  if (raw is String) {
+    try {
+      return DateTime.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+  if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+  if (raw is DateTime) return raw;
+  return null;
+}
+
+/// A single row in the dashboard activity list. Holds exactly one of an
+/// [Expense], a [PreciousMetal], or a stock investment transaction.
+class _ActivityItem {
+  final Expense? expense;
+  final PreciousMetal? metal;
+  final StockInvestment? stock;
+  final Map<String, dynamic>? stockTxn;
+  final DateTime date;
+
+  const _ActivityItem._({
+    this.expense,
+    this.metal,
+    this.stock,
+    this.stockTxn,
+    required this.date,
+  });
+
+  factory _ActivityItem.expense(Expense e) =>
+      _ActivityItem._(expense: e, date: e.date);
+
+  factory _ActivityItem.metal(PreciousMetal m) =>
+      _ActivityItem._(metal: m, date: m.date);
+
+  factory _ActivityItem.stock(StockInvestment s, Map<String, dynamic> tx) =>
+      _ActivityItem._(
+        stock: s,
+        stockTxn: tx,
+        date: _stockTxnDate(tx) ?? s.updatedAt,
+      );
+}
+
+// ── Asset activity row (precious metal / stock buy-sell) ───────
+class _AssetActivityRow extends ConsumerWidget {
+  final _ActivityItem item;
+  final String symbol;
+
+  const _AssetActivityRow({required this.item, required this.symbol});
+
+  void _openEdit(BuildContext context) {
+    final metal = item.metal;
+    if (metal != null) {
+      showMetalEditSheet(context, metal);
+    } else {
+      Navigator.push(
+        context,
+        CupertinoPageRoute(builder: (_) => StockDetailScreen(stock: item.stock!)),
+      );
+    }
+  }
+
+  Future<void> _deleteMetal(
+    BuildContext context,
+    WidgetRef ref,
+    PreciousMetal metal,
+  ) async {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    try {
+      // Always remove from local Hive immediately so the UI updates offline.
+      await LocalPreciousMetalRepository().delete(user.uid, metal.id);
+      await ref.read(preciousMetalRepositoryProvider).delete(user.uid, metal.id);
+      if (storageMode == StorageMode.firebase &&
+          !ref.read(isOnlineProvider)) {
+        // Offline: queue the Firestore delete so it syncs on reconnect.
+        await SyncService.markEntityPendingDelete(user.uid, 'metal', metal.id);
+      }
+      // Also remove the linked expense entry, if any.
+      if (metal.expenseId != null && metal.expenseId!.isNotEmpty) {
+        await LocalExpenseRepository()
+            .deleteExpense(user.uid, metal.expenseId!);
+        if (storageMode == StorageMode.firebase) {
+          await SyncService().deleteExpense(
+            userId: user.uid,
+            expenseId: metal.expenseId!,
+            isOnline: ref.read(isOnlineProvider),
+          );
+        }
+      }
+      ref.invalidate(preciousMetalsProvider);
+      if (!context.mounted) return;
+      AppToast.show(
+        context,
+        context.t('metal.deletedToast'),
+        type: AppToastType.info,
+        icon: CupertinoIcons.trash,
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      AppToast.show(
+        context,
+        context.t('common.error'),
+        type: AppToastType.error,
+        icon: CupertinoIcons.exclamationmark_circle_fill,
+      );
+    }
+  }
+
+  void _showActions(BuildContext context, WidgetRef ref) {
+    HapticFeedback.mediumImpact();
+    final metal = item.metal;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetCtx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetCtx);
+              _openEdit(context);
+            },
+            child: Text(context.t('common.edit')),
+          ),
+          if (metal != null)
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () {
+                Navigator.pop(sheetCtx);
+                _deleteMetal(context, ref, metal);
+              },
+              child: Text(context.t('common.delete')),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(sheetCtx),
+          child: Text(context.t('common.cancel')),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final metal = item.metal;
+    final stock = item.stock;
+
+    late final String title;
+    late final IconData icon;
+    late final Color iconBg;
+    late final Color iconColor;
+    late final bool isInflow;
+    late final double amount;
+
+    if (metal != null) {
+      final isSell = metal.action == MetalAction.sell;
+      title =
+          '${metal.metalType.label} ${isSell ? context.t('metal.sell') : context.t('metal.buy')}';
+      icon = CupertinoIcons.circle_grid_hex_fill;
+      iconBg = metal.metalType.bgColor;
+      iconColor = metal.metalType.primaryColor;
+      isInflow = isSell;
+      amount = metal.totalAmount;
+    } else {
+      final tx = item.stockTxn!;
+      final isSell = tx['type'] == 'sell';
+      final qty = (tx['qty'] as num?)?.toDouble() ?? 0.0;
+      final price = (tx['price'] as num?)?.toDouble() ?? 0.0;
+      title =
+          '${stock!.symbol} ${isSell ? context.t('metal.sell') : context.t('metal.buy')}';
+      icon = CupertinoIcons.chart_bar_alt_fill;
+      iconBg = AppColors.sky;
+      iconColor = const Color(0xFF2A6FB5);
+      isInflow = isSell;
+      amount = qty * price;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final d = DateTime(item.date.year, item.date.month, item.date.day);
+    final dateStr = d == today
+        ? 'Today'
+        : d == yesterday
+            ? 'Yesterday'
+            : DateFormat('MMM d').format(item.date);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        _openEdit(context);
+      },
+      onLongPress: () => _showActions(context, ref),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, size: 20, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: brand.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    dateStr,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              isInflow
+                  ? formatMoney(symbol, amount, forceSign: true)
+                  : formatMoney(symbol, -amount),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: isInflow ? brand.income : brand.ink,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1498,24 +1793,33 @@ class _QuickAddButtonState extends State<_QuickAddButton>
 
 // ── All Activity bottom sheet ──────────────────────────────────
 
-class _AllBillsSheet extends ConsumerWidget {
-  final List<Expense> expenses;
+class _AllBillsSheet extends ConsumerStatefulWidget {
+  final List<_ActivityItem> items;
   final double total;
   final String symbol;
   final DateTime month;
 
   const _AllBillsSheet({
-    required this.expenses,
+    required this.items,
     required this.total,
     required this.symbol,
     required this.month,
   });
 
-  Future<void> _deleteExpense(
-    BuildContext context,
-    WidgetRef ref,
-    Expense expense,
-  ) async {
+  @override
+  ConsumerState<_AllBillsSheet> createState() => _AllBillsSheetState();
+}
+
+class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
+  final _coordinator = ValueNotifier<String?>(null);
+
+  @override
+  void dispose() {
+    _coordinator.dispose();
+    super.dispose();
+  }
+
+  Future<void> _deleteExpense(BuildContext context, Expense expense) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
     final uid = user.uid;
@@ -1564,7 +1868,7 @@ class _AllBillsSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final brand = context.brand;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     return Padding(
@@ -1599,7 +1903,7 @@ class _AllBillsSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      DateFormat('MMMM yyyy').format(month),
+                      DateFormat('MMMM yyyy').format(widget.month),
                       style: TextStyle(
                         fontSize: 12,
                         color: brand.inkSoft,
@@ -1629,7 +1933,7 @@ class _AllBillsSheet extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    formatMoney(symbol, total),
+                    formatMoney(widget.symbol, widget.total),
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
@@ -1637,7 +1941,7 @@ class _AllBillsSheet extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  '${expenses.length} ${expenses.length == 1 ? context.t('common.entry') : context.t('common.entries')}',
+                  '${widget.items.length} ${widget.items.length == 1 ? context.t('common.entry') : context.t('common.entries')}',
                   style: TextStyle(
                     fontSize: 12,
                     color: brand.inkSoft,
@@ -1649,50 +1953,70 @@ class _AllBillsSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
           Flexible(
-            child: Container(
-              decoration: BoxDecoration(
-                color: brand.surface,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: expenses.length,
-                  separatorBuilder: (_, _) => Padding(
-                    padding: const EdgeInsets.only(left: 70),
-                    child: Container(height: 0.5, color: brand.divider),
-                  ),
-                  itemBuilder: (ctx, i) {
-                    final expense = expenses[i];
-                    final acct = accounts
-                        .where((a) => a.id == expense.accountId)
-                        .firstOrNull;
-                    return ExpenseCard(
-                      key: ValueKey(expense.id),
-                      expense: expense,
-                      currencySymbol: symbol,
-                      account: acct,
-                      flat: true,
-                      onTap: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(
-                          builder: (_) =>
-                              AddEditExpenseScreen(expense: expense),
-                        ),
-                      ),
-                      onEdit: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute(
-                          builder: (_) =>
-                              AddEditExpenseScreen(expense: expense),
-                        ),
-                      ),
-                      onDelete: () => _deleteExpense(context, ref, expense),
-                      onCopy: () => _copyRecord(context, expense),
-                    );
-                  },
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (_) {
+                _coordinator.value = null;
+                return false;
+              },
+              child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _coordinator.value = null,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(18),
                 ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: widget.items.length,
+                    separatorBuilder: (_, _) => Padding(
+                      padding: const EdgeInsets.only(left: 70),
+                      child: Container(height: 0.5, color: brand.divider),
+                    ),
+                    itemBuilder: (ctx, i) {
+                      final item = widget.items[i];
+                      final expense = item.expense;
+                      if (expense == null) {
+                        // Precious metal or stock transaction row.
+                        return _AssetActivityRow(
+                          item: item,
+                          symbol: widget.symbol,
+                        );
+                      }
+                      final acct = accounts
+                          .where((a) => a.id == expense.accountId)
+                          .firstOrNull;
+                      return ExpenseCard(
+                        key: ValueKey(expense.id),
+                        coordinator: _coordinator,
+                        rowId: expense.id,
+                        expense: expense,
+                        currencySymbol: widget.symbol,
+                        account: acct,
+                        flat: true,
+                        onTap: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (_) =>
+                                AddEditExpenseScreen(expense: expense),
+                          ),
+                        ),
+                        onEdit: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (_) =>
+                                AddEditExpenseScreen(expense: expense),
+                          ),
+                        ),
+                        onDelete: () => _deleteExpense(context, expense),
+                        onCopy: () => _copyRecord(context, expense),
+                      );
+                    },
+                  ),
+                ),
+              ),
               ),
             ),
           ),
@@ -1700,4 +2024,25 @@ class _AllBillsSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _CoordinatedList extends StatefulWidget {
+  final Widget Function(ValueNotifier<String?> coordinator) builder;
+  const _CoordinatedList({required this.builder});
+
+  @override
+  State<_CoordinatedList> createState() => _CoordinatedListState();
+}
+
+class _CoordinatedListState extends State<_CoordinatedList> {
+  final _coord = ValueNotifier<String?>(null);
+
+  @override
+  void dispose() {
+    _coord.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_coord);
 }

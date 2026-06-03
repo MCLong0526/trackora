@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -153,16 +152,35 @@ class _GroupDashboardScreenState extends ConsumerState<GroupDashboardScreen> {
 
             // ── Scrollable body ───────────────────────────────────
             Expanded(
-              child: groupsAsync.isLoading
-                  ? const Center(child: CupertinoActivityIndicator())
-                  : groups.isEmpty
-                  ? _IntroView(brand: brand)
-                  : GroupDashboardContent(
-                      brand: brand,
-                      group: activeGroup,
-                      symbol: symbol,
-                      userId: user?.uid,
+              child: Stack(
+                children: [
+                  groupsAsync.isLoading
+                      ? const Center(child: CupertinoActivityIndicator())
+                      : groups.isEmpty
+                      ? _IntroView(brand: brand)
+                      : GroupDashboardContent(
+                          brand: brand,
+                          group: activeGroup,
+                          symbol: symbol,
+                          userId: user?.uid,
+                        ),
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [brand.background, brand.background.withValues(alpha: 0)],
+                          ),
+                        ),
+                      ),
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -369,9 +387,17 @@ class _IntroView extends StatelessWidget {
   }
 }
 
+// ── Coordinator for one-at-a-time group expense swipe ───────────────────────
+
+class _GrpCoordinator extends ValueNotifier<String?> {
+  _GrpCoordinator() : super(null);
+  void openRow(String id) => value = id;
+  void closeAll() => value = null;
+}
+
 // ── Group body (has group) ───────────────────────────────────────────────────
 
-class GroupDashboardContent extends ConsumerWidget {
+class GroupDashboardContent extends ConsumerStatefulWidget {
   final BrandColors brand;
   final ExpenseGroup? group;
   final String symbol;
@@ -386,18 +412,35 @@ class GroupDashboardContent extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GroupDashboardContent> createState() => _GroupDashboardContentState();
+}
+
+class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
+  final _coordinator = _GrpCoordinator();
+
+  @override
+  void dispose() {
+    _coordinator.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = widget.brand;
+    final group = widget.group;
+    final symbol = widget.symbol;
+    final userId = widget.userId;
     if (group == null) {
       return _IntroView(brand: brand);
     }
 
     // Keep Firestore → local sync alive while this screen is visible.
-    ref.watch(groupExpenseSyncProvider(group!.id));
+    ref.watch(groupExpenseSyncProvider(group.id));
 
-    final expensesAsync = ref.watch(groupExpensesProvider(group!.id));
+    final expensesAsync = ref.watch(groupExpensesProvider(group.id));
     final expenses = expensesAsync.valueOrNull ?? const [];
     final service = ref.read(expenseGroupServiceProvider);
-    final balances = service.computeBalances(group!.members, expenses);
+    final balances = service.computeBalances(group.members, expenses);
     final myBalance = balances.cast<dynamic>().firstWhere(
       (b) => b.uid == userId,
       orElse: () => null,
@@ -409,8 +452,8 @@ class GroupDashboardContent extends ConsumerWidget {
     final myNet = myBalance?.net as double? ?? 0;
     final totalSpent = expenses.fold<double>(0, (s, e) => s + e.amount);
 
-    final me = group!.members.where((m) => m.uid == userId).firstOrNull;
-    final partner = group!.members.where((m) => m.uid != userId).firstOrNull;
+    final me = group.members.where((m) => m.uid == userId).firstOrNull;
+    final partner = group.members.where((m) => m.uid != userId).firstOrNull;
     final profileName = ref.watch(userNameProvider);
     final myDisplayName = profileName.isNotEmpty
         ? profileName
@@ -646,7 +689,7 @@ class GroupDashboardContent extends ConsumerWidget {
 
               // Generate Receipt — bottom of hero card
               GestureDetector(
-                onTap: () => showGroupReceiptPicker(context, group!),
+                onTap: () => showGroupReceiptPicker(context, group),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -695,7 +738,7 @@ class GroupDashboardContent extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 CupertinoPageRoute(
-                  builder: (_) => AddGroupExpenseScreen(group: group!),
+                  builder: (_) => AddGroupExpenseScreen(group: group),
                 ),
               ),
               child: Container(
@@ -755,35 +798,40 @@ class GroupDashboardContent extends ConsumerWidget {
             ),
           )
         else
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: Column(
-                children: [
-                  for (int i = 0; i < expenses.take(10).length; i++) ...[
-                    if (i > 0)
-                      Divider(
-                        height: 1,
-                        thickness: 0.5,
-                        indent: 74,
-                        endIndent: 18,
-                        color: brand.divider,
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _coordinator.closeAll,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < expenses.take(10).length; i++) ...[
+                      if (i > 0)
+                        Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          indent: 74,
+                          endIndent: 18,
+                          color: brand.divider,
+                        ),
+                      _SwipeableActivityRow(
+                        brand: brand,
+                        expense: expenses[i],
+                        group: group,
+                        members: group.members,
+                        symbol: symbol,
+                        userId: userId,
+                        ref: ref,
+                        coordinator: _coordinator,
                       ),
-                    _SwipeableActivityRow(
-                      brand: brand,
-                      expense: expenses[i],
-                      group: group!,
-                      members: group!.members,
-                      symbol: symbol,
-                      userId: userId,
-                      ref: ref,
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -791,12 +839,12 @@ class GroupDashboardContent extends ConsumerWidget {
         const SizedBox(height: 16),
 
         // Invite partner button (if only one member)
-        if (group!.members.length < 2)
+        if (group.members.length < 2)
           GestureDetector(
             onTap: () => Navigator.push(
               context,
               CupertinoPageRoute(
-                builder: (_) => GroupInviteScreen(group: group!),
+                builder: (_) => GroupInviteScreen(group: group),
               ),
             ),
             child: Container(
@@ -845,6 +893,7 @@ class _SwipeableActivityRow extends StatefulWidget {
   final String symbol;
   final String? userId;
   final WidgetRef ref;
+  final _GrpCoordinator coordinator;
 
   const _SwipeableActivityRow({
     required this.brand,
@@ -854,6 +903,7 @@ class _SwipeableActivityRow extends StatefulWidget {
     required this.symbol,
     required this.userId,
     required this.ref,
+    required this.coordinator,
   });
 
   @override
@@ -870,6 +920,7 @@ class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
   static const double _snapThreshold = 55.0;
 
   double _drag = 0.0;
+  double _dragStartOffset = 0.0;
   int _dir = 0; // -1 left, 1 right, 0 neutral
 
   @override
@@ -877,12 +928,20 @@ class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
     _anim = Tween<double>(begin: 0, end: 0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    widget.coordinator.addListener(_onCoordChange);
   }
 
   @override
   void dispose() {
+    widget.coordinator.removeListener(_onCoordChange);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _onCoordChange() {
+    if (widget.coordinator.value != widget.expense.id) {
+      _close();
+    }
   }
 
   void _animateTo(double target) {
@@ -964,7 +1023,9 @@ class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
       onHorizontalDragStart: (_) {
         _ctrl.stop();
         _drag = _anim.value;
+        _dragStartOffset = _drag;
         _dir = 0;
+        widget.coordinator.openRow(widget.expense.id);
       },
       onHorizontalDragUpdate: (d) {
         if (_dir == 0) {
@@ -981,16 +1042,12 @@ class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
       onHorizontalDragEnd: (d) {
         final vel = d.primaryVelocity ?? 0;
         final shouldOpen = _drag.abs() > _snapThreshold || vel.abs() > 300;
-        if (_dir == -1) {
+        final rightInvolved = _dragStartOffset < 0 || (_dir == -1 && _dragStartOffset == 0);
+        if (rightInvolved) {
           shouldOpen ? _animateTo(-_rightWidth) : _animateTo(0);
         } else {
-          if (shouldOpen) {
-            _animateTo(0);
-            HapticFeedback.mediumImpact();
-            _duplicate();
-          } else {
-            _animateTo(0);
-          }
+          // Left panel: snap open — user must tap the button to duplicate
+          shouldOpen ? _animateTo(_leftWidth) : _animateTo(0);
         }
       },
       child: AnimatedBuilder(

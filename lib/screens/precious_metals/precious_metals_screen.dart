@@ -10,10 +10,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/precious_metal.dart';
+import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_precious_metal_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -299,7 +303,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
-          _AddMetalSheet(initialMetal: _active, initialAction: action),
+          AddMetalSheet(initialMetal: _active, initialAction: action),
     );
   }
 
@@ -323,7 +327,24 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
   Future<void> _deleteMetal(PreciousMetal metal) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
+    // Always remove from local Hive immediately so sync doesn't restore it.
+    await LocalPreciousMetalRepository().delete(user.uid, metal.id);
     await ref.read(preciousMetalRepositoryProvider).delete(user.uid, metal.id);
+    if (storageMode == StorageMode.firebase && !ref.read(isOnlineProvider)) {
+      // Offline: queue the Firestore delete so it syncs on reconnect.
+      await SyncService.markEntityPendingDelete(user.uid, 'metal', metal.id);
+    }
+    // Also remove the linked expense entry, if any.
+    if (metal.expenseId != null && metal.expenseId!.isNotEmpty) {
+      await LocalExpenseRepository().deleteExpense(user.uid, metal.expenseId!);
+      if (storageMode == StorageMode.firebase) {
+        await SyncService().deleteExpense(
+          userId: user.uid,
+          expenseId: metal.expenseId!,
+          isOnline: ref.read(isOnlineProvider),
+        );
+      }
+    }
     if (mounted) {
       AppToast.show(
         context,
@@ -346,7 +367,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddMetalSheet(
+      builder: (_) => AddMetalSheet(
         initialMetal: metal.metalType,
         initialAction: metal.action,
         copyFrom: metal,
@@ -360,7 +381,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddMetalSheet(
+      builder: (_) => AddMetalSheet(
         initialMetal: metal.metalType,
         initialAction: metal.action,
         editMetal: metal,
@@ -2040,9 +2061,18 @@ class _SwipeTxRowState extends State<_SwipeTxRow>
   static const double _leftActionWidth = 80.0;
   static const double _snapThreshold = 60.0;
 
+  static final Set<_SwipeTxRowState> _openInstances = {};
+
+  static void _closeAllOpen() {
+    for (final s in Set.of(_openInstances)) {
+      if (s.mounted) s._close();
+    }
+  }
+
   late AnimationController _controller;
   late Animation<double> _offsetAnimation;
   double _dragOffset = 0.0;
+  double _dragStartOffset = 0.0;
   int _direction = 0;
 
   @override
@@ -2060,13 +2090,18 @@ class _SwipeTxRowState extends State<_SwipeTxRow>
 
   @override
   void dispose() {
+    _openInstances.remove(this);
     _controller.dispose();
     super.dispose();
   }
 
   void _onDragStart(DragStartDetails _) {
+    for (final s in Set.of(_openInstances)) {
+      if (s != this && s.mounted) s._close();
+    }
     _controller.stop();
     _dragOffset = _offsetAnimation.value;
+    _dragStartOffset = _dragOffset;
     _direction = 0;
   }
 
@@ -2077,7 +2112,7 @@ class _SwipeTxRowState extends State<_SwipeTxRow>
     }
     setState(() {
       _dragOffset += d.delta.dx;
-      if (_direction == -1) {
+      if (_dragStartOffset < 0 || _direction == -1) {
         _dragOffset = _dragOffset.clamp(-_rightActionWidth, 0.0);
       } else {
         _dragOffset = _dragOffset.clamp(0.0, _leftActionWidth);
@@ -2089,7 +2124,8 @@ class _SwipeTxRowState extends State<_SwipeTxRow>
     final velocity = d.primaryVelocity ?? 0;
     final shouldOpen =
         _dragOffset.abs() > _snapThreshold || velocity.abs() > 300;
-    if (_direction == -1) {
+    final rightInvolved = _dragStartOffset < 0 || _direction == -1;
+    if (rightInvolved) {
       if (shouldOpen && (widget.onDelete != null || widget.onEdit != null)) {
         _animateTo(-_rightActionWidth);
       } else {
@@ -2115,6 +2151,11 @@ class _SwipeTxRowState extends State<_SwipeTxRow>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward(from: 0);
     setState(() => _dragOffset = target);
+    if (target == 0) {
+      _openInstances.remove(this);
+    } else {
+      _openInstances.add(this);
+    }
   }
 
   void _close() => _animateTo(0);
@@ -2401,7 +2442,15 @@ class _HistorySheetState extends ConsumerState<_HistorySheet> {
                       style: TextStyle(fontSize: 14, color: brand.inkSoft),
                     ),
                   )
-                : ListView.separated(
+                : NotificationListener<ScrollNotification>(
+                    onNotification: (_) {
+                      _SwipeTxRowState._closeAllOpen();
+                      return false;
+                    },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTapDown: (_) => _SwipeTxRowState._closeAllOpen(),
+                      child: ListView.separated(
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomPad),
                     itemCount: items.length,
                     separatorBuilder: (_, __) => Padding(
@@ -2457,6 +2506,8 @@ class _HistorySheetState extends ConsumerState<_HistorySheet> {
                       ),
                     ),
                   ),
+                    ),
+                    ),
           ),
         ],
       ),
@@ -2508,13 +2559,30 @@ class _IngotPainter extends CustomPainter {
 // Add Metal Sheet — modal bottom sheet, new-entry style
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AddMetalSheet extends ConsumerStatefulWidget {
+/// Presents the precious-metal edit/add bottom sheet (UI B) used across the
+/// app — tapping a metal record in the dashboard activity list or calendar
+/// opens this same sheet, matching the precious-metals history presentation.
+Future<void> showMetalEditSheet(BuildContext context, PreciousMetal metal) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => AddMetalSheet(
+      initialMetal: metal.metalType,
+      initialAction: metal.action,
+      editMetal: metal,
+    ),
+  );
+}
+
+class AddMetalSheet extends ConsumerStatefulWidget {
   final MetalType initialMetal;
   final MetalAction initialAction;
   final PreciousMetal? editMetal;
   final PreciousMetal? copyFrom;
 
-  const _AddMetalSheet({
+  const AddMetalSheet({
+    super.key,
     required this.initialMetal,
     required this.initialAction,
     this.editMetal,
@@ -2522,17 +2590,17 @@ class _AddMetalSheet extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_AddMetalSheet> createState() => _AddMetalSheetState();
+  ConsumerState<AddMetalSheet> createState() => _AddMetalSheetState();
 }
 
-class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
+class _AddMetalSheetState extends ConsumerState<AddMetalSheet> {
   late MetalType _metalType;
   late MetalAction _action;
   late DateTime _date;
   String? _accountId;
   bool _saving = false;
   bool _saveSuccess = false;
-  bool _manualTotal = false;
+  bool _isCalcUpdating = false;
   bool _togglePressed = false;
 
   final _weightCtrl = TextEditingController();
@@ -2567,8 +2635,6 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
       if (m.totalAmount > 0) _totalCtrl.text = _fmt(m.totalAmount);
       if (widget.editMetal != null) _notesCtrl.text = m.notes ?? '';
     }
-    _weightCtrl.addListener(_autoCalc);
-    _priceCtrl.addListener(_autoCalc);
   }
 
   @override
@@ -2588,14 +2654,36 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
     c.selection = TextSelection(baseOffset: 0, extentOffset: c.text.length);
   }
 
-  void _autoCalc() {
-    if (_manualTotal) return;
+  /// Bidirectional auto-calc between weight, price/g and total amount.
+  /// Whichever field the user edits, the other two stay consistent.
+  void _doCalc(String changedField) {
+    if (_isCalcUpdating) return;
     final w = double.tryParse(_weightCtrl.text);
     final p = double.tryParse(_priceCtrl.text);
-    if (w != null && p != null) {
-      _totalCtrl.text = (w * p).toStringAsFixed(2);
-    } else if (_weightCtrl.text.isEmpty || _priceCtrl.text.isEmpty) {
-      _totalCtrl.text = '';
+    final t = double.tryParse(_totalCtrl.text);
+    _isCalcUpdating = true;
+    try {
+      if (changedField == 'weight') {
+        if (w != null && p != null) {
+          _totalCtrl.text = (w * p).toStringAsFixed(2);
+        } else if (w != null && t != null && w > 0) {
+          _priceCtrl.text = (t / w).toStringAsFixed(2);
+        }
+      } else if (changedField == 'price') {
+        if (p != null && w != null) {
+          _totalCtrl.text = (w * p).toStringAsFixed(2);
+        } else if (p != null && t != null && p > 0) {
+          _weightCtrl.text = _fmt(t / p);
+        }
+      } else if (changedField == 'total') {
+        if (t != null && w != null && w > 0) {
+          _priceCtrl.text = (t / w).toStringAsFixed(2);
+        } else if (t != null && p != null && p > 0) {
+          _weightCtrl.text = _fmt(t / p);
+        }
+      }
+    } finally {
+      _isCalcUpdating = false;
     }
   }
 
@@ -3018,12 +3106,8 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
-                                    onTap: () {
-                                      _selectAll(_totalCtrl);
-                                      setState(() => _manualTotal = true);
-                                    },
-                                    onChanged: (_) =>
-                                        setState(() => _manualTotal = true),
+                                    onTap: () => _selectAll(_totalCtrl),
+                                    onChanged: (_) => _doCalc('total'),
                                     style: TextStyle(
                                       fontSize: 44,
                                       fontWeight: FontWeight.w700,
@@ -3109,6 +3193,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                               ),
                                           textInputAction: TextInputAction.next,
                                           onTap: () => _selectAll(_weightCtrl),
+                                          onChanged: (_) => _doCalc('weight'),
                                           onSubmitted: (_) => FocusScope.of(
                                             context,
                                           ).requestFocus(_priceFocus),
@@ -3205,6 +3290,7 @@ class _AddMetalSheetState extends ConsumerState<_AddMetalSheet> {
                                               ),
                                           textInputAction: TextInputAction.done,
                                           onTap: () => _selectAll(_priceCtrl),
+                                          onChanged: (_) => _doCalc('price'),
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,

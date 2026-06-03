@@ -475,6 +475,16 @@ const Map<String, CategoryStyle> kCategoryStyles = {
     accent: Color(0xFF6B6B70),
     icon: CupertinoIcons.square_grid_2x2,
   ),
+  'PreciousMetal': CategoryStyle(
+    background: Color(0xFFFFF3C4),
+    accent: Color(0xFFB8860B),
+    icon: CupertinoIcons.star_fill,
+  ),
+  'Stock': CategoryStyle(
+    background: AppColors.sky,
+    accent: Color(0xFF2A6FB5),
+    icon: CupertinoIcons.chart_bar,
+  ),
   'Transfer': CategoryStyle(
     background: AppColors.blush,
     accent: Color(0xFFB23A4A),

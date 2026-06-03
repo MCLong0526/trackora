@@ -10,6 +10,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/account.dart';
 import '../models/expense.dart';
 import '../models/group_expense_item.dart';
+import '../models/precious_metal.dart';
 import '../services/money_format.dart';
 import '../services/prefs_service.dart';
 import '../state/providers.dart';
@@ -58,6 +59,16 @@ class _AccountTxn {
       amount: g.amount,
       isInflow: false,
       isGroup: true,
+    );
+  }
+
+  static _AccountTxn fromPreciousMetal(PreciousMetal m) {
+    return _AccountTxn(
+      title: '${m.metalType.label} ${m.action == MetalAction.buy ? 'Buy' : 'Sell'}',
+      date: m.date,
+      amount: m.totalAmount,
+      isInflow: m.action == MetalAction.sell,
+      isGroup: false,
     );
   }
 }
@@ -262,12 +273,16 @@ class AccountCarouselSection extends ConsumerWidget {
             (currentUser == null || e.paidBy == currentUser.uid))
         .toList();
 
+    final preciousMetals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+
     return LayoutBuilder(
       builder: (ctx, constraints) => _AccountCarousel(
         accounts: accounts,
         balances: balances,
         allExpenses: allExpenses,
         groupExpenses: myGroupExpenses,
+        preciousMetals: preciousMetals,
         symbol: symbol,
         visible: visible,
         availableWidth: constraints.maxWidth,
@@ -282,6 +297,7 @@ class _AccountCarousel extends StatefulWidget {
   final Map<String, double> balances;
   final List<Expense> allExpenses;
   final List<GroupExpenseItem> groupExpenses;
+  final List<PreciousMetal> preciousMetals;
   final String symbol;
   final bool visible;
   final double availableWidth;
@@ -291,6 +307,7 @@ class _AccountCarousel extends StatefulWidget {
     required this.balances,
     required this.allExpenses,
     required this.groupExpenses,
+    required this.preciousMetals,
     required this.symbol,
     required this.visible,
     required this.availableWidth,
@@ -498,7 +515,7 @@ class _AccountCarouselState extends State<_AccountCarousel>
     final balance = widget.balances[account.id] ?? 0.0;
     final pal = _paletteForAccountType(account.type);
 
-    // Merge personal + group transactions for this account, sorted by date.
+    // Merge personal + group + precious metal transactions for this account.
     final personalTxns = widget.allExpenses
         .where((e) => e.accountId == account.id || e.toAccountId == account.id)
         .map((e) => _AccountTxn.fromExpense(e, account.id))
@@ -507,7 +524,11 @@ class _AccountCarouselState extends State<_AccountCarousel>
         .where((e) => e.paidByAccountId == account.id)
         .map(_AccountTxn.fromGroupExpense)
         .toList();
-    final allTxns = [...personalTxns, ...groupTxns]
+    final metalTxns = widget.preciousMetals
+        .where((m) => m.accountId == account.id)
+        .map(_AccountTxn.fromPreciousMetal)
+        .toList();
+    final allTxns = [...personalTxns, ...groupTxns, ...metalTxns]
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return AnimatedPositioned(
@@ -1950,6 +1971,9 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
         ),
       );
       if (mounted) {
+        // Force a refresh so the new account shows immediately (critical for
+        // offline adds where the Hive watch stream may not auto-trigger).
+        ref.invalidate(accountsProvider);
         setState(() {
           _saving = false;
           _success = true;

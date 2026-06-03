@@ -3,6 +3,7 @@ import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hive/hive.dart';
 
 import '../app_config.dart';
 import '../firebase_options.dart';
@@ -19,8 +20,13 @@ import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
+import '../repositories/firebase_expense_group_repository.dart';
+import '../repositories/firebase_person_repository.dart';
+import '../repositories/local_expense_group_repository.dart';
+import '../repositories/local_person_repository.dart';
 import '../repositories/local_split_bill_repository.dart';
 import '../repositories/local_storage.dart';
+import '../repositories/local_travel_group_repository.dart';
 import '../repositories/split_bill_repository.dart';
 import 'storage_service.dart';
 
@@ -38,6 +44,40 @@ class SyncService {
   /// account A do not land in account B after a user-switch.
   static void cancelInFlight() {
     _syncEpoch++;
+  }
+
+  static const _entityDelPrefix = 'entity_del_';
+
+  /// Records that an entity has been deleted so sync can delete it from Firebase.
+  static Future<void> markEntityPendingDelete(
+      String userId, String entityType, String id) async {
+    await LocalStorage.init();
+    final key = '$_entityDelPrefix$entityType:$userId';
+    final box = LocalStorage.pendingDeletes;
+    final existing = List<String>.from(
+        (box.get(key) as List?)?.cast<String>() ?? const []);
+    if (!existing.contains(id)) {
+      existing.add(id);
+      await box.put(key, existing);
+    }
+  }
+
+  /// Returns pending delete IDs for a given entity type.
+  static List<String> getEntityPendingDeleteIds(
+      String userId, String entityType) {
+    if (!Hive.isBoxOpen(LocalStorage.pendingDeletesBoxName)) return const [];
+    final key = '$_entityDelPrefix$entityType:$userId';
+    return List<String>.from(
+        (LocalStorage.pendingDeletes.get(key) as List?)?.cast<String>() ??
+            const []);
+  }
+
+  /// Clears the pending delete queue for a given entity type.
+  static Future<void> clearEntityPendingDeletes(
+      String userId, String entityType) async {
+    await LocalStorage.init();
+    final key = '$_entityDelPrefix$entityType:$userId';
+    await LocalStorage.pendingDeletes.delete(key);
   }
 
   Future<void> _ensureFirebase() async {
@@ -281,8 +321,7 @@ class SyncService {
     return out;
   }
 
-  /// Syncs pending local entries to Firebase, then clears the pending set.
-  /// No-op if no user is authenticated or there are no pending entries.
+  /// Syncs all pending local entries (expenses + other entities) to Firebase.
   Future<void> syncPendingIfAuthenticated({
     required String localUserId,
     required void Function(SyncState) onState,
@@ -306,14 +345,11 @@ class SyncService {
         onState(SyncState.success);
         return;
       }
+      onState(SyncState.syncing);
+      // Always sync non-expense entities so offline edits reach Firebase.
+      await _syncNonExpenseEntities(user.uid);
       final count = await pendingCount(localUserId);
       final deleteIds = getPendingDeleteIds(localUserId);
-      if (count == 0 && deleteIds.isEmpty) {
-        await _refreshLocalExpenseMirror(user.uid);
-        onState(SyncState.success);
-        return;
-      }
-      onState(SyncState.syncing);
       if (deleteIds.isNotEmpty) {
         final db = FirebaseFirestore.instance;
         final fbExpenses = FirebaseExpenseRepository(firestore: db);
@@ -336,6 +372,251 @@ class SyncService {
       );
       onState(SyncState.failed);
     }
+  }
+
+  /// Pushes all locally-stored non-expense entities to Firebase (upsert).
+  /// Called during sync so offline edits to accounts, plans, people, etc.
+  /// are persisted to Firestore when connectivity is restored.
+  Future<void> _syncNonExpenseEntities(String uid) async {
+    final db = FirebaseFirestore.instance;
+
+    // ── Process pending entity deletes ─────────────────────────────────────
+    // Account deletes
+    final accountDelIds = SyncService.getEntityPendingDeleteIds(uid, 'account');
+    if (accountDelIds.isNotEmpty) {
+      final fbAccts = FirebaseAccountRepository(firestore: db);
+      for (final id in accountDelIds) {
+        try { await fbAccts.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'account');
+    }
+
+    // Saving Plans deletes
+    final planDelIds = SyncService.getEntityPendingDeleteIds(uid, 'plan');
+    if (planDelIds.isNotEmpty) {
+      final fbPl = FirebaseSavingPlanRepository();
+      for (final id in planDelIds) {
+        try { await fbPl.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'plan');
+    }
+
+    // Borrow & Lending deletes
+    final blDelIds = SyncService.getEntityPendingDeleteIds(uid, 'bl');
+    if (blDelIds.isNotEmpty) {
+      final fbBl = FirebaseBorrowLendingRepository();
+      for (final id in blDelIds) {
+        try { await fbBl.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'bl');
+    }
+
+    // Installments deletes
+    final instDelIds = SyncService.getEntityPendingDeleteIds(uid, 'inst');
+    if (instDelIds.isNotEmpty) {
+      final fbInst = FirebaseInstallmentRepository(firestore: db);
+      for (final id in instDelIds) {
+        try { await fbInst.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'inst');
+    }
+
+    // People deletes
+    final personDelIds = SyncService.getEntityPendingDeleteIds(uid, 'person');
+    if (personDelIds.isNotEmpty) {
+      final fbPer = FirebasePersonRepository();
+      for (final id in personDelIds) {
+        try { await fbPer.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'person');
+    }
+
+    // Precious Metal deletes
+    final metalDelIds = SyncService.getEntityPendingDeleteIds(uid, 'metal');
+    if (metalDelIds.isNotEmpty) {
+      final fbMetals = FirebasePreciousMetalRepository();
+      for (final id in metalDelIds) {
+        try { await fbMetals.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'metal');
+    }
+
+    // Travel Group deletes
+    final tgDelIds = SyncService.getEntityPendingDeleteIds(uid, 'tg');
+    if (tgDelIds.isNotEmpty) {
+      for (final gId in tgDelIds) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users').doc(uid).collection('travelGroups').doc(gId).delete();
+        } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'tg');
+    }
+
+    // ── Budget ────────────────────────────────────────────────────────────
+    final localExpenses = LocalExpenseRepository();
+    final fbExpenses = FirebaseExpenseRepository(firestore: db);
+    final budget = await localExpenses.getMonthlyBudget(uid).first;
+    if (budget > 0) {
+      try { await fbExpenses.setMonthlyBudget(uid, budget); } catch (_) {}
+    }
+
+    // Accounts (skip pending deletes)
+    final localAccounts = LocalAccountRepository();
+    final fbAccounts = FirebaseAccountRepository(firestore: db);
+    final accountDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'account').toSet();
+    final accounts = await localAccounts.getAll(uid).first;
+    for (final a in accounts) {
+      if (a.id.isEmpty || accountDeletedSet.contains(a.id)) continue;
+      try {
+        await fbAccounts.upsert(uid, a);
+      } catch (_) {}
+    }
+
+    // Installments
+    final localInstallments = LocalInstallmentRepository();
+    final fbInstallments = FirebaseInstallmentRepository(firestore: db);
+    final instDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'inst').toSet();
+    final installments = await localInstallments.getAll(uid).first;
+    for (final i in installments) {
+      if (i.id.isEmpty || instDeletedSet.contains(i.id)) continue;
+      try {
+        await fbInstallments.upsert(uid, i);
+      } catch (_) {}
+    }
+
+    // Saving Plans
+    final localPlans = LocalSavingPlanRepository();
+    final fbPlans = FirebaseSavingPlanRepository();
+    final planDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'plan').toSet();
+    final plans = await localPlans.getAll(uid).first;
+    for (final p in plans) {
+      if (p.id.isEmpty || planDeletedSet.contains(p.id)) continue;
+      try {
+        await fbPlans.upsertById(uid, p);
+      } catch (_) {}
+    }
+
+    // Borrow & Lending
+    final localBL = LocalBorrowLendingRepository();
+    final fbBL = FirebaseBorrowLendingRepository();
+    final blDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'bl').toSet();
+    final blRecords = await localBL.getAll(uid).first;
+    for (final r in blRecords) {
+      if (r.id.isEmpty || blDeletedSet.contains(r.id)) continue;
+      try {
+        await fbBL.upsertById(uid, r);
+      } catch (_) {}
+    }
+
+    // People
+    final localPeople = LocalPersonRepository();
+    final fbPeople = FirebasePersonRepository();
+    final personDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'person').toSet();
+    final people = await localPeople.getAll(uid).first;
+    for (final p in people) {
+      if (p.id.isEmpty || personDeletedSet.contains(p.id)) continue;
+      try {
+        await fbPeople.add(uid, p);
+      } catch (_) {}
+    }
+
+    // Precious Metals (skip pending deletes)
+    final localMetals = LocalPreciousMetalRepository();
+    final fbMetals = FirebasePreciousMetalRepository();
+    final metalDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'metal').toSet();
+    final metals = await localMetals.getAll(uid).first;
+    for (final m in metals) {
+      if (m.id.isEmpty || metalDeletedSet.contains(m.id)) continue;
+      try {
+        await fbMetals.upsertById(uid, m);
+      } catch (_) {}
+    }
+
+    // Group groups + group expenses
+    final localGroups = LocalExpenseGroupRepository();
+    final fbGroups = FirebaseExpenseGroupRepository();
+    final groups = await localGroups.getGroups(uid).first;
+    for (final g in groups) {
+      if (g.id.isEmpty) continue;
+      try {
+        await fbGroups.addGroup(g);
+        final expenses = await localGroups.getExpenses(g.id).first;
+        for (final e in expenses) {
+          if (e.id.isEmpty) continue;
+          try {
+            await fbGroups.addExpense(e);
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    // Travel Groups — upload local groups, members, and expenses to Firebase.
+    final localTg = LocalTravelGroupRepository();
+    final tgDeletedSet = SyncService.getEntityPendingDeleteIds(uid, 'tg').toSet();
+    final tgGroups = await localTg.getGroups(uid).first;
+    for (final tg in tgGroups) {
+      if (tg.id.isEmpty || tgDeletedSet.contains(tg.id)) continue;
+      // Only sync groups owned by this user (joined groups belong to another owner).
+      if (tg.ownerId != uid) continue;
+      try {
+        await db
+            .collection('users')
+            .doc(uid)
+            .collection('travelGroups')
+            .doc(tg.id)
+            .set(_toFirestoreMap(tg.toMap(includeId: true)), SetOptions(merge: true));
+
+        final members = await localTg.getMembers(tg.id).first;
+        for (final m in members) {
+          if (m.id.isEmpty) continue;
+          try {
+            await db
+                .collection('users')
+                .doc(uid)
+                .collection('travelGroups')
+                .doc(tg.id)
+                .collection('members')
+                .doc(m.id)
+                .set(_toFirestoreMap(m.toMap(includeId: true)), SetOptions(merge: true));
+          } catch (_) {}
+        }
+
+        final tgExpenses = await localTg.getExpenses(tg.id).first;
+        for (final e in tgExpenses) {
+          if (e.id.isEmpty) continue;
+          try {
+            await db
+                .collection('users')
+                .doc(uid)
+                .collection('travelGroups')
+                .doc(tg.id)
+                .collection('expenses')
+                .doc(e.id)
+                .set(_toFirestoreMap(e.toMap(includeId: true)), SetOptions(merge: true));
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Converts a flat map's DateTime ISO-string values to Firestore Timestamps.
+  static Map<String, dynamic> _toFirestoreMap(Map<String, dynamic> map) {
+    final result = Map<String, dynamic>.from(map);
+    for (final key in result.keys.toList()) {
+      final v = result[key];
+      if (v is String) {
+        final parsed = DateTime.tryParse(v);
+        if (parsed != null) result[key] = Timestamp.fromDate(parsed);
+      }
+    }
+    return result;
   }
 
   Future<void> deleteExpense({

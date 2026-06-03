@@ -4,9 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/group_expense_item.dart';
+import '../../models/precious_metal.dart';
+import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
@@ -100,6 +103,10 @@ Future<void> showMonthlyBudgetEditor(
   if (result != null) {
     try {
       await ref.read(expenseRepositoryProvider).setMonthlyBudget(userId, result);
+      // Mirror to local so budget is available offline
+      if (storageMode == StorageMode.firebase) {
+        await LocalExpenseRepository().setMonthlyBudget(userId, result);
+      }
       if (context.mounted) {
         AppToast.show(context, context.t('budget.updated'), type: AppToastType.success);
       }
@@ -339,7 +346,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         .where((e) => e.paidByAccountId != null &&
             (currentUserId == null || e.paidBy == currentUserId))
         .toList();
-    final accountBalances = _computeBalances(accounts, allExpenses, myGroupExpenses);
+    final metals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final accountBalances =
+        _computeBalances(accounts, allExpenses, myGroupExpenses, metals);
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
@@ -1043,6 +1053,7 @@ Map<String, double> _computeBalances(
   List<Account> accounts,
   List<Expense> expenses,
   List<GroupExpenseItem> groupExpenses,
+  List<PreciousMetal> metals,
 ) {
   final currencyCodes = <String, String?>{
     for (final a in accounts) a.id: a.currencyCode,
@@ -1071,6 +1082,15 @@ Map<String, double> _computeBalances(
     final aid = ge.paidByAccountId!;
     if (balances.containsKey(aid)) {
       balances[aid] = (balances[aid] ?? 0) - ge.amount;
+    }
+  }
+  // Precious metal transactions linked to an account: buy = money out,
+  // sell = money in.
+  for (final m in metals) {
+    final aid = m.accountId;
+    if (aid != null && balances.containsKey(aid)) {
+      balances[aid] = (balances[aid] ?? 0) +
+          (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
     }
   }
   return balances;

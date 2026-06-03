@@ -11,6 +11,7 @@ import '../../models/group_expense_item.dart';
 import '../../repositories/local_expense_group_repository.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
 // ── Design tokens (from design file) ─────────────────────────────────────────
@@ -359,6 +360,7 @@ class _AddGroupExpenseScreenState
             paidByAccountId: expense.paidByAccountId,
             splitBetween: expense.splitBetween,
             splitPercents: expense.splitPercents,
+            splitModeType: expense.splitModeType,
             category: expense.category,
             date: expense.date,
             createdBy: expense.createdBy,
@@ -464,106 +466,154 @@ class _AddGroupExpenseScreenState
   }
 
   void _showAccountSheet(List<Account> accounts) {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null || accounts.isEmpty) return;
-    showModalBottomSheet(
+    if (accounts.isEmpty) return;
+    final brand = context.brand;
+    FocusScope.of(context).unfocus();
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: _kBg,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-            24, 14, 24, MediaQuery.of(context).padding.bottom + 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1D1D6),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              context.t('groupExpense.payFromAccount'),
-              style: const TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w700,
-                color: Color(0xFF0B0B0F), letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 14),
-            ...accounts.map((a) {
-              final selected = _paidByAccountId == a.id;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _paidByAccountId = a.id);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: selected ? const Color(0xFF1A6CFF) : Colors.transparent,
-                      width: 2,
+      backgroundColor: brand.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 420,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                  child: Text(
+                    context.t('groupExpense.payFromAccount'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink,
                     ),
                   ),
-                  child: Row(
+                ),
+                Expanded(
+                  child: ListView(
                     children: [
-                      Expanded(
-                        child: Text(
-                          a.name,
-                          style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600,
-                            color: selected ? const Color(0xFF1A6CFF) : const Color(0xFF0B0B0F),
-                          ),
+                      ListTile(
+                        leading: Icon(
+                          CupertinoIcons.xmark_circle,
+                          color: brand.inkSoft,
                         ),
+                        title: Text(
+                          context.t('expense.none'),
+                          style: TextStyle(color: brand.inkSoft),
+                        ),
+                        trailing: _paidByAccountId == null
+                            ? Icon(
+                                CupertinoIcons.checkmark_alt,
+                                color: brand.accentDark,
+                              )
+                            : null,
+                        onTap: () {
+                          setState(() => _paidByAccountId = null);
+                          Navigator.pop(ctx);
+                        },
                       ),
-                      if (selected)
-                        const Icon(CupertinoIcons.check_mark_circled_solid,
-                            color: Color(0xFF1A6CFF), size: 20),
+                      ...accounts.map((a) {
+                        final isSelected = _paidByAccountId == a.id;
+                        return ListTile(
+                          leading: Icon(
+                            _iconForType(a.type),
+                            color: _accentForType(a.type),
+                          ),
+                          title: Text(
+                            a.name,
+                            style: TextStyle(
+                              color: brand.ink,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            a.type.label,
+                            style: TextStyle(color: brand.inkSoft),
+                          ),
+                          trailing: isSelected
+                              ? Icon(
+                                  CupertinoIcons.checkmark_alt,
+                                  color: brand.accentDark,
+                                )
+                              : null,
+                          onTap: () {
+                            setState(() => _paidByAccountId = a.id);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }),
                     ],
                   ),
                 ),
-              );
-            }),
-            if (_paidByAccountId != null) ...[
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: () {
-                  setState(() => _paidByAccountId = null);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(
-                      context.t('groupExpense.clearSelection'),
-                      style: const TextStyle(
-                          color: Color(0xFF8E8E96), fontSize: 14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  IconData _iconForType(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return CupertinoIcons.building_2_fill;
+      case AccountType.eWallet:
+        return CupertinoIcons.device_phone_portrait;
+      case AccountType.cash:
+        return CupertinoIcons.money_dollar_circle_fill;
+      case AccountType.investment:
+        return CupertinoIcons.chart_bar_fill;
+      case AccountType.savings:
+        return CupertinoIcons.archivebox_fill;
+      case AccountType.crypto:
+        return CupertinoIcons.bitcoin_circle_fill;
+      case AccountType.forex:
+        return CupertinoIcons.globe;
+      case AccountType.creditCard:
+        return CupertinoIcons.creditcard_fill;
+      case AccountType.loan:
+        return CupertinoIcons.doc_text_fill;
+      case AccountType.mortgage:
+        return CupertinoIcons.house_fill;
+      case AccountType.bnpl:
+        return CupertinoIcons.cart_fill;
+      case AccountType.otherLiability:
+        return CupertinoIcons.minus_circle_fill;
+    }
+  }
+
+  Color _accentForType(AccountType type) {
+    switch (type) {
+      case AccountType.bank:
+        return const Color(0xFF2A6FB5);
+      case AccountType.eWallet:
+        return const Color(0xFF1F7A60);
+      case AccountType.cash:
+        return const Color(0xFFA0801C);
+      case AccountType.investment:
+        return const Color(0xFF2E9E5A);
+      case AccountType.savings:
+        return const Color(0xFF2E7EB5);
+      case AccountType.crypto:
+        return const Color(0xFFE8820E);
+      case AccountType.forex:
+        return const Color(0xFF7F4FD4);
+      case AccountType.creditCard:
+        return const Color(0xFFB03060);
+      case AccountType.loan:
+        return const Color(0xFF9C4A1A);
+      case AccountType.mortgage:
+        return const Color(0xFF6B4D2A);
+      case AccountType.bnpl:
+        return const Color(0xFF5C3A9E);
+      case AccountType.otherLiability:
+        return const Color(0xFF7A4040);
+    }
   }
 
   void _showPaidBySheet() {

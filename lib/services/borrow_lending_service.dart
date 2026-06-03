@@ -1,5 +1,7 @@
 import '../models/borrow_lending.dart';
 import '../repositories/borrow_lending_repository.dart';
+import '../repositories/local_borrow_lending_repository.dart';
+import 'sync_service.dart';
 
 /// Thin orchestration layer over [BorrowLendingRepository]. Adds the
 /// little bits of business logic that don't belong on the model
@@ -16,7 +18,11 @@ class BorrowLendingService {
   Future<void> update(String userId, BorrowLending record) =>
       _repo.update(userId, record);
 
-  Future<void> delete(String userId, String id) => _repo.delete(userId, id);
+  Future<void> delete(String userId, String id) async {
+    await _repo.delete(userId, id);
+    await LocalBorrowLendingRepository().delete(userId, id);
+    await SyncService.markEntityPendingDelete(userId, 'bl', id);
+  }
 
   /// Append a partial repayment. Caller passes a fully formed
   /// [BorrowLendingRepayment] (so the screen can decide id / date).

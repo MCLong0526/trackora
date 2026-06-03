@@ -5,12 +5,85 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/expense.dart';
+import '../../models/precious_metal.dart';
+import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../expenses/add_edit_expense_screen.dart';
+import '../precious_metals/precious_metals_screen.dart';
+import '../stocks/stock_detail_screen.dart';
+
+// ── Calendar entry (union: expense / metal / stock txn) ────────
+
+DateTime? _calStockTxnDate(Map<String, dynamic> tx) {
+  final raw = tx['date'];
+  if (raw is String) {
+    try {
+      return DateTime.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+  if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+  if (raw is DateTime) return raw;
+  return null;
+}
+
+/// A single record row in a calendar day. Holds exactly one of an [Expense],
+/// a [PreciousMetal], or a stock investment transaction.
+class _CalEntry {
+  final Expense? expense;
+  final PreciousMetal? metal;
+  final StockInvestment? stock;
+  final Map<String, dynamic>? stockTxn;
+  final DateTime date;
+
+  const _CalEntry._({
+    this.expense,
+    this.metal,
+    this.stock,
+    this.stockTxn,
+    required this.date,
+  });
+
+  factory _CalEntry.expense(Expense e) => _CalEntry._(expense: e, date: e.date);
+
+  factory _CalEntry.metal(PreciousMetal m) =>
+      _CalEntry._(metal: m, date: m.date);
+
+  factory _CalEntry.stock(StockInvestment s, Map<String, dynamic> tx) =>
+      _CalEntry._(
+        stock: s,
+        stockTxn: tx,
+        date: _calStockTxnDate(tx) ?? s.updatedAt,
+      );
+}
+
+/// Builds the combined list of [_CalEntry] for a given calendar [day] from
+/// expenses, precious metals and stock transactions, sorted newest first.
+List<_CalEntry> _calEntriesForDay(
+  DateTime day,
+  List<Expense> expenses,
+  List<PreciousMetal> metals,
+  List<StockInvestment> stocks,
+) {
+  bool sameDay(DateTime d) =>
+      d.year == day.year && d.month == day.month && d.day == day.day;
+  final out = <_CalEntry>[
+    for (final e in expenses)
+      if (sameDay(e.date)) _CalEntry.expense(e),
+    for (final m in metals)
+      if (sameDay(m.date)) _CalEntry.metal(m),
+    for (final s in stocks)
+      for (final tx in s.transactions)
+        if (_calStockTxnDate(tx) != null && sameDay(_calStockTxnDate(tx)!))
+          _CalEntry.stock(s, tx),
+  ]..sort((a, b) => b.date.compareTo(a.date));
+  return out;
+}
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -70,6 +143,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
+    final allMetals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final allStocks = ref.watch(stockInvestmentsProvider).valueOrNull ??
+        const <StockInvestment>[];
     final isLoading = allExpensesAsync.isLoading && allExpenses.isEmpty;
 
     final monthExpenses = allExpenses.where((e) {
@@ -89,6 +166,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               )
               .toList()
             ..sort((a, b) => b.date.compareTo(a.date)));
+
+    final selectedDayEntries = _selectedDay == null
+        ? const <_CalEntry>[]
+        : _calEntriesForDay(_selectedDay!, allExpenses, allMetals, allStocks);
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -165,11 +246,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     symbol: symbol,
                   ),
                   const SizedBox(height: 10),
-                  if (selectedDayExpenses.isEmpty)
+                  if (selectedDayEntries.isEmpty)
                     _EmptyDayCard()
                   else
                     _DayRecordsList(
-                      expenses: selectedDayExpenses,
+                      entries: selectedDayEntries,
                       symbol: symbol,
                       accounts: accounts,
                       onTapExpense: (expense) => Navigator.push(
@@ -564,13 +645,13 @@ class _DayHeader extends StatelessWidget {
 // ── Day records list ───────────────────────────────────────────
 
 class _DayRecordsList extends StatelessWidget {
-  final List<Expense> expenses;
+  final List<_CalEntry> entries;
   final String symbol;
   final List<dynamic> accounts;
   final void Function(Expense) onTapExpense;
 
   const _DayRecordsList({
-    required this.expenses,
+    required this.entries,
     required this.symbol,
     required this.accounts,
     required this.onTapExpense,
@@ -586,20 +667,23 @@ class _DayRecordsList extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var i = 0; i < expenses.length; i++) ...[
+          for (var i = 0; i < entries.length; i++) ...[
             if (i > 0)
               Padding(
                 padding: const EdgeInsets.only(left: 68),
                 child: Container(height: 0.5, color: brand.divider),
               ),
-            _RecordRow(
-              expense: expenses[i],
-              symbol: symbol,
-              account: accounts
-                  .where((a) => a.id == expenses[i].accountId)
-                  .firstOrNull,
-              onTap: () => onTapExpense(expenses[i]),
-            ),
+            if (entries[i].expense != null)
+              _RecordRow(
+                expense: entries[i].expense!,
+                symbol: symbol,
+                account: accounts
+                    .where((a) => a.id == entries[i].expense!.accountId)
+                    .firstOrNull,
+                onTap: () => onTapExpense(entries[i].expense!),
+              )
+            else
+              _CalAssetRow(entry: entries[i], symbol: symbol),
           ],
         ],
       ),
@@ -715,6 +799,171 @@ class _RecordRow extends StatelessWidget {
                 ],
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Calendar asset row (precious metal / stock buy-sell) ───────
+
+class _CalAssetRow extends StatelessWidget {
+  final _CalEntry entry;
+  final String symbol;
+  final bool compact;
+
+  const _CalAssetRow({
+    required this.entry,
+    required this.symbol,
+    this.compact = false,
+  });
+
+  void _openEdit(BuildContext context) {
+    final metal = entry.metal;
+    if (metal != null) {
+      showMetalEditSheet(context, metal);
+    } else {
+      Navigator.push(
+        context,
+        CupertinoPageRoute(
+          builder: (_) => StockDetailScreen(stock: entry.stock!),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final metal = entry.metal;
+    final stock = entry.stock;
+
+    late final String title;
+    late final IconData icon;
+    late final Color iconBg;
+    late final Color iconColor;
+    late final bool isInflow;
+    late final double amount;
+
+    if (metal != null) {
+      final isSell = metal.action == MetalAction.sell;
+      title =
+          '${metal.metalType.label} ${isSell ? context.t('metal.sell') : context.t('metal.buy')}';
+      icon = CupertinoIcons.circle_grid_hex_fill;
+      iconBg = metal.metalType.bgColor;
+      iconColor = metal.metalType.primaryColor;
+      isInflow = isSell;
+      amount = metal.totalAmount;
+    } else {
+      final tx = entry.stockTxn!;
+      final isSell = tx['type'] == 'sell';
+      final qty = (tx['qty'] as num?)?.toDouble() ?? 0.0;
+      final price = (tx['price'] as num?)?.toDouble() ?? 0.0;
+      title =
+          '${stock!.symbol} ${isSell ? context.t('metal.sell') : context.t('metal.buy')}';
+      icon = CupertinoIcons.chart_bar_alt_fill;
+      iconBg = AppColors.sky;
+      iconColor = const Color(0xFF2A6FB5);
+      isInflow = isSell;
+      amount = qty * price;
+    }
+
+    if (compact) {
+      // Matches the dialog transaction row layout (dot + time + title + amount).
+      final timeStr = DateFormat('HH:mm').format(entry.date);
+      return GestureDetector(
+        onTap: () => _openEdit(context),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                timeStr,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: brand.inkSoft,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isInflow
+                    ? formatMoney(symbol, amount, forceSign: true)
+                    : formatMoney(symbol, -amount),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: isInflow ? AppColors.income : brand.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Full record-row layout (icon + title + amount).
+    return GestureDetector(
+      onTap: () => _openEdit(context),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isInflow
+                  ? formatMoney(symbol, amount, forceSign: true)
+                  : formatMoney(symbol, -amount),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: isInflow ? AppColors.income : brand.ink,
+              ),
+            ),
           ],
         ),
       ),
@@ -975,6 +1224,10 @@ class _CalendarDialogState extends ConsumerState<CalendarDialog> {
     final brand = context.brand;
     final allExpenses =
         ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final allMetals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final allStocks = ref.watch(stockInvestmentsProvider).valueOrNull ??
+        const <StockInvestment>[];
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
 
@@ -985,17 +1238,9 @@ class _CalendarDialogState extends ConsumerState<CalendarDialog> {
         .toList();
     final dayDots = _computeDayDots(monthExpenses);
 
-    final selectedDayExpenses = _selectedDay == null
-        ? const <Expense>[]
-        : (allExpenses
-              .where(
-                (e) =>
-                    e.date.year == _selectedDay!.year &&
-                    e.date.month == _selectedDay!.month &&
-                    e.date.day == _selectedDay!.day,
-              )
-              .toList()
-            ..sort((a, b) => b.date.compareTo(a.date)));
+    final selectedDayEntries = _selectedDay == null
+        ? const <_CalEntry>[]
+        : _calEntriesForDay(_selectedDay!, allExpenses, allMetals, allStocks);
 
     return Container(
       constraints: BoxConstraints(
@@ -1044,7 +1289,7 @@ class _CalendarDialogState extends ConsumerState<CalendarDialog> {
                       if (_selectedDay != null)
                         _DialogDaySection(
                           day: _selectedDay!,
-                          expenses: selectedDayExpenses,
+                          entries: selectedDayEntries,
                           symbol: symbol,
                           accounts: accounts,
                           onAddExpense: () {
@@ -1382,7 +1627,7 @@ class _DotCell extends StatelessWidget {
 
 class _DialogDaySection extends StatelessWidget {
   final DateTime day;
-  final List<Expense> expenses;
+  final List<_CalEntry> entries;
   final String symbol;
   final List<dynamic> accounts;
   final VoidCallback onAddExpense;
@@ -1390,7 +1635,7 @@ class _DialogDaySection extends StatelessWidget {
 
   const _DialogDaySection({
     required this.day,
-    required this.expenses,
+    required this.entries,
     required this.symbol,
     required this.accounts,
     required this.onAddExpense,
@@ -1400,9 +1645,9 @@ class _DialogDaySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    final countLabel = expenses.isEmpty
+    final countLabel = entries.isEmpty
         ? 'NO RECORDS'
-        : '${expenses.length} ${expenses.length == 1 ? 'RECORD' : 'RECORDS'}';
+        : '${entries.length} ${entries.length == 1 ? 'RECORD' : 'RECORDS'}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1419,7 +1664,7 @@ class _DialogDaySection extends StatelessWidget {
             ),
           ),
         ),
-        if (expenses.isNotEmpty)
+        if (entries.isNotEmpty)
           Container(
             decoration: BoxDecoration(
               color: brand.background,
@@ -1427,20 +1672,27 @@ class _DialogDaySection extends StatelessWidget {
             ),
             child: Column(
               children: [
-                for (var i = 0; i < expenses.length; i++) ...[
+                for (var i = 0; i < entries.length; i++) ...[
                   if (i > 0)
                     Padding(
                       padding: const EdgeInsets.only(left: 46),
                       child: Container(height: 0.5, color: brand.divider),
                     ),
-                  _DialogTransactionRow(
-                    expense: expenses[i],
-                    symbol: symbol,
-                    account: accounts
-                        .where((a) => a.id == expenses[i].accountId)
-                        .firstOrNull,
-                    onTap: () => onTapExpense(expenses[i]),
-                  ),
+                  if (entries[i].expense != null)
+                    _DialogTransactionRow(
+                      expense: entries[i].expense!,
+                      symbol: symbol,
+                      account: accounts
+                          .where((a) => a.id == entries[i].expense!.accountId)
+                          .firstOrNull,
+                      onTap: () => onTapExpense(entries[i].expense!),
+                    )
+                  else
+                    _CalAssetRow(
+                      entry: entries[i],
+                      symbol: symbol,
+                      compact: true,
+                    ),
                 ],
               ],
             ),

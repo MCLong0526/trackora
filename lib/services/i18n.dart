@@ -216,6 +216,8 @@ class AppStrings {
     'category.Entertainment': 'Entertainment',
     'category.Health': 'Health',
     'category.Bills': 'Bills',
+    'category.PreciousMetal': 'Precious Metal',
+    'category.Stock': 'Stock',
     'category.Others': 'Others',
     'category.Salary': 'Salary',
 
@@ -1356,6 +1358,8 @@ class AppStrings {
     'category.Entertainment': '娱乐',
     'category.Health': '健康',
     'category.Bills': '账单',
+    'category.PreciousMetal': '贵金属',
+    'category.Stock': '股票',
     'category.Others': '其他',
     'category.Salary': '薪资',
 
@@ -2460,6 +2464,8 @@ class AppStrings {
     'category.Entertainment': 'Hiburan',
     'category.Health': 'Kesihatan',
     'category.Bills': 'Bil',
+    'category.PreciousMetal': 'Logam Berharga',
+    'category.Stock': 'Saham',
     'category.Others': 'Lain-lain',
     'category.Salary': 'Gaji',
 

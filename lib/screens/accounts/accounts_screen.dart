@@ -32,7 +32,7 @@ class AccountsScreen extends ConsumerWidget {
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-    final balances = _computeBalances(accounts, allExpenses);
+    final balances = _computeBalances(accounts, allExpenses, metals);
 
     final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
     final negativeCards = creditCards.where((a) => (balances[a.id] ?? 0) < 0).toList();
@@ -142,6 +142,7 @@ class AccountsScreen extends ConsumerWidget {
   Map<String, double> _computeBalances(
     List<Account> accounts,
     List<Expense> expenses,
+    List<PreciousMetal> metals,
   ) {
     final currencyCodes = <String, String?>{
       for (final a in accounts) a.id: a.currencyCode,
@@ -161,6 +162,15 @@ class AccountsScreen extends ConsumerWidget {
       if (toId != null && balances.containsKey(toId)) {
         balances[toId] = (balances[toId] ?? 0) +
             _effectiveAmountForAccount(e, currencyCodes[toId]);
+      }
+    }
+    // Precious metal transactions linked to an account: buy = money out,
+    // sell = money in.
+    for (final m in metals) {
+      final aid = m.accountId;
+      if (aid != null && balances.containsKey(aid)) {
+        balances[aid] = (balances[aid] ?? 0) +
+            (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
       }
     }
     return balances;

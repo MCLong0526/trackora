@@ -5,8 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../models/account.dart';
+import '../../repositories/firebase_account_repository.dart';
+import '../../repositories/local_account_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -256,9 +259,19 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       ),
     );
     if (confirm != true) return;
-    await ref
-        .read(accountRepositoryProvider)
-        .delete(user.uid, widget.account!.id);
+    final accountId = widget.account!.id;
+    final isOnline = ref.read(isOnlineProvider);
+    // Always delete from local Hive immediately.
+    await LocalAccountRepository().delete(user.uid, accountId);
+    if (isOnline) {
+      try {
+        await FirebaseAccountRepository().delete(user.uid, accountId);
+      } catch (_) {
+        await SyncService.markEntityPendingDelete(user.uid, 'account', accountId);
+      }
+    } else {
+      await SyncService.markEntityPendingDelete(user.uid, 'account', accountId);
+    }
     if (mounted) {
       AppToast.show(context, 'Account deleted', type: AppToastType.success);
       Navigator.pop(context);

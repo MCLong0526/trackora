@@ -117,6 +117,29 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ),
             ),
           ),
+          // Gradient fade at the bottom so scrollable content fades out
+          // before it disappears behind the floating nav pill.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 150,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      brand.background.withValues(alpha: 0),
+                      brand.background.withValues(alpha: 0.92),
+                    ],
+                    stops: const [0.0, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
           // Floating glass pill — purely transparent outside the pill bounds.
           Positioned(
             left: 0,

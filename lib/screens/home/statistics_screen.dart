@@ -239,7 +239,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 onShare: _isSharing ? null : () => _shareSnapshot(context),
               ),
               const SizedBox(height: 16),
-              _PeriodPills(
+              _SlidingPeriodTabs(
                 period: _period,
                 onChanged: (p) {
                   if (p == _StatsPeriod.custom) {
@@ -266,6 +266,17 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                     }
                   });
                 },
+              ),
+              const SizedBox(height: 10),
+              _PeriodNavRow(
+                label: range.label,
+                showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
+                showCustom: _period == _StatsPeriod.custom,
+                customStart: _customStart,
+                customEnd: _customEnd,
+                onPrev: () => _step(-1),
+                onNext: () => _step(1),
+                onDateRange: _showDateRangePicker,
               ),
             ],
           ),
@@ -310,8 +321,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                     symbol: symbol,
                     accounts: accounts,
                     rangeLabel: range.label,
-                    showNav: _period != _StatsPeriod.all &&
-                        _period != _StatsPeriod.custom,
+                    showNav: false,
                     onPrev: () => _step(-1),
                     onNext: () => _step(1),
                   ),
@@ -692,100 +702,240 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ── Period pills (W M 6M Y All) ────────────────────────────────
+// ── Sliding period tabs (replaces pills) ──────────────────────────────────────
 
-class _PeriodPills extends StatelessWidget {
+class _SlidingPeriodTabs extends StatelessWidget {
   final _StatsPeriod period;
   final ValueChanged<_StatsPeriod> onChanged;
 
-  const _PeriodPills({required this.period, required this.onChanged});
+  const _SlidingPeriodTabs({required this.period, required this.onChanged});
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: () {
-          final periods = _StatsPeriod.values
-              .where((p) => p != _StatsPeriod.custom && p != _StatsPeriod.all)
-              .toList();
-          return <Widget>[
-            for (int i = 0; i < periods.length; i++) ...[
-              if (i > 0) const SizedBox(width: 6),
-              Expanded(
-                child: _PeriodPill(
-                  label: _label(context, periods[i]),
-                  selected: period == periods[i],
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onChanged(periods[i]);
-                  },
-                ),
-              ),
-            ],
-          ];
-        }(),
-    );
-  }
+  static const _tabs = [
+    _StatsPeriod.week,
+    _StatsPeriod.month,
+    _StatsPeriod.sixMonth,
+    _StatsPeriod.year,
+  ];
 
   String _label(BuildContext context, _StatsPeriod p) => switch (p) {
     _StatsPeriod.week => context.t('stats.filterWeek'),
     _StatsPeriod.month => context.t('stats.filterMonth'),
     _StatsPeriod.sixMonth => context.t('stats.filterSixMonth'),
     _StatsPeriod.year => context.t('stats.filterYear'),
-    _StatsPeriod.all => context.t('stats.filterAll'),
-    _StatsPeriod.custom => context.t('stats.filterCustom'),
+    _ => '',
   };
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedIdx = _tabs.indexOf(period).clamp(0, _tabs.length - 1);
+    final trackColor = isDark
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.white.withValues(alpha: 0.72);
+
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final tabW = constraints.maxWidth / _tabs.length;
+        return Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: trackColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.black.withValues(alpha: 0.06),
+              width: 0.8,
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Animated thumb
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                left: selectedIdx * tabW + 3,
+                top: 3,
+                bottom: 3,
+                width: tabW - 6,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: brand.accentDark,
+                    borderRadius: BorderRadius.circular(17),
+                    boxShadow: [
+                      BoxShadow(
+                        color: brand.accentDark.withValues(alpha: 0.30),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Tab labels (on top of thumb)
+              Row(
+                children: [
+                  for (int i = 0; i < _tabs.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onChanged(_tabs[i]);
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: period == _tabs[i]
+                                  ? foregroundOn(brand.accentDark)
+                                  : brand.inkSoft,
+                            ),
+                            child: Text(_label(context, _tabs[i])),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _PeriodPill extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+// ── Period navigation row (< label >) ───────────────────────────────────────
 
-  const _PeriodPill({
+class _PeriodNavRow extends StatelessWidget {
+  final String label;
+  final bool showNav;
+  final bool showCustom;
+  final DateTime? customStart;
+  final DateTime? customEnd;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onDateRange;
+
+  const _PeriodNavRow({
     required this.label,
-    required this.selected,
-    required this.onTap,
+    required this.showNav,
+    required this.showCustom,
+    required this.customStart,
+    required this.customEnd,
+    required this.onPrev,
+    required this.onNext,
+    required this.onDateRange,
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        // Previous button
+        if (showNav)
+          _NavArrow(
+            icon: CupertinoIcons.chevron_left,
+            onTap: onPrev,
+            brand: brand,
+          )
+        else
+          const SizedBox(width: 34),
+        // Period label (center)
+        Expanded(
+          child: GestureDetector(
+            onTap: showCustom ? onDateRange : null,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.15),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Container(
+                key: ValueKey(label),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: showCustom
+                    ? BoxDecoration(
+                        color: AppActionBlue.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      )
+                    : null,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showCustom) ...[
+                      Icon(
+                        CupertinoIcons.calendar,
+                        size: 13,
+                        color: AppActionBlue.color,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: showCustom
+                            ? AppActionBlue.color
+                            : (isDark ? Colors.white : const Color(0xFF1C1C1E)),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Next button
+        if (showNav)
+          _NavArrow(
+            icon: CupertinoIcons.chevron_right,
+            onTap: onNext,
+            brand: brand,
+          )
+        else
+          const SizedBox(width: 34),
+      ],
+    );
+  }
+}
+
+class _NavArrow extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final BrandColors brand;
+
+  const _NavArrow({required this.icon, required this.onTap, required this.brand});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
-          color: selected
-              ? brand.accentDark
-              : (isDark
-                  ? Colors.white.withValues(alpha: 0.07)
-                  : Colors.white.withValues(alpha: 0.72)),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected
-                ? brand.accentDark.withValues(alpha: 0.45)
-                : (isDark
-                    ? Colors.white.withValues(alpha: 0.13)
-                    : Colors.white.withValues(alpha: 0.85)),
-            width: 0.8,
-          ),
-          
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected ? foregroundOn(brand.accentDark) : brand.inkSoft,
-            ),
-            child: Text(label),
-          ),
-        ),
+        child: Icon(icon, size: 16, color: brand.ink),
       ),
     );
   }
