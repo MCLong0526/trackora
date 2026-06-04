@@ -490,8 +490,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           const SizedBox(height: 16),
 
           // ── Accounts carousel (top section) ──────────────
-          _GroupHeader(label: context.t('asset.title')),
-          const SizedBox(height: 10),
           AccountCarouselSection(
             accounts: accounts,
             balances: accountBalances,
@@ -814,28 +812,6 @@ class _BudgetDetailMetric extends StatelessWidget {
   }
 }
 
-class _GroupHeader extends StatelessWidget {
-  final String label;
-
-  const _GroupHeader({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.only(left: 14, bottom: 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: brand.inkSoft,
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-}
 
 class _VisibilitySheet extends StatelessWidget {
   final String title;

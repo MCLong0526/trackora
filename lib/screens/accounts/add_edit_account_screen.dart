@@ -1012,6 +1012,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   void _showProviderPicker(BrandColors brand) {
+    FocusScope.of(context).unfocus();
     final allProviders = List<String>.from(_providers);
     final label = _type == AccountType.bank
         ? 'Select Bank'
@@ -1133,7 +1134,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   IconData _iconFor(AccountType type) {

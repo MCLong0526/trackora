@@ -328,22 +328,6 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
             ),
                     ],
                   ),
-                  // Top fade gradient
-                  Positioned(
-                    top: 0, left: 0, right: 0,
-                    child: IgnorePointer(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [brand.background, brand.background.withValues(alpha: 0)],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),

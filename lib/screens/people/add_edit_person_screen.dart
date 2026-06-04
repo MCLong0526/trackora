@@ -125,6 +125,7 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
   }
 
   void _showEmojiPicker() {
+    FocusScope.of(context).unfocus();
     final brand = context.brand;
     showModalBottomSheet(
       context: context,
@@ -142,7 +143,9 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
           Navigator.pop(ctx);
         },
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   @override

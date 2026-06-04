@@ -95,9 +95,11 @@ class _AddEditBorrowLendingScreenState
         _personColorIndex = null;
       });
     }
+    if (mounted) FocusScope.of(context).unfocus();
   }
 
   Future<void> _pickImage() async {
+    FocusScope.of(context).unfocus();
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -109,6 +111,7 @@ class _AddEditBorrowLendingScreenState
   }
 
   Future<void> _pickDate({required bool due}) async {
+    FocusScope.of(context).unfocus();
     final initial = due ? (_dueDate ?? DateTime.now()) : _date;
     DateTime temp = initial;
     await showCupertinoModalPopup(
@@ -147,6 +150,7 @@ class _AddEditBorrowLendingScreenState
         ),
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
   }
 
   Future<void> _save() async {

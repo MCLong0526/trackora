@@ -370,6 +370,16 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
               if (v != null && v > 0) {
                 setState(() {
                   _totalAmount = v;
+                  // Reset locked state so all members recalculate freely
+                  _lockedIds.clear();
+                  // Reset each member's amount to the new equal share so
+                  // Amount mode seeds fresh equal values (not stale old amounts)
+                  if (_members.isNotEmpty) {
+                    final each = v / _members.length;
+                    for (final m in _members) {
+                      m.amount = each;
+                    }
+                  }
                   // Clear all controllers so recalculate seeds fresh values
                   for (final c in _amountCtrls.values) {
                     c.dispose();

@@ -88,7 +88,7 @@ class AppStrings {
     'tab.stats': 'Stats',
     'tab.budget': 'Budget',
     'tab.money': 'Manage',
-    'tab.assets': 'Assets',
+    'tab.assets': 'Summary',
     'tab.profile': 'Profile',
 
     // Dashboard.
@@ -746,7 +746,7 @@ class AppStrings {
     'account.balance': 'BALANCE',
 
     // Assets screen.
-    'asset.title': 'Assets',
+    'asset.title': 'Summary',
     'asset.subtitle': 'Your complete financial picture',
     'asset.netWorth': 'NET WORTH',
     'asset.moneyFlow': 'Money Flow',
@@ -1237,7 +1237,7 @@ class AppStrings {
     'tab.stats': '统计',
     'tab.budget': '预算',
     'tab.money': '管理',
-    'tab.assets': '资产',
+    'tab.assets': '总览',
     'tab.profile': '我的',
 
     'home.totalBalance': '总余额',
@@ -1861,7 +1861,7 @@ class AppStrings {
     'account.balance': '余额',
 
     // Assets screen.
-    'asset.title': '资产',
+    'asset.title': '总览',
     'asset.subtitle': '您的完整财务状况',
     'asset.netWorth': '净资产',
     'asset.moneyFlow': '资金流动',
@@ -2340,7 +2340,7 @@ class AppStrings {
     'tab.stats': 'Statistik',
     'tab.budget': 'Bajet',
     'tab.money': 'Urus',
-    'tab.assets': 'Aset',
+    'tab.assets': 'Ringkasan',
     'tab.profile': 'Profil',
 
     'home.totalBalance': 'Jumlah baki',
@@ -2987,7 +2987,7 @@ class AppStrings {
     'account.balance': 'BAKI',
 
     // Assets screen.
-    'asset.title': 'Aset',
+    'asset.title': 'Ringkasan',
     'asset.subtitle': 'Gambaran kewangan lengkap anda',
     'asset.netWorth': 'NILAI BERSIH',
     'asset.moneyFlow': 'Aliran Wang',

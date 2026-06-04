@@ -94,31 +94,12 @@ class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
                 ],
               ),
             ),
-            // Scrollable content with top fade
+            // Scrollable content
             Expanded(
-              child: Stack(
-                children: [
-                  async.when(
-                    loading: () => const Center(child: CupertinoActivityIndicator()),
-                    error: (e, _) => _ErrorBody(error: e),
-                    data: (groups) => _Body(groups: groups, isDark: isDark),
-                  ),
-                  Positioned(
-                    top: 0, left: 0, right: 0,
-                    child: IgnorePointer(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [bg, bg.withValues(alpha: 0)],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: async.when(
+                loading: () => const Center(child: CupertinoActivityIndicator()),
+                error: (e, _) => _ErrorBody(error: e),
+                data: (groups) => _Body(groups: groups, isDark: isDark),
               ),
             ),
           ],

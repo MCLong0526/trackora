@@ -84,6 +84,7 @@ class _AddEditTravelGroupScreenState
   }
 
   Future<void> _pickDate({required bool isStart}) async {
+    FocusScope.of(context).unfocus();
     final picked = await showCupertinoModalPopup<DateTime?>(
       context: context,
       builder: (ctx) => _DatePickerSheet(
@@ -91,6 +92,7 @@ class _AddEditTravelGroupScreenState
         minimumDate: isStart ? null : _startDate,
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (picked == null) return;
     setState(() {
       if (isStart) {
@@ -103,10 +105,12 @@ class _AddEditTravelGroupScreenState
   }
 
   void _showCurrencyPicker() async {
+    FocusScope.of(context).unfocus();
     final picked = await showCupertinoModalPopup<String>(
       context: context,
       builder: (ctx) => _CurrencyPickerSheet(selected: _selectedCurrency),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (picked != null) setState(() => _selectedCurrency = picked);
   }
 

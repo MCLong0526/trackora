@@ -704,18 +704,25 @@ class _ActionBtn extends StatelessWidget {
 
 // ── Sliding period tabs (replaces pills) ──────────────────────────────────────
 
-class _SlidingPeriodTabs extends StatelessWidget {
+class _SlidingPeriodTabs extends StatefulWidget {
   final _StatsPeriod period;
   final ValueChanged<_StatsPeriod> onChanged;
 
   const _SlidingPeriodTabs({required this.period, required this.onChanged});
 
+  @override
+  State<_SlidingPeriodTabs> createState() => _SlidingPeriodTabsState();
+}
+
+class _SlidingPeriodTabsState extends State<_SlidingPeriodTabs> {
   static const _tabs = [
     _StatsPeriod.week,
     _StatsPeriod.month,
     _StatsPeriod.sixMonth,
     _StatsPeriod.year,
   ];
+
+  double _barWidth = 0;
 
   String _label(BuildContext context, _StatsPeriod p) => switch (p) {
     _StatsPeriod.week => context.t('stats.filterWeek'),
@@ -725,86 +732,105 @@ class _SlidingPeriodTabs extends StatelessWidget {
     _ => '',
   };
 
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (_barWidth <= 0) return;
+    final tabW = _barWidth / _tabs.length;
+    final idx = (d.localPosition.dx / tabW).floor().clamp(0, _tabs.length - 1);
+    final cur = _tabs.indexOf(widget.period).clamp(0, _tabs.length - 1);
+    if (idx != cur) {
+      HapticFeedback.selectionClick();
+      widget.onChanged(_tabs[idx]);
+    }
+  }
+
+  void _onDragEnd(DragEndDetails _) {}
+
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final selectedIdx = _tabs.indexOf(period).clamp(0, _tabs.length - 1);
+    final selectedIdx = _tabs.indexOf(widget.period).clamp(0, _tabs.length - 1);
     final trackColor = isDark
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.white.withValues(alpha: 0.72);
 
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final tabW = constraints.maxWidth / _tabs.length;
-        return Container(
-          height: 40,
-          decoration: BoxDecoration(
-            color: trackColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.black.withValues(alpha: 0.06),
-              width: 0.8,
+    return GestureDetector(
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      onHorizontalDragCancel: () {},
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          _barWidth = constraints.maxWidth;
+          final tabW = _barWidth / _tabs.length;
+          return Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: trackColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.black.withValues(alpha: 0.06),
+                width: 0.8,
+              ),
             ),
-          ),
-          child: Stack(
-            children: [
-              // Animated thumb
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                left: selectedIdx * tabW + 3,
-                top: 3,
-                bottom: 3,
-                width: tabW - 6,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: brand.accentDark,
-                    borderRadius: BorderRadius.circular(17),
-                    boxShadow: [
-                      BoxShadow(
-                        color: brand.accentDark.withValues(alpha: 0.30),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+            child: Stack(
+              children: [
+                // Animated thumb
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  left: selectedIdx * tabW + 3,
+                  top: 3,
+                  bottom: 3,
+                  width: tabW - 6,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: brand.accentDark,
+                      borderRadius: BorderRadius.circular(17),
+                      boxShadow: [
+                        BoxShadow(
+                          color: brand.accentDark.withValues(alpha: 0.30),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // Tab labels (on top of thumb)
-              Row(
-                children: [
-                  for (int i = 0; i < _tabs.length; i++)
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          onChanged(_tabs[i]);
-                        },
-                        behavior: HitTestBehavior.opaque,
-                        child: Center(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 200),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: period == _tabs[i]
-                                  ? foregroundOn(brand.accentDark)
-                                  : brand.inkSoft,
+                // Tab labels (on top of thumb)
+                Row(
+                  children: [
+                    for (int i = 0; i < _tabs.length; i++)
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            widget.onChanged(_tabs[i]);
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Center(
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: widget.period == _tabs[i]
+                                    ? foregroundOn(brand.accentDark)
+                                    : brand.inkSoft,
+                              ),
+                              child: Text(_label(context, _tabs[i])),
                             ),
-                            child: Text(_label(context, _tabs[i])),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

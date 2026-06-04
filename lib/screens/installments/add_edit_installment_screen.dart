@@ -405,6 +405,7 @@ class _AddEditInstallmentScreenState
   }
 
   Future<void> _showActionsSheet() async {
+    FocusScope.of(context).unfocus();
     final i = widget.installment!;
     final status = i.status;
     await showCupertinoModalPopup<void>(
@@ -478,6 +479,7 @@ class _AddEditInstallmentScreenState
         ),
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
   }
 
   @override

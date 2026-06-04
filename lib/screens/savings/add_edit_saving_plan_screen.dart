@@ -184,6 +184,7 @@ class _AddEditSavingPlanScreenState
   // ── Date picker ──────────────────────────────────────────────
 
   Future<void> _pickDate({required bool start}) async {
+    FocusScope.of(context).unfocus();
     DateTime temp = start ? _startDate : (_endDate ?? DateTime.now());
     await showCupertinoModalPopup(
       context: context,
@@ -230,6 +231,7 @@ class _AddEditSavingPlanScreenState
         ),
       ),
     );
+    if (mounted) FocusScope.of(context).unfocus();
   }
 
   // ── Save ─────────────────────────────────────────────────────

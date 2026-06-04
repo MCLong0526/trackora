@@ -70,6 +70,8 @@ Future<void> showCurrencyPickerSheet(
   required String current,
   required ValueChanged<String> onPicked,
 }) async {
+  // Dismiss any active keyboard so it doesn't re-open when the sheet closes.
+  FocusScope.of(context).unfocus();
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: context.brand.background,
@@ -85,6 +87,9 @@ Future<void> showCurrencyPickerSheet(
       },
     ),
   );
+  // Clear focus again after the sheet closes so the caller's amount field
+  // doesn't regain focus and re-open the keyboard.
+  if (context.mounted) FocusScope.of(context).unfocus();
 }
 
 class _CurrencyPickerSheet extends StatefulWidget {

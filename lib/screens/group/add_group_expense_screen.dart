@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
@@ -13,6 +16,7 @@ import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/receipt_preview.dart';
 
 // ── Design tokens (from design file) ─────────────────────────────────────────
 const _kGroupTint = Color(0xFFE9E2F3);
@@ -69,6 +73,7 @@ class _AddGroupExpenseScreenState
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _amountFocus = FocusNode();
+  final _notesFocus = FocusNode();
   final _youCtrl = TextEditingController();
   final _partnerCtrl = TextEditingController();
   bool _syncingAmounts = false;
@@ -84,6 +89,21 @@ class _AddGroupExpenseScreenState
   bool _saving = false;
   bool _saveSuccess = false;
 
+  // Swipe-to-close
+  late AnimationController _closeCtrl;
+  late AnimationController _snapCtrl;
+  double _dragOffset = 0.0;
+  double _snapStartOffset = 0.0;
+
+  // Receipt
+  File? _newReceipt;
+  String? _existingReceiptUrl;
+
+  // Scroll fades
+  final _scrollCtrl = ScrollController();
+  bool _scrolled = false; // not at top → show top fade
+  bool _atBottom = true; // at bottom (or not scrollable) → hide bottom fade
+
   late AnimationController _saveBtnCtrl;
   late Animation<double> _saveBtnBounce;
 
@@ -94,6 +114,14 @@ class _AddGroupExpenseScreenState
   @override
   void initState() {
     super.initState();
+    _closeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _snapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
     _saveBtnCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 460),
@@ -103,6 +131,22 @@ class _AddGroupExpenseScreenState
       TweenSequenceItem(tween: Tween(begin: 1.07, end: 0.95), weight: 25),
       TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0), weight: 50),
     ]).animate(CurvedAnimation(parent: _saveBtnCtrl, curve: Curves.easeOut));
+
+    _scrollCtrl.addListener(_updateFadeState);
+
+    // When the note field gains focus, scroll it into view above the keyboard.
+    _notesFocus.addListener(() {
+      if (!_notesFocus.hasFocus) return;
+      // Wait for the keyboard to push the viewport up, then reveal the note.
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (!mounted || !_scrollCtrl.hasClients) return;
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+        );
+      });
+    });
 
     final user = ref.read(authStateProvider).valueOrNull;
     _paidByUid = widget.existing?.paidBy ?? user?.uid;
@@ -125,6 +169,7 @@ class _AddGroupExpenseScreenState
       _category = e.category;
       _date = e.date;
       _paidByAccountId = e.paidByAccountId;
+      _existingReceiptUrl = e.receiptUrl;
       // Infer split mode: prefer explicit splitPercents, fall back to splitBetween.
       if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
         _splitCustomPercents = Map<String, double>.from(e.splitPercents!);
@@ -156,6 +201,27 @@ class _AddGroupExpenseScreenState
         if (mounted) setState(() {});
       });
     }
+
+    // Resolve the initial fade state once the content has been laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFadeState());
+  }
+
+  // Recompute fade visibility: top fade shows when scrolled away from the top,
+  // bottom fade shows only when there is more content below (not at the end).
+  void _updateFadeState() {
+    if (!_scrollCtrl.hasClients) return;
+    final pos = _scrollCtrl.position;
+    final hasOverflow = pos.maxScrollExtent > 0;
+    final atTop = _scrollCtrl.offset <= 4;
+    final atBottom = _scrollCtrl.offset >= pos.maxScrollExtent - 4;
+    final newScrolled = hasOverflow && !atTop;
+    final newAtBottom = !hasOverflow || atBottom;
+    if (newScrolled != _scrolled || newAtBottom != _atBottom) {
+      setState(() {
+        _scrolled = newScrolled;
+        _atBottom = newAtBottom;
+      });
+    }
   }
 
   @override
@@ -163,10 +229,210 @@ class _AddGroupExpenseScreenState
     _amountCtrl.dispose();
     _notesCtrl.dispose();
     _amountFocus.dispose();
+    _notesFocus.dispose();
     _youCtrl.dispose();
     _partnerCtrl.dispose();
     _saveBtnCtrl.dispose();
+    _closeCtrl.dispose();
+    _snapCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  // ─── Swipe-to-close ───────────────────────────────────────────────────────
+
+  void _onSnapTick() {
+    if (!mounted) return;
+    setState(() {
+      _dragOffset =
+          _snapStartOffset *
+          (1.0 - Curves.easeOutCubic.transform(_snapCtrl.value));
+    });
+    if (_snapCtrl.isCompleted) {
+      _snapCtrl.removeListener(_onSnapTick);
+      _dragOffset = 0.0;
+      _snapStartOffset = 0.0;
+    }
+  }
+
+  void _snapBack() {
+    _snapStartOffset = _dragOffset;
+    _snapCtrl
+      ..stop()
+      ..reset()
+      ..removeListener(_onSnapTick)
+      ..addListener(_onSnapTick)
+      ..forward();
+  }
+
+  Future<void> _animatedClose() async {
+    if (_closeCtrl.isAnimating) return;
+    _snapCtrl.stop();
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+    await _closeCtrl.forward();
+    if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildDragHandle() {
+    final pillW = (36.0 + (_dragOffset * 0.3).clamp(0.0, 20.0));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) {
+        final dy = details.delta.dy;
+        if (dy > 0 || _dragOffset > 0) {
+          setState(() {
+            _dragOffset = (_dragOffset + dy).clamp(0.0, 260.0);
+          });
+        }
+      },
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (_dragOffset > 90 || velocity > 600) {
+          _animatedClose();
+        } else {
+          _snapBack();
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: pillW,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _kGroupInkSoft.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'swipe down to close',
+              style: TextStyle(
+                fontSize: 11,
+                color: _kGroupInkSoft.withValues(alpha: 0.55),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Receipt ──────────────────────────────────────────────────────────────
+
+  Future<void> _pickReceipt() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (picked != null) setState(() => _newReceipt = File(picked.path));
+  }
+
+  Widget _buildReceiptRow() {
+    final hasNew = _newReceipt != null;
+    final hasExisting = _existingReceiptUrl != null;
+
+    if (!hasNew && !hasExisting) {
+      return InkWell(
+        onTap: _pickReceipt,
+        borderRadius: BorderRadius.circular(18),
+        child: const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: Icon(CupertinoIcons.paperclip, color: Color(0xFF0B0B0F), size: 18),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Attach receipt',
+                  style: TextStyle(fontSize: 14, color: Color(0xFF8E8E96)),
+                ),
+              ),
+              Icon(CupertinoIcons.chevron_right, color: Color(0xFFC9C9CF), size: 14),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(CupertinoIcons.paperclip, color: Color(0xFF0B0B0F), size: 18),
+          ),
+          const SizedBox(width: 12),
+          if (hasNew)
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Receipt')),
+                    body: Center(
+                      child: InteractiveViewer(
+                        child: Image.file(_newReceipt!, fit: BoxFit.contain),
+                      ),
+                    ),
+                  ),
+                  fullscreenDialog: true,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(_newReceipt!, width: 44, height: 44, fit: BoxFit.cover),
+              ),
+            )
+          else
+            ReceiptPreview(stored: _existingReceiptUrl!, size: 44, fit: BoxFit.cover),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              hasNew ? 'New attachment' : 'Saved attachment',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF0B0B0F), fontWeight: FontWeight.w500),
+            ),
+          ),
+          GestureDetector(
+            onTap: _pickReceipt,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6B4FB2).withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(CupertinoIcons.pencil, size: 15, color: Color(0xFF6B4FB2)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() {
+              _newReceipt = null;
+              _existingReceiptUrl = null;
+            }),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD93025).withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(CupertinoIcons.delete, size: 15, color: Color(0xFFD93025)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Sync the YOU/PARTNER sub-amount fields based on total + split mode.
@@ -318,6 +584,22 @@ class _AddGroupExpenseScreenState
 
     setState(() => _saving = true);
     try {
+      // Upload receipt if a new one was selected
+      String? receiptUrl = _existingReceiptUrl;
+      if (_newReceipt != null) {
+        final isOnline = ref.read(isOnlineProvider);
+        final storage = ref.read(storageServiceProvider);
+        try {
+          if (isOnline) {
+            receiptUrl = await storage.saveReceipt(user.uid, _newReceipt!);
+          } else {
+            receiptUrl = await storage.saveReceiptLocally(user.uid, _newReceipt!);
+          }
+        } catch (_) {
+          receiptUrl = _existingReceiptUrl;
+        }
+      }
+
       final service = ref.read(expenseGroupServiceProvider);
       final now = DateTime.now();
       final expense = GroupExpenseItem(
@@ -338,6 +620,7 @@ class _AddGroupExpenseScreenState
         notes: _notesCtrl.text.trim().isEmpty
             ? null
             : _notesCtrl.text.trim(),
+        receiptUrl: receiptUrl,
         createdAt: widget.existing?.createdAt ?? now,
         updatedAt: now,
       );
@@ -365,6 +648,7 @@ class _AddGroupExpenseScreenState
             date: expense.date,
             createdBy: expense.createdBy,
             notes: expense.notes,
+            receiptUrl: expense.receiptUrl,
             createdAt: expense.createdAt,
             updatedAt: expense.updatedAt,
           );
@@ -450,6 +734,7 @@ class _AddGroupExpenseScreenState
   }
 
   void _pickDate() {
+    FocusScope.of(context).unfocus();
     showCupertinoModalPopup(
       context: context,
       builder: (_) => Container(
@@ -462,7 +747,7 @@ class _AddGroupExpenseScreenState
           onDateTimeChanged: (dt) => setState(() => _date = dt),
         ),
       ),
-    );
+    ).whenComplete(_dismissKeyboard);
   }
 
   void _showAccountSheet(List<Account> accounts) {
@@ -555,7 +840,7 @@ class _AddGroupExpenseScreenState
           ),
         );
       },
-    );
+    ).whenComplete(_dismissKeyboard);
   }
 
   IconData _iconForType(AccountType type) {
@@ -617,6 +902,7 @@ class _AddGroupExpenseScreenState
   }
 
   void _showPaidBySheet() {
+    FocusScope.of(context).unfocus();
     final user = ref.read(authStateProvider).valueOrNull;
     showModalBottomSheet(
       context: context,
@@ -631,37 +917,57 @@ class _AddGroupExpenseScreenState
           Navigator.pop(context);
         },
       ),
-    );
+    ).whenComplete(_dismissKeyboard);
+  }
+
+  // Clear focus after a picker closes so the form's amount field doesn't
+  // regain focus and re-open the keyboard/numpad.
+  void _dismissKeyboard() {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
   }
 
   void _showSplitSheet() {
+    FocusScope.of(context).unfocus();
     final user = ref.read(authStateProvider).valueOrNull;
     final partner = widget.group.members
         .where((m) => m.uid != user?.uid)
         .firstOrNull;
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '';
-    final screenHeight = MediaQuery.of(context).size.height;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: screenHeight * 0.70),
-        child: _SplitSheet(
-          members: widget.group.members,
-          currentUserId: user?.uid,
-          currentMode: _splitMode,
-          currentPercents: _splitCustomPercents,
-          amount: _parsedAmount,
-          symbol: symbol,
-          partnerName: partner?.displayName ?? context.t('group.partnerFallback'),
-          onSelected: (mode, percents) {
-            _setSplitMode(mode, customPercents: percents);
-            Navigator.pop(context);
-          },
-        ),
-      ),
-    );
+      builder: (ctx) {
+        final mq = MediaQuery.of(ctx);
+        final keyboardH = mq.viewInsets.bottom;
+        // Leave a comfortable gap below the status bar so the sheet never
+        // reaches the very top, and shrink as the keyboard rises so the inner
+        // scroll area takes the squeeze (Confirm button stays above keyboard).
+        final topGap = mq.padding.top + 64;
+        final maxH = mq.size.height - topGap - keyboardH;
+        return Padding(
+          padding: EdgeInsets.only(bottom: keyboardH),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH > 0 ? maxH : mq.size.height * 0.7),
+            child: _SplitSheet(
+              members: widget.group.members,
+              currentUserId: user?.uid,
+              currentMode: _splitMode,
+              currentPercents: _splitCustomPercents,
+              amount: _parsedAmount,
+              symbol: symbol,
+              partnerName: partner?.displayName ?? context.t('group.partnerFallback'),
+              onSelected: (mode, percents) {
+                FocusScope.of(context).unfocus();
+                _setSplitMode(mode, customPercents: percents);
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        );
+      },
+    ).whenComplete(_dismissKeyboard);
   }
 
   @override
@@ -730,90 +1036,57 @@ class _AddGroupExpenseScreenState
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
       backgroundColor: _kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top bar (X + title) ──────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(CupertinoIcons.xmark,
-                          color: Color(0xFF0B0B0F), size: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      _isEdit
-                          ? context.t('common.edit')
-                          : context.t('groupExpense.newEntry'),
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0B0B0F),
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  if (_isEdit)
-                    GestureDetector(
-                      onTap: _delete,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFFEEEE),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.delete,
-                          color: Color(0xFFD93025),
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                ],
+      body: AnimatedBuilder(
+        animation: _closeCtrl,
+        builder: (context, child) {
+          final t = Curves.easeInCubic.transform(_closeCtrl.value);
+          final screenH = MediaQuery.of(context).size.height;
+          final totalY = _dragOffset + t * screenH * 0.26;
+          final scale = (1.0 - totalY / (screenH * 1.6)).clamp(0.78, 1.0);
+          final opacity = (1.0 - totalY / 230.0).clamp(0.0, 1.0);
+          return Opacity(
+            opacity: opacity,
+            child: Transform.translate(
+              offset: Offset(0, totalY),
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topCenter,
+                child: child,
               ),
             ),
+          );
+        },
+        child: SafeArea(
+        child: Column(
+          children: [
+            _buildDragHandle(),
+            const SizedBox(height: 6),
 
-            const SizedBox(height: 10),
-
-            // ── Scrollable body ──────────────────────────────
+            // ── Purple card — fixed top, scrollable inner card ──
             Expanded(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Column(
-                  children: [
-                    // ── Outer purple card ────────────────────
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: _kGroupTint,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(
-                          16, 14, 16, 14),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Container(
+                  color: _kGroupTint,
+                  child: Stack(
+                    children: [
+                      NotificationListener<ScrollMetricsNotification>(
+                        onNotification: (_) {
+                          WidgetsBinding.instance.addPostFrameCallback(
+                              (_) => _updateFadeState());
+                          return false;
+                        },
+                        child: SingleChildScrollView(
+                          controller: _scrollCtrl,
+                          physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                           // Hero row: avatar pair + title
                           Row(
                             children: [
@@ -940,6 +1213,8 @@ class _AddGroupExpenseScreenState
                                     ),
                                     decoration: const InputDecoration(
                                       border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
                                       filled: false,
                                       fillColor: Colors.transparent,
                                       hintText: '0.00',
@@ -1024,6 +1299,8 @@ class _AddGroupExpenseScreenState
                                                     ),
                                                     decoration: const InputDecoration(
                                                       border: InputBorder.none,
+                                                      enabledBorder: InputBorder.none,
+                                                      focusedBorder: InputBorder.none,
                                                       isDense: true,
                                                       contentPadding: EdgeInsets.zero,
                                                       hintText: '0.00',
@@ -1097,6 +1374,8 @@ class _AddGroupExpenseScreenState
                                                     ),
                                                     decoration: const InputDecoration(
                                                       border: InputBorder.none,
+                                                      enabledBorder: InputBorder.none,
+                                                      focusedBorder: InputBorder.none,
                                                       isDense: true,
                                                       contentPadding: EdgeInsets.zero,
                                                       hintText: '0.00',
@@ -1247,13 +1526,11 @@ class _AddGroupExpenseScreenState
                           ],
 
                           const SizedBox(height: 12),
-
-                          // ── Inner white card ─────────────────
+                          // Inner white card
                           Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius:
-                                  BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Column(
                               children: [
@@ -1432,6 +1709,11 @@ class _AddGroupExpenseScreenState
 
                                 _EntryDivider(),
 
+                                // Receipt
+                                _buildReceiptRow(),
+
+                                _EntryDivider(),
+
                                 // Note
                                 Padding(
                                   padding:
@@ -1452,6 +1734,9 @@ class _AddGroupExpenseScreenState
                                       Expanded(
                                         child: TextField(
                                           controller: _notesCtrl,
+                                          focusNode: _notesFocus,
+                                          maxLines: null,
+                                          minLines: 1,
                                           cursorHeight: 15.0,
                                           textCapitalization:
                                               TextCapitalization
@@ -1486,20 +1771,82 @@ class _AddGroupExpenseScreenState
                                 ),
                               ],
                             ),
+                          ),    // Container (inner white card)
+                            ],
+                          ),    // Column (scroll content)
+                        ),      // SingleChildScrollView
+                      ),        // NotificationListener
+                          // Bottom fade — hidden once scrolled to the very end
+                          Positioned(
+                            left: 0, right: 0, bottom: 0,
+                            child: IgnorePointer(
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _atBottom ? 0.0 : 1.0,
+                                child: Container(
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [_kGroupTint.withValues(alpha: 0), _kGroupTint],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                          // Top fade — visible only when scrolled away from top
+                          Positioned(
+                            left: 0, right: 0, top: 0,
+                            child: IgnorePointer(
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _scrolled ? 1.0 : 0.0,
+                                child: Container(
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [_kGroupTint, _kGroupTint.withValues(alpha: 0)],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],    // Stack children
+                      ),      // Stack
+                  ),          // Container (purple card)
+                ),            // ClipRRect
+              ),              // Padding
+            ),                // Expanded
 
             // ── Save bar ─────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
               child: Row(
                 children: [
+                  if (_isEdit) ...[
+                    GestureDetector(
+                      onTap: _delete,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFEEEE),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.delete,
+                          color: Color(0xFFD93025),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   // Circle category icon
                   Container(
                     width: 56,
@@ -1635,6 +1982,7 @@ class _AddGroupExpenseScreenState
               ),
             ),
           ],
+        ),
         ),
       ),
       ),
@@ -1913,6 +2261,9 @@ class _SplitSheetState extends State<_SplitSheet> {
   late _SplitMode _selectedMode;
   late double _myPercent; // 0–100
   late TextEditingController _myAmountCtrl;
+  final _amountFocus = FocusNode();
+  final _sheetScrollCtrl = ScrollController();
+  bool _sheetAtBottom = true; // at end (or no overflow) → hide bottom fade
 
   String get _partnerUid =>
       widget.members.firstWhere((m) => m.uid != widget.currentUserId,
@@ -1929,12 +2280,36 @@ class _SplitSheetState extends State<_SplitSheet> {
     _myAmountCtrl = TextEditingController(
       text: myAmt > 0 ? myAmt.toStringAsFixed(2) : '',
     );
+    _sheetScrollCtrl.addListener(_updateSheetFade);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateSheetFade());
+  }
+
+  void _updateSheetFade() {
+    if (!_sheetScrollCtrl.hasClients) return;
+    final pos = _sheetScrollCtrl.position;
+    final hasOverflow = pos.maxScrollExtent > 0;
+    final atBottom = _sheetScrollCtrl.offset >= pos.maxScrollExtent - 4;
+    final next = !hasOverflow || atBottom;
+    if (next != _sheetAtBottom) setState(() => _sheetAtBottom = next);
   }
 
   @override
   void dispose() {
     _myAmountCtrl.dispose();
+    _amountFocus.dispose();
+    _sheetScrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _selectMode(_SplitMode mode) {
+    setState(() => _selectedMode = mode);
+    if (mode == _SplitMode.byAmount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _amountFocus.requestFocus();
+      });
+    } else if (mode != _SplitMode.byPercent) {
+      widget.onSelected(mode, null);
+    }
   }
 
   Map<String, double>? _buildPercents() {
@@ -2026,7 +2401,6 @@ class _SplitSheetState extends State<_SplitSheet> {
       ),
     ];
 
-    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Container(
@@ -2086,24 +2460,29 @@ class _SplitSheetState extends State<_SplitSheet> {
               ),
             ),
           ),
-          // ── Scrollable content ──────────────────────────────
+          // ── Scrollable content with bottom fade ─────────────
           Flexible(
-            child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 4, 24, keyboardH + safeBottom + 28),
+            child: Stack(
+              children: [
+            NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => _updateSheetFade());
+                return false;
+              },
+              child: SingleChildScrollView(
+            controller: _sheetScrollCtrl,
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 48),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
           ...options.map((opt) {
             final selected = opt.mode == _selectedMode;
+            final showInlineInput = selected &&
+                (opt.mode == _SplitMode.byPercent || opt.mode == _SplitMode.byAmount);
             return GestureDetector(
-              onTap: () {
-                setState(() => _selectedMode = opt.mode);
-                if (opt.mode != _SplitMode.byPercent &&
-                    opt.mode != _SplitMode.byAmount) {
-                  widget.onSelected(opt.mode, null);
-                }
-              },
+              onTap: () => _selectMode(opt.mode),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2127,206 +2506,212 @@ class _SplitSheetState extends State<_SplitSheet> {
                         ]
                       : null,
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  opt.title,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0B0B0F),
-                                    letterSpacing: -0.2,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      opt.title,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0B0B0F),
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+                                    decoration: BoxDecoration(
+                                      color: opt.badgeBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      opt.badge,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: opt.badgeFg,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                opt.subtitle,
+                                style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E96)),
+                              ),
+                              if (opt.mode == _SplitMode.even) ...[
+                                const SizedBox(height: 10),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: SizedBox(
+                                    height: 8,
+                                    child: Row(
+                                      children: [
+                                        Expanded(child: Container(color: const Color(0xFF5A4AAB))),
+                                        Expanded(child: Container(color: const Color(0xFF1FBE71))),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding:
-                                    const EdgeInsets.fromLTRB(
-                                        8, 2, 8, 2),
-                                decoration: BoxDecoration(
-                                  color: opt.badgeBg,
-                                  borderRadius:
-                                      BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  opt.badge,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: opt.badgeFg,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ),
+                              ],
                             ],
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            opt.subtitle,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF8E8E96)),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: selected ? const Color(0xFF1A6CFF) : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: selected
+                                ? null
+                                : Border.all(color: const Color(0xFFD1D1D6), width: 2),
                           ),
-                          // 50/50 bar for even split
-                          if (opt.mode == _SplitMode.even) ...[
-                            const SizedBox(height: 10),
-                            ClipRRect(
-                              borderRadius:
-                                  BorderRadius.circular(4),
-                              child: SizedBox(
-                                height: 8,
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                        child: Container(
-                                            color: const Color(
-                                                0xFF5A4AAB))),
-                                    Expanded(
-                                        child: Container(
-                                            color: const Color(
-                                                0xFF1FBE71))),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                          child: selected
+                              ? const Icon(CupertinoIcons.checkmark, color: Colors.white, size: 13)
+                              : null,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? const Color(0xFF1A6CFF)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: selected
-                            ? null
-                            : Border.all(
-                                color: const Color(0xFFD1D1D6),
-                                width: 2),
-                      ),
-                      child: selected
-                          ? const Icon(CupertinoIcons.checkmark,
-                              color: Colors.white, size: 13)
-                          : null,
+                    // Inline expansion for byPercent / byAmount
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                      child: showInlineInput
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 14),
+                              child: opt.mode == _SplitMode.byPercent
+                                  ? Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              '${context.t('group.you')}: ${_myPercent.toStringAsFixed(0)}%',
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF5A4AAB)),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              '${widget.partnerName}: ${(100 - _myPercent).toStringAsFixed(0)}%',
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1FBE71)),
+                                            ),
+                                          ],
+                                        ),
+                                        Slider(
+                                          value: _myPercent,
+                                          min: 0,
+                                          max: 100,
+                                          divisions: 20,
+                                          activeColor: const Color(0xFF1A6CFF),
+                                          onChanged: (v) => setState(() => _myPercent = v),
+                                        ),
+                                      ],
+                                    )
+                                  : Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          context.t('groupExpense.yourAmount').replaceAll('{symbol}', widget.symbol),
+                                          style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        TextField(
+                                          controller: _myAmountCtrl,
+                                          focusNode: _amountFocus,
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          textInputAction: TextInputAction.done,
+                                          onSubmitted: (_) => _amountFocus.unfocus(),
+                                          onChanged: (_) => setState(() {}),
+                                          decoration: InputDecoration(
+                                            hintText: '0.00',
+                                            prefixText: '${widget.symbol}  ',
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              borderSide: const BorderSide(color: Color(0xFF1A6CFF), width: 2),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Builder(builder: (ctx) {
+                                          final myAmt = double.tryParse(_myAmountCtrl.text) ?? 0.0;
+                                          final partnerAmt = (widget.amount - myAmt).clamp(0.0, widget.amount);
+                                          return Text(
+                                            '${widget.partnerName}: ${widget.symbol}${partnerAmt.toStringAsFixed(2)}',
+                                            style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
                   ],
                 ),
               ),
             );
           }),
-
-          // Custom percent input
-          if (_selectedMode == _SplitMode.byPercent) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text('${context.t('group.you')}: ${_myPercent.toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF5A4AAB))),
-                      const Spacer(),
-                      Text('${widget.partnerName}: ${(100 - _myPercent).toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1FBE71))),
-                    ],
-                  ),
-                  Slider(
-                    value: _myPercent,
-                    min: 0,
-                    max: 100,
-                    divisions: 20,
-                    activeColor: const Color(0xFF1A6CFF),
-                    onChanged: (v) => setState(() => _myPercent = v),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFF1A6CFF),
-                borderRadius: BorderRadius.circular(16),
-                onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
-                child: Text(context.t('groupExpense.confirmSplit'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-              ),
-            ),
-          ],
-
-          // Custom amount input — always show when byAmount is selected
-          if (_selectedMode == _SplitMode.byAmount) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.t('groupExpense.yourAmount').replaceAll('{symbol}', widget.symbol),
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66))),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _myAmountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: '0.00',
-                      prefixText: '${widget.symbol}  ',
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Builder(builder: (_) {
-                    final myAmt = double.tryParse(_myAmountCtrl.text) ?? 0.0;
-                    final partnerAmt = (widget.amount - myAmt).clamp(0.0, widget.amount);
-                    return Text(
-                      '${widget.partnerName}: ${widget.symbol}${partnerAmt.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFF1A6CFF),
-                borderRadius: BorderRadius.circular(16),
-                onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
-                child: Text(context.t('groupExpense.confirmSplit'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-              ),
-            ),
-          ],
         ],
         ),
         ), // end SingleChildScrollView
+        ), // end NotificationListener
+              // Bottom fade overlay — hidden once scrolled to the end
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _sheetAtBottom ? 0.0 : 1.0,
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [_kBg.withValues(alpha: 0), _kBg],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              ],
+            ), // end Stack
           ), // end Flexible
+          // ── Fixed Confirm Split button ───────────────────────
+          if (_selectedMode == _SplitMode.byPercent || _selectedMode == _SplitMode.byAmount)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoButton(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  color: const Color(0xFF1A6CFF),
+                  borderRadius: BorderRadius.circular(16),
+                  onPressed: () => widget.onSelected(_selectedMode, _buildPercents()),
+                  child: Text(
+                    context.t('groupExpense.confirmSplit'),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          SizedBox(height: safeBottom + 8),
         ],
       ), // end Column
     ); // end Container

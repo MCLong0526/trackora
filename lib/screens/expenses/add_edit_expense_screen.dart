@@ -111,6 +111,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   bool _swipeHintVisible = true;
 
+  final _cardScrollCtrl = ScrollController();
+  bool _cardScrolled = false; // not at top → show top fade
+  bool _cardAtBottom = true; // at bottom (or no overflow) → hide bottom fade
+
   bool _splitBillEnabled = false;
   List<SplitMember> _splitMembers = [];
   SplitMode _splitMode = SplitMode.equally;
@@ -158,6 +162,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       vsync: this,
       duration: const Duration(milliseconds: 360),
     );
+
+    _cardScrollCtrl.addListener(_updateCardFadeState);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateCardFadeState());
 
     _saveBtnCtrl = AnimationController(
       vsync: this,
@@ -253,6 +260,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _amountFocus.dispose();
     _noteController.dispose();
     _counterpartController.dispose();
+    _cardScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -293,6 +301,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   Widget _buildDragHandle(BrandColors brand) {
     final pillW = (36.0 + (_dragOffset * 0.3).clamp(0.0, 20.0));
+    final accent = _kTypeAccents[_typeIndexFor(_type)];
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragUpdate: (details) {
@@ -321,7 +330,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               width: pillW,
               height: 4,
               decoration: BoxDecoration(
-                color: brand.inkSoft.withValues(alpha: 0.35),
+                color: accent.withValues(alpha: 0.40),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -330,7 +339,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               'swipe down to close',
               style: TextStyle(
                 fontSize: 11,
-                color: brand.inkSoft.withValues(alpha: 0.45),
+                color: accent.withValues(alpha: 0.55),
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.1,
               ),
@@ -350,6 +359,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   Future<void> _pickReceipt() async {
+    FocusScope.of(context).unfocus();
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -360,7 +370,33 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     }
   }
 
+  // Clear focus after a picker closes so the amount field doesn't regain
+  // focus and re-open the keyboard/numpad.
+  void _dismissKeyboard() {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+  }
+
+  // Recompute fade visibility: top fade shows when scrolled away from the top,
+  // bottom fade shows only while there is more content below.
+  void _updateCardFadeState() {
+    if (!_cardScrollCtrl.hasClients) return;
+    final pos = _cardScrollCtrl.position;
+    final hasOverflow = pos.maxScrollExtent > 0;
+    final atTop = _cardScrollCtrl.offset <= 4;
+    final atBottom = _cardScrollCtrl.offset >= pos.maxScrollExtent - 4;
+    final newScrolled = hasOverflow && !atTop;
+    final newAtBottom = !hasOverflow || atBottom;
+    if (newScrolled != _cardScrolled || newAtBottom != _cardAtBottom) {
+      setState(() {
+        _cardScrolled = newScrolled;
+        _cardAtBottom = newAtBottom;
+      });
+    }
+  }
+
   Future<void> _pickDate() async {
+    FocusScope.of(context).unfocus();
     await showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
@@ -385,9 +421,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         ),
       ),
     );
+    _dismissKeyboard();
   }
 
   Future<void> _openSplitBillSheet(BuildContext context) async {
+    FocusScope.of(context).unfocus();
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
     final amount = double.tryParse(_amountController.text) ?? 0;
     final totalAmount = _splitBillEnabled && _splitBillTotal > 0
@@ -1152,8 +1190,11 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final t = _kTypes[index];
     if (_type == t) return;
     HapticFeedback.selectionClick();
+    if (_cardScrollCtrl.hasClients) _cardScrollCtrl.jumpTo(0);
     setState(() {
       _type = t;
+      _cardScrolled = false;
+      _cardAtBottom = true;
       _swipeHintVisible = false;
       _isAccountTransfer = false;
       _toAccountId = null;
@@ -1163,6 +1204,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         }
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateCardFadeState());
   }
 
   // ─── Page Indicator ───────────────────────────────────────────────────────────
@@ -1467,12 +1509,30 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         type == EntryType.transfer ||
         type == EntryType.receive;
 
-    return SingleChildScrollView(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final bg = [
+      AppColors.lilac,
+      AppColors.mint,
+      AppColors.blush,
+      AppColors.sky,
+    ][_typeIndexFor(type)];
+
+    return Stack(
+      children: [
+        NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _updateCardFadeState());
+            return false;
+          },
+          child: SingleChildScrollView(
+            controller: _cardScrollCtrl,
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+            child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           // Header
           Row(
             children: [
@@ -1684,7 +1744,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             _counterpartField(brand),
             SizedBox(height: compact ? 8 : 12),
           ],
-          // Details card (account / date / note / receipt)
           _groupedDetailsCard(
             brand: brand,
             accounts: accounts,
@@ -1693,9 +1752,52 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             entryType: type,
             compact: true,
           ),
-        ],
+            ],
+          ),
+        ),
       ),
-    );
+              // Bottom fade — hidden once scrolled to the very end
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _cardAtBottom ? 0.0 : 1.0,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [bg.withValues(alpha: 0), bg.withValues(alpha: 0.65)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Top fade — visible when scrolled away from top
+              Positioned(
+                left: 0, right: 0, top: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _cardScrolled ? 1.0 : 0.0,
+                    child: Container(
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [bg.withValues(alpha: 0.60), bg.withValues(alpha: 0)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
   }
 
   Widget _inactiveCardPreview({
@@ -2108,7 +2210,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   Expanded(
                     child: TextFormField(
                       controller: _noteController,
-                      maxLines: compact ? 1 : 2,
+                      maxLines: null,
+                      minLines: 1,
                       style: const TextStyle(fontSize: 15),
                       decoration: InputDecoration(
                         hintText: context.t('expense.note'),
@@ -2513,28 +2616,30 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         ),
         GestureDetector(
           onTap: _pickReceipt,
-          child: Text(
-            context.t('expense.replace'),
-            style: TextStyle(
-              fontSize: 13,
-              color: brand.accentDark,
-              fontWeight: FontWeight.w600,
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: brand.accentDark.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
             ),
+            child: Icon(CupertinoIcons.pencil, size: 15, color: brand.accentDark),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         GestureDetector(
           onTap: () => setState(() {
             _newReceipt = null;
             _existingReceiptUrl = null;
           }),
-          child: Text(
-            context.t('expense.remove'),
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.expense,
-              fontWeight: FontWeight.w600,
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.expense.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
             ),
+            child: const Icon(CupertinoIcons.delete, size: 15, color: AppColors.expense),
           ),
         ),
       ],
@@ -2603,6 +2708,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   Future<void> _pickFromPeople(BrandColors brand) async {
+    FocusScope.of(context).unfocus();
     final result = await showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
@@ -2618,6 +2724,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     } else if (result is String && result.trim().isNotEmpty) {
       setState(() => _counterpartController.text = result.trim());
     }
+    _dismissKeyboard();
   }
 
   void _showAccountPicker(
@@ -2715,7 +2822,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ),
         );
       },
-    );
+    ).whenComplete(_dismissKeyboard);
   }
 
   // ─── Account Type Helpers ─────────────────────────────────────────────────────

@@ -154,12 +154,12 @@ class GroupDetailScreen extends ConsumerWidget {
                         ),
                       ),
                     )
-                  else
+                  else ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _ExpensesCard(
                         brand: brand,
-                        expenses: expenses,
+                        expenses: expenses.take(5).toList(),
                         members: group.members,
                         symbol: symbol,
                         userId: user?.uid,
@@ -167,6 +167,40 @@ class GroupDetailScreen extends ConsumerWidget {
                         onDelete: (e) => _deleteExpense(context, ref, e),
                       ),
                     ),
+                    if (expenses.length > 5)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _showAllExpensesSheet(
+                            context,
+                            brand,
+                            expenses,
+                            group.members,
+                            symbol,
+                            user?.uid,
+                            (e) => _editExpense(context, e),
+                            (e) => _deleteExpense(context, ref, e),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: brand.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${context.t('home.allBills')} · ${expenses.length} ${context.t('common.entries')}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: brand.accentDark,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                   const SizedBox(height: 48),
                 ]),
               );
@@ -186,6 +220,86 @@ class GroupDetailScreen extends ConsumerWidget {
     Navigator.push(
       context,
       CupertinoPageRoute(builder: (_) => AddGroupExpenseScreen(group: group)),
+    );
+  }
+
+  void _showAllExpensesSheet(
+    BuildContext context,
+    BrandColors brand,
+    List<GroupExpenseItem> expenses,
+    List<GroupMember> members,
+    String symbol,
+    String? userId,
+    void Function(GroupExpenseItem) onEdit,
+    void Function(GroupExpenseItem) onDelete,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (ctx, sc) => Container(
+          decoration: BoxDecoration(
+            color: brand.background,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
+                child: Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: brand.inkSoft.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Row(
+                  children: [
+                    Text(
+                      '${expenses.length} ${context.t('common.entries')}',
+                      style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: brand.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  controller: sc,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  itemCount: expenses.length,
+                  separatorBuilder: (_, i) => Divider(
+                    height: 1, thickness: 0.5, indent: 16, color: brand.divider,
+                  ),
+                  itemBuilder: (_, i) => _ExpenseRow(
+                    brand: brand,
+                    expense: expenses[i],
+                    paidByName: members
+                        .cast<GroupMember?>()
+                        .firstWhere((m) => m?.uid == expenses[i].paidBy, orElse: () => null)
+                        ?.displayName ?? expenses[i].paidBy,
+                    members: members,
+                    symbol: symbol,
+                    userId: userId,
+                    onEdit: () => onEdit(expenses[i]),
+                    onDelete: () => onDelete(expenses[i]),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -542,15 +542,31 @@ class SyncService {
     // Group groups + group expenses
     final localGroups = LocalExpenseGroupRepository();
     final fbGroups = FirebaseExpenseGroupRepository();
+    final groupStorage = StorageService();
     final groups = await localGroups.getGroups(uid).first;
     for (final g in groups) {
       if (g.id.isEmpty) continue;
       try {
         await fbGroups.addGroup(g);
         final expenses = await localGroups.getExpenses(g.id).first;
-        for (final e in expenses) {
+        for (var e in expenses) {
           if (e.id.isEmpty) continue;
           try {
+            // Upload any locally-cached receipt before syncing to Firebase.
+            final url = e.receiptUrl;
+            if (url != null &&
+                !StorageService.isRemote(url) &&
+                !StorageService.isSupabasePath(url) &&
+                !StorageService.isFirebasePath(url)) {
+              try {
+                final localFile = await StorageService.resolveLocal(url);
+                if (localFile != null) {
+                  final supabaseUrl = await groupStorage.saveReceipt(uid, localFile);
+                  e = e.copyWith(receiptUrl: supabaseUrl);
+                  await localGroups.updateExpense(e);
+                }
+              } catch (_) {}
+            }
             await fbGroups.addExpense(e);
           } catch (_) {}
         }

@@ -428,6 +428,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
         );
       },
     );
+    if (mounted) FocusScope.of(context).unfocus();
   }
 
   @override

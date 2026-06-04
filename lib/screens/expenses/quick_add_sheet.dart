@@ -205,6 +205,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   }
 
   void _showAccountPicker(List<Account> accounts, BrandColors brand) {
+    FocusScope.of(context).unfocus();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: brand.surface,
@@ -289,7 +290,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
           ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   IconData _iconForAccountType(AccountType type) {

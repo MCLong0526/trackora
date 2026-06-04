@@ -183,14 +183,17 @@ class _AddTravelExpenseScreenState
   }
 
   Future<void> _pickDate() async {
+    FocusScope.of(context).unfocus();
     final picked = await showCupertinoModalPopup<DateTime?>(
       context: context,
       builder: (ctx) => _DatePickerSheet(initial: _date),
     );
+    if (mounted) FocusScope.of(context).unfocus();
     if (picked != null) setState(() => _date = picked);
   }
 
   void _showCategoryPicker() {
+    FocusScope.of(context).unfocus();
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Material(
@@ -268,7 +271,9 @@ class _AddTravelExpenseScreenState
           ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   Future<void> _save() async {
