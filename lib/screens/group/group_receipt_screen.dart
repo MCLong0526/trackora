@@ -519,13 +519,14 @@ class _GroupReceiptCard extends StatelessWidget {
                                   .where((m) => m.uid != userId)
                                   .firstOrNull
                                   ?.uid;
+                              final myName = _memberName(userId ?? '');
                               final otherName = otherUid != null
-                                  ? _memberName(otherUid).split(' ').first
+                                  ? _memberName(otherUid)
                                   : null;
                               return Text(
                                 otherUid != null
-                                    ? 'You ${_shareFor(e, userId ?? '')}  |  $otherName ${_shareFor(e, otherUid)}'
-                                    : 'You ${_shareFor(e, userId ?? '')}',
+                                    ? '$myName ${_shareFor(e, userId ?? '')}  |  $otherName ${_shareFor(e, otherUid)}'
+                                    : '$myName ${_shareFor(e, userId ?? '')}',
                                 style: const TextStyle(
                                   fontSize: 8,
                                   color: _kInk60,

@@ -15,13 +15,18 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/expenses/quick_add_sheet.dart';
 import 'screens/home/home_shell.dart';
+import 'models/account.dart';
+import 'models/expense.dart';
 import 'services/deep_link_service.dart';
+import 'services/i18n.dart';
+import 'services/interest_service.dart';
 import 'services/live_activity_service.dart';
 import 'services/prefs_service.dart';
 import 'services/widget_intent_service.dart';
 import 'services/widget_sync_service.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
+import 'widgets/connection_banner.dart';
 
 final GlobalKey<NavigatorState> rootNavKey = GlobalKey<NavigatorState>();
 
@@ -117,6 +122,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
       _restoreLiveActivity();
+      _accrueInterest();
     });
   }
 
@@ -140,6 +146,50 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       // Restore Live Activity if user has it enabled (handles iOS end-of-life
       // after the system's 12-hour limit and cold restarts).
       _restoreLiveActivity();
+      // Catch up any interest that came due while the app was backgrounded.
+      _accrueInterest();
+    }
+  }
+
+  /// Accrues any due interest on interest-bearing accounts (best-effort).
+  Future<void> _accrueInterest() async {
+    try {
+      final user = ref.read(authStateProvider).valueOrNull;
+      if (user == null) return;
+      final accountRepo = ref.read(accountRepositoryProvider);
+      final expenseRepo = ref.read(expenseRepositoryProvider);
+      final accounts = await accountRepo
+          .getAll(user.uid)
+          .first
+          .timeout(const Duration(seconds: 8), onTimeout: () => const <Account>[]);
+      final bearing = accounts
+          .where((a) =>
+              (a.interestRatePercent ?? 0) > 0 && a.interestPeriod != null)
+          .toList();
+      if (bearing.isEmpty) return;
+      final all = await expenseRepo
+          .getAllExpenses(user.uid)
+          .first
+          .timeout(const Duration(seconds: 8), onTimeout: () => const <Expense>[]);
+      final balances = computeAccountBalanceMap(accounts, all);
+      final converter = ref.read(currencyConverterProvider).valueOrNull;
+      final localeCode = ref.read(localeProvider).encode();
+      final note = AppStrings(localeCode == 'system' ? 'en' : localeCode)
+          .t('account.interestNote');
+      await InterestService.accrueDue(
+        userId: user.uid,
+        accountRepo: accountRepo,
+        expenseRepo: expenseRepo,
+        accounts: bearing,
+        balances: balances,
+        noteLabel: note,
+        toBase: converter != null
+            ? (amt, code) => converter.toBase(amt, code)
+            : null,
+        baseCurrencyCode: converter?.base,
+      );
+    } catch (_) {
+      // Interest accrual is best-effort; never block app startup.
     }
   }
 
@@ -274,6 +324,9 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
         GlobalWidgetsLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en'), Locale('zh'), Locale('ms')],
+      // App-wide offline / reconnect status strip, shown over every screen.
+      builder: (context, child) =>
+          ConnectionBanner(child: child ?? const SizedBox.shrink()),
       home: auth.when(
         data: (user) => user == null
             ? const _AuthGate()
@@ -298,9 +351,12 @@ class _AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Firebase persistence may restore the session slightly after the stream
-    // emits null. If currentUser is already set, wait for the auth stream to
-    // catch up and navigate to HomeShell — never show the login form.
-    if (FirebaseAuth.instance.currentUser != null) {
+    // emits null. If a *verified* currentUser is already set, wait for the auth
+    // stream to catch up and navigate to HomeShell — never show the login form.
+    // An unverified cached session must fall through to the login screen so the
+    // email-verification gate is enforced.
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (fbUser != null && fbUser.emailVerified) {
       return const Scaffold(
         body: Center(child: CupertinoActivityIndicator()),
       );

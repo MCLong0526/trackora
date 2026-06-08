@@ -12,6 +12,7 @@ import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import '../stocks/stock_detail_screen.dart';
@@ -207,7 +208,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: SingleChildScrollView(
+        child: FadingEdgeList(
+          fadeColor: brand.background,
+          child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -274,6 +277,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

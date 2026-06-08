@@ -1422,6 +1422,7 @@ class _AddGroupExpenseScreenState
                                     cat.label == _category;
                                 return GestureDetector(
                                   onTap: () {
+                                    FocusScope.of(context).unfocus();
                                     HapticFeedback.selectionClick();
                                     setState(
                                         () => _category = cat.label);
@@ -2639,11 +2640,20 @@ class _SplitSheetState extends State<_SplitSheet> {
                                           decoration: InputDecoration(
                                             hintText: '0.00',
                                             prefixText: '${widget.symbol}  ',
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                            filled: true,
+                                            fillColor: const Color(0xFFF2F2F7),
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              borderSide: BorderSide.none,
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                              borderSide: BorderSide.none,
+                                            ),
                                             focusedBorder: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
-                                              borderSide: const BorderSide(color: Color(0xFF1A6CFF), width: 2),
+                                              borderSide: BorderSide.none,
                                             ),
                                           ),
                                         ),

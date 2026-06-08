@@ -11,6 +11,7 @@ import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_dialog.dart';
 import '../../widgets/app_toast.dart';
 import '../home/home_shell.dart';
 import 'signup_screen.dart';
@@ -80,6 +81,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
       await _authService.signIn(email: email, password: password);
+
+      // Enforce email verification before letting the user into the app.
+      // The auth stream already withholds an unverified user, so there is no
+      // flash of the home screen here — we just surface a popup and sign out.
+      final verified = await _authService.reloadAndCheckEmailVerified();
+      if (!verified) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          await _showVerifyEmailRequired();
+        }
+        await _authService.signOut();
+        return;
+      }
 
       final prefs = await SharedPreferences.getInstance();
       if (_rememberMe) {
@@ -505,6 +519,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showVerifyEmailRequired() {
+    return showAppDialog(
+      context: context,
+      icon: CupertinoIcons.envelope_badge_fill,
+      title: context.t('auth.verifyEmailTitle'),
+      message: context.t('auth.verifyEmailRequired'),
+      actions: [
+        AppDialogAction(
+          label: context.t('auth.resendEmail'),
+          onTap: () async {
+            try {
+              await _authService.sendVerificationEmail();
+              if (mounted) {
+                AppToast.show(
+                  context,
+                  context.t('auth.verifyEmailResent'),
+                  type: AppToastType.success,
+                );
+              }
+            } catch (_) {}
+          },
+        ),
+        AppDialogAction(
+          label: context.t('common.ok'),
+          isPrimary: true,
+        ),
+      ],
     );
   }
 

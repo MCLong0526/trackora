@@ -11,6 +11,7 @@ import '../models/account.dart';
 import '../models/expense.dart';
 import '../models/group_expense_item.dart';
 import '../models/precious_metal.dart';
+import '../models/stock_investment.dart';
 import '../services/money_format.dart';
 import '../services/prefs_service.dart';
 import '../state/providers.dart';
@@ -30,6 +31,7 @@ class _AccountTxn {
   final bool isInflow;
   final bool isGroup;
   final String? originalCurrency;
+  final double? baseCurrencyAmount;
 
   const _AccountTxn({
     required this.title,
@@ -38,6 +40,7 @@ class _AccountTxn {
     required this.isInflow,
     required this.isGroup,
     this.originalCurrency,
+    this.baseCurrencyAmount,
   });
 
   static _AccountTxn fromExpense(Expense e, String accountId) {
@@ -49,6 +52,7 @@ class _AccountTxn {
       isInflow: e.type.isInflow || isTo,
       isGroup: false,
       originalCurrency: e.originalCurrency,
+      baseCurrencyAmount: e.baseCurrencyAmount,
     );
   }
 
@@ -69,6 +73,31 @@ class _AccountTxn {
       amount: m.totalAmount,
       isInflow: m.action == MetalAction.sell,
       isGroup: false,
+    );
+  }
+
+  static _AccountTxn fromStock(
+    StockInvestment s,
+    Map<String, dynamic> tx, {
+    String? baseCode,
+    double Function(double amount, String code)? toBase,
+  }) {
+    final qty = (tx['qty'] as num?)?.toDouble() ?? 0;
+    final price = (tx['price'] as num?)?.toDouble() ?? 0;
+    final amount = qty * price;
+    final isSell = (tx['type'] as String?) == 'sell';
+    final date = DateTime.tryParse(tx['date'] as String? ?? '') ?? s.createdAt;
+    final cur = tx['currency'] as String?;
+    final foreign =
+        cur != null && baseCode != null && cur != baseCode && toBase != null;
+    return _AccountTxn(
+      title: '${s.symbol} ${isSell ? 'Sell' : 'Buy'}',
+      date: date,
+      amount: amount,
+      isInflow: isSell,
+      isGroup: false,
+      originalCurrency: foreign ? cur : null,
+      baseCurrencyAmount: foreign ? toBase(amount, cur) : null,
     );
   }
 }
@@ -275,6 +304,9 @@ class AccountCarouselSection extends ConsumerWidget {
 
     final preciousMetals =
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final stocks =
+        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
 
     return LayoutBuilder(
       builder: (ctx, constraints) => _AccountCarousel(
@@ -283,6 +315,11 @@ class AccountCarouselSection extends ConsumerWidget {
         allExpenses: allExpenses,
         groupExpenses: myGroupExpenses,
         preciousMetals: preciousMetals,
+        stocks: stocks,
+        baseCode: converter?.base,
+        toBase: converter != null
+            ? (amt, code) => converter.toBase(amt, code)
+            : null,
         symbol: symbol,
         visible: visible,
         availableWidth: constraints.maxWidth,
@@ -298,6 +335,9 @@ class _AccountCarousel extends StatefulWidget {
   final List<Expense> allExpenses;
   final List<GroupExpenseItem> groupExpenses;
   final List<PreciousMetal> preciousMetals;
+  final List<StockInvestment> stocks;
+  final String? baseCode;
+  final double Function(double amount, String code)? toBase;
   final String symbol;
   final bool visible;
   final double availableWidth;
@@ -308,6 +348,9 @@ class _AccountCarousel extends StatefulWidget {
     required this.allExpenses,
     required this.groupExpenses,
     required this.preciousMetals,
+    required this.stocks,
+    required this.baseCode,
+    required this.toBase,
     required this.symbol,
     required this.visible,
     required this.availableWidth,
@@ -524,11 +567,30 @@ class _AccountCarouselState extends State<_AccountCarousel>
         .where((e) => e.paidByAccountId == account.id)
         .map(_AccountTxn.fromGroupExpense)
         .toList();
+    // Only metals without a linked expense — metals paid from an account now
+    // create a linked expense (already in personalTxns), so including them here
+    // too would double-count.
     final metalTxns = widget.preciousMetals
-        .where((m) => m.accountId == account.id)
+        .where((m) =>
+            m.accountId == account.id &&
+            (m.expenseId == null || m.expenseId!.isEmpty))
         .map(_AccountTxn.fromPreciousMetal)
         .toList();
-    final allTxns = [...personalTxns, ...groupTxns, ...metalTxns]
+    // Stock buys/sells paid from this account (stored per-transaction).
+    final stockTxns = <_AccountTxn>[];
+    for (final s in widget.stocks) {
+      for (final tx in s.transactions) {
+        if ((tx['accountId'] as String?) == account.id) {
+          stockTxns.add(_AccountTxn.fromStock(
+            s,
+            tx,
+            baseCode: widget.baseCode,
+            toBase: widget.toBase,
+          ));
+        }
+      }
+    }
+    final allTxns = [...personalTxns, ...groupTxns, ...metalTxns, ...stockTxns]
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return AnimatedPositioned(
@@ -1234,17 +1296,34 @@ class _CardBack extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                txn.isInflow
-                                    ? '+${formatMoney(txnSym, txn.amount)}'
-                                    : '−${formatMoney(txnSym, txn.amount)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: txn.isInflow
-                                      ? const Color(0xFF1B8A4A)
-                                      : pal.ink,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    txn.isInflow
+                                        ? '+${formatMoney(txnSym, txn.amount)}'
+                                        : '−${formatMoney(txnSym, txn.amount)}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: txn.isInflow
+                                          ? const Color(0xFF1B8A4A)
+                                          : pal.ink,
+                                    ),
+                                  ),
+                                  // Estimated value in the user's main/base
+                                  // currency (baseCurrencyAmount is stored in
+                                  // the base currency, so it always uses the
+                                  // base symbol, not the account's).
+                                  if (txn.baseCurrencyAmount != null)
+                                    Text(
+                                      '≈ ${formatMoney(symbol, txn.baseCurrencyAmount!)}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: pal.ink.withValues(alpha: 0.55),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -1276,6 +1355,7 @@ class _CardBack extends StatelessWidget {
         account: account,
         allTxns: allTxns,
         acctSymbol: acctSymbol,
+        baseSymbol: symbol,
         pal: pal,
       ),
     );
@@ -1287,12 +1367,14 @@ class _AllTransactionsSheet extends StatefulWidget {
   final Account account;
   final List<_AccountTxn> allTxns;
   final String acctSymbol;
+  final String baseSymbol;
   final _Pal pal;
 
   const _AllTransactionsSheet({
     required this.account,
     required this.allTxns,
     required this.acctSymbol,
+    required this.baseSymbol,
     required this.pal,
   });
 
@@ -1495,17 +1577,33 @@ class _AllTransactionsSheetState extends State<_AllTransactionsSheet> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              txn.isInflow
-                                  ? '+${formatMoney(txnSym, txn.amount)}'
-                                  : '−${formatMoney(txnSym, txn.amount)}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: txn.isInflow
-                                    ? AppColors.income
-                                    : brand.ink,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  txn.isInflow
+                                      ? '+${formatMoney(txnSym, txn.amount)}'
+                                      : '−${formatMoney(txnSym, txn.amount)}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: txn.isInflow
+                                        ? AppColors.income
+                                        : brand.ink,
+                                  ),
+                                ),
+                                // Estimated value in the user's main/base
+                                // currency (baseCurrencyAmount is in the base
+                                // currency, so always use the base symbol).
+                                if (txn.baseCurrencyAmount != null)
+                                  Text(
+                                    '≈ ${formatMoney(widget.baseSymbol, txn.baseCurrencyAmount!)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: brand.inkSoft,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
@@ -1859,6 +1957,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
   double _animatedBalance = 0;
   String _currencyCode = 'MYR';
 
+  // Optional interest accrual (asset accounts only).
+  final _interestCtrl = TextEditingController();
+  String _interestPeriod = 'daily'; // daily | monthly | yearly
+
   late final AnimationController _tileCtrl;
   late final AnimationController _stepCtrl;
   late final AnimationController _confettiCtrl;
@@ -1903,6 +2005,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     _confettiCtrl.dispose();
     _nameCtrl.dispose();
     _balanceCtrl.dispose();
+    _interestCtrl.dispose();
     super.dispose();
   }
 
@@ -1958,6 +2061,12 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     final opening = t.type.isLiability ? -rawBalance.abs() : rawBalance;
     final name = _nameCtrl.text.trim().isEmpty ? t.defaultName : _nameCtrl.text.trim();
 
+    // Optional interest (asset accounts only).
+    final interestRate = double.tryParse(_interestCtrl.text.trim());
+    final hasInterest =
+        !t.type.isLiability && interestRate != null && interestRate > 0;
+    final now = DateTime.now();
+
     try {
       await repo.add(
         user.uid,
@@ -1967,7 +2076,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
           type: t.type,
           openingBalance: opening,
           currencyCode: _currencyCode,
-          createdAt: DateTime.now(),
+          createdAt: now,
+          interestRatePercent: hasInterest ? interestRate : null,
+          interestPeriod: hasInterest ? _interestPeriod : null,
+          lastInterestAt: hasInterest ? now : null,
         ),
       );
       if (mounted) {
@@ -2116,6 +2228,10 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                         setState(() => _swatchColor = t),
                     onCurrencyChanged: (c) =>
                         setState(() => _currencyCode = c),
+                    interestCtrl: _interestCtrl,
+                    interestPeriod: _interestPeriod,
+                    onInterestPeriodChanged: (p) =>
+                        setState(() => _interestPeriod = p),
                     onSubmit: _submit,
                   ),
           ),
@@ -2611,6 +2727,9 @@ class _Step2 extends StatefulWidget {
   final ValueChanged<AccountType> onSwatchChanged;
   final ValueChanged<String> onCurrencyChanged;
   final String currencyCode;
+  final TextEditingController interestCtrl;
+  final String interestPeriod;
+  final ValueChanged<String> onInterestPeriodChanged;
   final VoidCallback onSubmit;
 
   const _Step2({
@@ -2627,6 +2746,9 @@ class _Step2 extends StatefulWidget {
     required this.currencyCode,
     required this.onSwatchChanged,
     required this.onCurrencyChanged,
+    required this.interestCtrl,
+    required this.interestPeriod,
+    required this.onInterestPeriodChanged,
     required this.onSubmit,
   });
 
@@ -2638,14 +2760,53 @@ class _Step2State extends State<_Step2> {
   String? _selectedProvider;
   bool _useCustomName = false;
 
+  Widget _interestPeriodChip(String value, String label, BrandColors brand) {
+    const accent = Color(0xFF0066CC);
+    final selected = widget.interestPeriod == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => widget.onInterestPeriodChanged(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? accent.withValues(alpha: 0.12) : brand.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? accent : brand.divider,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? accent : brand.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   bool get _hasProviderList =>
       widget.selectedType.type == AccountType.bank ||
-      widget.selectedType.type == AccountType.eWallet;
+      widget.selectedType.type == AccountType.eWallet ||
+      widget.selectedType.type == AccountType.creditCard;
 
-  List<String> get _providerList =>
-      widget.selectedType.type == AccountType.bank
-          ? kCommonBanks
-          : kCommonWallets;
+  List<String> get _providerList {
+    switch (widget.selectedType.type) {
+      case AccountType.bank:
+        return kCommonBanks;
+      case AccountType.creditCard:
+        return kCommonCreditCards;
+      default:
+        return kCommonWallets;
+    }
+  }
 
   @override
   void didUpdateWidget(_Step2 old) {
@@ -2659,9 +2820,11 @@ class _Step2State extends State<_Step2> {
   }
 
   void _showProviderPicker() {
-    final label = widget.selectedType.type == AccountType.bank
-        ? 'Select Bank'
-        : 'Select E-Wallet';
+    final label = switch (widget.selectedType.type) {
+      AccountType.bank => 'Select Bank',
+      AccountType.creditCard => 'Select Card',
+      _ => 'Select E-Wallet',
+    };
     final allProviders = List<String>.from(_providerList);
     final brand = context.brand;
 
@@ -2904,6 +3067,10 @@ class _Step2State extends State<_Step2> {
                         curve: Curves.easeOutCubic,
                         builder: (ctx, v, _) {
                           final sym = kSupportedCurrencies[widget.currencyCode] ?? widget.currencyCode;
+                          // Credit cards / liabilities show the entered amount
+                          // as a negative balance in the preview.
+                          final display =
+                              widget.selectedType.type.isLiability ? -v : v;
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -2911,7 +3078,7 @@ class _Step2State extends State<_Step2> {
                                 NumberFormat.currency(
                                   symbol: '$sym ',
                                   decimalDigits: 2,
-                                ).format(v),
+                                ).format(display),
                                 style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w700,
@@ -2922,11 +3089,11 @@ class _Step2State extends State<_Step2> {
                               Consumer(builder: (ctx, ref, _) {
                                 final mainCode = ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
                                 final converter = ref.watch(currencyConverterProvider).valueOrNull;
-                                if (widget.currencyCode == mainCode || converter == null || v <= 0) {
+                                if (widget.currencyCode == mainCode || converter == null || v.abs() < 0.005) {
                                   return const SizedBox.shrink();
                                 }
                                 final mainSym = kSupportedCurrencies[mainCode] ?? mainCode;
-                                final est = converter.toBase(v, widget.currencyCode);
+                                final est = converter.toBase(display, widget.currencyCode);
                                 return Text(
                                   'est. $mainSym ${est.toStringAsFixed(2)}',
                                   style: TextStyle(
@@ -2990,9 +3157,11 @@ class _Step2State extends State<_Step2> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              widget.selectedType.type == AccountType.bank
-                                  ? 'BANK'
-                                  : 'E-WALLET',
+                              switch (widget.selectedType.type) {
+                                AccountType.bank => 'BANK',
+                                AccountType.creditCard => 'CREDIT CARD',
+                                _ => 'E-WALLET',
+                              },
                               style: TextStyle(
                                 fontSize: 11,
                                 letterSpacing: 0.5,
@@ -3005,10 +3174,11 @@ class _Step2State extends State<_Step2> {
                             _useCustomName
                                 ? 'Custom'
                                 : (_selectedProvider ??
-                                    (widget.selectedType.type ==
-                                            AccountType.bank
-                                        ? 'Select bank'
-                                        : 'Select e-wallet')),
+                                    switch (widget.selectedType.type) {
+                                      AccountType.bank => 'Select bank',
+                                      AccountType.creditCard => 'Select card',
+                                      _ => 'Select e-wallet',
+                                    }),
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
@@ -3120,7 +3290,9 @@ class _Step2State extends State<_Step2> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        context.t('account.startingBalance'),
+                        widget.selectedType.type.isLiability
+                            ? context.t('account.balanceOwed')
+                            : context.t('account.startingBalance'),
                         style: TextStyle(
                           fontSize: 11,
                           letterSpacing: 0.5,
@@ -3208,6 +3380,72 @@ class _Step2State extends State<_Step2> {
                     ),
                   ),
                 ),
+                // Interest (optional) — asset accounts only.
+                if (!widget.selectedType.type.isLiability) ...[
+                  Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: brand.divider,
+                      indent: 16),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          context.t('account.interest'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 0.5,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: 96,
+                          child: TextField(
+                            controller: widget.interestCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: brand.ink,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: '0',
+                              hintStyle: TextStyle(
+                                color: brand.inkSoft,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              suffixText: '%',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    child: Row(
+                      children: [
+                        _interestPeriodChip('daily',
+                            context.t('account.interestDaily'), brand),
+                        const SizedBox(width: 6),
+                        _interestPeriodChip('monthly',
+                            context.t('account.interestMonthly'), brand),
+                        const SizedBox(width: 6),
+                        _interestPeriodChip('yearly',
+                            context.t('account.interestYearly'), brand),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

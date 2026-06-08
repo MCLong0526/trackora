@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/account.dart';
 import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
 import '../../services/stock_service.dart';
@@ -1397,18 +1398,19 @@ class _TxSwipeActionState extends State<_TxSwipeAction> {
 
 // ── Edit transaction sheet ─────────────────────────────────────────────────────
 
-class _EditTxSheet extends StatefulWidget {
+class _EditTxSheet extends ConsumerStatefulWidget {
   final Map<String, dynamic> tx;
   const _EditTxSheet({required this.tx});
 
   @override
-  State<_EditTxSheet> createState() => _EditTxSheetState();
+  ConsumerState<_EditTxSheet> createState() => _EditTxSheetState();
 }
 
-class _EditTxSheetState extends State<_EditTxSheet> {
+class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
   late final TextEditingController _qtyCtrl;
   late final TextEditingController _priceCtrl;
   late DateTime _date;
+  String? _accountId;
   bool _saving = false;
 
   @override
@@ -1423,6 +1425,7 @@ class _EditTxSheetState extends State<_EditTxSheet> {
     _priceCtrl = TextEditingController(text: price.toStringAsFixed(2));
     _date =
         DateTime.tryParse(widget.tx['date'] as String? ?? '') ?? DateTime.now();
+    _accountId = widget.tx['accountId'] as String?;
   }
 
   @override
@@ -1441,7 +1444,42 @@ class _EditTxSheetState extends State<_EditTxSheet> {
       ..['qty'] = qty
       ..['price'] = price
       ..['date'] = _date.toIso8601String();
+    if (_accountId != null) {
+      updated['accountId'] = _accountId;
+    } else {
+      updated.remove('accountId');
+    }
     Navigator.pop(context, updated);
+  }
+
+  Future<void> _pickAccount(List<Account> accounts) async {
+    final brand = context.brand;
+    final picked = await showCupertinoModalPopup<String?>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Pay from account'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: Text(
+              'No account',
+              style: TextStyle(color: brand.inkSoft),
+            ),
+          ),
+          for (final a in accounts)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(ctx, a.id),
+              child: Text(a.name),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (picked == null) return; // cancelled
+    setState(() => _accountId = picked.isEmpty ? null : picked);
   }
 
   @override
@@ -1450,6 +1488,10 @@ class _EditTxSheetState extends State<_EditTxSheet> {
     final isBuy = (widget.tx['type'] as String?) != 'sell';
     final currency = widget.tx['currency'] as String? ?? 'USD';
     final currSym = currency == 'MYR' ? 'RM' : '\$';
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
+    final selectedAccount = _accountId == null
+        ? null
+        : accounts.where((a) => a.id == _accountId).firstOrNull;
 
     return Padding(
       padding:
@@ -1521,6 +1563,47 @@ class _EditTxSheetState extends State<_EditTxSheet> {
                 ),
               ),
             ),
+            if (accounts.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => _pickAccount(accounts),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.creditcard,
+                          size: 16, color: brand.inkSoft),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Account',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w500),
+                      ),
+                      const Spacer(),
+                      Text(
+                        selectedAccount?.name ?? 'No account',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: selectedAccount == null
+                                ? brand.inkSoft
+                                : brand.ink,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(CupertinoIcons.chevron_right,
+                          size: 14, color: brand.inkSoft),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

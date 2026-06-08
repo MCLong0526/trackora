@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,11 +13,12 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/travel_expense.dart';
 import '../../models/travel_group.dart';
 import '../../services/travel_group_service.dart';
+import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const _paper = Color(0xFFF5F0E8);
-const _paperEdge = Color(0xFFE8E0D0);
+const _paper = Color(0xFFFFFFFF);
+const _paperEdge = Color(0xFFE5E5EA);
 const _blue = Color(0xFF0055BB);
 const _inkColor = Color(0xFF1A1614);
 const _ink60 = Color(0xFF6B6259);
@@ -26,7 +28,7 @@ const _kReceiptW = 300.0;
 
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
-class ReceiptScreen extends StatefulWidget {
+class ReceiptScreen extends ConsumerStatefulWidget {
   final TravelGroup group;
   final TravelGroupMember member;
   final MemberBalance balance;
@@ -43,10 +45,10 @@ class ReceiptScreen extends StatefulWidget {
   });
 
   @override
-  State<ReceiptScreen> createState() => _ReceiptScreenState();
+  ConsumerState<ReceiptScreen> createState() => _ReceiptScreenState();
 }
 
-class _ReceiptScreenState extends State<ReceiptScreen> {
+class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   final _receiptKey = GlobalKey();
   final _shareButtonKey = GlobalKey();
   bool _sharing = false;
@@ -128,7 +130,17 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE8E3DA);
+    final bg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
+
+    // Multiplier from the trip currency to the user's main currency, used to
+    // show estimated values when the trip currency differs from it.
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = converter?.base;
+    double? fxToMain;
+    if (converter != null && mainCode != null && mainCode != widget.group.currency) {
+      final one = converter.toBase(1.0, widget.group.currency);
+      if (one > 0) fxToMain = one;
+    }
 
     return Scaffold(
       backgroundColor: bg,
@@ -182,6 +194,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           balance: widget.balance,
                           allTransactions: widget.allTransactions,
                           expenses: widget.expenses,
+                          mainCode: fxToMain != null ? mainCode : null,
+                          fxToMain: fxToMain,
                         ),
                       ),
                     ),
@@ -242,6 +256,10 @@ class _ReceiptCard extends StatelessWidget {
   final MemberBalance balance;
   final List<SettlementTransaction> allTransactions;
   final List<TravelExpense> expenses;
+  // When the trip currency differs from the user's main currency, [fxToMain]
+  // is the multiplier (main = group × fxToMain) and [mainCode] the main code.
+  final String? mainCode;
+  final double? fxToMain;
 
   const _ReceiptCard({
     required this.group,
@@ -249,7 +267,18 @@ class _ReceiptCard extends StatelessWidget {
     required this.balance,
     required this.allTransactions,
     required this.expenses,
+    this.mainCode,
+    this.fxToMain,
   });
+
+  // Returns the "~ Est. <main> <amount>" tail for an amount in the trip's
+  // currency, or null when the trip is already in the user's main currency.
+  String? _mainEst(double amountInGroupCurrency, NumberFormat fmt) {
+    final fx = fxToMain;
+    final code = mainCode;
+    if (fx == null || code == null) return null;
+    return '~ Est. $code ${fmt.format(amountInGroupCurrency * fx)}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -444,6 +473,15 @@ class _ReceiptCard extends StatelessWidget {
                                 fontFeatures: [FontFeature.tabularFigures()],
                               ),
                             ),
+                          if (_mainEst(convertedAmt, fmt) != null)
+                            Text(
+                              _mainEst(convertedAmt, fmt)!,
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: _ink60,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -466,14 +504,28 @@ class _ReceiptCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    '${group.currency} ${fmt.format(balance.totalPaid)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _inkColor,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${group.currency} ${fmt.format(balance.totalPaid)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _inkColor,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      if (_mainEst(balance.totalPaid, fmt) != null)
+                        Text(
+                          _mainEst(balance.totalPaid, fmt)!,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: _ink60,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -490,6 +542,7 @@ class _ReceiptCard extends StatelessWidget {
                   label: 'YOUR SHARE',
                   value: '${group.currency} ${fmt.format(balance.totalShare)}',
                   color: _inkColor,
+                  sub: _mainEst(balance.totalShare, fmt),
                 ),
                 const SizedBox(height: 5),
                 _AmountRow(
@@ -498,6 +551,7 @@ class _ReceiptCard extends StatelessWidget {
                       '${isPositive ? '+' : '−'}${group.currency} ${fmt.format(balance.net.abs())}',
                   color: isPositive ? _green : _red,
                   large: true,
+                  sub: _mainEst(balance.net.abs(), fmt),
                 ),
               ],
             ),
@@ -545,14 +599,28 @@ class _ReceiptCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Text(
-                      '${group.currency} ${fmt.format(tx.amount)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: owing ? _red : _green,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${group.currency} ${fmt.format(tx.amount)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: owing ? _red : _green,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        if (_mainEst(tx.amount, fmt) != null)
+                          Text(
+                            _mainEst(tx.amount, fmt)!,
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: _ink60,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -674,35 +742,55 @@ class _AmountRow extends StatelessWidget {
   final String label, value;
   final Color color;
   final bool large;
+  final String? sub;
   const _AmountRow({
     required this.label,
     required this.value,
     required this.color,
     this.large = false,
+    this.sub,
   });
 
   @override
   Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 7,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: _ink60,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 7,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: _ink60,
+            ),
           ),
         ),
       ),
-      Text(
-        value,
-        style: TextStyle(
-          fontSize: large ? 15 : 12,
-          fontWeight: large ? FontWeight.w800 : FontWeight.w600,
-          color: color,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: large ? 15 : 12,
+              fontWeight: large ? FontWeight.w800 : FontWeight.w600,
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          if (sub != null)
+            Text(
+              sub!,
+              style: const TextStyle(
+                fontSize: 9,
+                color: _ink60,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+        ],
       ),
     ],
   );

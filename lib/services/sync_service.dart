@@ -543,14 +543,61 @@ class SyncService {
     final localGroups = LocalExpenseGroupRepository();
     final fbGroups = FirebaseExpenseGroupRepository();
     final groupStorage = StorageService();
+
+    // ── Pending offline group-expense deletes ────────────────────────────
+    // Format: '$groupId:$expenseId'
+    final groupExpenseDelIds =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_expense');
+    if (groupExpenseDelIds.isNotEmpty) {
+      for (final compositeId in groupExpenseDelIds) {
+        final sep = compositeId.indexOf(':');
+        if (sep <= 0) continue;
+        final gId = compositeId.substring(0, sep);
+        final eId = compositeId.substring(sep + 1);
+        try { await fbGroups.deleteExpense(gId, eId); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'group_expense');
+    }
+
+    // ── Pending offline group deletes ────────────────────────────────────
+    final groupDelIds =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_delete');
+    if (groupDelIds.isNotEmpty) {
+      for (final gId in groupDelIds) {
+        try { await fbGroups.deleteGroup(gId); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'group_delete');
+    }
+
+    // ── Pending offline group leaves ─────────────────────────────────────
+    final groupLeaveIds =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_leave');
+    if (groupLeaveIds.isNotEmpty) {
+      for (final gId in groupLeaveIds) {
+        try { await fbGroups.removeMemberFromGroup(gId, uid); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'group_leave');
+    }
+
+    // ── Upload remaining local group records ─────────────────────────────
+    // Re-read after processing pending deletes/leaves so the sets are empty.
+    final groupDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_delete').toSet();
+    final groupLeftSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_leave').toSet();
+    final groupExpenseDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'group_expense').toSet();
+
     final groups = await localGroups.getGroups(uid).first;
     for (final g in groups) {
       if (g.id.isEmpty) continue;
+      if (groupDeletedSet.contains(g.id) || groupLeftSet.contains(g.id)) continue;
       try {
         await fbGroups.addGroup(g);
         final expenses = await localGroups.getExpenses(g.id).first;
         for (var e in expenses) {
           if (e.id.isEmpty) continue;
+          if (groupExpenseDeletedSet.contains('${g.id}:${e.id}')) continue;
           try {
             // Upload any locally-cached receipt before syncing to Firebase.
             final url = e.receiptUrl;

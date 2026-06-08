@@ -416,20 +416,36 @@ class _CardContents extends StatelessWidget {
           ),
         ),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Builder(builder: (ctx) {
               final displaySym = expense.originalCurrency != null
                   ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
                   : currencySymbol;
-              return Text(
-                (isIncome || isReceive)
-                    ? formatMoney(displaySym, expense.amount, forceSign: true)
-                    : formatMoney(displaySym, -expense.amount),
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: amountColor,
-                ),
+              final hasForeign = expense.originalCurrency != null &&
+                  expense.baseCurrencyAmount != null;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    (isIncome || isReceive)
+                        ? formatMoney(displaySym, expense.amount, forceSign: true)
+                        : formatMoney(displaySym, -expense.amount),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: amountColor,
+                    ),
+                  ),
+                  if (hasForeign)
+                    Text(
+                      '≈ ${formatMoney(currencySymbol, expense.baseCurrencyAmount!)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: brand.inkSoft,
+                      ),
+                    ),
+                ],
               );
             }),
             if (expense.receiptUrl != null) ...[

@@ -8,6 +8,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plan_detail_screen.dart';
 
@@ -82,89 +83,105 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
               Center(child: Text('${context.t('common.error')}: $e')),
           data: (plans) {
             final filtered = plans.where(_matches).toList();
-            return Stack(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-              ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              children: [
-                _Summary(plans: plans, symbol: symbol),
-                const SizedBox(height: 14),
-                _FilterSegment(
-                  selected: _filter,
-                  onSelected: (f) => setState(() => _filter = f),
-                ),
-                const SizedBox(height: 18),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: child,
+                // Fixed header (summary + filter) — does not scroll
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Summary(plans: plans, symbol: symbol),
+                      const SizedBox(height: 14),
+                      _FilterSegment(
+                        selected: _filter,
+                        onSelected: (f) => setState(() => _filter = f),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                   ),
-                  child: plans.isEmpty
-                      ? _EmptyState(
-                          onAdd: () => Navigator.push(
-                            context,
-                            CupertinoPageRoute(
-                              builder: (_) => const AddEditSavingPlanScreen(),
-                            ),
+                ),
+                // Scrollable list only, with fade edges
+                Expanded(
+                  child: FadingEdgeList(
+                    fadeColor: brand.background,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: child,
                           ),
-                        )
-                      : Column(
-                          key: ValueKey(_filter),
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 10),
-                              child: Text(
-                                'PLANS',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF8E8E93),
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: context.brand.surface,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: Column(
+                          child: plans.isEmpty
+                              ? _EmptyState(
+                                  onAdd: () => Navigator.push(
+                                    context,
+                                    CupertinoPageRoute(
+                                      builder: (_) => const AddEditSavingPlanScreen(),
+                                    ),
+                                  ),
+                                )
+                              : Column(
+                                  key: ValueKey(_filter),
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    for (int i = 0; i < filtered.length; i++) ...[
-                                      _SavingPlanSwipeActions(
-                                        plan: filtered[i],
-                                        userId: user?.uid,
-                                        coordinator: _coordinator,
-                                        child: _PlanRow(
-                                          plan: filtered[i],
-                                          symbol: symbol,
+                                    const Padding(
+                                      padding: EdgeInsets.only(bottom: 10),
+                                      child: Text(
+                                        'PLANS',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF8E8E93),
+                                          letterSpacing: 0.8,
                                         ),
                                       ),
-                                      if (i < filtered.length - 1)
-                                        Divider(
-                                          height: 1,
-                                          color: context.brand.divider,
-                                          indent: 16,
-                                          endIndent: 0,
+                                    ),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: context.brand.surface,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Column(
+                                          children: [
+                                            for (int i = 0; i < filtered.length; i++) ...[
+                                              _SavingPlanSwipeActions(
+                                                plan: filtered[i],
+                                                userId: user?.uid,
+                                                coordinator: _coordinator,
+                                                child: _PlanRow(
+                                                  plan: filtered[i],
+                                                  symbol: symbol,
+                                                ),
+                                              ),
+                                              if (i < filtered.length - 1)
+                                                Divider(
+                                                  height: 1,
+                                                  color: context.brand.divider,
+                                                  indent: 16,
+                                                  endIndent: 0,
+                                                ),
+                                            ],
+                                          ],
                                         ),
-                                    ],
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ),
-                            ),
-                          ],
                         ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
-            ),
-            ],
-          );
+            );
           },
         ),
         ),

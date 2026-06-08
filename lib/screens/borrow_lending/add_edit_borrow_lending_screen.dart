@@ -487,7 +487,10 @@ class _AddEditBorrowLendingScreenState
                   for (int i = 0; i < types.length; i++)
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setState(() => _type = types[i]),
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          setState(() => _type = types[i]);
+                        },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           child: Row(

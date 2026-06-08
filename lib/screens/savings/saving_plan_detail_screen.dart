@@ -9,17 +9,23 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import 'add_edit_saving_plan_screen.dart';
 import 'saving_plans_screen.dart' show spAccent, spTint;
 
-/// Saving plan detail screen.
-///
-/// Shows progress hero, contribution history, and (for challenge plans
-/// only) a slot grid where each cell represents day N or week N. Tap a
-/// slot to deposit / un-deposit.
 class SavingPlanDetailScreen extends ConsumerWidget {
   final String planId;
   const SavingPlanDetailScreen({super.key, required this.planId});
+
+  static final _missingPlan = SavingPlan(
+    id: '',
+    name: '',
+    type: SavingPlanType.flexible,
+    targetAmount: 0,
+    startDate: DateTime.fromMillisecondsSinceEpoch(0),
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,6 +40,22 @@ class SavingPlanDetailScreen extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(context.t('sp.detailTitle')),
+        actions: [
+          if (async.valueOrNull != null)
+            Builder(
+              builder: (ctx) {
+                final plan = async.valueOrNull!.firstWhere(
+                  (p) => p.id == planId,
+                  orElse: () => _missingPlan,
+                );
+                if (identical(plan, _missingPlan)) return const SizedBox.shrink();
+                return IconButton(
+                  icon: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
+                  onPressed: () => _showActionsSheet(ctx, ref, plan),
+                );
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         child: async.when(
@@ -70,47 +92,135 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                 if (plan.type != SavingPlanType.daysChallenge &&
                     plan.type != SavingPlanType.weeksChallenge)
                   _ContributionHistory(plan: plan, symbol: symbol),
-                const SizedBox(height: 24),
-                _ActionRow(plan: plan, symbol: symbol),
               ],
             );
           },
         ),
       ),
-      floatingActionButton: ref.watch(savingPlansProvider).valueOrNull == null
-          ? null
-          : Builder(
-              builder: (ctx) {
-                final plans = ref.watch(savingPlansProvider).value!;
-                final plan = plans.firstWhere(
-                  (p) => p.id == planId,
-                  orElse: () => _missingPlan,
-                );
-                if (identical(plan, _missingPlan) ||
-                    plan.status != SavingPlanStatus.active ||
-                    plan.type == SavingPlanType.daysChallenge ||
-                    plan.type == SavingPlanType.weeksChallenge) {
-                  return const SizedBox.shrink();
-                }
-                return FloatingActionButton.extended(
-                  onPressed: () => _showAddContributionSheet(ctx, ref, plan),
-                  icon: const Icon(CupertinoIcons.plus),
-                  label: Text(context.t('sp.addContribution')),
-                );
-              },
-            ),
     );
   }
 
-  static final _missingPlan = SavingPlan(
-    id: '',
-    name: '',
-    type: SavingPlanType.flexible,
-    targetAmount: 0,
-    startDate: DateTime.fromMillisecondsSinceEpoch(0),
-    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
-    updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
-  );
+  void _showActionsSheet(BuildContext context, WidgetRef ref, SavingPlan plan) {
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final isActive = plan.status == SavingPlanStatus.active;
+    final isCancelled = plan.status == SavingPlanStatus.cancelled;
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AddEditSavingPlanScreen(plan: plan),
+                ),
+              );
+            },
+            child: Text(context.t('sp.edit')),
+          ),
+          if (isActive)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ref.read(savingPlanServiceProvider).markCompleted(user.uid, plan);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan completed', type: AppToastType.success);
+                    Navigator.pop(context);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
+                  }
+                }
+              },
+              child: Text(context.t('inst.markCompleted')),
+            ),
+          if (isCancelled)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ref.read(savingPlanServiceProvider).setCancelled(user.uid, plan, false);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                  }
+                }
+              },
+              child: Text(context.t('inst.reactivate')),
+            ),
+          if (!isCancelled && plan.status != SavingPlanStatus.completed)
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ref.read(savingPlanServiceProvider).setCancelled(user.uid, plan, true);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+                  }
+                }
+              },
+              child: const Text('Cancel plan'),
+            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await showCupertinoDialog<bool>(
+                context: context,
+                builder: (dctx) => CupertinoAlertDialog(
+                  title: Text(context.t('sp.deleteTitle')),
+                  content: Text(context.t('sp.deleteMessage')),
+                  actions: [
+                    CupertinoDialogAction(
+                      onPressed: () => Navigator.pop(dctx, false),
+                      child: Text(context.t('common.cancel')),
+                    ),
+                    CupertinoDialogAction(
+                      isDestructiveAction: true,
+                      onPressed: () => Navigator.pop(dctx, true),
+                      child: Text(context.t('common.delete')),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true && context.mounted) {
+                try {
+                  await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
+                  if (context.mounted) {
+                    AppToast.show(context, 'Plan deleted', type: AppToastType.success);
+                    Navigator.pop(context);
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+                  }
+                }
+              }
+            },
+            child: Text(context.t('common.delete')),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.t('common.cancel')),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _showAddContributionSheet(
@@ -121,10 +231,17 @@ Future<void> _showAddContributionSheet(
   final user = ref.read(authStateProvider).valueOrNull;
   if (user == null) return;
   final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+  // The amount still needed to reach the target. A contribution can never
+  // exceed this (e.g. only 100 left ⇒ the max contribution is 100).
+  final remaining = plan.remaining > 0 ? plan.remaining : 0.0;
+  final defaultContribution = plan.contributionAmount ?? 0;
+  // Pre-fill with the usual per-period contribution, but capped to whatever
+  // is left so the field never suggests overshooting the goal.
+  final prefill = defaultContribution > 0 && defaultContribution <= remaining
+      ? defaultContribution
+      : remaining;
   final ctrl = TextEditingController(
-    text: (plan.contributionAmount ?? 0) > 0
-        ? plan.contributionAmount!.toStringAsFixed(2)
-        : '',
+    text: prefill > 0 ? prefill.toStringAsFixed(2) : '',
   );
   final amount = await showModalBottomSheet<double>(
     context: context,
@@ -159,13 +276,25 @@ Future<void> _showAddContributionSheet(
               textInputAction: TextInputAction.done,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(prefixText: '$symbol  '),
+              decoration: InputDecoration(
+                prefixText: '$symbol  ',
+                helperText: remaining > 0
+                    ? '${formatMoney(symbol, remaining)} left to reach goal'
+                    : null,
+              ),
             ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () {
                 final v = double.tryParse(ctrl.text);
-                Navigator.pop(ctx, v);
+                if (v == null) {
+                  Navigator.pop(ctx);
+                  return;
+                }
+                // Never let a contribution exceed the remaining amount.
+                final capped =
+                    remaining > 0 && v > remaining ? remaining : v;
+                Navigator.pop(ctx, capped);
               },
               child: Text(context.t('common.save')),
             ),
@@ -644,6 +773,7 @@ class _ContributionHistory extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final canAdd = plan.status == SavingPlanStatus.active;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
@@ -653,13 +783,44 @@ class _ContributionHistory extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.t('sp.history'),
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-              letterSpacing: 0.5,
-            ),
+          Row(
+            children: [
+              Text(
+                context.t('sp.history'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Spacer(),
+              if (canAdd)
+                GestureDetector(
+                  onTap: () => _showAddContributionSheet(context, ref, plan),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppActionBlue.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.plus, size: 12, color: AppActionBlue.color),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.t('sp.addContribution'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppActionBlue.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           if (plan.contributions.isEmpty)
@@ -671,300 +832,115 @@ class _ContributionHistory extends ConsumerWidget {
               ),
             )
           else
-            for (final c in plan.contributions.reversed)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: AppColors.mint,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.arrow_down,
-                        size: 14,
-                        color: AppColors.income,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            formatMoney(symbol, c.amount),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            DateFormat('MMM d, yyyy').format(c.date),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: brand.inkSoft,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () async {
-                        final user = ref.read(authStateProvider).valueOrNull;
-                        if (user == null) return;
-                        try {
-                          await ref
-                              .read(savingPlanServiceProvider)
-                              .removeContribution(user.uid, plan, c.id);
-                          if (context.mounted) {
-                            AppToast.show(context, 'Contribution removed', type: AppToastType.success);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
-                          }
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          CupertinoIcons.minus_circle,
-                          size: 18,
-                          color: brand.inkSoft,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _buildContributionList(context, ref, brand),
         ],
       ),
     );
   }
-}
 
-class _ActionRow extends ConsumerWidget {
-  final SavingPlan plan;
-  final String symbol;
-  const _ActionRow({required this.plan, required this.symbol});
+  Widget _buildContributionList(
+    BuildContext context,
+    WidgetRef ref,
+    BrandColors brand,
+  ) {
+    // Latest contribution first.
+    final items = [...plan.contributions]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final rows = [
+      for (final c in items) _contributionRow(context, ref, brand, c),
+    ];
+    // Short lists render inline; once there are many, cap the height and let
+    // only this section scroll so the page doesn't stretch endlessly.
+    if (rows.length <= 5) {
+      return Column(children: rows);
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 320),
+      child: FadingEdgeList(
+        fadeColor: brand.surface,
+        topHeight: 16,
+        bottomHeight: 24,
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: rows,
+        ),
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isActive = plan.status == SavingPlanStatus.active;
-    final isCancelled = plan.status == SavingPlanStatus.cancelled;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _OutlineBtn(
-                label: context.t('common.edit'),
-                onTap: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    builder: (_) => AddEditSavingPlanScreen(plan: plan),
+  Widget _contributionRow(
+    BuildContext context,
+    WidgetRef ref,
+    BrandColors brand,
+    SavingContribution c,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: AppColors.mint,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              CupertinoIcons.arrow_down,
+              size: 14,
+              color: AppColors.income,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formatMoney(symbol, c.amount),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _FilledBtn(
-                label: isActive
-                    ? context.t('inst.markCompleted')
-                    : isCancelled
-                    ? context.t('inst.reactivate')
-                    : 'Completed',
-                color: AppActionBlue.color,
-                textColor: Colors.white,
-                onTap: isActive
-                    ? () async {
-                        final user = ref.read(authStateProvider).valueOrNull;
-                        if (user == null) return;
-                        try {
-                          await ref
-                              .read(savingPlanServiceProvider)
-                              .markCompleted(user.uid, plan);
-                          if (context.mounted) {
-                            AppToast.show(context, 'Plan completed', type: AppToastType.success);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
-                          }
-                        }
-                      }
-                    : isCancelled
-                    ? () async {
-                        final user = ref.read(authStateProvider).valueOrNull;
-                        if (user == null) return;
-                        try {
-                          await ref
-                              .read(savingPlanServiceProvider)
-                              .setCancelled(user.uid, plan, false);
-                          if (context.mounted) {
-                            AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
-                          }
-                        }
-                      }
-                    : () {},
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            if (!isCancelled && plan.status != SavingPlanStatus.completed)
-              Expanded(
-                child: _FilledBtn(
-                  label: 'Cancel plan',
-                  color: const Color(0xFFFEE2E2),
-                  textColor: AppColors.expense,
-                  onTap: () async {
-                    final user = ref.read(authStateProvider).valueOrNull;
-                    if (user == null) return;
-                    try {
-                      await ref
-                          .read(savingPlanServiceProvider)
-                          .setCancelled(user.uid, plan, true);
-                      if (context.mounted) {
-                        AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
-                      }
-                    } catch (_) {
-                      if (context.mounted) {
-                        AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
-                      }
-                    }
-                  },
+                Text(
+                  DateFormat('MMM d, yyyy').format(c.date),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: brand.inkSoft,
+                  ),
                 ),
-              )
-            else
-              const Expanded(child: SizedBox.shrink()),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _FilledBtn(
-                label: context.t('common.delete'),
-                color: const Color(0xFFFEE2E2),
-                textColor: AppColors.expense,
-                onTap: () => _confirmDelete(context, ref),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final user = ref.read(authStateProvider).valueOrNull;
+              if (user == null) return;
+              try {
+                await ref
+                    .read(savingPlanServiceProvider)
+                    .removeContribution(user.uid, plan, c.id);
+                if (context.mounted) {
+                  AppToast.show(context, 'Contribution removed', type: AppToastType.success);
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
+                }
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                CupertinoIcons.minus_circle,
+                size: 18,
+                color: brand.inkSoft,
               ),
             ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final user = ref.read(authStateProvider).valueOrNull;
-    if (user == null) return;
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text(context.t('sp.deleteTitle')),
-        content: Text(context.t('sp.deleteMessage')),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.t('common.cancel')),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.t('common.delete')),
           ),
         ],
       ),
     );
-    if (ok == true) {
-      try {
-        await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
-        if (context.mounted) {
-          AppToast.show(context, 'Plan deleted', type: AppToastType.success);
-          Navigator.pop(context);
-        }
-      } catch (_) {
-        if (context.mounted) {
-          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
-        }
-      }
-    }
   }
 }
 
-// ── Button helpers ────────────────────────────────────────────
-
-class _OutlineBtn extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _OutlineBtn({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: brand.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: brand.divider, width: 1.5),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: brand.ink,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilledBtn extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color? textColor;
-  final VoidCallback onTap;
-  const _FilledBtn({
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = textColor ?? foregroundOn(color);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: fg,
-          ),
-        ),
-      ),
-    );
-  }
-}

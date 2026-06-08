@@ -76,6 +76,28 @@ class _StickyHeaderScaffoldState extends State<StickyHeaderScaffold> {
                     ),
                   ),
                 ),
+              // Bottom fade — content dissolves softly at the bottom edge,
+              // matching the listing screens. Invisible over empty background.
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          brand.background,
+                          brand.background.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

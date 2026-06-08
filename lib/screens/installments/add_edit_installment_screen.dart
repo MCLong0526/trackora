@@ -884,7 +884,10 @@ class _AddEditInstallmentScreenState
                                   final d = idx + 1;
                                   final selected = d == _day;
                                   return GestureDetector(
-                                    onTap: () => setState(() => _day = d),
+                                    onTap: () {
+                                      FocusScope.of(context).unfocus();
+                                      setState(() => _day = d);
+                                    },
                                     child: AnimatedContainer(
                                       duration: const Duration(milliseconds: 120),
                                       width: 36,

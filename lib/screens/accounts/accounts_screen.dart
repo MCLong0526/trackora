@@ -7,11 +7,13 @@ import 'package:flutter/services.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/precious_metal.dart';
+import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/masked_amount.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../precious_metals/precious_metals_screen.dart';
@@ -29,10 +31,13 @@ class AccountsScreen extends ConsumerWidget {
     final visible = ref.watch(balanceVisibleProvider);
     final metals =
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final stocks =
+        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
-    final balances = _computeBalances(accounts, allExpenses, metals);
+    final balances = computeAccountBalanceMap(accounts, allExpenses,
+        metals: metals, stocks: stocks);
 
     final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
     final negativeCards = creditCards.where((a) => (balances[a.id] ?? 0) < 0).toList();
@@ -57,7 +62,9 @@ class AccountsScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: CustomScrollView(
+        child: FadingEdgeList(
+          fadeColor: brand.background,
+          child: CustomScrollView(
           clipBehavior: Clip.none,
           slivers: [
             if (accounts.isEmpty)
@@ -135,45 +142,9 @@ class AccountsScreen extends ConsumerWidget {
             ),
           ],
         ),
+        ),
       ),
     );
-  }
-
-  Map<String, double> _computeBalances(
-    List<Account> accounts,
-    List<Expense> expenses,
-    List<PreciousMetal> metals,
-  ) {
-    final currencyCodes = <String, String?>{
-      for (final a in accounts) a.id: a.currencyCode,
-    };
-    final balances = <String, double>{};
-    for (final a in accounts) {
-      balances[a.id] = a.openingBalance;
-    }
-    for (final e in expenses) {
-      final aid = e.accountId;
-      if (aid != null && balances.containsKey(aid)) {
-        final amt = _effectiveAmountForAccount(e, currencyCodes[aid]);
-        balances[aid] = (balances[aid] ?? 0) +
-            (e.type.isInflow ? amt : -amt);
-      }
-      final toId = e.toAccountId;
-      if (toId != null && balances.containsKey(toId)) {
-        balances[toId] = (balances[toId] ?? 0) +
-            _effectiveAmountForAccount(e, currencyCodes[toId]);
-      }
-    }
-    // Precious metal transactions linked to an account: buy = money out,
-    // sell = money in.
-    for (final m in metals) {
-      final aid = m.accountId;
-      if (aid != null && balances.containsKey(aid)) {
-        balances[aid] = (balances[aid] ?? 0) +
-            (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
-      }
-    }
-    return balances;
   }
 
   Widget _empty(BuildContext context, BrandColors brand) {

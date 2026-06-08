@@ -9,6 +9,7 @@ import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import 'add_edit_travel_group_screen.dart';
 import 'travel_group_detail_screen.dart';
 
@@ -94,12 +95,16 @@ class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
                 ],
               ),
             ),
-            // Scrollable content
+            // Scrollable content with scroll-aware fade edges
+            // Scrollable content with scroll-aware fade edges
             Expanded(
-              child: async.when(
-                loading: () => const Center(child: CupertinoActivityIndicator()),
-                error: (e, _) => _ErrorBody(error: e),
-                data: (groups) => _Body(groups: groups, isDark: isDark),
+              child: FadingEdgeList(
+                fadeColor: bg,
+                child: async.when(
+                  loading: () => const Center(child: CupertinoActivityIndicator()),
+                  error: (e, _) => _ErrorBody(error: e),
+                  data: (groups) => _Body(groups: groups, isDark: isDark),
+                ),
               ),
             ),
           ],
@@ -295,6 +300,15 @@ class _TripCardActive extends ConsumerWidget {
     final totalSpent = expenses.fold(0.0, (s, e) => s + e.amountInGroupCurrency);
     final hasForeign = expenses.any((e) => e.currencyCode != null && e.currencyCode != group.currency);
 
+    // Estimated trip total in the user's main currency, when the trip's
+    // currency differs from it.
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = converter?.base;
+    final mainEstStr =
+        (converter != null && mainCode != null && mainCode != group.currency)
+            ? '≈ $mainCode ${amtFmt.format(converter.toBase(totalSpent, group.currency))}'
+            : null;
+
     // Current user's balance
     final svc = ref.read(travelGroupServiceProvider);
     final settlement = svc.calculateSettlement(members, expenses);
@@ -398,6 +412,17 @@ class _TripCardActive extends ConsumerWidget {
                                 ),
                               ],
                             ),
+                      if (!expensesAsync.isLoading && mainEstStr != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '$mainEstStr est.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -15,6 +15,7 @@ import '../../repositories/local_precious_metal_repository.dart';
 import '../../repositories/local_split_bill_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/prefs_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -779,6 +780,12 @@ class _AssetActivityRow extends ConsumerWidget {
     late final Color iconColor;
     late final bool isInflow;
     late final double amount;
+    // For stocks the transaction amount is in the stock's own currency
+    // (e.g. USD), not the user's base currency. [amountSymbol] is the symbol
+    // to render the amount with; [estBase] is the converted estimate in the
+    // base currency (null when no conversion is needed/available).
+    String amountSymbol = symbol;
+    double? estBase;
 
     if (metal != null) {
       final isSell = metal.action == MetalAction.sell;
@@ -801,6 +808,19 @@ class _AssetActivityRow extends ConsumerWidget {
       iconColor = const Color(0xFF2A6FB5);
       isInflow = isSell;
       amount = qty * price;
+      // Show the amount in the stock's native currency, and an estimated
+      // value in the user's base currency underneath.
+      final txCurrency =
+          (tx['currency'] as String?) ?? stock.currency ?? '';
+      if (txCurrency.isNotEmpty) {
+        amountSymbol = kSupportedCurrencies[txCurrency] ?? txCurrency;
+      }
+      final converter = ref.watch(currencyConverterProvider).valueOrNull;
+      if (converter != null &&
+          txCurrency.isNotEmpty &&
+          txCurrency != converter.base) {
+        estBase = converter.toBase(amount, txCurrency);
+      }
     }
 
     final now = DateTime.now();
@@ -860,15 +880,29 @@ class _AssetActivityRow extends ConsumerWidget {
                 ],
               ),
             ),
-            Text(
-              isInflow
-                  ? formatMoney(symbol, amount, forceSign: true)
-                  : formatMoney(symbol, -amount),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isInflow ? brand.income : brand.ink,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  isInflow
+                      ? formatMoney(amountSymbol, amount, forceSign: true)
+                      : formatMoney(amountSymbol, -amount),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isInflow ? brand.income : brand.ink,
+                  ),
+                ),
+                if (estBase != null)
+                  Text(
+                    '≈ ${formatMoney(symbol, estBase)} est.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -1390,18 +1424,61 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
     ),
   ];
 
-  void _openReorderSheet() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentOrder = ref.read(quickAddOrderProvider);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _QuickAddReorderSheet(
-        order: List<int>.from(currentOrder),
-        items: _allItems(isDark),
-        onSave: (newOrder) =>
-            ref.read(quickAddOrderProvider.notifier).setOrder(newOrder),
+  // Move the action at position [from] to position [to] within the saved
+  // order (standard reorder semantics, like ReorderableListView).
+  void _reorder(int from, int to) {
+    if (from == to) return;
+    final order = List<int>.from(ref.read(quickAddOrderProvider));
+    if (from < 0 || from >= order.length || to < 0 || to >= order.length) {
+      return;
+    }
+    final moved = order.removeAt(from);
+    var insertAt = to;
+    if (insertAt > from) insertAt -= 1;
+    order.insert(insertAt, moved);
+    ref.read(quickAddOrderProvider.notifier).setOrder(order);
+    HapticFeedback.selectionClick();
+  }
+
+  // The floating widget shown under the finger while dragging an action.
+  Widget _dragFeedback(_QuickItem item, double width, BrandColors brand) {
+    return Material(
+      color: Colors.transparent,
+      child: SizedBox(
+        width: width,
+        height: 82,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: item.iconBg,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(item.icon, color: item.iconColor, size: 21),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t(item.labelKey),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: brand.ink,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1414,16 +1491,38 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
     final all = _allItems(isDark);
     final ordered = order.map((i) => all[i]).toList();
 
-    Widget buildRow(int start, int end) => Row(
+    // A single action slot: tap opens the action, long-press picks it up to
+    // drag-and-drop into a new position right here on the home page.
+    Widget slot(int i, double slotW) {
+      return DragTarget<int>(
+        onWillAcceptWithDetails: (d) => d.data != i,
+        onAcceptWithDetails: (d) => _reorder(d.data, i),
+        builder: (ctx, candidate, rejected) {
+          final hovering = candidate.isNotEmpty;
+          return LongPressDraggable<int>(
+            data: i,
+            onDragStarted: () => HapticFeedback.mediumImpact(),
+            feedback: _dragFeedback(ordered[i], slotW, brand),
+            childWhenDragging: Opacity(
+              opacity: 0.25,
+              child: _QuickAddButton(item: ordered[i]),
+            ),
+            child: AnimatedScale(
+              scale: hovering ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: _QuickAddButton(item: ordered[i]),
+            ),
+          );
+        },
+      );
+    }
+
+    Widget buildRow(int start, int end, double slotW) => Row(
       children: [
         for (var i = start; i < end; i++) ...[
           if (i > start) const SizedBox(width: 10),
-          Expanded(
-            child: _QuickAddButton(
-              item: ordered[i],
-              onLongPress: _openReorderSheet,
-            ),
-          ),
+          Expanded(child: slot(i, slotW)),
         ],
       ],
     );
@@ -1455,34 +1554,38 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: _openReorderSheet,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Icon(
-                    CupertinoIcons.slider_horizontal_3,
-                    size: 16,
-                    color: brand.inkSoft,
-                  ),
+              if (_expanded)
+                Text(
+                  context.t('quickAdd.rearrangeHint'),
+                  style: TextStyle(fontSize: 11, color: brand.inkSoft),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-          buildRow(0, 3),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 260),
-            sizeCurve: Curves.easeOutCubic,
-            crossFadeState: _expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Column(
-              children: [
-                const SizedBox(height: 10),
-                buildRow(3, 6),
-              ],
-            ),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              // 3 columns with two 10px gaps.
+              final slotW = (constraints.maxWidth - 20) / 3;
+              return Column(
+                children: [
+                  buildRow(0, 3, slotW),
+                  AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 260),
+                    sizeCurve: Curves.easeOutCubic,
+                    crossFadeState: _expanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    firstChild: const SizedBox(width: double.infinity),
+                    secondChild: Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        buildRow(3, 6, slotW),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 6),
           Center(
@@ -1507,162 +1610,6 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
   }
 }
 
-// ── Reorder sheet ─────────────────────────────────────────────────────────────
-
-class _QuickAddReorderSheet extends StatefulWidget {
-  final List<int> order;
-  final List<_QuickItem> items;
-  final void Function(List<int>) onSave;
-
-  const _QuickAddReorderSheet({
-    required this.order,
-    required this.items,
-    required this.onSave,
-  });
-
-  @override
-  State<_QuickAddReorderSheet> createState() => _QuickAddReorderSheetState();
-}
-
-class _QuickAddReorderSheetState extends State<_QuickAddReorderSheet> {
-  late List<int> _order;
-
-  @override
-  void initState() {
-    super.initState();
-    _order = List<int>.from(widget.order);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      decoration: BoxDecoration(
-        color: brand.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: brand.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 16, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Customize Quick Add',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: brand.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'First 3 shown by default. Drag to reorder.',
-                          style: TextStyle(fontSize: 13, color: brand.inkSoft),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      widget.onSave(_order);
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0066CC),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            SizedBox(
-              height: 336,
-              child: ReorderableListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                itemCount: _order.length,
-                buildDefaultDragHandles: false,
-                onReorder: (oldIndex, newIndex) {
-                  setState(() {
-                    if (newIndex > oldIndex) newIndex--;
-                    final item = _order.removeAt(oldIndex);
-                    _order.insert(newIndex, item);
-                  });
-                },
-                itemBuilder: (ctx, index) {
-                  final itemIdx = _order[index];
-                  final item = widget.items[itemIdx];
-                  return Material(
-                    key: ValueKey(itemIdx),
-                    color: Colors.transparent,
-                    child: ListTile(
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: item.iconBg,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(item.icon, color: item.iconColor, size: 19),
-                      ),
-                      title: Text(
-                        context.t(item.labelKey),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: brand.ink,
-                        ),
-                      ),
-                      subtitle: index < 3
-                          ? Text(
-                              'Shown by default',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: const Color(0xFF0066CC).withValues(alpha: 0.8),
-                              ),
-                            )
-                          : null,
-                      trailing: ReorderableDragStartListener(
-                        index: index,
-                        child: Icon(
-                          CupertinoIcons.line_horizontal_3,
-                          color: brand.inkSoft,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _QuickItem {
   final IconData icon;
   final String labelKey;
@@ -1681,9 +1628,8 @@ class _QuickItem {
 
 class _QuickAddButton extends StatefulWidget {
   final _QuickItem item;
-  final VoidCallback? onLongPress;
 
-  const _QuickAddButton({required this.item, this.onLongPress});
+  const _QuickAddButton({required this.item});
 
   @override
   State<_QuickAddButton> createState() => _QuickAddButtonState();
@@ -1745,12 +1691,6 @@ class _QuickAddButtonState extends State<_QuickAddButton>
         _navigate();
       },
       onTapCancel: () => _press.forward(),
-      onLongPress: widget.onLongPress != null
-          ? () {
-              HapticFeedback.mediumImpact();
-              widget.onLongPress!();
-            }
-          : null,
       child: ScaleTransition(
         scale: _press,
         child: SizedBox(

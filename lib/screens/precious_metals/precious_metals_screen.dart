@@ -440,6 +440,7 @@ class _PreciousMetalsScreenState extends ConsumerState<PreciousMetalsScreen>
         behavior: HitTestBehavior.opaque,
         child: SafeArea(
           child: CustomScrollView(
+            physics: const NeverScrollableScrollPhysics(),
             slivers: [
               // ── Hero cards (PageView — swipe Gold ↔ Silver) ───────────────
               SliverToBoxAdapter(

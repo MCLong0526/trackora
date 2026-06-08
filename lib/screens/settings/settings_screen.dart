@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/precious_metal.dart';
+import '../../models/stock_investment.dart';
 import '../../services/auth_service.dart';
 import '../../services/currency_converter.dart';
 import '../../services/export_service.dart';
@@ -27,6 +29,7 @@ import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../../main.dart' show rootNavKey;
 
 enum _CsvExportRangeMode { month, all }
@@ -54,6 +57,10 @@ class SettingsScreen extends ConsumerWidget {
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
     final allExpenses =
         ref.watch(allExpensesProvider).valueOrNull ?? const <Expense>[];
+    final metals =
+        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+    final stocks =
+        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
     final totalBalance = ref.watch(totalAccountBalanceProvider);
     final visible = ref.watch(balanceVisibleProvider);
     final converter = ref.watch(currencyConverterProvider).valueOrNull;
@@ -102,6 +109,8 @@ class SettingsScreen extends ConsumerWidget {
             _AccountsSection(
               accounts: accounts,
               allExpenses: allExpenses,
+              metals: metals,
+              stocks: stocks,
               symbol: symbol,
               mainCode: code,
               totalBalance: totalBalance,
@@ -206,6 +215,17 @@ class SettingsScreen extends ConsumerWidget {
                   iconColor: AppColors.sand,
                   label: context.t('settings.version'),
                   trailing: '1.0.0',
+                ),
+                _GroupDivider(),
+                _Tile(
+                  icon: CupertinoIcons.sparkles,
+                  iconColor: AppColors.lilac,
+                  label: context.t('settings.replayTour'),
+                  onTap: () => Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (_) => const OnboardingScreen(tourOnly: true),
+                    ),
+                  ),
                 ),
                 if (storageMode == StorageMode.firebase) ...[
                   _GroupDivider(),
@@ -915,6 +935,8 @@ const _kAccountChartColors = [
 class _AccountsSection extends StatefulWidget {
   final List<Account> accounts;
   final List<Expense> allExpenses;
+  final List<PreciousMetal> metals;
+  final List<StockInvestment> stocks;
   final String symbol;
   final String mainCode;
   final double totalBalance;
@@ -924,6 +946,8 @@ class _AccountsSection extends StatefulWidget {
   const _AccountsSection({
     required this.accounts,
     required this.allExpenses,
+    required this.metals,
+    required this.stocks,
     required this.symbol,
     required this.mainCode,
     required this.totalBalance,
@@ -942,10 +966,12 @@ class _AccountsSectionState extends State<_AccountsSection> {
   Widget build(BuildContext context) {
     final brand = context.brand;
 
-    final balanceMap = <String, double>{
-      for (final a in widget.accounts)
-        a.id: computeAccountBalance(a, widget.allExpenses),
-    };
+    final balanceMap = computeAccountBalanceMap(
+      widget.accounts,
+      widget.allExpenses,
+      metals: widget.metals,
+      stocks: widget.stocks,
+    );
     final positiveAccounts = widget.accounts
         .where((a) => (balanceMap[a.id] ?? 0) > 0)
         .toList();

@@ -377,6 +377,51 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     FocusScope.of(context).unfocus();
   }
 
+  // ── Smart numpad behaviour around popup pickers ──────────────────────────────
+  // Remembers whether the amount field held focus when a popup picker
+  // (account / date / currency) was opened. The numpad should only re-open
+  // after picking when the user had *already* started entering an amount;
+  // tapping a popup field first (cold) must not pop the numpad.
+  bool _reopenNumpadAfterPicker = false;
+
+  // Call right before opening a popup picker.
+  void _beginPicker() {
+    _reopenNumpadAfterPicker = _amountFocus.hasFocus;
+    FocusScope.of(context).unfocus();
+  }
+
+  // Call right after a popup picker closes.
+  void _endPicker() {
+    if (!mounted) return;
+    if (_reopenNumpadAfterPicker) {
+      // Bring the numpad back by returning focus to the amount field, after the
+      // popped route finishes restoring focus.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _amountFocus.requestFocus();
+      });
+    } else {
+      FocusScope.of(context).unfocus();
+    }
+    _reopenNumpadAfterPicker = false;
+  }
+
+  Future<void> _pickCurrency() async {
+    final reopen = _amountFocus.hasFocus;
+    await showCurrencyPickerSheet(
+      context,
+      current: _currencyCode,
+      onPicked: (code) => setState(() => _currencyCode = code),
+    );
+    if (!mounted) return;
+    if (reopen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _amountFocus.requestFocus();
+      });
+    } else {
+      FocusScope.of(context).unfocus();
+    }
+  }
+
   // Recompute fade visibility: top fade shows when scrolled away from the top,
   // bottom fade shows only while there is more content below.
   void _updateCardFadeState() {
@@ -396,7 +441,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   Future<void> _pickDate() async {
-    FocusScope.of(context).unfocus();
+    _beginPicker();
     await showCupertinoModalPopup(
       context: context,
       builder: (ctx) => Container(
@@ -421,12 +466,25 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         ),
       ),
     );
-    _dismissKeyboard();
+    _endPicker();
   }
 
   Future<void> _openSplitBillSheet(BuildContext context) async {
     FocusScope.of(context).unfocus();
-    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+    final mainCode = await ref.read(currencyCodeProvider.future);
+    if (!context.mounted) return;
+    // Use the expense's selected currency for the split (not the base one), so
+    // the split bill page shows the correct currency.
+    final symbol = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
+    final baseSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
+    // When the expense is in a foreign currency, compute the base-currency
+    // multiplier so the split bill can show an estimate.
+    double? fxToBase;
+    if (_currencyCode != mainCode) {
+      final converter = ref.read(currencyConverterProvider).valueOrNull;
+      final one = converter?.toBase(1.0, _currencyCode) ?? 0;
+      if (one > 0) fxToBase = one;
+    }
     final amount = double.tryParse(_amountController.text) ?? 0;
     final totalAmount = _splitBillEnabled && _splitBillTotal > 0
         ? _splitBillTotal
@@ -446,6 +504,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           initialMembers: _splitMembers,
           initialSplitMode: _splitMode,
           userName: displayName,
+          baseCurrencySymbol: _currencyCode != mainCode ? baseSymbol : null,
+          fxToBase: fxToBase,
         ),
         fullscreenDialog: true,
       ),
@@ -720,8 +780,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }) async {
     try {
       final now2 = DateTime.now();
-      final mainCode2 = await ref.read(currencyCodeProvider.future);
-      final sym = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
+      // Persist the split bill in the *expense's* selected currency (not the
+      // base currency) so the receipt renders the currency the user chose.
+      final entrySymbol = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
       final billTotal = _splitBillTotal > 0
           ? _splitBillTotal
           : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
@@ -746,8 +807,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         billNumber: billNumber,
         title: title,
         totalAmount: billTotal,
-        currency: mainCode2,
-        currencySymbol: sym,
+        currency: _currencyCode,
+        currencySymbol: entrySymbol,
         splitMode: _splitMode,
         members: _splitMembers,
         date: _date,
@@ -1262,6 +1323,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   Widget _typeMenuButton(BrandColors brand) {
     return GestureDetector(
       onTap: () {
+        FocusScope.of(context).unfocus();
         HapticFeedback.selectionClick();
         setState(() => _typeMenuOpen = !_typeMenuOpen);
         if (_typeMenuOpen) {
@@ -1891,6 +1953,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           return GestureDetector(
             onTap: () {
               if (_category == c) return;
+              FocusScope.of(context).unfocus();
               HapticFeedback.selectionClick();
               setState(() => _category = c);
             },
@@ -2180,6 +2243,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               value: _currencyCode,
               onChanged: (code) => setState(() => _currencyCode = code),
               label: 'Currency',
+              onTap: _pickCurrency,
             ),
             // Split bill toggle (expense only)
             if (entryType == EntryType.expense) ...[
@@ -2254,18 +2318,31 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   // ─── Split Bill Toggle Row ────────────────────────────────────────────────────
 
-  String _splitSubtitle(String symbol) {
+  String _splitSubtitle() {
     final n = _splitMembers.length;
     if (n == 0) return '';
+    // Use the expense's selected currency (not the base one) so the sentence
+    // tracks the currency chosen for this transaction.
+    final symbol = kSupportedCurrencies[_currencyCode] ?? _currencyCode;
+    final converter = ref.read(currencyConverterProvider).valueOrNull;
+    final mainCode =
+        converter?.base ?? ref.read(currencyCodeProvider).valueOrNull ?? 'MYR';
+    final mainSymbol = kSupportedCurrencies[mainCode] ?? mainCode;
+    final isForeign = _currencyCode != mainCode && converter != null;
+    // Appends an "· est. <base> <amount>" tail when the expense is in a
+    // foreign currency, converting from the entry currency to the base one.
+    String est(double amountInEntry) => isForeign
+        ? ' · est. $mainSymbol ${converter.toBase(amountInEntry, _currencyCode).toStringAsFixed(2)}'
+        : '';
     switch (_splitMode) {
       case SplitMode.equally:
         final each = _splitBillTotal > 0
             ? _splitBillTotal / n
             : _splitMembers.fold<double>(0, (s, m) => s + m.amount) / n;
-        return '$n people · $symbol ${each.toStringAsFixed(2)} each';
+        return '$n people · $symbol ${each.toStringAsFixed(2)} each${est(each)}';
       case SplitMode.amount:
         final total = _splitMembers.fold<double>(0, (s, m) => s + m.amount);
-        return '$n people · $symbol ${total.toStringAsFixed(2)} total';
+        return '$n people · $symbol ${total.toStringAsFixed(2)} total${est(total)}';
       case SplitMode.percent:
         return '$n people · by percentage';
       case SplitMode.shares:
@@ -2274,8 +2351,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   Widget _splitBillToggleRow(BrandColors brand) {
-    final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
-
     return InkWell(
       onTap: () => _openSplitBillSheet(context),
       child: Padding(
@@ -2306,7 +2381,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ),
                   if (_splitBillEnabled && _splitMembers.isNotEmpty)
                     Text(
-                      _splitSubtitle(symbol),
+                      _splitSubtitle(),
                       style: TextStyle(fontSize: 12, color: brand.inkSoft),
                     )
                   else
@@ -2734,7 +2809,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required void Function(String? id) onSelect,
     bool allowNone = true,
   }) {
-    FocusScope.of(context).unfocus();
+    _beginPicker();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: brand.surface,
@@ -2822,7 +2897,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ),
         );
       },
-    ).whenComplete(_dismissKeyboard);
+    ).whenComplete(_endPicker);
   }
 
   // ─── Account Type Helpers ─────────────────────────────────────────────────────

@@ -7,12 +7,15 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../repositories/firebase_expense_group_repository.dart';
 import '../../repositories/local_expense_group_repository.dart';
 import '../../services/i18n.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/personal_group_toggle.dart';
 import '../../widgets/profile_avatar_button.dart';
 import 'add_group_expense_screen.dart';
@@ -476,7 +479,9 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
     final mySpent = (myPaid - myNet).clamp(0.0, double.infinity);
     final partnerSpent = (partnerPaid - partnerNet).clamp(0.0, double.infinity);
 
-    return ListView(
+    return FadingEdgeList(
+      fadeColor: brand.background,
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
       children: [
         // ── Hero card ─────────────────────────────────────────
@@ -879,6 +884,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
             ),
           ),
       ],
+    ),
     );
   }
 }
@@ -975,14 +981,29 @@ class _SwipeableActivityRowState extends State<_SwipeableActivityRow>
     );
     if (confirmed != true || !mounted) return;
     try {
-      await widget.ref.read(expenseGroupServiceProvider).deleteExpense(
+      final isOnline = widget.ref.read(isOnlineProvider);
+      final userId = widget.userId ?? '';
+
+      // Always remove from local Hive immediately for instant UI update.
+      await LocalExpenseGroupRepository().deleteExpense(
         widget.expense.groupId, widget.expense.id,
       );
+
       if (storageMode == StorageMode.firebase) {
-        await LocalExpenseGroupRepository().deleteExpense(
-          widget.expense.groupId, widget.expense.id,
-        );
+        if (isOnline) {
+          // Online: delete from Firebase directly.
+          await FirebaseExpenseGroupRepository().deleteExpense(
+            widget.expense.groupId, widget.expense.id,
+          );
+        } else if (userId.isNotEmpty) {
+          // Offline: queue so it's deleted from Firebase on reconnect.
+          await SyncService.markEntityPendingDelete(
+            userId, 'group_expense',
+            '${widget.expense.groupId}:${widget.expense.id}',
+          );
+        }
       }
+
       if (mounted) AppToast.show(context, context.t('group.expenseDeleted'));
     } catch (_) {
       if (mounted) {
@@ -1780,29 +1801,6 @@ class _GroupMenuSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
           ],
-          // Go to group view on home tab
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              color: const Color(0xFFF4F4F7),
-              borderRadius: BorderRadius.circular(14),
-              onPressed: () {
-                ref.read(homeModeProvider.notifier).state = HomeMode.group;
-                ref.read(homeTabIndexProvider.notifier).state = 0;
-                Navigator.popUntil(context, (r) => r.isFirst);
-              },
-              child: Text(
-                context.t('group.viewGroup'),
-                style: const TextStyle(
-                  color: Color(0xFF0B0B0F),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
           // When sole member: only show Delete (leaving = deleting anyway).
           // When multiple members: show Leave for everyone, Delete for owner.
           if (group.members.length > 1) ...[
@@ -1845,8 +1843,21 @@ class _GroupMenuSheet extends ConsumerWidget {
                     }
 
                     try {
-                      final service = ref.read(expenseGroupServiceProvider);
-                      await service.leaveGroup(group.id, userId!);
+                      final isOnline = ref.read(isOnlineProvider);
+
+                      // Always update local Hive immediately: removes userId
+                      // and transfers ownership to the next member.
+                      await LocalExpenseGroupRepository()
+                          .removeMemberFromGroup(group.id, userId!);
+
+                      if (isOnline) {
+                        final service = ref.read(expenseGroupServiceProvider);
+                        await service.leaveGroup(group.id, userId!);
+                      } else if (storageMode == StorageMode.firebase) {
+                        // Offline: queue leave for Firebase when reconnected.
+                        await SyncService.markEntityPendingDelete(
+                            userId!, 'group_leave', group.id);
+                      }
                       clearGroupState();
                       if (context.mounted) {
                         Navigator.pop(context);
@@ -1895,22 +1906,10 @@ class _GroupMenuSheet extends ConsumerWidget {
                 color: const Color(0xFFFFEEEE),
                 borderRadius: BorderRadius.circular(14),
                 onPressed: () async {
-                  final confirmed = await showCupertinoDialog<bool>(
+                  final confirmed = await showDialog<bool>(
                     context: context,
-                    builder: (dialogCtx) => CupertinoAlertDialog(
-                      title: Text('${context.t('group.deleteGroup')}?'),
-                      content: Text(context.t('group.deleteGroupPermanent')),
-                      actions: [
-                        CupertinoDialogAction(
-                          isDestructiveAction: true,
-                          onPressed: () => Navigator.pop(dialogCtx, true),
-                          child: Text(context.t('common.delete')),
-                        ),
-                        CupertinoDialogAction(
-                          onPressed: () => Navigator.pop(dialogCtx, false),
-                          child: Text(context.t('common.cancel')),
-                        ),
-                      ],
+                    builder: (dialogCtx) => _DeleteGroupDialog(
+                      groupName: group.name,
                     ),
                   );
                   if (confirmed == true) {
@@ -1927,8 +1926,20 @@ class _GroupMenuSheet extends ConsumerWidget {
                     }
 
                     try {
-                      final service = ref.read(expenseGroupServiceProvider);
-                      await service.deleteGroup(group.id);
+                      final isOnline = ref.read(isOnlineProvider);
+
+                      // Always clean up local Hive immediately.
+                      await LocalExpenseGroupRepository().deleteGroup(group.id);
+
+                      if (isOnline) {
+                        final service = ref.read(expenseGroupServiceProvider);
+                        await service.deleteGroup(group.id);
+                      } else if (storageMode == StorageMode.firebase &&
+                          userId != null) {
+                        // Offline: queue Firebase deletion for when reconnected.
+                        await SyncService.markEntityPendingDelete(
+                            userId!, 'group_delete', group.id);
+                      }
                       clearGroupState();
                       if (context.mounted) {
                         Navigator.pop(context);
@@ -1937,6 +1948,7 @@ class _GroupMenuSheet extends ConsumerWidget {
                     } on FirebaseException catch (e) {
                       if (e.code == 'not-found' ||
                           e.code == 'permission-denied') {
+                        // Group already gone from Firebase — treat as success.
                         clearGroupState();
                         if (context.mounted) {
                           Navigator.pop(context);
@@ -1969,6 +1981,155 @@ class _GroupMenuSheet extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Animated delete-group confirmation dialog ─────────────────────────────────
+
+class _DeleteGroupDialog extends StatefulWidget {
+  final String groupName;
+  const _DeleteGroupDialog({required this.groupName});
+
+  @override
+  State<_DeleteGroupDialog> createState() => _DeleteGroupDialogState();
+}
+
+class _DeleteGroupDialogState extends State<_DeleteGroupDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _shake;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _shake = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: -8), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8, end: -6), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -6, end: 6), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 6, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    // Start animation shortly after showing
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Animated warning icon
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (_, child) => Transform.translate(
+                offset: Offset(_shake.value, 0),
+                child: Transform.scale(scale: _scale.value, child: child),
+              ),
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEEEE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  color: Color(0xFFD93025),
+                  size: 32,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.t('group.deleteGroup'),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0B0B0F),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.t('group.deleteGroupPermanent'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, false),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F4F7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        context.t('common.cancel'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0B0B0F),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD93025),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        context.t('common.delete'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

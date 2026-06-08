@@ -2,31 +2,32 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/auth_service.dart';
-import '../../services/biometric_service.dart';
 import '../../services/i18n.dart';
+import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_dialog.dart';
 import 'login_screen.dart';
 import 'welcome_screen.dart';
 
 const Color _kPrimary = Color(0xFF0066CC);
 
-class SignupScreen extends StatefulWidget {
+class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
-  final _biometricService = BiometricService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -94,14 +95,36 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
+      final name = _nameController.text.trim();
       final credential = await _authService.signUp(
         email: email,
         password: password,
       );
-      await credential.user?.updateDisplayName(_nameController.text.trim());
-      final biometricAvailable = await _biometricService.isAvailable();
-      if (biometricAvailable) {
-        await _biometricService.enable(email, password);
+      // Persist the entered name as the app-wide display name (used across
+      // settings, receipts, splits) and on the Firebase profile.
+      await credential.user?.updateDisplayName(name);
+      if (name.isNotEmpty) {
+        await ref.read(userNameProvider.notifier).set(name);
+      }
+      // Send a verification email (branded via Firebase console template).
+      // Best-effort: never let it block or fail the signup flow.
+      try {
+        await credential.user?.sendEmailVerification();
+      } catch (_) {}
+      // Require the user to verify their email before they can sign in. Show a
+      // popup, then sign out so the verification gate keeps them on the login
+      // screen until they confirm their address. Biometrics are enabled later,
+      // on the first verified login, rather than for an unverified account.
+      if (mounted) {
+        setState(() => _isLoading = false);
+        await _showVerifyEmailDialog(email);
+      }
+      await _authService.signOut();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -118,6 +141,21 @@ class _SignupScreenState extends State<SignupScreen> {
         });
       }
     }
+  }
+
+  Future<void> _showVerifyEmailDialog(String email) {
+    return showAppDialog(
+      context: context,
+      icon: CupertinoIcons.envelope_badge_fill,
+      title: context.t('auth.verifyEmailTitle'),
+      message: context.t('auth.verifyEmailBody').replaceAll('{email}', email),
+      actions: [
+        AppDialogAction(
+          label: context.t('common.ok'),
+          isPrimary: true,
+        ),
+      ],
+    );
   }
 
   String _friendlyError(String code) {

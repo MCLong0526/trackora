@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -103,7 +104,28 @@ class _BillReceiptScreenState extends ConsumerState<BillReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final bg = context.brand.background;
-    final userName = ref.watch(userNameProvider);
+    final savedName = ref.watch(userNameProvider).trim();
+    // Fall back to the Firebase profile display name so the receipt never
+    // shows the generic "You" once the user has a name on their account.
+    final userName = savedName.isNotEmpty
+        ? savedName
+        : (FirebaseAuth.instance.currentUser?.displayName?.trim() ?? '');
+
+    // When the bill is in a currency other than the user's base currency,
+    // compute a multiplier so the receipt can show an "est. <base>" value
+    // alongside each amount.
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final baseCode =
+        converter?.base ?? ref.watch(currencyCodeProvider).valueOrNull ?? 'MYR';
+    double? fxToBase;
+    String? baseSymbol;
+    if (converter != null && widget.bill.currency != baseCode) {
+      final one = converter.toBase(1.0, widget.bill.currency);
+      if (one > 0) {
+        fxToBase = one;
+        baseSymbol = ref.watch(currencySymbolProvider).valueOrNull ?? baseCode;
+      }
+    }
 
     return Scaffold(
       backgroundColor: bg,
@@ -148,7 +170,12 @@ class _BillReceiptScreenState extends ConsumerState<BillReceiptScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                       child: RepaintBoundary(
                         key: _receiptKey,
-                        child: _ReceiptCard(bill: widget.bill, userName: userName),
+                        child: _ReceiptCard(
+                          bill: widget.bill,
+                          userName: userName,
+                          fxToBase: fxToBase,
+                          baseSymbol: baseSymbol,
+                        ),
                       ),
                     ),
                   ),
@@ -201,8 +228,26 @@ class _BillReceiptScreenState extends ConsumerState<BillReceiptScreen> {
 class _ReceiptCard extends StatelessWidget {
   final SplitBill bill;
   final String userName;
+  // When the bill currency differs from the base currency, [fxToBase] is the
+  // multiplier (base = entry × fxToBase) and [baseSymbol] the base symbol.
+  final double? fxToBase;
+  final String? baseSymbol;
 
-  const _ReceiptCard({required this.bill, this.userName = ''});
+  const _ReceiptCard({
+    required this.bill,
+    this.userName = '',
+    this.fxToBase,
+    this.baseSymbol,
+  });
+
+  // Returns the "est. <base> <amount>" tail for [amountInEntry], or null when
+  // the bill is already in the base currency.
+  String? _est(double amountInEntry) {
+    final fx = fxToBase;
+    final sym = baseSymbol;
+    if (fx == null || sym == null) return null;
+    return 'est. $sym ${(amountInEntry * fx).toStringAsFixed(2)}';
+  }
 
   String _resolveName(String name) {
     if (name == 'You' && userName.isNotEmpty) return userName;
@@ -369,6 +414,7 @@ class _ReceiptCard extends StatelessWidget {
                   value:
                       '${bill.currencySymbol} ${bill.totalAmount.toStringAsFixed(2)}',
                   color: _ink,
+                  sub: _est(bill.totalAmount),
                 ),
                 const SizedBox(height: 5),
                 _AmountRow(
@@ -377,6 +423,7 @@ class _ReceiptCard extends StatelessWidget {
                       '${bill.currencySymbol} ${bill.outstanding.toStringAsFixed(2)}',
                   color: _green,
                   large: true,
+                  sub: _est(bill.outstanding),
                 ),
               ],
             ),
@@ -433,14 +480,28 @@ class _ReceiptCard extends StatelessWidget {
                       style: const TextStyle(fontSize: 12, color: _ink),
                     ),
                   ),
-                  Text(
-                    '${bill.currencySymbol} ${member.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _ink,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${bill.currencySymbol} ${member.amount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      if (_est(member.amount) != null)
+                        Text(
+                          _est(member.amount)!,
+                          style: const TextStyle(
+                            fontSize: 8,
+                            color: _ink60,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -554,36 +615,56 @@ class _AmountRow extends StatelessWidget {
   final String value;
   final Color color;
   final bool large;
+  final String? sub;
 
   const _AmountRow({
     required this.label,
     required this.value,
     required this.color,
     this.large = false,
+    this.sub,
   });
 
   @override
   Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 7,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: _ink60,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 7,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: _ink60,
+            ),
           ),
         ),
       ),
-      Text(
-        value,
-        style: TextStyle(
-          fontSize: large ? 15 : 12,
-          fontWeight: large ? FontWeight.w800 : FontWeight.w600,
-          color: color,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: large ? 15 : 12,
+              fontWeight: large ? FontWeight.w800 : FontWeight.w600,
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          if (sub != null)
+            Text(
+              sub!,
+              style: const TextStyle(
+                fontSize: 8,
+                color: _ink60,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+        ],
       ),
     ],
   );

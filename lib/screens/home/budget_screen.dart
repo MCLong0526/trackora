@@ -7,8 +7,8 @@ import 'package:intl/intl.dart';
 import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/expense.dart';
-import '../../models/group_expense_item.dart';
 import '../../models/precious_metal.dart';
+import '../../models/stock_investment.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
@@ -336,20 +336,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final visible = ref.watch(balanceVisibleProvider);
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
 
-    // Include group expenses paid via an account in the balance calculation.
-    final activeGroupId = ref.watch(activeGroupIdProvider);
-    final currentUserId = user?.uid;
-    final allGroupExpenses = activeGroupId != null
-        ? (ref.watch(groupExpensesProvider(activeGroupId)).valueOrNull ?? const <GroupExpenseItem>[])
-        : const <GroupExpenseItem>[];
-    final myGroupExpenses = allGroupExpenses
-        .where((e) => e.paidByAccountId != null &&
-            (currentUserId == null || e.paidBy == currentUserId))
-        .toList();
     final metals =
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
-    final accountBalances =
-        _computeBalances(accounts, allExpenses, myGroupExpenses, metals);
+    final stocks =
+        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    // Account balances use the shared canonical calculation so Budget tallies
+    // with Manage / Summary / Profile (includes metals & stocks).
+    final accountBalances = computeAccountBalanceMap(accounts, allExpenses,
+        metals: metals, stocks: stocks);
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)
@@ -1015,59 +1009,3 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
   }
 }
 
-// ── Account balance helpers (mirrors assets_screen logic) ──────
-
-double _effectiveAmountForAccount(
-  Expense expense,
-  String? accountCurrencyCode,
-) {
-  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
-  return expense.convertedAmount;
-}
-
-Map<String, double> _computeBalances(
-  List<Account> accounts,
-  List<Expense> expenses,
-  List<GroupExpenseItem> groupExpenses,
-  List<PreciousMetal> metals,
-) {
-  final currencyCodes = <String, String?>{
-    for (final a in accounts) a.id: a.currencyCode,
-  };
-  final balances = <String, double>{
-    for (final a in accounts) a.id: a.openingBalance,
-  };
-  for (final expense in expenses) {
-    final from = expense.accountId;
-    if (from != null && balances.containsKey(from)) {
-      final amt = _effectiveAmountForAccount(expense, currencyCodes[from]);
-      if (expense.type.isInflow) {
-        balances[from] = (balances[from] ?? 0) + amt;
-      } else {
-        balances[from] = (balances[from] ?? 0) - amt;
-      }
-    }
-    final to = expense.toAccountId;
-    if (to != null && balances.containsKey(to)) {
-      balances[to] = (balances[to] ?? 0) +
-          _effectiveAmountForAccount(expense, currencyCodes[to]);
-    }
-  }
-  // Deduct group expenses from the paying account balance.
-  for (final ge in groupExpenses) {
-    final aid = ge.paidByAccountId!;
-    if (balances.containsKey(aid)) {
-      balances[aid] = (balances[aid] ?? 0) - ge.amount;
-    }
-  }
-  // Precious metal transactions linked to an account: buy = money out,
-  // sell = money in.
-  for (final m in metals) {
-    final aid = m.accountId;
-    if (aid != null && balances.containsKey(aid)) {
-      balances[aid] = (balances[aid] ?? 0) +
-          (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
-    }
-  }
-  return balances;
-}

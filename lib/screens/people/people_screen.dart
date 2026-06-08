@@ -7,6 +7,7 @@ import '../../models/person.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/person_avatar.dart';
 import 'add_edit_person_screen.dart';
 
@@ -121,42 +122,41 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
           ),
           // List
           Expanded(
-            child: Stack(
-              children: [
-                async.when(
-                  loading: () => const Center(child: CupertinoActivityIndicator()),
-                  error: (e, _) => Center(child: Text('Error: $e')),
-                  data: (all) {
-                    final list = _filtered(all);
-                    if (all.isEmpty) {
-                      return _EmptyState(onAdd: () => _openAdd(context));
-                    }
-                    if (list.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'No results',
-                          style: TextStyle(color: brand.inkSoft),
-                        ),
-                      );
-                    }
-                    return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      itemCount: list.length,
-                      separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
-                      itemBuilder: (ctx, i) => _PersonSwipeActions(
-                        person: list[i],
-                        userId: user?.uid,
-                        coordinator: _coordinator,
-                        onEdit: () => _openEdit(context, list[i]),
-                        child: _PersonCard(
-                          person: list[i],
-                          onTap: () => _openEdit(context, list[i]),
-                        ),
+            child: FadingEdgeList(
+              fadeColor: brand.background,
+              child: async.when(
+                loading: () => const Center(child: CupertinoActivityIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
+                data: (all) {
+                  final list = _filtered(all);
+                  if (all.isEmpty) {
+                    return _EmptyState(onAdd: () => _openAdd(context));
+                  }
+                  if (list.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No results',
+                        style: TextStyle(color: brand.inkSoft),
                       ),
                     );
-                  },
-                ),
-              ],
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    itemCount: list.length,
+                    separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
+                    itemBuilder: (ctx, i) => _PersonSwipeActions(
+                      person: list[i],
+                      userId: user?.uid,
+                      coordinator: _coordinator,
+                      onEdit: () => _openEdit(context, list[i]),
+                      child: _PersonCard(
+                        person: list[i],
+                        onTap: () => _openEdit(context, list[i]),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -834,10 +834,20 @@ class _PersonOrNamePickerSheetState
                         ),
                         Row(
                           children: [
-                            _tabChip('New', _showNew, brand,
-                                () => setState(() { _showNew = true; _searchCtrl.clear(); })),
-                            _tabChip('From Contacts', !_showNew, brand,
-                                () => setState(() { _showNew = false; })),
+                            _tabChip('New', _showNew, brand, () {
+                              // Dismiss the keyboard first so the height change
+                              // animates smoothly instead of fighting the
+                              // keyboard inset.
+                              FocusScope.of(context).unfocus();
+                              setState(() {
+                                _showNew = true;
+                                _searchCtrl.clear();
+                              });
+                            }),
+                            _tabChip('From Contacts', !_showNew, brand, () {
+                              FocusScope.of(context).unfocus();
+                              setState(() => _showNew = false);
+                            }),
                           ],
                         ),
                       ],

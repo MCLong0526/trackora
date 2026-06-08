@@ -185,7 +185,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             final updatedExp = Expense(
               id: oldExpenseId,
               amount: total,
-              category: 'Precious Metals',
+              category: 'PreciousMetal',
               note: expenseNote,
               date: _date,
               type: entryType,
@@ -200,7 +200,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
             final newExp = Expense(
               id: expId,
               amount: total,
-              category: 'Precious Metals',
+              category: 'PreciousMetal',
               note: expenseNote,
               date: _date,
               type: entryType,
@@ -246,7 +246,7 @@ class _State extends ConsumerState<AddEditMetalScreen> {
           final newExp = Expense(
             id: expId,
             amount: total,
-            category: 'Precious Metals',
+            category: 'PreciousMetal',
             note: expenseNote,
             date: _date,
             type: entryType,

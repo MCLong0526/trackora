@@ -10,6 +10,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/section_card.dart';
 import 'add_edit_installment_screen.dart';
 import 'installment_detail_screen.dart';
@@ -102,87 +103,103 @@ class _InstallmentsScreenState extends ConsumerState<InstallmentsScreen> {
                   item.status == InstallmentStatus.cancelled,
               }).toList();
 
-              return Stack(
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                children: [
-                  _SummaryCard(items: items, symbol: symbol),
-                  const SizedBox(height: 14),
-                  _InstallFilterSegment(
-                    selected: _filter,
-                    onSelected: (f) => setState(() => _filter = f),
+                  // Fixed header (summary + filter) — does not scroll
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _SummaryCard(items: items, symbol: symbol),
+                        const SizedBox(height: 14),
+                        _InstallFilterSegment(
+                          selected: _filter,
+                          onSelected: (f) => setState(() => _filter = f),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 18),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, anim) =>
-                        FadeTransition(opacity: anim, child: child),
-                    child: filtered.isEmpty
-                        ? Padding(
-                            key: ValueKey('empty-${_filter.name}'),
-                            padding: const EdgeInsets.symmetric(vertical: 40),
-                            child: Center(
-                              child: Text(
-                                'No ${_filter.name} installments',
-                                style: TextStyle(
-                                  color: brand.inkSoft,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          )
-                        : Column(
-                            key: ValueKey(_filter),
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: brand.surface,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Column(
+                  // Scrollable list only, with fade edges
+                  Expanded(
+                    child: FadingEdgeList(
+                      fadeColor: brand.background,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, anim) =>
+                                FadeTransition(opacity: anim, child: child),
+                            child: filtered.isEmpty
+                                ? Padding(
+                                    key: ValueKey('empty-${_filter.name}'),
+                                    padding: const EdgeInsets.symmetric(vertical: 40),
+                                    child: Center(
+                                      child: Text(
+                                        'No ${_filter.name} installments',
+                                        style: TextStyle(
+                                          color: brand.inkSoft,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : Column(
+                                    key: ValueKey(_filter),
                                     children: [
-                                      for (int i = 0; i < filtered.length; i++) ...[
-                                        _InstallmentSwipeActions(
-                                          installment: filtered[i],
-                                          userId: user?.uid,
-                                          coordinator: _coordinator,
-                                          child: _InstallmentRow(
-                                            installment: filtered[i],
-                                            symbol: symbol,
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              CupertinoPageRoute(
-                                                builder: (_) =>
-                                                    InstallmentDetailScreen(
-                                                  installmentId: filtered[i].id,
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: brand.surface,
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(20),
+                                          child: Column(
+                                            children: [
+                                              for (int i = 0; i < filtered.length; i++) ...[
+                                                _InstallmentSwipeActions(
+                                                  installment: filtered[i],
+                                                  userId: user?.uid,
+                                                  coordinator: _coordinator,
+                                                  child: _InstallmentRow(
+                                                    installment: filtered[i],
+                                                    symbol: symbol,
+                                                    onTap: () => Navigator.push(
+                                                      context,
+                                                      CupertinoPageRoute(
+                                                        builder: (_) =>
+                                                            InstallmentDetailScreen(
+                                                          installmentId: filtered[i].id,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
+                                                if (i < filtered.length - 1)
+                                                  Divider(
+                                                    height: 1,
+                                                    color: brand.divider,
+                                                    indent: 16,
+                                                    endIndent: 0,
+                                                  ),
+                                              ],
+                                            ],
                                           ),
                                         ),
-                                        if (i < filtered.length - 1)
-                                          Divider(
-                                            height: 1,
-                                            color: brand.divider,
-                                            indent: 16,
-                                            endIndent: 0,
-                                          ),
-                                      ],
+                                      ),
                                     ],
                                   ),
-                                ),
-                              ),
-                            ],
                           ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
                 ],
               );
             },
@@ -515,7 +532,7 @@ class _InstallmentRow extends StatelessWidget {
                   ),
                 ],
               ),
-              // Progress bar for fixed-term active plans
+              // Progress bar + stats for fixed-term active plans
               if (!i.isLifetime && isActive) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
@@ -526,6 +543,28 @@ class _InstallmentRow extends StatelessWidget {
                     backgroundColor: brand.divider,
                     valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
                   ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      '${i.paidCount}/${i.totalMonths ?? 0} paid',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${formatMoney(symbol, i.totalRemaining ?? 0)} left',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
@@ -542,17 +581,11 @@ class _InstallmentRow extends StatelessWidget {
       case InstallmentStatus.completed:
         return context.t('inst.completedLine');
       case InstallmentStatus.active:
-        if (i.isLifetime) {
-          final next = i.nextDueDate();
-          if (next != null) {
-            return context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next));
-          }
-          return context.t('inst.statusLifetime');
+        final next = i.nextDueDate();
+        if (next != null) {
+          return context.t('inst.nextDue').replaceFirst('{date}', DateFormat('MMM d').format(next));
         }
-        final paid = i.paidCount;
-        final total = i.totalMonths ?? 0;
-        final rem = i.totalRemaining ?? 0;
-        return '$paid/$total paid · ${formatMoney(symbol, rem)} left';
+        return context.t('inst.statusLifetime');
     }
   }
 }

@@ -159,6 +159,11 @@ class LocalExpenseGroupRepository implements ExpenseGroupRepository {
         .toList();
     final uids = List<String>.from(data['memberUids'] as List? ?? [])
       ..remove(userId);
+    // Transfer ownership when the leaver was the creator and others remain.
+    if (data['createdBy'] == userId && members.isNotEmpty) {
+      final newOwnerUid = members.first['uid'] as String?;
+      if (newOwnerUid != null) data['createdBy'] = newOwnerUid;
+    }
     data['members'] = members;
     data['memberUids'] = uids;
     data['updatedAt'] = DateTime.now().toIso8601String();

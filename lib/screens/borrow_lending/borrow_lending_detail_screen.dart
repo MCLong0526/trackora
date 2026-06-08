@@ -631,7 +631,7 @@ class _RepaymentCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
+          // Header row with prominent pill button
           Row(
             children: [
               Text(
@@ -645,29 +645,71 @@ class _RepaymentCard extends ConsumerWidget {
               ),
               const Spacer(),
               if (canAddRepayment)
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 0),
-                  onPressed: () => _addRepayment(context, ref),
-                  child: Text(
-                    context.t('bl.addRepayment'),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                GestureDetector(
+                  onTap: () => _addRepayment(context, ref),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppActionBlue.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(CupertinoIcons.plus, size: 12, color: AppActionBlue.color),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.t('bl.addRepayment'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppActionBlue.color,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
-          // Empty state
+          const SizedBox(height: 10),
+          // Empty state with clear hint
           if (record.repayments.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text(
-                context.t('bl.noRepayments'),
-                style:
-                    TextStyle(color: brand.inkSoft, fontSize: 13),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: brand.background,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(CupertinoIcons.arrow_uturn_left, size: 16, color: brand.inkSoft),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.t('bl.noRepayments'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: brand.ink,
+                          ),
+                        ),
+                        if (canAddRepayment)
+                          Text(
+                            'Tap "+ ${context.t('bl.addRepayment')}" above to record one',
+                            style: TextStyle(fontSize: 11, color: brand.inkSoft),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             )
           else

@@ -11,6 +11,7 @@ import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/currency_picker.dart';
+import 'travel_categories.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -67,27 +68,9 @@ class _AddTravelExpenseScreenState
 
   bool get _isEdit => widget.expense != null;
 
-  static const _categories = [
-    'food', 'transport', 'accommodation', 'activities', 'shopping', 'general',
-  ];
-
-  static const _catIcons = <String, IconData>{
-    'food': CupertinoIcons.cart_fill,
-    'transport': CupertinoIcons.car_fill,
-    'accommodation': CupertinoIcons.house_fill,
-    'activities': CupertinoIcons.star_fill,
-    'shopping': CupertinoIcons.bag_fill,
-    'general': CupertinoIcons.square_grid_2x2_fill,
-  };
-
-  static const _catColors = <String, Color>{
-    'food': Color(0xFFFF9500),
-    'transport': Color(0xFF3478F6),
-    'accommodation': Color(0xFF5856D6),
-    'activities': Color(0xFFFF2D55),
-    'shopping': Color(0xFF34C759),
-    'general': Color(0xFF8E8E93),
-  };
+  static const _categories = kTravelCategories;
+  static const _catIcons = kTravelCatIcons;
+  static const _catColors = kTravelCatColors;
 
   @override
   void initState() {
@@ -835,9 +818,19 @@ class _AddTravelExpenseScreenState
                                                   decimal: true),
                                               textAlign: TextAlign.right,
                                               decoration: InputDecoration(
+                                                filled: true,
+                                                fillColor: border.withValues(alpha: 0.18),
                                                 border: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(8),
-                                                  borderSide: BorderSide(color: border),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                enabledBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: BorderSide.none,
+                                                ),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderSide: BorderSide.none,
                                                 ),
                                                 contentPadding: const EdgeInsets.symmetric(
                                                     horizontal: 10, vertical: 8),

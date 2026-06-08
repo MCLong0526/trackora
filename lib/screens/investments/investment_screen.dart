@@ -117,12 +117,11 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                 ],
               ),
             ),
-            // Scrollable content with top fade
+            // Static content — does not scroll
             Expanded(
-              child: Stack(
-                children: [
-                  CustomScrollView(
-                    slivers: [
+              child: CustomScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                slivers: [
             // ── Hero section ───────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
@@ -326,10 +325,8 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                 ]),
               ),
             ),
-                    ],
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ),
           ],
         ),

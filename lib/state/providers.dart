@@ -455,11 +455,30 @@ double _effectiveAmount(Expense expense, String? accountCurrencyCode) {
   return expense.convertedAmount;
 }
 
+/// Amount of a stock transaction map (qty × price), in the tx's own currency.
+double stockTxnAmount(Map<String, dynamic> tx) {
+  final qty = (tx['qty'] as num?)?.toDouble() ?? 0;
+  final price = (tx['price'] as num?)?.toDouble() ?? 0;
+  return qty * price;
+}
+
 /// Per-account raw balance map (in each account's own currency).
+///
+/// This is the single source of truth for account balances — every screen
+/// (Manage, Summary, Profile, Home total) must use it so the numbers tally.
+/// It applies, per account:
+///  • opening balance,
+///  • expenses (income +, expense/transfer −) and transfers in (toAccountId +),
+///  • precious-metal buys/sells that have NO linked expense (those that do are
+///    already counted via that expense — avoids double-counting),
+///  • stock buys/sells paid from the account (stocks never create a linked
+///    expense, so they must be applied here).
 Map<String, double> computeAccountBalanceMap(
   List<Account> accounts,
-  List<Expense> all,
-) {
+  List<Expense> all, {
+  List<PreciousMetal> metals = const [],
+  List<StockInvestment> stocks = const [],
+}) {
   final currencyCodes = <String, String?>{
     for (final a in accounts) a.id: a.currencyCode,
   };
@@ -483,6 +502,25 @@ Map<String, double> computeAccountBalanceMap(
           (balances[toId] ?? 0) + _effectiveAmount(e, currencyCodes[toId]);
     }
   }
+  for (final m in metals) {
+    final aid = m.accountId;
+    if (aid != null &&
+        balances.containsKey(aid) &&
+        (m.expenseId == null || m.expenseId!.isEmpty)) {
+      balances[aid] = (balances[aid] ?? 0) +
+          (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
+    }
+  }
+  for (final s in stocks) {
+    for (final tx in s.transactions) {
+      final aid = tx['accountId'] as String?;
+      if (aid != null && balances.containsKey(aid)) {
+        final amt = stockTxnAmount(tx);
+        final isSell = (tx['type'] as String?) == 'sell';
+        balances[aid] = (balances[aid] ?? 0) + (isSell ? amt : -amt);
+      }
+    }
+  }
   return balances;
 }
 
@@ -496,7 +534,10 @@ final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
 
   final converter = ref.watch(currencyConverterProvider).valueOrNull;
   final mainCode = converter?.base;
-  final balances = computeAccountBalanceMap(accounts, all);
+  final metals = ref.watch(preciousMetalsProvider).valueOrNull ?? const [];
+  final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? const [];
+  final balances =
+      computeAccountBalanceMap(accounts, all, metals: metals, stocks: stocks);
 
   double total = 0;
   for (final a in accounts) {
@@ -1059,19 +1100,38 @@ final expenseGroupServiceProvider = Provider<ExpenseGroupService>((ref) {
 
 final myGroupsProvider = StreamProvider.autoDispose<List<ExpenseGroup>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
+  // Reset the removed-group filter whenever the logged-in user changes so
+  // that a previous user's "left group" filter doesn't bleed into another
+  // user's session on the same device.
+  ref.listen(authStateProvider, (prev, next) {
+    final prevUid = prev?.valueOrNull?.uid;
+    final nextUid = next.valueOrNull?.uid;
+    if (prevUid != nextUid) {
+      ref.read(removedExpenseGroupIdsProvider.notifier).state = const {};
+    }
+  });
   final removedGroupIds = ref.watch(removedExpenseGroupIdsProvider);
   if (user == null) return Stream.value(const []);
+  // Pending offline group-delete and group-leave IDs — filter these out so
+  // the UI immediately hides them even before the Firebase sync runs.
+  final pendingDeletes =
+      SyncService.getEntityPendingDeleteIds(user.uid, 'group_delete').toSet();
+  final pendingLeaves =
+      SyncService.getEntityPendingDeleteIds(user.uid, 'group_leave').toSet();
   final stream = ref
       .watch(expenseGroupServiceProvider)
       .getGroups(user.uid)
       .map(
         (groups) => groups
-            .where((group) => !removedGroupIds.contains(group.id))
+            .where((g) => !removedGroupIds.contains(g.id))
+            .where((g) => !pendingDeletes.contains(g.id))
+            .where((g) => !pendingLeaves.contains(g.id))
             .toList(),
       );
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((groups) async {
       final local = LocalExpenseGroupRepository();
+      // Only write to Hive groups that are still active for this user.
       for (final g in groups) {
         if (g.id.isNotEmpty) await local.updateGroup(g);
       }
@@ -1130,10 +1190,18 @@ final quickAddOrderProvider =
 final groupExpenseSyncProvider =
     StreamProvider.family.autoDispose<void, String>((ref, groupId) {
       if (storageMode != StorageMode.firebase) return Stream.value(null);
+      final user = ref.watch(authStateProvider).valueOrNull;
       final firebaseRepo = FirebaseExpenseGroupRepository();
       final localRepo = LocalExpenseGroupRepository();
       return firebaseRepo.getExpenses(groupId).asyncMap((expenses) async {
+        // Tombstone: skip any expense the user deleted offline so Firebase
+        // doesn't re-create it in local Hive before sync has pushed the delete.
+        final uid = user?.uid ?? '';
+        final pendingDeletes = uid.isNotEmpty
+            ? SyncService.getEntityPendingDeleteIds(uid, 'group_expense').toSet()
+            : const <String>{};
         for (final e in expenses) {
+          if (pendingDeletes.contains('$groupId:${e.id}')) continue;
           try {
             await localRepo.addExpense(e);
           } catch (_) {}

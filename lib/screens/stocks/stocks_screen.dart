@@ -14,6 +14,7 @@ import '../../services/stock_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import 'stock_detail_screen.dart';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
@@ -203,7 +204,9 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       child: Scaffold(
       backgroundColor: brand.background,
       body: SafeArea(
-        child: CustomScrollView(
+        child: FadingEdgeList(
+          fadeColor: brand.background,
+          child: CustomScrollView(
           slivers: [
             // ── App bar ────────────────────────────────────────────────────
             SliverToBoxAdapter(
@@ -492,6 +495,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               ),
           ],
         ),
+        ),
       ),
       ),
     );
@@ -596,7 +600,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       builder: (_) => _BuyStockSheet(
         result: result,
         quote: quote,
-        onSave: (investment) async {
+        onSave: (investment, accountId) async {
           final user = ref.read(authStateProvider).valueOrNull;
           if (user == null) return;
           try {
@@ -613,6 +617,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               'price': investment.buyPrice,
               'currency': investment.currency ?? 'USD',
               'type': 'buy',
+              if (accountId != null) 'accountId': accountId,
             };
             if (existing != null) {
               final merged = existing.copyWith(
@@ -2760,7 +2765,7 @@ class _TopMatchCard extends StatelessWidget {
 class _BuyStockSheet extends ConsumerStatefulWidget {
   final StockSearchResult result;
   final StockQuote? quote;
-  final Future<void> Function(StockInvestment) onSave;
+  final Future<void> Function(StockInvestment, String? accountId) onSave;
 
   const _BuyStockSheet({
     required this.result,
@@ -2843,7 +2848,9 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
       updatedAt: now,
     );
     try {
-      await widget.onSave(investment).timeout(const Duration(seconds: 10));
+      await widget
+          .onSave(investment, _selectedAccount?.id)
+          .timeout(const Duration(seconds: 10));
       if (mounted) Navigator.pop(context);
     } catch (_) {
       if (mounted) {

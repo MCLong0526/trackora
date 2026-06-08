@@ -11,10 +11,12 @@ import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
 import '../../services/travel_group_service.dart';
 import '../../state/providers.dart';
+import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/app_toast.dart';
 import 'add_edit_travel_group_screen.dart';
 import 'add_travel_expense_screen.dart';
 import 'settlement_screen.dart';
+import 'travel_categories.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -259,6 +261,17 @@ class _TravelGroupDetailScreenState
     final totalSpent = expenses.fold<double>(0.0, (s, e) => s + e.amountInGroupCurrency);
     final memberMap = {for (final m in members) m.id: m};
 
+    // Estimated value in the user's main currency, shown when the trip's
+    // currency differs from the user's base currency.
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = converter?.base;
+    final showMainEst = converter != null &&
+        mainCode != null &&
+        mainCode != widget.group.currency;
+    String? mainEst(double amountInGroupCurrency) => showMainEst
+        ? '≈ $mainCode ${fmt.format(converter.toBase(amountInGroupCurrency, widget.group.currency))} est.'
+        : null;
+
     // Day info
     final now = DateTime.now();
     final dayNum = now.difference(widget.group.startDate).inDays + 1;
@@ -350,6 +363,7 @@ class _TravelGroupDetailScreenState
                           value: '${widget.group.currency} ${fmt.format(totalSpent)}',
                           valueColor: null,
                           isDark: isDark,
+                          sub: mainEst(totalSpent),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -367,6 +381,7 @@ class _TravelGroupDetailScreenState
                               ? null
                               : myBalance.net >= 0 ? _green : _red,
                           isDark: isDark,
+                          sub: myBalance == null ? null : mainEst(myBalance.net.abs()),
                         ),
                       ),
                     ],
@@ -417,6 +432,24 @@ class _TravelGroupDetailScreenState
                           );
                         }).toList(),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // ── BY CATEGORY chart ────────────────────────────────────────
+                if (!expensesAsync.isLoading && expenses.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(26, 0, 22, 10),
+                    child: Text('BY CATEGORY', style: _eyebrow()),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _CategoryChart(
+                      expenses: expenses,
+                      currency: widget.group.currency,
+                      fmt: fmt,
+                      isDark: isDark,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -501,6 +534,7 @@ class _TravelGroupDetailScreenState
                                   splitLabel: splitLabel,
                                   balanceText: balanceText,
                                   balanceColor: balanceColor,
+                                  mainCurrencyEst: mainEst(expense.amountInGroupCurrency),
                                   isLast: idx == dayExpenses.length - 1,
                                   isDark: isDark,
                                   onTap: () => Navigator.push(
@@ -548,12 +582,14 @@ class _StatsCard extends StatelessWidget {
   final String value;
   final Color? valueColor;
   final bool isDark;
+  final String? sub;
 
   const _StatsCard({
     required this.label,
     required this.value,
     required this.valueColor,
     required this.isDark,
+    this.sub,
   });
 
   @override
@@ -578,7 +614,110 @@ class _StatsCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          if (sub != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              sub!,
+              style: _body(11, color: _ink48),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// ── By-category chart ─────────────────────────────────────────────────────────
+
+class _CategoryChart extends StatelessWidget {
+  final List<TravelExpense> expenses;
+  final String currency;
+  final NumberFormat fmt;
+  final bool isDark;
+
+  const _CategoryChart({
+    required this.expenses,
+    required this.currency,
+    required this.fmt,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totals = <String, double>{};
+    for (final e in expenses) {
+      totals[e.category] =
+          (totals[e.category] ?? 0) + e.amountInGroupCurrency;
+    }
+    final entries = totals.entries.where((e) => e.value > 0).toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    if (entries.isEmpty) return const SizedBox.shrink();
+    final total = entries.fold<double>(0, (s, e) => s + e.value);
+    final segments = [
+      for (final e in entries)
+        DonutSegment(value: e.value, color: travelCatColor(e.key)),
+    ];
+
+    return _Card(
+      isDark: isDark,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Row(
+          children: [
+            AnimatedDonutChart(
+              segments: segments,
+              size: 104,
+              strokeWidth: 20,
+              centerChild: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${entries.length}', style: _display(18, tracking: -0.3)),
+                  Text('cats', style: _body(10, color: _ink48)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                children: [
+                  for (final e in entries.take(5))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: travelCatColor(e.key).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Icon(travelCatIcon(e.key),
+                                size: 12, color: travelCatColor(e.key)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              travelCatLabel(e.key),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _body(13, weight: FontWeight.w500),
+                            ),
+                          ),
+                          Text(
+                            '${total > 0 ? (e.value / total * 100).round() : 0}%',
+                            style: _body(12, color: _ink48),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -678,6 +817,7 @@ class _ExpenseRow extends StatelessWidget {
   final String splitLabel;
   final String balanceText;
   final Color balanceColor;
+  final String? mainCurrencyEst;
   final bool isLast;
   final bool isDark;
   final VoidCallback onTap;
@@ -690,29 +830,16 @@ class _ExpenseRow extends StatelessWidget {
     required this.splitLabel,
     required this.balanceText,
     required this.balanceColor,
+    this.mainCurrencyEst,
     required this.isLast,
     required this.isDark,
     required this.onTap,
     required this.onDelete,
   });
 
-  static const _catIcons = <String, IconData>{
-    'food': CupertinoIcons.cart_fill,
-    'transport': CupertinoIcons.car_fill,
-    'accommodation': CupertinoIcons.house_fill,
-    'activities': CupertinoIcons.star_fill,
-    'shopping': CupertinoIcons.bag_fill,
-    'general': CupertinoIcons.square_grid_2x2_fill,
-  };
+  static const _catIcons = kTravelCatIcons;
 
-  static const _catColors = <String, Color>{
-    'food': Color(0xFFFF9500),
-    'transport': Color(0xFF3478F6),
-    'accommodation': Color(0xFF5856D6),
-    'activities': Color(0xFFFF2D55),
-    'shopping': Color(0xFF34C759),
-    'general': Color(0xFF8E8E93),
-  };
+  static const _catColors = kTravelCatColors;
 
   @override
   Widget build(BuildContext context) {
@@ -778,6 +905,21 @@ class _ExpenseRow extends StatelessWidget {
                     children: [
                       Text('${expense.currencyCode ?? currency} ${fmt.format(expense.amount)}',
                           style: _body(15, weight: FontWeight.w600)),
+                      // Estimated value in the group's currency when the
+                      // expense was recorded in a different currency.
+                      if (expense.currencyCode != null &&
+                          expense.currencyCode != currency) ...[
+                        const SizedBox(height: 2),
+                        Text('≈ $currency ${fmt.format(expense.amountInGroupCurrency)} est.',
+                            style: _body(11, color: _ink48)),
+                      ],
+                      // Estimated value in the user's main currency when the
+                      // trip currency differs from it.
+                      if (mainCurrencyEst != null) ...[
+                        const SizedBox(height: 2),
+                        Text(mainCurrencyEst!,
+                            style: _body(11, color: _ink48)),
+                      ],
                       if (balanceText.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(balanceText,

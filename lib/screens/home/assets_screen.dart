@@ -61,6 +61,8 @@ class AssetsScreen extends ConsumerWidget {
       savingPlans: savingPlans,
       borrowLending: borrowLending,
       installments: installments,
+      metals: metals,
+      stocks: stocks,
       converter: converter,
       mainCode: mainCode,
     );
@@ -550,6 +552,15 @@ class _NetWorthDetailSheet extends StatelessWidget {
           ));
         }
       }
+      if (snapshot.investmentsValue > 0) {
+        assetRows.add((
+          label: context.t('asset.investmentsItem'),
+          amount: snapshot.investmentsValue,
+          icon: CupertinoIcons.chart_pie_fill,
+          bg: const Color(0xFFEDE7F6),
+          color: const Color(0xFF673AB7),
+        ));
+      }
       if (snapshot.totalLent > 0) {
         assetRows.add((
           label: context.t('asset.lentOut'),
@@ -801,6 +812,7 @@ class _AssetSnapshot {
   final double savingPlanSaved;
   final List<Installment> activeInstallments;
   final double? installmentLiability;
+  final double investmentsValue;
   final double weeklyChange;
   final bool hasMultiCurrency;
 
@@ -817,6 +829,7 @@ class _AssetSnapshot {
     required this.savingPlanSaved,
     required this.activeInstallments,
     required this.installmentLiability,
+    required this.investmentsValue,
     required this.weeklyChange,
     this.hasMultiCurrency = false,
   });
@@ -827,10 +840,13 @@ class _AssetSnapshot {
     required List<SavingPlan> savingPlans,
     required List<BorrowLending> borrowLending,
     required List<Installment> installments,
+    List<PreciousMetal> metals = const [],
+    List<StockInvestment> stocks = const [],
     CurrencyConverter? converter,
     String? mainCode,
   }) {
-    final balances = _computeBalances(accounts, expenses);
+    final balances = computeAccountBalanceMap(accounts, expenses,
+        metals: metals, stocks: stocks);
 
     double toBase(Account a, double bal) {
       final code = a.currencyCode ?? mainCode;
@@ -898,7 +914,22 @@ class _AssetSnapshot {
       }
     }
 
-    final totalAssets = accountAssetsSum + totalLent;
+    // Investment holdings (stock cost basis + precious-metal value), in the
+    // base currency. Account cash already dropped when these were bought, so
+    // adding the holding value back keeps net worth whole (cash → asset).
+    double investmentsValue = 0;
+    for (final s in stocks) {
+      final v = s.totalCost;
+      final code = s.currency ?? mainCode;
+      investmentsValue += (converter != null && code != null && code != mainCode)
+          ? converter.toBase(v, code)
+          : v;
+    }
+    for (final m in metals) {
+      investmentsValue += m.weightGrams * (m.pricePerGram ?? 0);
+    }
+
+    final totalAssets = accountAssetsSum + totalLent + investmentsValue;
     final totalLiabilities = accountLiabilitiesSum + totalBorrowed +
         (installmentLiability ?? 0);
     final netWorth = totalAssets - totalLiabilities;
@@ -927,6 +958,7 @@ class _AssetSnapshot {
       savingPlanSaved: savingPlanSaved,
       activeInstallments: activeInstallments,
       installmentLiability: installmentLiability,
+      investmentsValue: investmentsValue,
       weeklyChange: weeklyChange,
       hasMultiCurrency: multiCurrency,
     );
@@ -939,38 +971,3 @@ class _AccountAsset {
   const _AccountAsset({required this.account, required this.balance});
 }
 
-// ── Balance computation ───────────────────────────────────────────────────────
-
-double _effectiveAmountForAccount(Expense expense, String? accountCurrencyCode) {
-  if (expense.originalCurrency == accountCurrencyCode) return expense.amount;
-  return expense.convertedAmount;
-}
-
-Map<String, double> _computeBalances(
-  List<Account> accounts,
-  List<Expense> expenses,
-) {
-  final currencyCodes = <String, String?>{
-    for (final a in accounts) a.id: a.currencyCode,
-  };
-  final balances = <String, double>{
-    for (final a in accounts) a.id: a.openingBalance,
-  };
-  for (final expense in expenses) {
-    final from = expense.accountId;
-    if (from != null && balances.containsKey(from)) {
-      final amt = _effectiveAmountForAccount(expense, currencyCodes[from]);
-      if (expense.type.isInflow) {
-        balances[from] = (balances[from] ?? 0) + amt;
-      } else {
-        balances[from] = (balances[from] ?? 0) - amt;
-      }
-    }
-    final to = expense.toAccountId;
-    if (to != null && balances.containsKey(to)) {
-      balances[to] = (balances[to] ?? 0) +
-          _effectiveAmountForAccount(expense, currencyCodes[to]);
-    }
-  }
-  return balances;
-}

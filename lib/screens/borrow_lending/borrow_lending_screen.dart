@@ -11,6 +11,7 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/person_avatar.dart';
 import 'add_edit_borrow_lending_screen.dart';
 import 'borrow_lending_detail_screen.dart';
@@ -109,82 +110,90 @@ class _BorrowLendingScreenState extends ConsumerState<BorrowLendingScreen> {
           error: (e, _) =>
               Center(child: Text('${context.t('common.error')}: $e')),
           data: (records) {
-            return Stack(
+            final filtered = records.where(_matches).toList();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              children: [
-                _SummaryRow(records: records, symbol: symbol),
-                const SizedBox(height: 14),
-                _SearchBar(
-                  controller: _searchCtrl,
-                  onChanged: (_) => setState(() {}),
+                // Fixed header (summary + search + filter) — does not scroll
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SummaryRow(records: records, symbol: symbol),
+                      const SizedBox(height: 14),
+                      _SearchBar(
+                        controller: _searchCtrl,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      _FilterChips(
+                        selected: _filter,
+                        onSelected: (f) => setState(() => _filter = f),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _FilterChips(
-                  selected: _filter,
-                  onSelected: (f) => setState(() => _filter = f),
-                ),
-                const SizedBox(height: 14),
-                if (records.isEmpty)
-                  _EmptyState(onAdd: () => _openAdd(context))
-                else ...[
-                  () {
-                    final filtered = records.where(_matches).toList();
-                    if (filtered.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(
-                          child: Text(
-                            context.t('bl.noMatch'),
-                            style: TextStyle(color: brand.inkSoft),
-                          ),
-                        ),
-                      );
-                    }
-                    return Column(
+                // Scrollable list only, with fade edges
+                Expanded(
+                  child: FadingEdgeList(
+                    fadeColor: brand.background,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                       children: [
-                        for (int i = 0; i < filtered.length; i++)
+                        if (records.isEmpty)
+                          _EmptyState(onAdd: () => _openAdd(context))
+                        else if (filtered.isEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _EntranceItem(
-                              key: ValueKey(filtered[i].id),
-                              delay: Duration(milliseconds: i * 45),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: brand.surface,
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.card,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.card,
-                                  ),
-                                  child: _BorrowSwipeActions(
-                                    record: filtered[i],
-                                    userId: user?.uid,
-                                    coordinator: _coordinator,
-                                    child: _RecordTile(
-                                      record: filtered[i],
-                                      symbol: symbol,
-                                      matchedPerson: people
-                                          .where((p) =>
-                                              p.name.toLowerCase() ==
-                                              filtered[i].person.toLowerCase())
-                                          .firstOrNull,
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Text(
+                                context.t('bl.noMatch'),
+                                style: TextStyle(color: brand.inkSoft),
+                              ),
+                            ),
+                          )
+                        else
+                          Column(
+                            children: [
+                              for (int i = 0; i < filtered.length; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _EntranceItem(
+                                    key: ValueKey(filtered[i].id),
+                                    delay: Duration(milliseconds: i * 45),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: brand.surface,
+                                        borderRadius: BorderRadius.circular(AppRadius.card),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(AppRadius.card),
+                                        child: _BorrowSwipeActions(
+                                          record: filtered[i],
+                                          userId: user?.uid,
+                                          coordinator: _coordinator,
+                                          child: _RecordTile(
+                                            record: filtered[i],
+                                            symbol: symbol,
+                                            matchedPerson: people
+                                                .where((p) =>
+                                                    p.name.toLowerCase() ==
+                                                    filtered[i].person.toLowerCase())
+                                                .firstOrNull,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
+                            ],
                           ),
                       ],
-                    );
-                  }(),
-                ],
-              ],
-            ),
+                    ),
+                  ),
+                ),
               ],
             );
           },

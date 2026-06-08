@@ -220,11 +220,67 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     });
   }
 
+  /// Merges investment activity into the expense list so it shows in the
+  /// breakdown:
+  ///  • Normalizes the legacy precious-metal category ('Precious Metals') to
+  ///    the styled key ('PreciousMetal').
+  ///  • Adds stock buys/sells that were paid from an account — unlike precious
+  ///    metals, stock transactions don't create a linked expense, so without
+  ///    this they'd never appear in the stats by-category breakdown.
+  List<Expense> _withInvestmentExpenses(List<Expense> base) {
+    final normalized = [
+      for (final e in base)
+        e.category == 'Precious Metals'
+            ? e.copyWith(category: 'PreciousMetal')
+            : e,
+    ];
+    final stocks = ref.read(stockInvestmentsProvider).valueOrNull ?? const [];
+    if (stocks.isEmpty) return normalized;
+    final converter = ref.read(currencyConverterProvider).valueOrNull;
+    final baseCode = converter?.base;
+    final pseudo = <Expense>[];
+    for (final s in stocks) {
+      for (final tx in s.transactions) {
+        final accountId = tx['accountId'] as String?;
+        if (accountId == null || accountId.isEmpty) continue;
+        final qty = (tx['qty'] as num?)?.toDouble() ?? 0;
+        final price = (tx['price'] as num?)?.toDouble() ?? 0;
+        final amount = qty * price;
+        if (amount <= 0) continue;
+        final cur = tx['currency'] as String? ?? 'USD';
+        final isSell = (tx['type'] as String?) == 'sell';
+        final date =
+            DateTime.tryParse(tx['date'] as String? ?? '') ?? s.createdAt;
+        final foreign =
+            converter != null && baseCode != null && cur != baseCode;
+        pseudo.add(Expense(
+          id: 'stock_${s.id}_${tx['date'] ?? date.toIso8601String()}',
+          amount: amount,
+          category: 'Stock',
+          note: s.symbol,
+          date: date,
+          type: isSell ? EntryType.income : EntryType.expense,
+          accountId: accountId,
+          createdAt: date,
+          updatedAt: date,
+          originalCurrency: foreign ? cur : null,
+          baseCurrencyAmount: foreign ? converter.toBase(amount, cur) : null,
+        ));
+      }
+    }
+    return [...normalized, ...pseudo];
+  }
+
   @override
   Widget build(BuildContext context) {
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
     final visibleSections = ref.watch(statsSectionsVisibilityProvider);
+    // Keep these (autoDispose) providers alive across rebuilds so the
+    // investment data merged in _withInvestmentExpenses stays available when
+    // switching period tabs — otherwise stock entries vanish on tab change.
+    ref.watch(stockInvestmentsProvider);
+    ref.watch(currencyConverterProvider);
     final range = _currentRange(context);
 
     return SafeArea(
@@ -289,7 +345,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               child: Text('${context.t('common.error')}: $e'),
             ),
           ),
-          data: (allItems) {
+          data: (rawItems) {
+            final allItems = _withInvestmentExpenses(rawItems);
             final allExpenses = allItems
                 .where((e) => e.type == EntryType.expense)
                 .toList();
@@ -482,7 +539,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final captureKey = GlobalKey();
     final mediaSize = MediaQuery.sizeOf(context);
     final brand = context.brand;
-    final allItems = ref.read(allExpensesProvider).valueOrNull ?? const [];
+    final allItems =
+        _withInvestmentExpenses(ref.read(allExpensesProvider).valueOrNull ?? const []);
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
     final visibleSections = ref.read(statsSectionsVisibilityProvider);
     final range = _currentRange(context);

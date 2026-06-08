@@ -69,7 +69,7 @@ class _AddEditSavingPlanScreenState
       }
     }
 
-    _target.addListener(_recalculateFixed);
+    _target.addListener(_onTargetChanged);
     _contribution.addListener(_onContributionChanged);
     _periodsCtrl.addListener(_onPeriodsChanged);
   }
@@ -87,6 +87,25 @@ class _AddEditSavingPlanScreenState
   }
 
   // ── Auto-fill logic ──────────────────────────────────────────
+
+  /// When the target amount changes we keep the per-period contribution the
+  /// user entered fixed and recompute the number of periods (e.g. raising the
+  /// target from 2000 → 4000 at 200/period takes the periods from 10 → 20).
+  /// Only if there is no contribution do we instead recompute the
+  /// contribution from the existing periods.
+  void _onTargetChanged() {
+    if (_isUpdating) return;
+    final contribution = double.tryParse(_contribution.text.trim());
+    final periods = int.tryParse(_periodsCtrl.text.trim());
+    if (contribution != null && contribution > 0) {
+      _periodsIsAuto = true;
+      _contribIsAuto = false;
+    } else if (periods != null && periods > 0) {
+      _contribIsAuto = true;
+      _periodsIsAuto = false;
+    }
+    _recalculateFixed();
+  }
 
   void _onContributionChanged() {
     if (_isUpdating) return;
@@ -654,6 +673,7 @@ class _AddEditSavingPlanScreenState
                       child: GestureDetector(
                         onTap: () {
                           if (_type == type) return;
+                          FocusScope.of(context).unfocus();
                           setState(() => _type = type);
                           // Reset auto-fill when switching type
                           if (type == SavingPlanType.fixed) {

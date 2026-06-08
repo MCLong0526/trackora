@@ -45,6 +45,14 @@ class SplitBillScreen extends ConsumerStatefulWidget {
   final SplitMode initialSplitMode;
   final String userName;
 
+  /// Base currency symbol used for the estimated conversion line, shown when
+  /// the expense is in a different (foreign) currency. Null = no estimate.
+  final String? baseCurrencySymbol;
+
+  /// Multiplier to convert a foreign amount into the base currency
+  /// (foreignAmount * fxToBase = baseAmount). Null = no estimate shown.
+  final double? fxToBase;
+
   const SplitBillScreen({
     super.key,
     required this.totalAmount,
@@ -53,6 +61,8 @@ class SplitBillScreen extends ConsumerStatefulWidget {
     required this.initialMembers,
     this.initialSplitMode = SplitMode.equally,
     this.userName = '',
+    this.baseCurrencySymbol,
+    this.fxToBase,
   });
 
   @override
@@ -626,6 +636,22 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
               ),
             ],
           ),
+          // Estimated value in the user's base currency when the expense is
+          // recorded in a foreign currency.
+          if (widget.fxToBase != null &&
+              widget.baseCurrencySymbol != null &&
+              widget.baseCurrencySymbol != widget.currencySymbol) ...[
+            const SizedBox(height: 4),
+            Text(
+              '≈ ${widget.baseCurrencySymbol} ${(_owedAmount * widget.fxToBase!).toStringAsFixed(2)} est.',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: _kInkMuted,
+                letterSpacing: -0.12,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             countOwing > 0
@@ -704,9 +730,9 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'You',
-          style: TextStyle(
+        Text(
+          m.name.isNotEmpty ? m.name : 'You',
+          style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: _kPurple,

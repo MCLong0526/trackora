@@ -109,6 +109,10 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   double _animatedBalance = 0;
   String _currencyCode = 'MYR'; // will be loaded from prefs in initState
 
+  // Optional interest accrual (asset accounts only).
+  final _interestController = TextEditingController();
+  String _interestPeriod = 'daily'; // daily | monthly | yearly
+
   bool get _isEdit => widget.account != null;
 
   bool get _hasProviderList =>
@@ -153,6 +157,13 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       } else {
         _nameController.text = a.name;
       }
+
+      final rate = a.interestRatePercent;
+      if (rate != null && rate > 0) {
+        _interestController.text =
+            rate == rate.roundToDouble() ? rate.toStringAsFixed(0) : '$rate';
+      }
+      if (a.interestPeriod != null) _interestPeriod = a.interestPeriod!;
     }
     _nameController.addListener(_onNameChanged);
     _customNameController.addListener(_onNameChanged);
@@ -170,6 +181,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     _nameController.dispose();
     _balanceController.dispose();
     _customNameController.dispose();
+    _interestController.dispose();
     super.dispose();
   }
 
@@ -196,12 +208,26 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           _type.isLiability ? -enteredBalance.abs() : enteredBalance;
       final now = DateTime.now();
 
+      // Interest only applies to asset accounts.
+      final interestRate = double.tryParse(_interestController.text.trim());
+      final hasInterest =
+          !_type.isLiability && interestRate != null && interestRate > 0;
+
       if (_isEdit) {
-        final updated = widget.account!.copyWith(
+        final existing = widget.account!;
+        final wasInterest = (existing.interestRatePercent ?? 0) > 0;
+        final updated = existing.copyWith(
           name: _resolvedName,
           type: _type,
           openingBalance: openingBalance,
           currencyCode: _currencyCode,
+          interestRatePercent: hasInterest ? interestRate : null,
+          interestPeriod: hasInterest ? _interestPeriod : null,
+          // Keep the existing checkpoint if interest was already on; start
+          // accruing from now if newly enabled; clear it if turned off.
+          lastInterestAt: hasInterest
+              ? (wasInterest ? (existing.lastInterestAt ?? now) : now)
+              : null,
         );
         await repo.update(user.uid, updated);
       } else {
@@ -212,6 +238,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           openingBalance: openingBalance,
           createdAt: now,
           currencyCode: _currencyCode,
+          interestRatePercent: hasInterest ? interestRate : null,
+          interestPeriod: hasInterest ? _interestPeriod : null,
+          lastInterestAt: hasInterest ? now : null,
         );
         await repo.add(user.uid, account);
       }
@@ -377,6 +406,20 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                   style: TextStyle(fontSize: 12, color: brand.inkSoft),
                 ),
               ),
+              if (!_type.isLiability) ...[
+                const SizedBox(height: 22),
+                _sectionLabel(context.t('account.interest'), brand),
+                const SizedBox(height: 10),
+                _interestCard(brand),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Text(
+                    context.t('account.interestHint'),
+                    style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                  ),
+                ),
+              ],
               const SizedBox(height: 28),
               SizedBox(
                 height: 54,
@@ -891,6 +934,99 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _interestCard(BrandColors brand) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(CupertinoIcons.percent, size: 18, color: brand.inkSoft),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.t('account.interestRate'),
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ),
+              SizedBox(
+                width: 90,
+                child: TextField(
+                  controller: _interestController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                    suffixText: '%',
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _interestPeriodChip('daily', context.t('account.interestDaily'),
+                  brand),
+              const SizedBox(width: 6),
+              _interestPeriodChip(
+                  'monthly', context.t('account.interestMonthly'), brand),
+              const SizedBox(width: 6),
+              _interestPeriodChip(
+                  'yearly', context.t('account.interestYearly'), brand),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _interestPeriodChip(String value, String label, BrandColors brand) {
+    final selected = _interestPeriod == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _interestPeriod = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppActionBlue.color.withValues(alpha: 0.12)
+                : brand.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? AppActionBlue.color : brand.divider,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? AppActionBlue.color : brand.ink,
+            ),
           ),
         ),
       ),

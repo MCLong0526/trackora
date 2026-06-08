@@ -329,9 +329,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: BorderSide.none,
         ),
+        // No visible box/line on focus — fields rely on their fill + the
+        // blinking cursor for focus feedback. (Previously this drew a hard
+        // black line in light mode that some dense fields' cursor overflowed.)
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),
-          borderSide: BorderSide(color: brand.accentDark, width: 1.5),
+          borderSide: BorderSide.none,
         ),
         labelStyle: TextStyle(color: brand.inkSoft),
         hintStyle: TextStyle(color: brand.inkSoft),
@@ -403,9 +406,11 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: BorderSide.none,
         ),
+        // No visible box/line on focus — fields rely on their fill + the
+        // blinking cursor for focus feedback (consistent with light mode).
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),
-          borderSide: BorderSide(color: brand.accent, width: 1.5),
+          borderSide: BorderSide.none,
         ),
         labelStyle: TextStyle(color: brand.inkSoft),
         hintStyle: TextStyle(color: brand.inkSoft),

@@ -36,8 +36,31 @@ class AuthService {
     }
     return _auth.authStateChanges().map((user) {
       if (user == null) return null;
+      // Require a verified email before the app treats the account as signed
+      // in. OAuth providers (Google / Apple) report emailVerified == true, so
+      // they pass through unaffected; only unverified email/password accounts
+      // are held back until they confirm their address.
+      if (!user.emailVerified) return null;
       return AppUser(uid: user.uid, email: user.email);
     });
+  }
+
+  /// Whether the currently signed-in Firebase user has a verified email.
+  bool get isEmailVerified =>
+      storageMode == StorageMode.local || (_auth.currentUser?.emailVerified ?? false);
+
+  /// (Re)sends the verification email to the currently signed-in user.
+  Future<void> sendVerificationEmail() async {
+    await _auth.currentUser?.sendEmailVerification();
+  }
+
+  /// Reloads the current user from the server and returns whether their email
+  /// is now verified. Used at login to enforce verification before entry.
+  Future<bool> reloadAndCheckEmailVerified() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    await user.reload();
+    return _auth.currentUser?.emailVerified ?? false;
   }
 
   // Creates a new account with email and password.

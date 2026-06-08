@@ -161,6 +161,18 @@ class Account {
   /// Null means the account uses the user's main/base currency.
   final String? currencyCode;
 
+  /// Optional interest rate (percent per [interestPeriod]) earned on this
+  /// account's balance. Null / 0 means no interest accrual.
+  final double? interestRatePercent;
+
+  /// How often interest accrues: 'daily', 'monthly', or 'yearly'.
+  /// Null means no interest accrual.
+  final String? interestPeriod;
+
+  /// Checkpoint of the last accrued interest period, so accrual is idempotent
+  /// across app launches. Null means accrual starts from [createdAt].
+  final DateTime? lastInterestAt;
+
   const Account({
     required this.id,
     required this.name,
@@ -168,6 +180,9 @@ class Account {
     required this.openingBalance,
     required this.createdAt,
     this.currencyCode,
+    this.interestRatePercent,
+    this.interestPeriod,
+    this.lastInterestAt,
   });
 
   factory Account.fromMap(Map<String, dynamic> data, {required String id}) {
@@ -178,6 +193,11 @@ class Account {
       openingBalance: (data['openingBalance'] as num?)?.toDouble() ?? 0.0,
       createdAt: _readDate(data['createdAt']),
       currencyCode: data['currencyCode'] as String?,
+      interestRatePercent: (data['interestRatePercent'] as num?)?.toDouble(),
+      interestPeriod: data['interestPeriod'] as String?,
+      lastInterestAt: data['lastInterestAt'] != null
+          ? _readDate(data['lastInterestAt'])
+          : null,
     );
   }
 
@@ -189,6 +209,11 @@ class Account {
       'openingBalance': openingBalance,
       'createdAt': createdAt.toIso8601String(),
       if (currencyCode != null) 'currencyCode': currencyCode,
+      if (interestRatePercent != null)
+        'interestRatePercent': interestRatePercent,
+      if (interestPeriod != null) 'interestPeriod': interestPeriod,
+      if (lastInterestAt != null)
+        'lastInterestAt': lastInterestAt!.toIso8601String(),
     };
   }
 
@@ -201,6 +226,9 @@ class Account {
     double? openingBalance,
     DateTime? createdAt,
     Object? currencyCode = _sentinel,
+    Object? interestRatePercent = _sentinel,
+    Object? interestPeriod = _sentinel,
+    Object? lastInterestAt = _sentinel,
   }) {
     return Account(
       id: id ?? this.id,
@@ -211,6 +239,15 @@ class Account {
       currencyCode: identical(currencyCode, _sentinel)
           ? this.currencyCode
           : currencyCode as String?,
+      interestRatePercent: identical(interestRatePercent, _sentinel)
+          ? this.interestRatePercent
+          : interestRatePercent as double?,
+      interestPeriod: identical(interestPeriod, _sentinel)
+          ? this.interestPeriod
+          : interestPeriod as String?,
+      lastInterestAt: identical(lastInterestAt, _sentinel)
+          ? this.lastInterestAt
+          : lastInterestAt as DateTime?,
     );
   }
 

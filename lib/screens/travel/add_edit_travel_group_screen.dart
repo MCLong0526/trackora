@@ -92,7 +92,7 @@ class _AddEditTravelGroupScreenState
         minimumDate: isStart ? null : _startDate,
       ),
     );
-    if (mounted) FocusScope.of(context).unfocus();
+    _keepKeyboardDown();
     if (picked == null) return;
     setState(() {
       if (isStart) {
@@ -110,8 +110,17 @@ class _AddEditTravelGroupScreenState
       context: context,
       builder: (ctx) => _CurrencyPickerSheet(selected: _selectedCurrency),
     );
-    if (mounted) FocusScope.of(context).unfocus();
     if (picked != null) setState(() => _selectedCurrency = picked);
+    _keepKeyboardDown();
+  }
+
+  // Keep the keyboard down after a popup closes. A modal route restores focus
+  // to the previously focused field *after* it pops, so a synchronous unfocus
+  // gets overridden — unfocus on the next frame instead so it sticks.
+  void _keepKeyboardDown() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   Future<void> _save() async {
@@ -894,7 +903,9 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
                 (_kCurrencyNames[c] ?? '').toLowerCase().contains(_query.toLowerCase()))
             .toList();
 
-    return Container(
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
       height: MediaQuery.of(context).size.height * 0.72,
       decoration: BoxDecoration(
         color: surface,
@@ -993,6 +1004,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

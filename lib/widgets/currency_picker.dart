@@ -9,12 +9,17 @@ class CurrencyPickerTile extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final String? label;
+  // Optional override for the tap handler. When provided, the caller is
+  // responsible for showing the picker (e.g. so it can manage keyboard focus
+  // around the sheet). When null, the default sheet is shown.
+  final VoidCallback? onTap;
 
   const CurrencyPickerTile({
     super.key,
     required this.value,
     required this.onChanged,
     this.label,
+    this.onTap,
   });
 
   @override
@@ -22,7 +27,8 @@ class CurrencyPickerTile extends StatelessWidget {
     final brand = context.brand;
     final symbol = kSupportedCurrencies[value] ?? value;
     return InkWell(
-      onTap: () => showCurrencyPickerSheet(context, current: value, onPicked: onChanged),
+      onTap: onTap ??
+          () => showCurrencyPickerSheet(context, current: value, onPicked: onChanged),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
@@ -87,9 +93,15 @@ Future<void> showCurrencyPickerSheet(
       },
     ),
   );
-  // Clear focus again after the sheet closes so the caller's amount field
-  // doesn't regain focus and re-open the keyboard.
-  if (context.mounted) FocusScope.of(context).unfocus();
+  // Clear focus again after the sheet closes so the caller's field doesn't
+  // regain focus and re-open the keyboard. A modal route restores focus to the
+  // previously focused field *after* it pops, so a synchronous unfocus here
+  // gets overridden — unfocus on the next frame instead so it sticks.
+  if (context.mounted) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) FocusScope.of(context).unfocus();
+    });
+  }
 }
 
 class _CurrencyPickerSheet extends StatefulWidget {
