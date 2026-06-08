@@ -33,11 +33,16 @@ class AccountsScreen extends ConsumerWidget {
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
     final stocks =
         ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final balances = computeAccountBalanceMap(accounts, allExpenses,
-        metals: metals, stocks: stocks);
+        metals: metals,
+        stocks: stocks,
+        toBase: converter == null
+            ? null
+            : (amt, code) => converter.toBase(amt, code));
 
     final creditCards = accounts.where((a) => a.type == AccountType.creditCard).toList();
     final negativeCards = creditCards.where((a) => (balances[a.id] ?? 0) < 0).toList();

@@ -846,7 +846,11 @@ class _AssetSnapshot {
     String? mainCode,
   }) {
     final balances = computeAccountBalanceMap(accounts, expenses,
-        metals: metals, stocks: stocks);
+        metals: metals,
+        stocks: stocks,
+        toBase: converter == null
+            ? null
+            : (amt, code) => converter.toBase(amt, code));
 
     double toBase(Account a, double bal) {
       final code = a.currencyCode ?? mainCode;

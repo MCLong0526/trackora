@@ -966,11 +966,14 @@ class _AccountsSectionState extends State<_AccountsSection> {
   Widget build(BuildContext context) {
     final brand = context.brand;
 
+    final converter = widget.converter;
     final balanceMap = computeAccountBalanceMap(
       widget.accounts,
       widget.allExpenses,
       metals: widget.metals,
       stocks: widget.stocks,
+      toBase:
+          converter == null ? null : (amt, code) => converter.toBase(amt, code),
     );
     final positiveAccounts = widget.accounts
         .where((a) => (balanceMap[a.id] ?? 0) > 0)

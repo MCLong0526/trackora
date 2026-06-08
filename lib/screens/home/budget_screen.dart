@@ -340,10 +340,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
     final stocks =
         ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
     // Account balances use the shared canonical calculation so Budget tallies
     // with Manage / Summary / Profile (includes metals & stocks).
     final accountBalances = computeAccountBalanceMap(accounts, allExpenses,
-        metals: metals, stocks: stocks);
+        metals: metals,
+        stocks: stocks,
+        toBase: converter == null
+            ? null
+            : (amt, code) => converter.toBase(amt, code));
 
     final discretionarySpent = expenses
         .where(_isDiscretionary)

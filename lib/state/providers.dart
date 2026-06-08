@@ -473,11 +473,18 @@ double stockTxnAmount(Map<String, dynamic> tx) {
 ///    already counted via that expense — avoids double-counting),
 ///  • stock buys/sells paid from the account (stocks never create a linked
 ///    expense, so they must be applied here).
+///
+/// [toBase] converts an amount from a given currency code to the user's base
+/// currency. It is required for correct stock handling when a stock trade was
+/// made in a currency different from the account's (e.g. a USD stock bought
+/// from an MYR account) — without it, foreign amounts would be subtracted at
+/// their raw face value.
 Map<String, double> computeAccountBalanceMap(
   List<Account> accounts,
   List<Expense> all, {
   List<PreciousMetal> metals = const [],
   List<StockInvestment> stocks = const [],
+  double Function(double amount, String fromCode)? toBase,
 }) {
   final currencyCodes = <String, String?>{
     for (final a in accounts) a.id: a.currencyCode,
@@ -514,11 +521,18 @@ Map<String, double> computeAccountBalanceMap(
   for (final s in stocks) {
     for (final tx in s.transactions) {
       final aid = tx['accountId'] as String?;
-      if (aid != null && balances.containsKey(aid)) {
-        final amt = stockTxnAmount(tx);
-        final isSell = (tx['type'] as String?) == 'sell';
-        balances[aid] = (balances[aid] ?? 0) + (isSell ? amt : -amt);
-      }
+      if (aid == null || !balances.containsKey(aid)) continue;
+      final raw = stockTxnAmount(tx);
+      final txCur = tx['currency'] as String?;
+      final acctCur = currencyCodes[aid];
+      // Apply in the account's currency: use the raw amount only when the
+      // trade is in the same currency, otherwise convert to base (mirrors how
+      // expenses are applied via convertedAmount).
+      final amt = (txCur == null || txCur == acctCur || toBase == null)
+          ? raw
+          : toBase(raw, txCur);
+      final isSell = (tx['type'] as String?) == 'sell';
+      balances[aid] = (balances[aid] ?? 0) + (isSell ? amt : -amt);
     }
   }
   return balances;
@@ -536,8 +550,10 @@ final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
   final mainCode = converter?.base;
   final metals = ref.watch(preciousMetalsProvider).valueOrNull ?? const [];
   final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? const [];
-  final balances =
-      computeAccountBalanceMap(accounts, all, metals: metals, stocks: stocks);
+  final balances = computeAccountBalanceMap(accounts, all,
+      metals: metals,
+      stocks: stocks,
+      toBase: converter == null ? null : (amt, code) => converter.toBase(amt, code));
 
   double total = 0;
   for (final a in accounts) {
