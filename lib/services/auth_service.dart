@@ -284,6 +284,7 @@ class AuthService {
       LocalStorage.travelExpenses.clear(),
       LocalStorage.travelMembers.clear(),
       LocalStorage.splitBills.clear(),
+      LocalStorage.stockInvestments.clear(),
       LocalStorage.pendingSync.clear(),
       LocalStorage.pendingDeletes.clear(),
       LocalStorage.meta.clear(),

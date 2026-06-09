@@ -14,12 +14,14 @@ import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
 import '../repositories/firebase_precious_metal_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
+import '../repositories/firebase_stock_investment_repository.dart';
 import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
+import '../repositories/local_stock_investment_repository.dart';
 import '../repositories/firebase_expense_group_repository.dart';
 import '../repositories/firebase_person_repository.dart';
 import '../repositories/local_expense_group_repository.dart';
@@ -441,6 +443,16 @@ class SyncService {
       await SyncService.clearEntityPendingDeletes(uid, 'metal');
     }
 
+    // Stock Investment deletes
+    final stockDelIds = SyncService.getEntityPendingDeleteIds(uid, 'stock');
+    if (stockDelIds.isNotEmpty) {
+      final fbStocks = FirebaseStockInvestmentRepository();
+      for (final id in stockDelIds) {
+        try { await fbStocks.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'stock');
+    }
+
     // Travel Group deletes
     final tgDelIds = SyncService.getEntityPendingDeleteIds(uid, 'tg');
     if (tgDelIds.isNotEmpty) {
@@ -536,6 +548,19 @@ class SyncService {
       if (m.id.isEmpty || metalDeletedSet.contains(m.id)) continue;
       try {
         await fbMetals.upsertById(uid, m);
+      } catch (_) {}
+    }
+
+    // Stock Investments
+    final localStocks = LocalStockInvestmentRepository();
+    final fbStocks = FirebaseStockInvestmentRepository();
+    final stockDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'stock').toSet();
+    final stockRecords = await localStocks.getAll(uid).first;
+    for (final s in stockRecords) {
+      if (s.id.isEmpty || stockDeletedSet.contains(s.id)) continue;
+      try {
+        await fbStocks.upsertById(uid, s);
       } catch (_) {}
     }
 
@@ -906,6 +931,18 @@ class SyncService {
       if (m.id.isEmpty) continue;
       if (!stillCurrent()) return;
       await fbMetals.upsertById(toUid, m);
+    }
+
+    // ── Stock Investments ─────────────────────────────────────────────────────
+    final localStocksUpload = LocalStockInvestmentRepository();
+    final fbStocksUpload = FirebaseStockInvestmentRepository();
+    final stocksToUpload = await localStocksUpload.getAll(fromUid).first;
+    for (final s in stocksToUpload) {
+      if (s.id.isEmpty) continue;
+      if (!stillCurrent()) return;
+      try {
+        await fbStocksUpload.upsertById(toUid, s);
+      } catch (_) {}
     }
 
     // ── Split Bills ───────────────────────────────────────────────────────────

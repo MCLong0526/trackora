@@ -41,4 +41,13 @@ class FirebaseStockInvestmentRepository implements StockInvestmentRepository {
   Future<void> delete(String userId, String id) async {
     await _col(userId).doc(id).delete().timeout(_kTimeout);
   }
+
+  /// Upserts a stock investment by its existing id (used during offline→online sync).
+  Future<void> upsertById(String userId, StockInvestment investment) async {
+    if (investment.id.isEmpty) return;
+    await _col(userId)
+        .doc(investment.id)
+        .set(investment.toMap(), SetOptions(merge: true))
+        .timeout(_kTimeout);
+  }
 }

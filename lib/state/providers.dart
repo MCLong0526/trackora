@@ -57,6 +57,7 @@ import '../models/travel_expense.dart';
 import '../models/stock_investment.dart';
 import '../repositories/stock_investment_repository.dart';
 import '../repositories/firebase_stock_investment_repository.dart';
+import '../repositories/local_stock_investment_repository.dart';
 import '../services/stock_service.dart';
 import '../models/expense_group.dart';
 import '../models/group_expense_item.dart';
@@ -1070,10 +1071,17 @@ final cycleDateRangeProvider = Provider.autoDispose<CycleDateRange?>((ref) {
 
 // ── Stock Investments ─────────────────────────────────────────────────────────
 
-final stockInvestmentRepositoryProvider = Provider<StockInvestmentRepository>((
-  _,
-) {
-  return FirebaseStockInvestmentRepository();
+final stockInvestmentRepositoryProvider =
+    Provider<StockInvestmentRepository>((ref) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalStockInvestmentRepository();
+    case StorageMode.firebase:
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline
+          ? FirebaseStockInvestmentRepository()
+          : LocalStockInvestmentRepository();
+  }
 });
 
 final stockServiceProvider = Provider((_) => StockService());

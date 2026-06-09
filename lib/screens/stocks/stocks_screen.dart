@@ -8,9 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/stock_investment.dart';
+import '../../repositories/local_stock_investment_repository.dart';
 import '../../services/stock_service.dart';
+import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -619,6 +622,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               'type': 'buy',
               if (accountId != null) 'accountId': accountId,
             };
+            final localStockRepo = LocalStockInvestmentRepository();
             if (existing != null) {
               final merged = existing.copyWith(
                 quantity: existing.watchOnly
@@ -631,6 +635,8 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 updatedAt: DateTime.now(),
                 transactions: [...existing.transactions, newTx],
               );
+              // Dual-write: keep local Hive in sync for offline reads.
+              await localStockRepo.update(user.uid, merged);
               await ref
                   .read(stockInvestmentRepositoryProvider)
                   .update(user.uid, merged);
@@ -651,6 +657,8 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 updatedAt: investment.updatedAt,
                 transactions: [newTx],
               );
+              // Dual-write: keep local Hive in sync for offline reads.
+              await localStockRepo.add(user.uid, withTx);
               await ref
                   .read(stockInvestmentRepositoryProvider)
                   .add(user.uid, withTx);
@@ -902,9 +910,20 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               final user = ref.read(authStateProvider).valueOrNull;
               if (user == null) return;
               try {
-                await ref
-                    .read(stockInvestmentRepositoryProvider)
-                    .delete(user.uid, stock.id);
+                final isOnline = ref.read(isOnlineProvider);
+                // Always delete from local Hive so offline UI refreshes immediately.
+                await LocalStockInvestmentRepository().delete(user.uid, stock.id);
+                if (storageMode == StorageMode.firebase) {
+                  if (isOnline) {
+                    await ref
+                        .read(stockInvestmentRepositoryProvider)
+                        .delete(user.uid, stock.id);
+                  } else {
+                    // Queue Firebase delete for when connectivity returns.
+                    await SyncService.markEntityPendingDelete(
+                        user.uid, 'stock', stock.id);
+                  }
+                }
                 if (mounted) AppToast.show(context, '${stock.symbol} removed');
               } catch (_) {
                 if (mounted)
@@ -2821,17 +2840,6 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
 
   Future<void> _save() async {
     if (_units <= 0) return;
-    // Stocks are Firebase-only (no offline Hive queue). When offline the
-    // Firestore write never completes, leaving the button spinning forever.
-    // Bail out early with a clear message instead.
-    if (!ref.read(isOnlineProvider)) {
-      AppToast.show(
-        context,
-        'You\'re offline — connect to the internet to record a stock.',
-        type: AppToastType.error,
-      );
-      return;
-    }
     setState(() => _saving = true);
     final now = DateTime.now();
     final investment = StockInvestment(

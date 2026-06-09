@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/account.dart';
 import '../../models/stock_investment.dart';
+import '../../repositories/local_stock_investment_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/stock_service.dart';
 import '../../state/providers.dart';
@@ -878,10 +879,10 @@ class _PurchaseHistorySheetState
   Future<void> _save(StockInvestment updated) async {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
-    // NOTE: Stocks are Firebase-only (no local Hive repository / offline queue).
-    // When offline the Firestore write throws after a timeout; handle it
-    // gracefully with a toast instead of letting the error surface/crash.
     try {
+      // Always keep the local Hive cache up-to-date so offline reads are fresh.
+      await LocalStockInvestmentRepository().update(user.uid, updated);
+      // Also write to Firebase (no-op when offline — the repo returns Local).
       await ref
           .read(stockInvestmentRepositoryProvider)
           .update(user.uid, updated);

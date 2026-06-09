@@ -20,6 +20,7 @@ class LocalStorage {
   static const splitBillsBoxName = 'trackora_split_bills_v1';
   static const expenseGroupsBoxName = 'trackora_expense_groups_v1';
   static const expenseGroupItemsBoxName = 'trackora_expense_group_items_v1';
+  static const stockInvestmentsBoxName = 'trackora_stock_investments_v1';
 
   static bool _initialized = false;
 
@@ -46,6 +47,7 @@ class LocalStorage {
     await _openBox(splitBillsBoxName);
     await _openBox(expenseGroupsBoxName);
     await _openBox(expenseGroupItemsBoxName);
+    await _openBox(stockInvestmentsBoxName);
     _initialized = true;
   }
 
@@ -80,6 +82,8 @@ class LocalStorage {
   static Box<dynamic> get expenseGroups => Hive.box(expenseGroupsBoxName);
 
   static Box<dynamic> get expenseGroupItems => Hive.box(expenseGroupItemsBoxName);
+
+  static Box<dynamic> get stockInvestments => Hive.box(stockInvestmentsBoxName);
 
   static Future<void> _openBox(String name) async {
     if (!Hive.isBoxOpen(name)) {
