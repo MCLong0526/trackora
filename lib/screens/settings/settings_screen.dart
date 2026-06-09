@@ -29,7 +29,6 @@ import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
-import '../onboarding/onboarding_screen.dart';
 import '../tips/how_trackora_works_screen.dart';
 import '../../main.dart' show rootNavKey;
 
@@ -212,7 +211,7 @@ class SettingsScreen extends ConsumerWidget {
             _GroupCard(
               children: [
                 _Tile(
-                  icon: CupertinoIcons.lightbulb_fill,
+                  icon: CupertinoIcons.book_fill,
                   iconColor: const Color(0xFF6C63FF),
                   label: context.t('settings.howTrackoraWorks'),
                   onTap: () => Navigator.of(context).push(
@@ -227,17 +226,6 @@ class SettingsScreen extends ConsumerWidget {
                   iconColor: AppColors.sand,
                   label: context.t('settings.version'),
                   trailing: '1.0.0',
-                ),
-                _GroupDivider(),
-                _Tile(
-                  icon: CupertinoIcons.sparkles,
-                  iconColor: AppColors.lilac,
-                  label: context.t('settings.replayTour'),
-                  onTap: () => Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => const OnboardingScreen(tourOnly: true),
-                    ),
-                  ),
                 ),
                 if (storageMode == StorageMode.firebase) ...[
                   _GroupDivider(),

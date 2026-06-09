@@ -901,12 +901,31 @@ final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((ref) 
 });
 
 /// Stream of all precious metal transactions for the active user.
+/// Uses ref.watch so it re-subscribes whenever connectivity changes
+/// (online→Firebase, offline→local Hive). Mirrors Firebase data into
+/// local Hive while online so records survive an offline transition.
 final preciousMetalsProvider = StreamProvider.autoDispose<List<PreciousMetal>>((
   ref,
 ) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const []);
-  return ref.read(preciousMetalRepositoryProvider).getAll(user.uid);
+  final stream = ref.watch(preciousMetalRepositoryProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalPreciousMetalRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'metal').toSet();
+      for (final m in items) {
+        if (m.id.isNotEmpty && !deletedIds.contains(m.id)) {
+          await local.update(user.uid, m);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((m) => !deletedIds.contains(m.id)).toList();
+    });
+  }
+  return stream;
 });
 
 /// Watches for offline→online transitions and automatically uploads pending
@@ -1087,11 +1106,30 @@ final stockInvestmentRepositoryProvider =
 final stockServiceProvider = Provider((_) => StockService());
 
 /// Stream of all stock investments for the active user.
+/// Uses ref.watch so it re-subscribes on connectivity changes and mirrors
+/// Firebase data to local Hive while online for offline availability.
 final stockInvestmentsProvider =
     StreamProvider.autoDispose<List<StockInvestment>>((ref) {
       final user = ref.watch(authStateProvider).valueOrNull;
       if (user == null) return Stream.value(const []);
-      return ref.read(stockInvestmentRepositoryProvider).getAll(user.uid);
+      final stream =
+          ref.watch(stockInvestmentRepositoryProvider).getAll(user.uid);
+      if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+        return stream.asyncMap((items) async {
+          final local = LocalStockInvestmentRepository();
+          final deletedIds =
+              SyncService.getEntityPendingDeleteIds(user.uid, 'stock').toSet();
+          for (final s in items) {
+            if (s.id.isNotEmpty && !deletedIds.contains(s.id)) {
+              await local.update(user.uid, s);
+            }
+          }
+          return deletedIds.isEmpty
+              ? items
+              : items.where((s) => !deletedIds.contains(s.id)).toList();
+        });
+      }
+      return stream;
     });
 
 // ── Expense Groups ────────────────────────────────────────────────────────────
