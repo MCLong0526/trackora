@@ -212,7 +212,7 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 _Tile(
                   icon: CupertinoIcons.book_fill,
-                  iconColor: const Color(0xFF6C63FF),
+                  iconColor: AppColors.sky,
                   label: context.t('settings.howTrackoraWorks'),
                   onTap: () => Navigator.of(context).push(
                     CupertinoPageRoute(

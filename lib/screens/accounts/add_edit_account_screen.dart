@@ -1271,7 +1271,11 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         );
       },
     ).whenComplete(() {
-      if (mounted) FocusScope.of(context).unfocus();
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) FocusScope.of(context).unfocus();
+        });
+      }
     });
   }
 

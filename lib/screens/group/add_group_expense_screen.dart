@@ -924,7 +924,9 @@ class _AddGroupExpenseScreenState
   // regain focus and re-open the keyboard/numpad.
   void _dismissKeyboard() {
     if (!mounted) return;
-    FocusScope.of(context).unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   void _showSplitSheet() {

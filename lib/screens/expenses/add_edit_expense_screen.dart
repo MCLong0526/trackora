@@ -400,7 +400,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (mounted) _amountFocus.requestFocus();
       });
     } else {
-      FocusScope.of(context).unfocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
     }
     _reopenNumpadAfterPicker = false;
   }
@@ -418,7 +420,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (mounted) _amountFocus.requestFocus();
       });
     } else {
-      FocusScope.of(context).unfocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
     }
   }
 

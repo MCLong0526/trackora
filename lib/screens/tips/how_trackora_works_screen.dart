@@ -336,7 +336,7 @@ class HowTrackoraWorksScreen extends StatelessWidget {
 
 class _TopicCard extends StatefulWidget {
   final _Topic topic;
-  const _TopicCard({super.key, required this.topic});
+  const _TopicCard({required this.topic});
 
   @override
   State<_TopicCard> createState() => _TopicCardState();

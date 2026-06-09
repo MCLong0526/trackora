@@ -95,7 +95,11 @@ class _AddEditBorrowLendingScreenState
         _personColorIndex = null;
       });
     }
-    if (mounted) FocusScope.of(context).unfocus();
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
+    }
   }
 
   Future<void> _pickImage() async {
@@ -150,7 +154,11 @@ class _AddEditBorrowLendingScreenState
         ),
       ),
     );
-    if (mounted) FocusScope.of(context).unfocus();
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
+    }
   }
 
   Future<void> _save() async {

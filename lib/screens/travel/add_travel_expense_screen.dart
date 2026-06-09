@@ -171,7 +171,11 @@ class _AddTravelExpenseScreenState
       context: context,
       builder: (ctx) => _DatePickerSheet(initial: _date),
     );
-    if (mounted) FocusScope.of(context).unfocus();
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
+    }
     if (picked != null) setState(() => _date = picked);
   }
 
@@ -255,7 +259,11 @@ class _AddTravelExpenseScreenState
         ),
       ),
     ).whenComplete(() {
-      if (mounted) FocusScope.of(context).unfocus();
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) FocusScope.of(context).unfocus();
+        });
+      }
     });
   }
 
