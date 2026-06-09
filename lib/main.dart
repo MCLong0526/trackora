@@ -26,7 +26,6 @@ import 'services/widget_intent_service.dart';
 import 'services/widget_sync_service.dart';
 import 'state/providers.dart';
 import 'theme/app_theme.dart';
-import 'widgets/connection_banner.dart';
 
 final GlobalKey<NavigatorState> rootNavKey = GlobalKey<NavigatorState>();
 
@@ -324,9 +323,6 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
         GlobalWidgetsLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en'), Locale('zh'), Locale('ms')],
-      // App-wide offline / reconnect status strip, shown over every screen.
-      builder: (context, child) =>
-          ConnectionBanner(child: child ?? const SizedBox.shrink()),
       home: auth.when(
         data: (user) => user == null
             ? const _AuthGate()
