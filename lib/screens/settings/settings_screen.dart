@@ -2393,7 +2393,14 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
             SizedBox(
               width: double.infinity,
               child: CupertinoButton.filled(
-                onPressed: () => Navigator.pop(context),
+                // Force re-login after an email change: sign out and pop back to
+                // the root so the auth gate shows the login screen.
+                onPressed: () async {
+                  final navigator =
+                      Navigator.of(context, rootNavigator: true);
+                  await widget.authService.signOut();
+                  navigator.popUntil((route) => route.isFirst);
+                },
                 child: Text(context.t('common.done')),
               ),
             ),
@@ -2402,7 +2409,7 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
             _Field(
               controller: _newEmailCtrl,
               label: context.t('settings.newEmail'),
-              hint: 'chia70857@gmail.com',
+              hint: context.t('settings.newEmailHint'),
               keyboardType: TextInputType.emailAddress,
               brand: brand,
             ),

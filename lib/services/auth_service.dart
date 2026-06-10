@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../app_config.dart';
@@ -15,6 +21,14 @@ class ReauthRequiredException implements Exception {
   const ReauthRequiredException(this.message);
   @override
   String toString() => message;
+}
+
+// Thrown when the per-day verification-email resend cap has been reached.
+class VerificationResendLimitException implements Exception {
+  final int maxPerDay;
+  const VerificationResendLimitException(this.maxPerDay);
+  @override
+  String toString() => 'Resend limit of $maxPerDay per day reached.';
 }
 
 class AuthService {
@@ -49,9 +63,50 @@ class AuthService {
   bool get isEmailVerified =>
       storageMode == StorageMode.local || (_auth.currentUser?.emailVerified ?? false);
 
-  /// (Re)sends the verification email to the currently signed-in user.
-  Future<void> sendVerificationEmail() async {
-    await _auth.currentUser?.sendEmailVerification();
+  /// Max verification-email resends allowed per calendar day.
+  static const int maxVerificationResendsPerDay = 3;
+  static const _kVerifyResendCount = 'verify_resend_count';
+  static const _kVerifyResendDate = 'verify_resend_date';
+
+  /// Resends the verification email to the currently signed-in user, capped at
+  /// [maxVerificationResendsPerDay] per calendar day (the count resets the next
+  /// day). Returns the number of resends still available today *after* this
+  /// one.
+  ///
+  /// Throws [VerificationResendLimitException] when today's cap is already
+  /// reached, or [FirebaseAuthException] when there is no signed-in user or the
+  /// send itself fails — callers should surface these instead of swallowing
+  /// them, so a failed/throttled send is never reported as success.
+  Future<int> resendVerificationEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today = '${now.year}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    // A new day resets the counter.
+    var count = prefs.getString(_kVerifyResendDate) == today
+        ? (prefs.getInt(_kVerifyResendCount) ?? 0)
+        : 0;
+
+    if (count >= maxVerificationResendsPerDay) {
+      throw const VerificationResendLimitException(maxVerificationResendsPerDay);
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'You need to sign in again before resending.',
+      );
+    }
+    // Let any FirebaseAuthException (e.g. too-many-requests) propagate so the
+    // caller can tell the user the truth. Only count a successful send.
+    await user.sendEmailVerification();
+
+    count += 1;
+    await prefs.setInt(_kVerifyResendCount, count);
+    await prefs.setString(_kVerifyResendDate, today);
+    return maxVerificationResendsPerDay - count;
   }
 
   /// Reloads the current user from the server and returns whether their email
@@ -130,15 +185,23 @@ class AuthService {
     if (storageMode == StorageMode.local) {
       throw UnsupportedError('Sign in is only available in Firebase mode.');
     }
+    // Firebase validates the Apple identity token against a nonce: send the
+    // SHA-256 of a random nonce to Apple, then hand Firebase the raw value.
+    // (Apple's authorizationCode is NOT an OAuth access token — passing it as
+    // one makes Firebase reject the credential with `invalid-credential`.)
+    // DIAGNOSTIC (temporary): proves the corrected build is actually running.
+    debugPrint('🍎 Apple sign-in: nonce flow active (idToken + rawNonce, no accessToken)');
+    final rawNonce = _generateNonce();
     final appleCredential = await SignInWithApple.getAppleIDCredential(
       scopes: [
         AppleIDAuthorizationScopes.email,
         AppleIDAuthorizationScopes.fullName,
       ],
+      nonce: _sha256OfString(rawNonce),
     );
     final oauthCredential = OAuthProvider('apple.com').credential(
       idToken: appleCredential.identityToken,
-      accessToken: appleCredential.authorizationCode,
+      rawNonce: rawNonce,
     );
     return await _auth.signInWithCredential(oauthCredential);
   }
@@ -218,20 +281,36 @@ class AuthService {
   Future<void> reauthWithApple() async {
     final user = _auth.currentUser;
     if (user == null) throw const ReauthRequiredException('No signed-in user.');
+    final rawNonce = _generateNonce();
     final appleCredential = await SignInWithApple.getAppleIDCredential(
       scopes: [
         AppleIDAuthorizationScopes.email,
         AppleIDAuthorizationScopes.fullName,
       ],
+      nonce: _sha256OfString(rawNonce),
     );
     final oauthCredential = OAuthProvider('apple.com').credential(
       idToken: appleCredential.identityToken,
-      accessToken: appleCredential.authorizationCode,
+      rawNonce: rawNonce,
     );
     await user.reauthenticateWithCredential(oauthCredential);
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /// A cryptographically-random nonce string for Apple sign-in.
+  String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(
+      length,
+      (_) => charset[random.nextInt(charset.length)],
+    ).join();
+  }
+
+  String _sha256OfString(String input) =>
+      sha256.convert(utf8.encode(input)).toString();
 
   Future<void> _deleteFirestoreData(String uid) async {
     final db = FirebaseFirestore.instance;

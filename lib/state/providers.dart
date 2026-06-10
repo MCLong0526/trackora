@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -335,19 +336,42 @@ class UserNameNotifier extends StateNotifier<String> {
       if (remote != null && remote.trim().isNotEmpty && mounted) {
         state = remote.trim();
         await _prefs.setUserNameForUid(uid, remote.trim());
+        return;
       }
     } catch (_) {}
+    // Fallback for accounts created before the name was persisted to Firestore:
+    // recover it from the Firebase Auth profile (set at signup via
+    // updateDisplayName) and backfill Firestore so it becomes the source of
+    // truth going forward.
+    if (state.isEmpty) {
+      final authUser = FirebaseAuth.instance.currentUser;
+      final authName = authUser?.displayName?.trim() ?? '';
+      if (authUser?.uid == uid && authName.isNotEmpty) {
+        if (mounted) state = authName;
+        await _prefs.setUserNameForUid(uid, authName);
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .set({'displayName': authName}, SetOptions(merge: true));
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> set(String name) async {
     state = name.trim();
-    final user = _ref.read(authStateProvider).valueOrNull;
-    if (user != null) {
-      await _prefs.setUserNameForUid(user.uid, name.trim());
+    // Prefer the gated app user, but fall back to the raw Firebase user: at
+    // signup the email isn't verified yet, so authStateProvider is still null —
+    // without this fallback the name set during signup is never persisted.
+    final uid = _ref.read(authStateProvider).valueOrNull?.uid ??
+        FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await _prefs.setUserNameForUid(uid, name.trim());
       try {
         await FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(uid)
             .set({'displayName': name.trim()}, SetOptions(merge: true));
       } catch (_) {}
     }

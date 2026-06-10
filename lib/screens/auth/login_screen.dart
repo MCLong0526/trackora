@@ -266,31 +266,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _goHome();
       }
     } on SignInWithAppleAuthorizationException catch (e) {
+      // DIAGNOSTIC (temporary): surface the real reason while debugging.
+      debugPrint('Apple sign-in — NATIVE error: ${e.code} — ${e.message}');
       if (mounted) {
         setState(() {
           _errorMessage = e.code == AuthorizationErrorCode.canceled
               ? null
-              : 'Apple sign-in failed. Please try again.';
+              : 'Apple (native) failed: ${e.code.name} — ${e.message}';
           _isLoading = false;
         });
       }
     } on FirebaseAuthException catch (e) {
+      // DIAGNOSTIC (temporary): surface the real Firebase code/message.
+      debugPrint('Apple sign-in — FIREBASE error: ${e.code} — ${e.message}');
       if (mounted) {
         setState(() {
-          // Never show "Incorrect password" for Apple sign-in — the
-          // invalid-credential code here means the Apple ID token was
-          // rejected (misconfigured provider, expired token, etc.) which
-          // has nothing to do with a password.
-          _errorMessage = (e.code == 'wrong-password' || e.code == 'invalid-credential')
-              ? 'Apple sign-in failed. Please try again.'
-              : _friendlyError(e.code);
+          _errorMessage = 'Apple (Firebase) failed: ${e.code} — ${e.message}';
           _isLoading = false;
         });
       }
     } catch (e) {
+      // DIAGNOSTIC (temporary): surface any other error.
+      debugPrint('Apple sign-in — OTHER error: $e');
       if (mounted) {
         setState(() {
-          _errorMessage = 'Apple sign-in failed. Please try again.';
+          _errorMessage = 'Apple sign-in failed: $e';
           _isLoading = false;
         });
       }
@@ -533,7 +533,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           label: context.t('auth.resendEmail'),
           onTap: () async {
             try {
-              await _authService.sendVerificationEmail();
+              await _authService.resendVerificationEmail();
               if (mounted) {
                 AppToast.show(
                   context,
@@ -541,7 +541,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   type: AppToastType.success,
                 );
               }
-            } catch (_) {}
+            } on VerificationResendLimitException {
+              if (mounted) {
+                AppToast.show(
+                  context,
+                  context.t('auth.resendLimitReached'),
+                  type: AppToastType.info,
+                );
+              }
+            } catch (_) {
+              if (mounted) {
+                AppToast.show(
+                  context,
+                  context.t('auth.resendFailed'),
+                  type: AppToastType.error,
+                );
+              }
+            }
           },
         ),
         AppDialogAction(

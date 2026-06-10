@@ -192,6 +192,10 @@ class AppStrings {
         'Please verify your email before logging in. Check your inbox for the verification link.',
     'auth.resendEmail': 'Resend email',
     'auth.verifyEmailResent': 'Verification email sent',
+    'auth.resendLimitReached':
+        'You\'ve reached the daily limit of 3 verification emails. Please try again tomorrow.',
+    'auth.resendFailed':
+        'Couldn\'t resend the email. Please try again in a moment.',
 
     // Add / edit expense.
     'expense.new': 'New entry',
@@ -1283,7 +1287,7 @@ class AppStrings {
     'settings.appName': 'Trackora',
     'settings.displayNameHint': 'e.g. John',
     'settings.changeEmailCurrent': 'Current: {email}',
-    'settings.newEmailHint': 'chia70857@gmail.com',
+    'settings.newEmailHint': 'you@example.com',
     'settings.passwordHint': '••••••••',
     'settings.notSignedInFirebase': 'Not signed in to Firebase.',
     'settings.syncFailedDot': 'Sync failed.',
@@ -1393,6 +1397,8 @@ class AppStrings {
     'auth.verifyEmailRequired': '请先验证您的邮箱再登录。请查看收件箱中的验证链接。',
     'auth.resendEmail': '重新发送邮件',
     'auth.verifyEmailResent': '验证邮件已发送',
+    'auth.resendLimitReached': '您今天已达到 3 封验证邮件的上限，请明天再试。',
+    'auth.resendFailed': '无法重新发送邮件，请稍后再试。',
 
     'expense.new': '新建',
     'expense.newExpenseHeader': '新支出',
@@ -2442,7 +2448,7 @@ class AppStrings {
     'settings.appName': 'Trackora',
     'settings.displayNameHint': '例如：阿强',
     'settings.changeEmailCurrent': '当前邮箱：{email}',
-    'settings.newEmailHint': 'chia70857@gmail.com',
+    'settings.newEmailHint': 'you@example.com',
     'settings.passwordHint': '••••••••',
     'settings.notSignedInFirebase': '尚未登录 Firebase。',
     'settings.syncFailedDot': '同步失败。',
@@ -2556,6 +2562,10 @@ class AppStrings {
         'Sila sahkan e-mel anda sebelum log masuk. Semak peti masuk anda untuk pautan pengesahan.',
     'auth.resendEmail': 'Hantar semula e-mel',
     'auth.verifyEmailResent': 'E-mel pengesahan dihantar',
+    'auth.resendLimitReached':
+        'Anda telah mencapai had 3 e-mel pengesahan hari ini. Sila cuba lagi esok.',
+    'auth.resendFailed':
+        'Tidak dapat menghantar semula e-mel. Sila cuba sebentar lagi.',
 
     'expense.new': 'Rekod baru',
     'expense.newExpenseHeader': 'Belanja Baru',
@@ -3642,7 +3652,7 @@ class AppStrings {
     'settings.appName': 'Trackora',
     'settings.displayNameHint': 'cth. Ahmad',
     'settings.changeEmailCurrent': 'Semasa: {email}',
-    'settings.newEmailHint': 'chia70857@gmail.com',
+    'settings.newEmailHint': 'you@example.com',
     'settings.passwordHint': '••••••••',
     'settings.notSignedInFirebase': 'Belum log masuk ke Firebase.',
     'settings.syncFailedDot': 'Segerak gagal.',
