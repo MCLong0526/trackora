@@ -23,7 +23,7 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/expense_card.dart';
 import '../../widgets/month_filter_bar.dart';
 import '../../widgets/exchange_rate_sheet.dart';
-import '../../widgets/profile_avatar_button.dart';
+import '../../widgets/reorderable_tile_grid.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../expenses/add_edit_expense_screen.dart';
@@ -142,9 +142,13 @@ class DashboardScreen extends ConsumerWidget {
     final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
     double todaySpent = 0;
     double weekSpent = 0;
+    int todayCount = 0;
     for (final e in allExpenses) {
       if (e.type != EntryType.expense) continue;
-      if (!e.date.isBefore(todayStart)) todaySpent += e.convertedAmount;
+      if (!e.date.isBefore(todayStart)) {
+        todaySpent += e.convertedAmount;
+        todayCount++;
+      }
       if (!e.date.isBefore(weekStart)) weekSpent += e.convertedAmount;
     }
 
@@ -176,6 +180,7 @@ class DashboardScreen extends ConsumerWidget {
           budgetableSpent: budgetableSpent,
           localeCode: appLocale.encode(),
           todaySpent: todaySpent,
+          todayCount: todayCount,
           weekSpent: weekSpent,
           accounts: accounts,
           recentExpenses: sortedRecent.take(5).toList(),
@@ -215,29 +220,17 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   Row(
                     children: [
-                      GestureDetector(
+                      GlassCircleButton(
+                        icon: visible
+                            ? CupertinoIcons.eye
+                            : CupertinoIcons.eye_slash,
                         onTap: () =>
                             ref.read(balanceVisibleProvider.notifier).toggle(),
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: brand.surface,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            visible
-                                ? CupertinoIcons.eye
-                                : CupertinoIcons.eye_slash,
-                            size: 17,
-                            color: brand.inkSoft,
-                          ),
-                        ),
                       ),
                       const SizedBox(width: 8),
                       const FxRateButton(),
-                      const SizedBox(width: 10),
                       if (isGroupMode) ...[
+                        const SizedBox(width: 10),
                         GestureDetector(
                           onTap: () => showGroupMenu(
                             context,
@@ -250,10 +243,7 @@ class DashboardScreen extends ConsumerWidget {
                             userId: user?.uid,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const ProfileAvatarButton(),
-                      ] else
-                        const ProfileAvatarButton(),
+                      ],
                     ],
                   ),
                 ],
@@ -1376,8 +1366,26 @@ class _QuickAddCard extends ConsumerStatefulWidget {
   ConsumerState<_QuickAddCard> createState() => _QuickAddCardState();
 }
 
-class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
+class _QuickAddCardState extends ConsumerState<_QuickAddCard>
+    with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  bool _editMode = false;
+  late final AnimationController _jiggleCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _jiggleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _jiggleCtrl.dispose();
+    super.dispose();
+  }
 
   List<_QuickItem> _allItems(bool isDark) => [
     _QuickItem(
@@ -1425,19 +1433,31 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
   ];
 
   // Move the action at position [from] to position [to] within the saved
-  // order (standard reorder semantics, like ReorderableListView).
+  // order, using remove-at/insert-at semantics shared with the grid.
   void _reorder(int from, int to) {
     if (from == to) return;
     final order = List<int>.from(ref.read(quickAddOrderProvider));
-    if (from < 0 || from >= order.length || to < 0 || to >= order.length) {
-      return;
-    }
+    if (from < 0 || from >= order.length) return;
     final moved = order.removeAt(from);
-    var insertAt = to;
-    if (insertAt > from) insertAt -= 1;
-    order.insert(insertAt, moved);
+    order.insert(to.clamp(0, order.length), moved);
     ref.read(quickAddOrderProvider.notifier).setOrder(order);
     HapticFeedback.selectionClick();
+  }
+
+  // Tile content for one action; jiggles while in edit mode (drag handling
+  // lives in [ReorderableTileGrid]).
+  Widget _quickTile(_QuickItem item, int i) {
+    final button = _QuickAddButton(item: item);
+    if (!_editMode) return button;
+    return AnimatedBuilder(
+      animation: _jiggleCtrl,
+      builder: (_, child) {
+        final dir = i.isEven ? 1.0 : -1.0;
+        final angle = 0.03 * dir * (_jiggleCtrl.value * 2 - 1);
+        return Transform.rotate(angle: angle, child: child);
+      },
+      child: button,
+    );
   }
 
   // The floating widget shown under the finger while dragging an action.
@@ -1491,47 +1511,15 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
     final all = _allItems(isDark);
     final ordered = order.map((i) => all[i]).toList();
 
-    // A single action slot: tap opens the action, long-press picks it up to
-    // drag-and-drop into a new position right here on the home page.
-    Widget slot(int i, double slotW) {
-      return DragTarget<int>(
-        onWillAcceptWithDetails: (d) => d.data != i,
-        onAcceptWithDetails: (d) => _reorder(d.data, i),
-        builder: (ctx, candidate, rejected) {
-          final hovering = candidate.isNotEmpty;
-          return LongPressDraggable<int>(
-            data: i,
-            onDragStarted: () => HapticFeedback.mediumImpact(),
-            feedback: _dragFeedback(ordered[i], slotW, brand),
-            childWhenDragging: Opacity(
-              opacity: 0.25,
-              child: _QuickAddButton(item: ordered[i]),
-            ),
-            child: AnimatedScale(
-              scale: hovering ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              child: _QuickAddButton(item: ordered[i]),
-            ),
-          );
-        },
-      );
-    }
-
-    Widget buildRow(int start, int end, double slotW) => Row(
-      children: [
-        for (var i = start; i < end; i++) ...[
-          if (i > start) const SizedBox(width: 10),
-          Expanded(child: slot(i, slotW)),
-        ],
-      ],
-    );
-
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       onTap: () {
         HapticFeedback.selectionClick();
-        setState(() => _expanded = !_expanded);
+        if (_editMode) {
+          setState(() => _editMode = false);
+        } else {
+          setState(() => _expanded = !_expanded);
+        }
       },
       child: Container(
       decoration: BoxDecoration(
@@ -1553,37 +1541,104 @@ class _QuickAddCardState extends ConsumerState<_QuickAddCard> {
                   letterSpacing: -0.2,
                 ),
               ),
-              const Spacer(),
-              if (_expanded)
-                Text(
-                  context.t('quickAdd.rearrangeHint'),
-                  style: TextStyle(fontSize: 11, color: brand.inkSoft),
-                ),
             ],
+          ),
+          // Rearrange affordance — kept identical to the Manage page: same
+          // hint/active text plus a Done button while reordering.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: Alignment.topLeft,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _editMode
+                              ? CupertinoIcons.checkmark_circle_fill
+                              : CupertinoIcons.arrow_up_arrow_down,
+                          size: 12,
+                          color: _editMode
+                              ? AppActionBlue.color
+                              : brand.inkSoft,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _editMode
+                              ? context.t('budget.reorderActive')
+                              : context.t('budget.reorderHint'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _editMode
+                                ? AppActionBlue.color
+                                : brand.inkSoft,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_editMode)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() => _editMode = false);
+                            },
+                            child: Text(
+                              context.t('budget.done'),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppActionBlue.color,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (ctx, constraints) {
-              // 3 columns with two 10px gaps.
-              final slotW = (constraints.maxWidth - 20) / 3;
-              return Column(
-                children: [
-                  buildRow(0, 3, slotW),
-                  AnimatedCrossFade(
-                    duration: const Duration(milliseconds: 260),
-                    sizeCurve: Curves.easeOutCubic,
-                    crossFadeState: _expanded
-                        ? CrossFadeState.showSecond
-                        : CrossFadeState.showFirst,
-                    firstChild: const SizedBox(width: double.infinity),
-                    secondChild: Column(
-                      children: [
-                        const SizedBox(height: 10),
-                        buildRow(3, 6, slotW),
-                      ],
+              const tileH = 82.0;
+              const gap = 10.0;
+              final cellW = (constraints.maxWidth - gap * 2) / 3;
+              final rows = ((ordered.length - 1) ~/ 3) + 1;
+              final fullHeight = rows * tileH + (rows - 1) * gap;
+              // Collapsed shows only the first row; expanding reveals the rest
+              // and unlocks drag-to-rearrange.
+              return AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  height: _expanded ? fullHeight : tileH,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: fullHeight,
+                      maxHeight: fullHeight,
+                      child: ReorderableTileGrid(
+                        itemCount: ordered.length,
+                        columns: 3,
+                        spacing: gap,
+                        runSpacing: gap,
+                        tileHeight: tileH,
+                        enabled: _expanded,
+                        itemKeys: order,
+                        itemBuilder: (_, i) => _quickTile(ordered[i], i),
+                        feedbackBuilder: (_, i) =>
+                            _dragFeedback(ordered[i], cellW, brand),
+                        onDragStart: () {
+                          HapticFeedback.mediumImpact();
+                          if (!_editMode) setState(() => _editMode = true);
+                        },
+                        onReorder: _reorder,
+                      ),
                     ),
                   ),
-                ],
+                ),
               );
             },
           ),

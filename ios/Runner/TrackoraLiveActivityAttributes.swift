@@ -8,6 +8,7 @@ struct TrackoraLiveActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var currency: String
         var todaySpent: Double
+        var todayCount: Int = 0
     }
 
     // No static fields needed — all display data lives in ContentState.

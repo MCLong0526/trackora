@@ -1276,6 +1276,8 @@ class AppStrings {
     'budget.expenseCycle': 'Expense Cycle',
     'budget.notSet': 'not set',
     'budget.done': 'Done',
+    'budget.reorderHint': 'Hold & drag to rearrange',
+    'budget.reorderActive': 'Drag tiles to rearrange',
 
     // Settings — additional keys
     'settings.appName': 'Trackora',
@@ -2433,6 +2435,8 @@ class AppStrings {
     'budget.expenseCycle': '消费周期',
     'budget.notSet': '未设置',
     'budget.done': '完成',
+    'budget.reorderHint': '长按拖动以重新排列',
+    'budget.reorderActive': '拖动磁贴重新排列',
 
     // Settings — additional keys
     'settings.appName': 'Trackora',
@@ -3631,6 +3635,8 @@ class AppStrings {
     'budget.expenseCycle': 'Kitaran Perbelanjaan',
     'budget.notSet': 'belum ditetapkan',
     'budget.done': 'Selesai',
+    'budget.reorderHint': 'Tahan & seret untuk susun semula',
+    'budget.reorderActive': 'Seret jubin untuk susun semula',
 
     // Settings — additional keys
     'settings.appName': 'Trackora',

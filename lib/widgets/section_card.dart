@@ -84,3 +84,62 @@ class CircleIconButton extends StatelessWidget {
     );
   }
 }
+
+/// iOS-26-style frosted circular toolbar button. Used for *every* top-right
+/// header action (FX, manage, eye, back…) so they all share one colour, size
+/// and shape — translucent fill + hairline edge + soft lift.
+class GlassCircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final double size;
+  final double? iconSize;
+  final Color? foreground;
+
+  const GlassCircleButton({
+    super.key,
+    required this.icon,
+    this.onTap,
+    this.size = 40,
+    this.iconSize,
+    this.foreground,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.14)
+              : Colors.white.withValues(alpha: 0.62),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.18)
+                : Colors.white.withValues(alpha: 0.80),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          icon,
+          size: iconSize ?? size * 0.46,
+          color: foreground ?? brand.ink.withValues(alpha: 0.78),
+        ),
+      ),
+    );
+  }
+}

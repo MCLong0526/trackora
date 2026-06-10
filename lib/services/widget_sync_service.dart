@@ -43,6 +43,7 @@ class WidgetSyncService {
     required double budgetableSpent,
     String localeCode = 'system',
     double todaySpent = 0,
+    int todayCount = 0,
     double weekSpent = 0,
     List<Account> accounts = const [],
     List<Expense> recentExpenses = const [],
@@ -76,6 +77,7 @@ class WidgetSyncService {
     LiveActivityService.update(
       currency: currencySymbol,
       todaySpent: todaySpent,
+      todayCount: todayCount,
     );
 
     // Push the same totals to the paired Apple Watch via WCSession

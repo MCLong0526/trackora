@@ -1,15 +1,16 @@
-import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../onboarding/onboarding_screen.dart';
-import 'assets_screen.dart';
+import '../settings/settings_screen.dart';
 import 'dashboard_screen.dart';
 import 'statistics_screen.dart';
 import 'budget_screen.dart';
@@ -28,7 +29,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _HomeTabWrapper(),
     StatisticsScreen(),
     BudgetScreen(),
-    AssetsScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -66,6 +67,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (next != _index) setState(() => _index = next);
     });
     final brand = context.brand;
+    final offline = !(ref.watch(networkStatusProvider).valueOrNull ?? true);
     return Scaffold(
       backgroundColor: brand.background,
       // Stack-based floating nav: no bottomNavigationBar slot so Flutter never
@@ -107,13 +109,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ),
             ),
           ),
-          // Gradient fade at the bottom so scrollable content fades out
-          // before it disappears behind the floating nav pill.
+          // Soft fade above the bar. Kept light on purpose: the glass needs
+          // real content with contrast *behind* it to refract — fading it to
+          // solid background would leave nothing for the "liquid" to bend.
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            height: 150,
+            height: 130,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -122,7 +125,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                     end: Alignment.bottomCenter,
                     colors: [
                       brand.background.withValues(alpha: 0),
-                      brand.background.withValues(alpha: 0.92),
+                      brand.background.withValues(alpha: 0.40),
                     ],
                     stops: const [0.0, 1.0],
                   ),
@@ -137,6 +140,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             bottom: 0,
             child: _BottomBar(
               index: _index,
+              offline: offline,
               onTap: (i) {
                 if (i == _index) return;
                 ref.read(homeTabIndexProvider.notifier).state = i;
@@ -153,7 +157,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 class _BottomBar extends StatefulWidget {
   final int index;
   final ValueChanged<int> onTap;
-  const _BottomBar({required this.index, required this.onTap});
+  final bool offline;
+  const _BottomBar({
+    required this.index,
+    required this.onTap,
+    required this.offline,
+  });
 
   @override
   State<_BottomBar> createState() => _BottomBarState();
@@ -177,8 +186,9 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
   // Liquid glass expand animation while the finger is on the bar.
   late final AnimationController _glassCtrl;
 
-  // Floating glass pill height; it only grows subtly while touched.
-  static const _compactH = 64.0;
+  // Floating glass pill height. Fixed (not animated) so the LiquidGlass
+  // geometry never regenerates per-frame — animating a glass shape can spike
+  // memory due to a known Flutter texture-disposal bug (see package docs).
   static const _liquidH = 68.0;
   // Selected capsule size: covers both icon and label, then jelly-stretches.
   static const _lensWBase = 82.0;
@@ -355,9 +365,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         animation: Listenable.merge([_pillCtrl, _glassCtrl]),
         builder: (context, _) {
           final t = Curves.easeOutCubic.transform(_glassCtrl.value);
-          // Lens is always at least 80% visible at rest, expands to 100% on touch.
-          final lensProgress = lerpDouble(0.8, 1.0, t)!;
-          final barH = lerpDouble(_compactH, _liquidH, t)!;
+          const barH = _liquidH;
           final jelly = Curves.easeOut.transform(_dragStretch) * t;
           final lensBaseW = lerpDouble(_lensWBase, _lensWExpanded, t)!;
           final lensBaseH = lerpDouble(_lensHBase, _lensHExpanded, t)!;
@@ -371,49 +379,41 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // ── Layer 1: Solid bar background (iOS 26 style) ──────────
+                // ── Layer 1: Liquid Glass bar ─────────────────────────────
+                // Real shader refraction (liquid_glass_renderer) that bends the
+                // content scrolling behind the bar — it samples Flutter's own
+                // backdrop, which Apple's UIGlassEffect cannot (that only blurs
+                // native UIKit views, and this screen is Flutter-drawn). The
+                // squircle drop shadow is drawn here in Flutter.
                 Positioned.fill(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(36),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                        borderRadius: BorderRadius.circular(36),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.10)
-                              : Colors.black.withValues(alpha: 0.07),
-                          width: 0.8,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.40 : 0.10,
-                            ),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.18 : 0.04,
-                            ),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                  child: DecoratedBox(
+                    decoration: const ShapeDecoration(
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(36)),
                       ),
+                      shadows: [
+                        BoxShadow(
+                          color: Color(0x1F000000),
+                          blurRadius: 28,
+                          offset: Offset(0, 10),
+                        ),
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
+                    child: _GlassBar(isDark: isDark),
                   ),
                 ),
-                // Layer 2: glass lens indicator, behind nav items and allowed
-                // to overflow the bar like the WhatsApp reference.
+                // Layer 2: the gliding selection capsule, behind the nav items.
                 Positioned(
                   left: cx - lensW / 2,
-                  top: (barH - lensH) / 2 - lerpDouble(0, 2, t)!,
+                  top: (barH - lensH) / 2,
                   width: lensW,
                   height: lensH,
-                  child: _LiquidGlassLens(
-                    progress: lensProgress,
+                  child: _GlideCapsule(
                     isDark: isDark,
                     jelly: jelly,
                     direction: _dragDirection,
@@ -456,7 +456,8 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                         child: Row(
                           children: [
                             _NavItem(
-                              icon: CupertinoIcons.house_fill,
+                              icon: CupertinoIcons.house,
+                              activeIcon: CupertinoIcons.house_fill,
                               label: context.t('tab.home'),
                               selected: activeIndex == 0,
                               onTap: () => _handleTap(0),
@@ -464,7 +465,8 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                               glassExpand: t,
                             ),
                             _NavItem(
-                              icon: CupertinoIcons.chart_bar_alt_fill,
+                              icon: CupertinoIcons.chart_bar,
+                              activeIcon: CupertinoIcons.chart_bar_fill,
                               label: context.t('tab.stats'),
                               selected: activeIndex == 1,
                               onTap: () => _handleTap(1),
@@ -473,6 +475,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                             ),
                             _NavItem(
                               icon: CupertinoIcons.creditcard,
+                              activeIcon: CupertinoIcons.creditcard_fill,
                               label: context.t('tab.money'),
                               selected: activeIndex == 2,
                               onTap: () => _handleTap(2),
@@ -480,12 +483,14 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                               glassExpand: t,
                             ),
                             _NavItem(
-                              icon: CupertinoIcons.chart_pie_fill,
-                              label: context.t('tab.assets'),
+                              icon: CupertinoIcons.person_crop_circle,
+                              activeIcon: CupertinoIcons.person_crop_circle_fill,
+                              label: context.t('tab.profile'),
                               selected: activeIndex == 3,
                               onTap: () => _handleTap(3),
                               isDark: isDark,
                               glassExpand: t,
+                              offlineBadge: widget.offline,
                             ),
                           ],
                         ),
@@ -502,38 +507,87 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
   }
 }
 
+/// The bar's glass surface — real shader refraction via [LiquidGlass].
+///
+/// Unlike Apple's `UIGlassEffect` (which can only blur native UIKit views, not
+/// Flutter-rendered content), this samples Flutter's own backdrop, so it
+/// genuinely bends and blurs the dashboard/list scrolling behind the bar. A
+/// crisp Flutter-drawn rim sits on top for the bright glass edge.
+///
+/// Purely decorative: touches are handled by the nav items layered on top.
+class _GlassBar extends StatelessWidget {
+  final bool isDark;
+  const _GlassBar({required this.isDark});
+
+  static const double _radius = 36;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: ShapeDecoration(
+        shape: RoundedSuperellipseBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(_radius)),
+          side: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.18)
+                : Colors.white.withValues(alpha: 0.80),
+            width: 1,
+          ),
+        ),
+      ),
+      child: LiquidGlass.withOwnLayer(
+        shape: const LiquidRoundedSuperellipse(borderRadius: _radius),
+        settings: LiquidGlassSettings(
+          thickness: 20,
+          blur: 7,
+          refractiveIndex: 1.45,
+          chromaticAberration: 0.015,
+          lightIntensity: 0.85,
+          ambientStrength: 0.15,
+          saturation: 1.4,
+          glassColor: isDark
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.45),
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
-  final IconData icon;
+  final IconData icon; // outline glyph, shown when inactive
+  final IconData activeIcon; // filled glyph, shown when selected
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final bool isDark;
   final double glassExpand; // 0.0 = compact, 1.0 = liquid expanded
+  final bool offlineBadge;
 
   const _NavItem({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.selected,
     required this.onTap,
     required this.isDark,
     required this.glassExpand,
+    this.offlineBadge = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
-    const accent = AppActionBlue.color;
-    final iconColor = selected
-        ? accent
+    // Selected items use plain black / white (no accent tint) so they read
+    // crisply on the neutral thumb — especially in dark mode.
+    final color = selected
+        ? (isDark ? Colors.white : Colors.black)
         : (isDark
-              ? Colors.white.withValues(alpha: 0.48)
+              ? Colors.white.withValues(alpha: 0.50)
               : brand.ink.withValues(alpha: 0.45));
-    final labelColor = selected
-        ? accent
-        : (isDark
-              ? Colors.white.withValues(alpha: 0.42)
-              : brand.ink.withValues(alpha: 0.45));
-    final iconSz = lerpDouble(25.0, 26.0, glassExpand)!;
+    final iconSz = lerpDouble(24.0, 25.0, glassExpand)!;
     final labelSz = lerpDouble(10.5, 11.0, glassExpand)!;
 
     return Expanded(
@@ -543,30 +597,64 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1.0, end: selected ? 1.08 : 1.0),
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutBack,
-              builder: (ctx, scale, child) =>
-                  Transform.scale(scale: scale, child: child),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  icon,
-                  key: ValueKey(selected),
-                  color: iconColor,
-                  size: iconSz,
+            // Springy pop + a crossfade morph from outline to filled glyph,
+            // with an optional offline badge for the Profile tab.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 1.0, end: selected ? 1.16 : 1.0),
+                  duration: const Duration(milliseconds: 340),
+                  curve: Curves.easeOutBack,
+                  builder: (ctx, scale, child) =>
+                      Transform.scale(scale: scale, child: child),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Icon(
+                      selected ? activeIcon : icon,
+                      key: ValueKey(selected),
+                      color: color,
+                      size: iconSz,
+                    ),
+                  ),
                 ),
-              ),
+                // Amber wifi-slash dot, matching the profile avatar's badge.
+                if (offlineBadge)
+                  Positioned(
+                    right: -5,
+                    top: -3,
+                    child: Container(
+                      width: 13,
+                      height: 13,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? const Color(0xFF1C1C1E)
+                              : Colors.white,
+                          width: 1.5,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        CupertinoIcons.wifi_slash,
+                        size: 7,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             SizedBox(height: lerpDouble(3.0, 4.0, glassExpand)!),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
               style: TextStyle(
                 fontSize: labelSz,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: labelColor,
-                letterSpacing: 0,
+                color: color,
+                letterSpacing: selected ? 0.1 : 0,
               ),
               child: Text(label, maxLines: 1),
             ),
@@ -577,14 +665,17 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _LiquidGlassLens extends StatelessWidget {
-  final double progress;
+/// The gliding selection indicator — a clean elevated "thumb" (iOS
+/// segmented-control style) that springs between tabs with a soft branded
+/// accent glow and a glassy top highlight. The width/height it is given
+/// already squashes with travel (see `_BottomBar`); here it just leans subtly
+/// in the direction of motion for a lively, tactile feel.
+class _GlideCapsule extends StatelessWidget {
   final bool isDark;
   final double jelly;
   final double direction;
 
-  const _LiquidGlassLens({
-    required this.progress,
+  const _GlideCapsule({
     required this.isDark,
     required this.jelly,
     required this.direction,
@@ -592,253 +683,22 @@ class _LiquidGlassLens extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = progress.clamp(0.0, 1.0);
-    final rimOpacity = lerpDouble(0.0, 1.0, t)!;
-    final blur = lerpDouble(24.0, 34.0, t)!;
-    final radiusValue = lerpDouble(24.0, 30.0, t)!;
-    final radius = BorderRadius.circular(radiusValue);
-    final glowShift = lerpDouble(0, 6, jelly)! * direction;
-    final tintTop = isDark
-        ? lerpDouble(0.22, 0.30, t)!
-        : lerpDouble(0.10, 0.18, t)!;
-    final tintBottom = isDark
-        ? lerpDouble(0.12, 0.18, t)!
-        : lerpDouble(0.05, 0.10, t)!;
+    // Neutral selection chip in the spirit of the WhatsApp reference: a flat,
+    // soft grey capsule (no glow / no gloss) that simply glides between tabs.
+    final radius = BorderRadius.circular(28);
+    final lean = lerpDouble(0, 4, jelly)! * direction;
 
     return Transform.translate(
-      offset: Offset(glowShift * 0.16, 0),
+      offset: Offset(lean * 0.3, 0),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radius,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: isDark
-                    ? lerpDouble(0.20, 0.30, t)!
-                    : lerpDouble(0.06, 0.11, t)!,
-              ),
-              blurRadius: lerpDouble(12, 20, t)!,
-              offset: Offset(0, lerpDouble(3, 7, t)!),
-            ),
-            BoxShadow(
-              color: Colors.white.withValues(
-                alpha: isDark
-                    ? lerpDouble(0.10, 0.16, t)!
-                    : lerpDouble(0.34, 0.48, t)!,
-              ),
-              blurRadius: lerpDouble(5, 8, t)!,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ClipRRect(
-              borderRadius: radius,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withValues(alpha: tintTop),
-                        Colors.white.withValues(alpha: tintBottom),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: Colors.white.withValues(
-                        alpha: isDark
-                            ? lerpDouble(0.28, 0.42, t)!
-                            : lerpDouble(0.78, 0.94, t)!,
-                      ),
-                      width: lerpDouble(0.8, 1.1, t)!,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Radial inner luminosity — iOS 26 glass "inner bubble" glow
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    gradient: RadialGradient(
-                      center: const Alignment(0, -0.2),
-                      radius: 0.85,
-                      colors: [
-                        Colors.white.withValues(
-                          alpha: (isDark ? 0.20 : 0.34) * t,
-                        ),
-                        Colors.white.withValues(
-                          alpha: (isDark ? 0.06 : 0.12) * t,
-                        ),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.42, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            CustomPaint(
-              painter: _LiquidGlassRimPainter(
-                opacity: rimOpacity,
-                isDark: isDark,
-                cornerRadius: radiusValue,
-                jelly: jelly,
-                direction: direction,
-              ),
-            ),
-            Positioned(
-              left: 10 + glowShift.clamp(-3.0, 3.0),
-              top: 7,
-              right: 12 - glowShift.clamp(-3.0, 3.0),
-              height: 16,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withValues(alpha: 0.0),
-                        Colors.white.withValues(
-                          alpha: lerpDouble(0.16, 0.36, t)!,
-                        ),
-                        Colors.white.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: 5,
-              height: 8,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: LinearGradient(
-                      begin: direction >= 0
-                          ? Alignment.centerLeft
-                          : Alignment.centerRight,
-                      end: direction >= 0
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      colors: [
-                        const Color(0xFF4FE6FF).withValues(alpha: 0.0),
-                        const Color(0xFF4FE6FF).withValues(alpha: 0.18 * t),
-                        const Color(0xFFFFD15C).withValues(alpha: 0.15 * t),
-                        const Color(0xFF7C4DFF).withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.18)
+              : Colors.black.withValues(alpha: 0.08),
         ),
       ),
     );
-  }
-}
-
-class _LiquidGlassRimPainter extends CustomPainter {
-  final double opacity;
-  final bool isDark;
-  final double cornerRadius;
-  final double jelly;
-  final double direction;
-
-  const _LiquidGlassRimPainter({
-    required this.opacity,
-    required this.isDark,
-    required this.cornerRadius,
-    required this.jelly,
-    required this.direction,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (opacity <= 0) return;
-    final rect = Offset.zero & size;
-    final stroke = size.shortestSide * 0.035;
-    final horizontalInset = lerpDouble(0, 3.5, jelly)!;
-    final rimRect = rect.deflate(stroke / 2);
-    final squishRect = Rect.fromLTWH(
-      rimRect.left + horizontalInset,
-      rimRect.top,
-      rimRect.width - horizontalInset * 2,
-      rimRect.height,
-    );
-    final rimRRect = RRect.fromRectAndRadius(
-      squishRect,
-      Radius.circular(cornerRadius),
-    );
-
-    final rimPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..shader = SweepGradient(
-        startAngle: direction >= 0 ? -0.9 : -1.15,
-        endAngle: direction >= 0 ? 5.55 : 5.25,
-        colors: [
-          Colors.transparent,
-          const Color(0xFF4FE6FF).withValues(alpha: 0.68 * opacity),
-          Colors.white.withValues(alpha: (isDark ? 0.88 : 0.96) * opacity),
-          const Color(0xFFFFD15C).withValues(alpha: 0.66 * opacity),
-          const Color(0xFF7C4DFF).withValues(alpha: 0.54 * opacity),
-          Colors.transparent,
-        ],
-        stops: const [0.00, 0.12, 0.22, 0.58, 0.76, 1.00],
-      ).createShader(rect);
-    canvas.drawRRect(rimRRect, rimPaint);
-
-    final innerRRect = RRect.fromRectAndRadius(
-      squishRect.deflate(size.shortestSide * 0.08),
-      Radius.circular(cornerRadius * 0.78),
-    );
-    final innerPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke * 0.52
-      ..color = Colors.white.withValues(alpha: 0.11 * opacity);
-    canvas.drawRRect(innerRRect, innerPaint);
-
-    final causticPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke * 0.62
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.white.withValues(alpha: 0.26 * opacity);
-    canvas.drawArc(
-      squishRect.deflate(size.shortestSide * 0.10),
-      direction >= 0 ? -1.84 : -1.62,
-      1.08 + (jelly * 0.24),
-      false,
-      causticPaint,
-    );
-    canvas.drawArc(
-      squishRect.deflate(size.shortestSide * 0.08),
-      direction >= 0 ? 1.00 : 1.18,
-      0.92 + (jelly * 0.18),
-      false,
-      causticPaint..color = Colors.black.withValues(alpha: 0.08 * opacity),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _LiquidGlassRimPainter oldDelegate) {
-    return oldDelegate.opacity != opacity ||
-        oldDelegate.isDark != isDark ||
-        oldDelegate.cornerRadius != cornerRadius ||
-        oldDelegate.jelly != jelly ||
-        oldDelegate.direction != direction;
   }
 }
 

@@ -23,6 +23,7 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../../widgets/section_card.dart';
@@ -71,13 +72,12 @@ class SettingsScreen extends ConsumerWidget {
       body: SafeArea(
         child: StickyHeaderScaffold(
           header: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Row(
               children: [
                 if (canPop) ...[
-                  CircleIconButton(
+                  GlassCircleButton(
                     icon: CupertinoIcons.chevron_left,
-                    size: 40,
                     onTap: () => Navigator.maybePop(context),
                   ),
                   const SizedBox(width: 12),
@@ -85,13 +85,11 @@ class SettingsScreen extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     context.t('settings.profile'),
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
-                    ),
+                    style: Theme.of(context).textTheme.displayMedium,
                   ),
                 ),
+                // Exchange-rates button, matching the other tab headers.
+                const FxRateButton(),
               ],
             ),
           ),

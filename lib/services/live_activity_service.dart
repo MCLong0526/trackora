@@ -15,12 +15,14 @@ class LiveActivityService {
   static Future<String?> start({
     required String currency,
     required double todaySpent,
+    int todayCount = 0,
   }) async {
     if (!_supported) return null;
     try {
       await _channel.invokeMethod<dynamic>('start', {
         'currency': currency,
         'todaySpent': todaySpent,
+        'todayCount': todayCount,
       });
       return null;
     } on PlatformException catch (e) {
@@ -36,12 +38,14 @@ class LiveActivityService {
   static Future<void> update({
     required String currency,
     required double todaySpent,
+    int todayCount = 0,
   }) async {
     if (!_supported) return;
     try {
       await _channel.invokeMethod<dynamic>('update', {
         'currency': currency,
         'todaySpent': todaySpent,
+        'todayCount': todayCount,
       });
     } on PlatformException catch (e) {
       debugPrint('[LiveActivity] update failed: ${e.code} – ${e.message}');

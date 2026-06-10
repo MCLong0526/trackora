@@ -51,9 +51,11 @@ class LiveActivityService {
         guard let map = args as? [String: Any] else { return nil }
         let currency = map["currency"] as? String ?? "$"
         let todaySpent = (map["todaySpent"] as? Double) ?? 0.0
+        let todayCount = (map["todayCount"] as? Int) ?? 0
         return TrackoraLiveActivityAttributes.ContentState(
             currency: currency,
-            todaySpent: todaySpent
+            todaySpent: todaySpent,
+            todayCount: todayCount
         )
     }
 

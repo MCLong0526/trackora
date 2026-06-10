@@ -160,8 +160,23 @@ class DeepLinkService {
     });
   }
 
+  // Guards against the same deep link being delivered twice in quick succession
+  // (it can arrive via both the native channel and the home_widget plugin),
+  // which otherwise stacks two Add-Expense screens.
+  static String? _lastHandledUri;
+  static DateTime? _lastHandledAt;
+
   static void _handle(Uri? uri, GlobalKey<NavigatorState> navKey) {
     if (uri == null) return;
+    final uriStr = uri.toString();
+    final now = DateTime.now();
+    if (_lastHandledUri == uriStr &&
+        _lastHandledAt != null &&
+        now.difference(_lastHandledAt!) < const Duration(milliseconds: 1200)) {
+      return;
+    }
+    _lastHandledUri = uriStr;
+    _lastHandledAt = now;
     final host = uri.host.isEmpty ? uri.path.replaceAll('/', '') : uri.host;
 
     if (host == 'add') {

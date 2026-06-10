@@ -17,7 +17,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
-import '../../widgets/profile_avatar_button.dart';
+import '../../widgets/reorderable_tile_grid.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
@@ -298,7 +298,82 @@ class BudgetScreen extends ConsumerStatefulWidget {
   ConsumerState<BudgetScreen> createState() => _BudgetScreenState();
 }
 
-class _BudgetScreenState extends ConsumerState<BudgetScreen> {
+class _BudgetScreenState extends ConsumerState<BudgetScreen>
+    with SingleTickerProviderStateMixin {
+  // Long-press "edit mode" for rearranging the quick-action tiles, with the
+  // iOS home-screen style jiggle while active.
+  bool _hubEditMode = false;
+  late final AnimationController _jiggleCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _jiggleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _jiggleCtrl.dispose();
+    super.dispose();
+  }
+
+  void _enterHubEdit() {
+    if (_hubEditMode) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _hubEditMode = true);
+  }
+
+  void _exitHubEdit() {
+    if (!_hubEditMode) return;
+    setState(() => _hubEditMode = false);
+  }
+
+  /// Applies a remove-at-[from] / insert-at-[to] reorder of the visible
+  /// [reorderableIds] back onto the full saved money-hub order, leaving any
+  /// hidden modules in their existing slots.
+  void _reorderHub(List<String> reorderableIds, int from, int to) {
+    if (from == to) return;
+    final reordered = [...reorderableIds];
+    if (from < 0 || from >= reordered.length) return;
+    final moved = reordered.removeAt(from);
+    reordered.insert(to.clamp(0, reordered.length), moved);
+
+    final full = [...ref.read(moneyHubOrderProvider)];
+    final visible = reorderableIds.toSet();
+    var next = 0;
+    for (var i = 0; i < full.length && next < reordered.length; i++) {
+      if (visible.contains(full[i])) full[i] = reordered[next++];
+    }
+    for (; next < reordered.length; next++) {
+      if (!full.contains(reordered[next])) full.add(reordered[next]);
+    }
+    ref.read(moneyHubOrderProvider.notifier).setOrder(full);
+    HapticFeedback.selectionClick();
+  }
+
+  /// Tile content for one quick-action. Rearrangeable modules jiggle while in
+  /// edit mode; the drag handling itself lives in [ReorderableTileGrid].
+  Widget _hubTile(_BudgetQuickItem item) {
+    final reorderable = item.id != 'expenseCycle';
+    final button = _BudgetQuickButton(
+      item: item,
+      editMode: _hubEditMode && reorderable,
+    );
+    if (!_hubEditMode || !reorderable) return button;
+    return AnimatedBuilder(
+      animation: _jiggleCtrl,
+      builder: (_, child) {
+        final dir = item.id.hashCode.isEven ? 1.0 : -1.0;
+        final angle = 0.03 * dir * (_jiggleCtrl.value * 2 - 1);
+        return Transform.rotate(angle: angle, child: child);
+      },
+      child: button,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final expenses =
@@ -358,6 +433,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final quickItems = <_BudgetQuickItem>[
       if (visibleModules.contains('monthlyBudget'))
         _BudgetQuickItem(
+          id: 'monthlyBudget',
           icon: CupertinoIcons.chart_pie_fill,
           iconBg: AppColors.lilac,
           iconColor: kCategoryStyles['Shopping']!.accent,
@@ -374,6 +450,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('savingPlans'))
         _BudgetQuickItem(
+          id: 'savingPlans',
           icon: CupertinoIcons.flag_fill,
           iconBg: const Color(0xFFE8F5E9),
           iconColor: const Color(0xFF34C759),
@@ -382,6 +459,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('borrowLending'))
         _BudgetQuickItem(
+          id: 'borrowLending',
           icon: CupertinoIcons.arrow_up_arrow_down,
           iconBg: const Color(0xFFFFF3E0),
           iconColor: const Color(0xFFF57C00),
@@ -390,6 +468,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('installments'))
         _BudgetQuickItem(
+          id: 'installments',
           icon: CupertinoIcons.bolt_fill,
           iconBg: const Color(0xFFFCE4EC),
           iconColor: const Color(0xFFE91E63),
@@ -398,6 +477,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('people'))
         _BudgetQuickItem(
+          id: 'people',
           icon: CupertinoIcons.person_2_fill,
           iconBg: AppColors.lilac,
           iconColor: kCategoryStyles['Shopping']!.accent,
@@ -406,6 +486,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('travelGroups'))
         _BudgetQuickItem(
+          id: 'travelGroups',
           icon: CupertinoIcons.airplane,
           iconBg: const Color(0xFFE3F2FD),
           iconColor: const Color(0xFF0066CC),
@@ -414,6 +495,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('investments'))
         _BudgetQuickItem(
+          id: 'investments',
           icon: CupertinoIcons.chart_bar_square_fill,
           iconBg: const Color(0xFFEDE7F6),
           iconColor: const Color(0xFF5856D6),
@@ -422,6 +504,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       if (visibleModules.contains('groups'))
         _BudgetQuickItem(
+          id: 'groups',
           icon: CupertinoIcons.person_2_fill,
           iconBg: const Color(0xFFEAE3F8),
           iconColor: const Color(0xFF5A4AAB),
@@ -446,12 +529,28 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       // ── Always-visible tools ──────────────────────────────
       _BudgetQuickItem(
+        id: 'expenseCycle',
         icon: CupertinoIcons.calendar_badge_plus,
         iconBg: AppColors.butter,
         iconColor: AppColors.ink,
         label: context.t('budget.expenseCycle'),
         onTap: () => _showCycleSheet(context),
       ),
+    ];
+
+    // Order the rearrangeable modules by the saved money-hub order; the
+    // always-on tool ('expenseCycle') stays pinned at the end.
+    final hubOrder = ref.watch(moneyHubOrderProvider);
+    final byId = {for (final it in quickItems) it.id: it};
+    final reorderableIds = <String>[
+      for (final id in hubOrder)
+        if (byId.containsKey(id) && id != 'expenseCycle') id,
+      for (final it in quickItems)
+        if (it.id != 'expenseCycle' && !hubOrder.contains(it.id)) it.id,
+    ];
+    final orderedItems = <_BudgetQuickItem>[
+      for (final id in reorderableIds) byId[id]!,
+      ...quickItems.where((it) => it.id == 'expenseCycle'),
     ];
 
     return SafeArea(
@@ -468,15 +567,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               ),
               Row(
                 children: [
-                  CircleIconButton(
+                  GlassCircleButton(
                     icon: CupertinoIcons.slider_horizontal_3,
-                    size: 40,
                     onTap: () => _showMoneyHubSheet(context, ref),
                   ),
                   const SizedBox(width: 8),
                   const FxRateButton(),
-                  const SizedBox(width: 8),
-                  const ProfileAvatarButton(),
                 ],
               ),
             ],
@@ -500,11 +596,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           const SizedBox(height: 16),
 
           // ── Quick-action card ─────────────────────────────
-          if (quickItems.isNotEmpty)
+          if (orderedItems.isNotEmpty)
             Builder(builder: (ctx) {
               final brand = ctx.brand;
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
                 decoration: BoxDecoration(
                   color: brand.surface,
                   borderRadius: BorderRadius.circular(20),
@@ -512,19 +608,65 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (int row = 0; row * 3 < quickItems.length; row++) ...[
-                      if (row > 0) const SizedBox(height: 4),
-                      Row(
+                    // Affordance so users know the tiles can be rearranged.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
+                      child: Row(
                         children: [
-                          for (int col = 0; col < 3; col++)
-                            Expanded(
-                              child: (row * 3 + col) < quickItems.length
-                                  ? _BudgetQuickButton(item: quickItems[row * 3 + col])
-                                  : const SizedBox(),
+                          Icon(
+                            _hubEditMode
+                                ? CupertinoIcons.checkmark_circle_fill
+                                : CupertinoIcons.arrow_up_arrow_down,
+                            size: 12,
+                            color: _hubEditMode
+                                ? AppActionBlue.color
+                                : brand.inkSoft,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _hubEditMode
+                                ? context.t('budget.reorderActive')
+                                : context.t('budget.reorderHint'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _hubEditMode
+                                  ? AppActionBlue.color
+                                  : brand.inkSoft,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_hubEditMode)
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _exitHubEdit,
+                              child: Text(
+                                context.t('budget.done'),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppActionBlue.color,
+                                ),
+                              ),
                             ),
                         ],
                       ),
-                    ],
+                    ),
+                    ReorderableTileGrid(
+                      itemCount: orderedItems.length,
+                      reorderableCount: reorderableIds.length,
+                      columns: 3,
+                      spacing: 0,
+                      runSpacing: 4,
+                      tileHeight: 84,
+                      itemKeys: [for (final it in orderedItems) it.id],
+                      itemBuilder: (_, i) => _hubTile(orderedItems[i]),
+                      feedbackBuilder: (_, i) =>
+                          _BudgetQuickButton(item: orderedItems[i]),
+                      onDragStart: _enterHubEdit,
+                      onReorder: (from, to) =>
+                          _reorderHub(reorderableIds, from, to),
+                    ),
                   ],
                 ),
               );
@@ -910,6 +1052,7 @@ class _VisibilitySwitchRow extends StatelessWidget {
 // ── Budget quick-icon button ───────────────────────────────────
 
 class _BudgetQuickItem {
+  final String id;
   final IconData icon;
   final Color iconBg;
   final Color iconColor;
@@ -917,6 +1060,7 @@ class _BudgetQuickItem {
   final VoidCallback onTap;
 
   const _BudgetQuickItem({
+    required this.id,
     required this.icon,
     required this.iconBg,
     required this.iconColor,
@@ -927,7 +1071,8 @@ class _BudgetQuickItem {
 
 class _BudgetQuickButton extends StatefulWidget {
   final _BudgetQuickItem item;
-  const _BudgetQuickButton({required this.item});
+  final bool editMode;
+  const _BudgetQuickButton({required this.item, this.editMode = false});
 
   @override
   State<_BudgetQuickButton> createState() => _BudgetQuickButtonState();
@@ -962,6 +1107,7 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
       onTapDown: (_) => _press.reverse(),
       onTapUp: (_) {
         _press.forward();
+        if (widget.editMode) return;
         HapticFeedback.selectionClick();
         widget.item.onTap();
       },

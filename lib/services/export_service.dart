@@ -41,10 +41,11 @@ class CsvExportResult {
 ///
 /// **Header schema** — exported with display-friendly Title Case names:
 /// ```
-/// ID, Date, Type, Category, Amount, Note, Receipt URL, Created At, Updated At
+/// Date, Type, Category, Amount, Note, Created At, Updated At
 /// ```
-/// **Date format** — ISO-8601 (`2026-05-01T19:30:00.000`). Round-trips
-/// cleanly through `DateTime.parse`.
+/// **Date format** — human-readable: `Date` as `yyyy-MM-dd`, `Created At` /
+/// `Updated At` as `yyyy-MM-dd HH:mm`. Both still round-trip through the
+/// import parser (which also accepts ISO-8601 written by older exports).
 ///
 /// **Encoding** — UTF-8 with BOM (`﻿`) so Excel auto-detects the
 /// encoding and renders accented characters correctly.
@@ -58,13 +59,11 @@ class CsvExportResult {
 class ExportService {
   /// Display-friendly headers used when writing CSVs. Order is fixed.
   static const _exportHeaders = <String>[
-    'ID',
     'Date',
     'Type',
     'Category',
     'Amount',
     'Note',
-    'Receipt URL',
     'Created At',
     'Updated At',
   ];
@@ -90,19 +89,21 @@ class ExportService {
     // Newest first — easier to skim in Excel/Numbers.
     final sorted = [...items]..sort((a, b) => b.date.compareTo(a.date));
 
+    // Human-readable, Excel-friendly dates (still re-importable).
+    final dateFmt = DateFormat('yyyy-MM-dd');
+    final tsFmt = DateFormat('yyyy-MM-dd HH:mm');
+
     final rows = <List<dynamic>>[
       _exportHeaders,
       for (final e in sorted)
         [
-          e.id,
-          e.date.toIso8601String(),
+          dateFmt.format(e.date),
           e.type == EntryType.income ? 'income' : 'expense',
           e.category,
           e.amount.toStringAsFixed(2),
           e.note,
-          e.receiptUrl ?? '',
-          e.createdAt.toIso8601String(),
-          e.updatedAt.toIso8601String(),
+          tsFmt.format(e.createdAt),
+          tsFmt.format(e.updatedAt),
         ],
     ];
 

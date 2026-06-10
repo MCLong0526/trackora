@@ -548,7 +548,7 @@ struct TrackoraLiveActivityWidget: Widget {
                     .font(.system(size: 11, weight: .heavy))
                     .foregroundColor(liveBrandPurple)
             }
-            .widgetURL(liveRoute("add"))
+            .widgetURL(liveRoute("open"))
             .keylineTint(liveBrandPurple)
         }
     }
@@ -561,7 +561,7 @@ private struct TrackoraLiveActivityLockScreenView: View {
     let state: TrackoraLiveActivityAttributes.ContentState
 
     var body: some View {
-        Link(destination: liveRoute("add")) {
+        Link(destination: liveRoute("open")) {
             HStack(spacing: 8) {
                 Image(systemName: "chart.pie.fill")
                     .font(.system(size: 12, weight: .heavy))
@@ -616,7 +616,7 @@ private func liveIslandBrandHeader() -> some View {
 }
 
 private func liveIslandOpenLink() -> some View {
-    Link(destination: liveRoute("add")) {
+    Link(destination: liveRoute("open")) {
         VStack(spacing: 3) {
             Image(systemName: "arrow.up.right.square.fill")
                 .font(.system(size: 16, weight: .bold))
@@ -637,10 +637,12 @@ private func liveIslandQuickEntryPanel(
 ) -> some View {
     VStack(spacing: 10) {
         HStack(alignment: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("TODAY'S SPENDING")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.todayCount == 1
+                    ? "1 EXPENSE TODAY"
+                    : "\(state.todayCount) EXPENSES TODAY")
                     .font(.system(size: 8, weight: .heavy))
-                    .foregroundColor(.white.opacity(0.40))
+                    .foregroundColor(.white.opacity(0.45))
                 Text(fmtAmount(state.todaySpent, currency: state.currency))
                     .font(.system(size: 24, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
@@ -648,7 +650,7 @@ private func liveIslandQuickEntryPanel(
                     .minimumScaleFactor(0.50)
             }
             Spacer(minLength: 8)
-            Link(destination: liveRoute("add")) {
+            Link(destination: liveRoute("open")) {
                 HStack(spacing: 3) {
                     Text("Open")
                         .font(.system(size: 10, weight: .bold))

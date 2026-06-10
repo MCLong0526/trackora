@@ -10,7 +10,7 @@ import 'package:intl/intl.dart';
 import '../services/exchange_rate_service.dart';
 import '../services/fx_preferences_service.dart';
 import '../state/providers.dart';
-import '../theme/app_theme.dart';
+import 'section_card.dart';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -49,41 +49,15 @@ class FxRateButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Tooltip(
       message: 'Exchange rates',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: GlassCircleButton(
+        icon: Icons.currency_exchange_rounded,
+        size: size,
         onTap: () {
           HapticFeedback.selectionClick();
           ExchangeRateSheet.show(context);
         },
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2C2C2E) : _parchment,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: brand.surface.withValues(alpha: 0.75),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.currency_exchange_rounded,
-            size: size * 0.46,
-            color: isDark ? Colors.white70 : _ink.withValues(alpha: 0.75),
-          ),
-        ),
       ),
     );
   }

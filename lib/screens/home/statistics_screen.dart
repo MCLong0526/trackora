@@ -15,6 +15,7 @@ import '../../models/account.dart';
 import '../../models/expense.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../models/precious_metal.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
@@ -22,7 +23,6 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/exchange_rate_sheet.dart';
-import '../../widgets/profile_avatar_button.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 
@@ -235,7 +235,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             : e,
     ];
     final stocks = ref.read(stockInvestmentsProvider).valueOrNull ?? const [];
-    if (stocks.isEmpty) return normalized;
+    final metals = ref.read(preciousMetalsProvider).valueOrNull ?? const [];
     final converter = ref.read(currencyConverterProvider).valueOrNull;
     final baseCode = converter?.base;
     final pseudo = <Expense>[];
@@ -268,6 +268,29 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         ));
       }
     }
+
+    // Precious metals only create a linked expense when an account was chosen
+    // (see PreciousMetal.expenseId). Inject the account-less ones so they still
+    // show in the by-category breakdown, without double-counting the rest.
+    for (final m in metals) {
+      if (m.expenseId != null && m.expenseId!.isNotEmpty) continue;
+      if (m.totalAmount <= 0) continue;
+      pseudo.add(Expense(
+        id: 'metal_${m.id}',
+        amount: m.totalAmount,
+        category: 'PreciousMetal',
+        note: m.metalType.label,
+        date: m.date,
+        type: m.action == MetalAction.buy
+            ? EntryType.expense
+            : EntryType.income,
+        accountId: m.accountId ?? '',
+        createdAt: m.date,
+        updatedAt: m.date,
+      ));
+    }
+
+    if (pseudo.isEmpty) return normalized;
     return [...normalized, ...pseudo];
   }
 
@@ -722,40 +745,13 @@ class _TopActionBar extends StatelessWidget {
             style: Theme.of(context).textTheme.displayMedium,
           ),
         ),
-        _ActionBtn(
+        GlassCircleButton(
           icon: CupertinoIcons.slider_horizontal_3,
           onTap: onManage,
         ),
         const SizedBox(width: 8),
         const FxRateButton(),
-        const SizedBox(width: 8),
-        const ProfileAvatarButton(),
       ],
-    );
-  }
-}
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ActionBtn({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: brand.surface,
-          shape: BoxShape.circle,
-          
-        ),
-        child: Icon(icon, size: 18, color: brand.ink),
-      ),
     );
   }
 }
@@ -3661,6 +3657,8 @@ Color _donutColorFor(String category) {
     'Bills': Color(0xFFD4A845), // warm gold
     'Groceries': Color(0xFF4BC4A8), // bright teal
     'Salary': Color(0xFF5DC98A), // fresh mint green
+    'PreciousMetal': Color(0xFFE0B33A), // premium gold
+    'Stock': Color(0xFF6E72E0), // confident indigo
     'Others': Color(0xFFA0A0AA), // neutral slate
     'Transfer': Color(0xFF78AEDD), // muted blue-gray
   };
