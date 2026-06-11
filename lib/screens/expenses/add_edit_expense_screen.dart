@@ -336,7 +336,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             ),
             const SizedBox(height: 5),
             Text(
-              'swipe down to close',
+              context.t('expense.swipeToClose'),
               style: TextStyle(
                 fontSize: 11,
                 color: accent.withValues(alpha: 0.55),
@@ -1728,7 +1728,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             bottom: 4,
                           ),
                           child: Text(
-                            'est. $mainSymbol ${converted.toStringAsFixed(2)}',
+                            '${context.t('common.est')} $mainSymbol ${converted.toStringAsFixed(2)}',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -2124,7 +2124,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                   ),
                 ),
                 Text(
-                  'e.g. Maybank → Touch \'n Go',
+                  context.t('expense.transferAccountsHint'),
                   style: TextStyle(fontSize: 12, color: brand.inkSoft),
                 ),
               ],
@@ -2246,7 +2246,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             CurrencyPickerTile(
               value: _currencyCode,
               onChanged: (code) => setState(() => _currencyCode = code),
-              label: 'Currency',
+              label: context.t('settings.currency'),
               onTap: _pickCurrency,
             ),
             // Split bill toggle (expense only)
@@ -2336,21 +2336,32 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     // Appends an "· est. <base> <amount>" tail when the expense is in a
     // foreign currency, converting from the entry currency to the base one.
     String est(double amountInEntry) => isForeign
-        ? ' · est. $mainSymbol ${converter.toBase(amountInEntry, _currencyCode).toStringAsFixed(2)}'
+        ? context.t('expense.splitEstTail').replaceAll(
+            '{amount}',
+            '$mainSymbol ${converter.toBase(amountInEntry, _currencyCode).toStringAsFixed(2)}',
+          )
         : '';
     switch (_splitMode) {
       case SplitMode.equally:
         final each = _splitBillTotal > 0
             ? _splitBillTotal / n
             : _splitMembers.fold<double>(0, (s, m) => s + m.amount) / n;
-        return '$n people · $symbol ${each.toStringAsFixed(2)} each${est(each)}';
+        return context
+                .t('expense.splitEach')
+                .replaceAll('{n}', '$n')
+                .replaceAll('{amount}', '$symbol ${each.toStringAsFixed(2)}') +
+            est(each);
       case SplitMode.amount:
         final total = _splitMembers.fold<double>(0, (s, m) => s + m.amount);
-        return '$n people · $symbol ${total.toStringAsFixed(2)} total${est(total)}';
+        return context
+                .t('expense.splitTotal')
+                .replaceAll('{n}', '$n')
+                .replaceAll('{amount}', '$symbol ${total.toStringAsFixed(2)}') +
+            est(total);
       case SplitMode.percent:
-        return '$n people · by percentage';
+        return context.t('expense.splitByPercentage').replaceAll('{n}', '$n');
       case SplitMode.shares:
-        return '$n people · by shares';
+        return context.t('expense.splitByShares').replaceAll('{n}', '$n');
     }
   }
 
@@ -2374,7 +2385,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Split bill',
+                    context.t('expense.splitBill'),
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
@@ -2390,7 +2401,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     )
                   else
                     Text(
-                      'Share this expense with others',
+                      context.t('expense.splitBillSubtitle'),
                       style: TextStyle(fontSize: 12, color: brand.inkSoft),
                     ),
                 ],
@@ -2447,7 +2458,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Split with',
+                context.t('expense.splitWith'),
                 style: const TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 15,
@@ -2485,9 +2496,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 ),
               ),
             const SizedBox(width: 4),
-            const Text(
-              'Edit',
-              style: TextStyle(
+            Text(
+              context.t('common.edit'),
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF6B40A8),
@@ -2531,14 +2542,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             color: const Color(0xFF6B40A8),
             borderRadius: BorderRadius.circular(9999),
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(CupertinoIcons.doc_text, color: Colors.white, size: 16),
-              SizedBox(width: 8),
+              const Icon(CupertinoIcons.doc_text, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
               Text(
-                'Generate Receipt',
-                style: TextStyle(
+                context.t('group.generateReceipt'),
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -2732,8 +2743,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         ? context.t('expense.toPerson')
         : context.t('expense.fromPerson');
     final hint = _type == EntryType.transfer
-        ? 'e.g. John, Company ABC'
-        : 'e.g. Sarah, Client XYZ';
+        ? context.t('expense.toPersonHint')
+        : context.t('expense.fromPersonHint');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

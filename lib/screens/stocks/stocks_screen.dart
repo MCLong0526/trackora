@@ -2856,8 +2856,14 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
       updatedAt: now,
     );
     try {
+      // Use explicitly-picked account; fall back to the displayed default
+      // (first account) so the transaction always links to an account when
+      // one exists.
+      final accounts = ref.read(accountsProvider).valueOrNull ?? const <Account>[];
+      final effectiveAccountId =
+          _selectedAccount?.id ?? (accounts.isNotEmpty ? accounts.first.id : null);
       await widget
-          .onSave(investment, _selectedAccount?.id)
+          .onSave(investment, effectiveAccountId)
           .timeout(const Duration(seconds: 10));
       if (mounted) Navigator.pop(context);
     } catch (_) {

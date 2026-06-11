@@ -12,10 +12,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/account.dart';
+import '../../models/borrow_lending.dart'
+    show BorrowLending, BorrowLendingStatus, BorrowLendingType;
 import '../../models/expense.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
+import '../../models/installment.dart' show Installment, InstallmentStatus;
 import '../../models/precious_metal.dart';
+import '../../models/saving_plan.dart' show SavingPlan, SavingPlanStatus;
+import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../services/money_format.dart';
@@ -23,8 +28,13 @@ import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/exchange_rate_sheet.dart';
+import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
+import '../borrow_lending/borrow_lending_screen.dart';
+import '../installments/installments_screen.dart';
+import '../investments/investment_screen.dart';
+import '../savings/saving_plans_screen.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -470,6 +480,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           final visible = ref.watch(statsSectionsVisibilityProvider);
           final notifier = ref.read(statsSectionsVisibilityProvider.notifier);
           final items = [
+            ('importantData', context.t('stats.section.importantData')),
             ('donutChart', context.t('stats.section.donutChart')),
           ];
           return _VisibilitySheet(
@@ -506,6 +517,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   }) {
     const showLine = false;
     final showDonut = visibleSections.contains('donutChart');
+    final showSummary = visibleSections.contains('importantData');
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -526,6 +538,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             onPrev: onPrev,
             onNext: onNext,
           ),
+        // Overview is a lifetime snapshot (not period-filtered), so it sits
+        // below the donut chart — the floating calendar / date-range button
+        // stays anchored to the date-filtered "by category" chart above.
+        if (showSummary) ...[
+          const SizedBox(height: 14),
+          const _FinancialSummaryCard(),
+        ],
         const SizedBox(height: 14),
         _GroupSpendCard(range: range, symbol: symbol),
       ],
@@ -557,6 +576,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   Future<void> _shareSnapshot(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final failedMsg = context.t('stats.exportFailed');
+    final shareSubject = context.t('stats.shareSubject');
     setState(() => _isSharing = true);
     final overlay = Overlay.of(context, rootOverlay: true);
     final captureKey = GlobalKey();
@@ -676,7 +696,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       await file.writeAsBytes(bytes, flush: true);
       await Share.shareXFiles([
         XFile(file.path, mimeType: 'image/png', name: 'trackora_stats.png'),
-      ], subject: 'Trackora — Statistics');
+      ], subject: shareSubject);
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(failedMsg)));
@@ -700,6 +720,271 @@ class _StatsRange {
     required this.endExclusive,
     required this.label,
   });
+}
+
+// ── Financial summary card (Overview section) ────────────────────────────────
+//
+// A compact 2×2 snapshot of money commitments & holdings, independent of the
+// selected period: amount borrowed, total monthly installment payments, amount
+// saved in active plans, and portfolio value (stocks + precious metals).
+
+class _FinancialSummaryCard extends ConsumerWidget {
+  const _FinancialSummaryCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final brand = context.brand;
+    final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
+    final visible = ref.watch(balanceVisibleProvider);
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final mainCode = ref.watch(currencyCodeProvider).valueOrNull;
+
+    final borrowLending =
+        ref.watch(borrowLendingProvider).valueOrNull ?? const <BorrowLending>[];
+    final installments =
+        ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
+    final savingPlans =
+        ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
+    final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ??
+        const <StockInvestment>[];
+    final metals = ref.watch(preciousMetalsProvider).valueOrNull ??
+        const <PreciousMetal>[];
+
+    // Borrowed: outstanding amounts the user still owes others.
+    final borrowed = borrowLending
+        .where((r) =>
+            !r.cancelled &&
+            r.status != BorrowLendingStatus.settled &&
+            r.remaining > 0 &&
+            r.type == BorrowLendingType.borrowed)
+        .fold<double>(0, (sum, r) => sum + r.remaining);
+
+    // Installments: total monthly payment across active installments.
+    final installmentMonthly = installments
+        .where((i) => i.status == InstallmentStatus.active)
+        .fold<double>(0, (sum, i) => sum + i.amount);
+
+    // Saving: amount already put aside in active saving plans.
+    final saving = savingPlans
+        .where((p) => p.status == SavingPlanStatus.active)
+        .fold<double>(0, (sum, p) => sum + p.currentAmount);
+
+    // Portfolio: stock cost basis (converted to base) + precious-metal value.
+    double portfolio = 0;
+    for (final s in stocks) {
+      final v = s.totalCost;
+      final code = s.currency ?? mainCode;
+      portfolio += (converter != null && code != null && code != mainCode)
+          ? converter.toBase(v, code)
+          : v;
+    }
+    for (final m in metals) {
+      portfolio += m.weightGrams * (m.pricePerGram ?? 0);
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                context.t('stats.section.importantData'),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  ref.read(balanceVisibleProvider.notifier).toggle();
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Icon(
+                  visible ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                  size: 18,
+                  color: brand.inkSoft,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryTile(
+                  label: context.t('asset.borrowedLabel'),
+                  amount: borrowed,
+                  symbol: symbol,
+                  visible: visible,
+                  tint: const Color(0xFFFF3B30),
+                  onTap: () =>
+                      _openPage(context, const BorrowLendingScreen()),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryTile(
+                  label: context.t('stats.summaryInstallmentMo'),
+                  amount: installmentMonthly,
+                  symbol: symbol,
+                  visible: visible,
+                  tint: const Color(0xFFF57C00),
+                  onTap: () =>
+                      _openPage(context, const InstallmentsScreen()),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryTile(
+                  label: context.t('asset.savings'),
+                  amount: saving,
+                  symbol: symbol,
+                  visible: visible,
+                  tint: const Color(0xFF34C759),
+                  onTap: () =>
+                      _openPage(context, const SavingPlansScreen()),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SummaryTile(
+                  label: context.t('budget.portfolio'),
+                  amount: portfolio,
+                  symbol: symbol,
+                  visible: visible,
+                  tint: const Color(0xFF1A6CFF),
+                  onTap: () => _openPage(context, const InvestmentScreen()),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _openPage(BuildContext context, Widget page) {
+    Navigator.push(context, CupertinoPageRoute(builder: (_) => page));
+  }
+}
+
+class _SummaryTile extends StatefulWidget {
+  final String label;
+  final double amount;
+  final String symbol;
+  final bool visible;
+  final Color tint;
+  final VoidCallback onTap;
+
+  const _SummaryTile({
+    required this.label,
+    required this.amount,
+    required this.symbol,
+    required this.visible,
+    required this.tint,
+    required this.onTap,
+  });
+
+  @override
+  State<_SummaryTile> createState() => _SummaryTileState();
+}
+
+class _SummaryTileState extends State<_SummaryTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 110),
+  );
+  late final Animation<double> _scale = Tween(begin: 1.0, end: 0.96)
+      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final tint = widget.tint;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration:
+                        BoxDecoration(color: tint, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: brand.inkSoft,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 11,
+                    color: tint.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              MaskedAmount(
+                visibleText: formatMoney(widget.symbol, widget.amount),
+                visible: widget.visible,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Floating card with shadow ───────────────────────────────────
@@ -2611,7 +2896,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
   DateTime? _end;
   late DateTime _month;
 
-  static const _weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  List<String> get _weekdays => context.t('stats.weekdayInitials').split(',');
 
   @override
   void initState() {

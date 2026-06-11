@@ -303,7 +303,10 @@ class DashboardScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'Cycle: ${DateFormat('d MMM').format(cycleRange.start)} – ${DateFormat('d MMM').format(cycleRange.endExclusive.subtract(const Duration(days: 1)))}',
+                        context.t('home.cycleLabel').replaceAll(
+                          '{range}',
+                          '${DateFormat('d MMM').format(cycleRange.start)} – ${DateFormat('d MMM').format(cycleRange.endExclusive.subtract(const Duration(days: 1)))}',
+                        ),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
@@ -567,7 +570,7 @@ class DashboardScreen extends ConsumerWidget {
   void _copyRecord(BuildContext context, Expense original) {
     AppToast.show(
       context,
-      'Record has been copied',
+      context.t('metal.copiedToast'),
       type: AppToastType.info,
       icon: CupertinoIcons.doc_on_doc,
     );
@@ -818,9 +821,9 @@ class _AssetActivityRow extends ConsumerWidget {
     final yesterday = today.subtract(const Duration(days: 1));
     final d = DateTime(item.date.year, item.date.month, item.date.day);
     final dateStr = d == today
-        ? 'Today'
+        ? context.t('home.today')
         : d == yesterday
-            ? 'Yesterday'
+            ? context.t('home.yesterday')
             : DateFormat('MMM d').format(item.date);
 
     return GestureDetector(
@@ -885,7 +888,7 @@ class _AssetActivityRow extends ConsumerWidget {
                 ),
                 if (estBase != null)
                   Text(
-                    '≈ ${formatMoney(symbol, estBase)} est.',
+                    '≈ ${formatMoney(symbol, estBase)} ${context.t('common.est')}',
                     style: TextStyle(
                       fontSize: 11,
                       color: brand.inkSoft,
@@ -1069,8 +1072,8 @@ class _SpendingOverviewCard extends StatelessWidget {
                     Semantics(
                       button: true,
                       label: visible
-                          ? 'Hide balance amounts'
-                          : 'Show balance amounts',
+                          ? context.t('home.hideBalance')
+                          : context.t('home.showBalance'),
                       child: GestureDetector(
                         onTap: onToggleVisibility,
                         behavior: HitTestBehavior.opaque,
@@ -1200,7 +1203,7 @@ class _HeroAmount extends StatelessWidget {
       children: [
         if (hasForeign) ...[
           Text(
-            'est.',
+            context.t('common.est'),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w400,
@@ -1309,7 +1312,7 @@ class _InlineBudgetBar extends StatelessWidget {
                 visible
                     ? overspent
                         ? '-${formatMoney(symbol, -remaining)}  ·  ${pct.toStringAsFixed(0)}%'
-                        : '${formatMoney(symbol, remaining)} left  ·  ${pct.toStringAsFixed(0)}%'
+                        : '${formatMoney(symbol, remaining)} ${context.t('common.left')}  ·  ${pct.toStringAsFixed(0)}%'
                     : '$symbol ****',
                 style: TextStyle(
                   fontSize: 11,
@@ -1850,7 +1853,7 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
   void _copyRecord(BuildContext context, Expense original) {
     AppToast.show(
       context,
-      'Record has been copied',
+      context.t('metal.copiedToast'),
       type: AppToastType.info,
       icon: CupertinoIcons.doc_on_doc,
     );
@@ -1889,9 +1892,9 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Activity',
-                      style: TextStyle(
+                    Text(
+                      context.t('home.activity'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),

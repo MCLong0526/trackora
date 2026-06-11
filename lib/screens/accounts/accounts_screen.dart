@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/account.dart';
 import '../../models/expense.dart';
+import '../../models/group_expense_item.dart';
 import '../../models/precious_metal.dart';
 import '../../models/stock_investment.dart';
 import '../../services/i18n.dart';
@@ -34,12 +35,25 @@ class AccountsScreen extends ConsumerWidget {
     final stocks =
         ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
     final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final currentUser = ref.watch(authStateProvider).valueOrNull;
+    final activeGroupId = ref.watch(activeGroupIdProvider);
+    final rawGroupExpenses = activeGroupId != null
+        ? (ref.watch(groupExpensesProvider(activeGroupId)).valueOrNull ??
+            const <GroupExpenseItem>[])
+        : const <GroupExpenseItem>[];
+    // Only include group expenses paid by the current user from an account.
+    final myGroupExpenses = rawGroupExpenses
+        .where((e) =>
+            e.paidByAccountId != null &&
+            (currentUser == null || e.paidBy == currentUser.uid))
+        .toList();
 
     final accounts = accountsAsync.valueOrNull ?? const <Account>[];
     final allExpenses = allExpensesAsync.valueOrNull ?? const <Expense>[];
     final balances = computeAccountBalanceMap(accounts, allExpenses,
         metals: metals,
         stocks: stocks,
+        groupExpenses: myGroupExpenses,
         toBase: converter == null
             ? null
             : (amt, code) => converter.toBase(amt, code));

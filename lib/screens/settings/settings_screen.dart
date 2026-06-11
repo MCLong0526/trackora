@@ -191,14 +191,17 @@ class SettingsScreen extends ConsumerWidget {
                   label: context.t('settings.exportCsv'),
                   onTap: () => _exportCsv(context, ref, user?.uid),
                 ),
-                _GroupDivider(),
-                _Tile(
-                  // Inward-arrow / download-style — matches "bring in".
-                  icon: CupertinoIcons.tray_arrow_down,
-                  iconColor: AppColors.butter,
-                  label: context.t('settings.importCsv'),
-                  onTap: () => _importCsv(context, ref, user?.uid),
-                ),
+                // ignore: dead_code
+                if (false) ...[
+                  _GroupDivider(),
+                  _Tile(
+                    // Inward-arrow / download-style — matches "bring in".
+                    icon: CupertinoIcons.tray_arrow_down,
+                    iconColor: AppColors.butter,
+                    label: context.t('settings.importCsv'),
+                    onTap: () => _importCsv(context, ref, user?.uid),
+                  ),
+                ],
               ],
             ),
 
@@ -488,7 +491,7 @@ class SettingsScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
             controller: ctrl,
-            placeholder: 'e.g. John',
+            placeholder: context.t('settings.nameHintEg'),
             autofocus: true,
             textCapitalization: TextCapitalization.words,
           ),
@@ -1267,7 +1270,7 @@ class _AccountsSectionState extends State<_AccountsSection> {
                                         a.currencyCode != widget.mainCode &&
                                         widget.converter != null)
                                       Text(
-                                        'est. ${kSupportedCurrencies[widget.mainCode] ?? widget.mainCode} ${convertedBal.toStringAsFixed(2)}',
+                                        '${context.t('common.est')} ${kSupportedCurrencies[widget.mainCode] ?? widget.mainCode} ${convertedBal.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontSize: 9,
                                           fontWeight: FontWeight.w500,
@@ -1527,7 +1530,7 @@ class _LiveActivityToggleTileState extends State<_LiveActivityToggleTile> {
         if (!mounted) return;
         AppToast.show(
           context,
-          'Could not start Live Activity: $error',
+          context.t('settings.couldNotStartLA').replaceAll('{error}', error),
           type: AppToastType.error,
           icon: CupertinoIcons.exclamationmark_circle,
         );
@@ -1928,7 +1931,7 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection>
                                 ),
                           const SizedBox(width: 5),
                           Text(
-                            isSyncing ? 'Syncing…' : syncBtnLabel,
+                            isSyncing ? context.t('settings.syncing') : syncBtnLabel,
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -2354,7 +2357,9 @@ class _ChangeEmailSheetState extends State<_ChangeEmailSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Current: ${widget.currentEmail}',
+            context
+                .t('settings.changeEmailCurrent')
+                .replaceAll('{email}', widget.currentEmail),
             style: TextStyle(fontSize: 13, color: brand.inkSoft),
           ),
           const SizedBox(height: 20),

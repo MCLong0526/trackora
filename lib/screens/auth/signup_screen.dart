@@ -3,16 +3,21 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_toast.dart';
 import 'login_screen.dart';
 import 'welcome_screen.dart';
 
 const Color _kPrimary = Color(0xFF0066CC);
+
+const String _kTermsUrl = 'https://trackora-9c965.web.app/terms';
+const String _kPrivacyUrl = 'https://trackora-9c965.web.app/privacy';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -44,6 +49,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     super.dispose();
   }
 
+  Future<void> _openUrl(String url) async {
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && mounted) {
+      AppToast.show(
+        context,
+        context.t('auth.linkOpenError'),
+        type: AppToastType.error,
+      );
+    }
+  }
+
   int _passwordStrength(String password) {
     if (password.isEmpty) return 0;
     int score = 0;
@@ -58,13 +77,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     switch (strength) {
       case 0:
       case 1:
-        return 'Weak';
+        return context.t('auth.pwWeak');
       case 2:
-        return 'Fair';
+        return context.t('auth.pwFair');
       case 3:
-        return 'Good';
+        return context.t('auth.pwGood');
       default:
-        return 'Strong';
+        return context.t('auth.pwStrong');
     }
   }
 
@@ -84,7 +103,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (!_agreedToTerms) {
       setState(
-        () => _errorMessage = 'Please agree to the Terms and Privacy Policy.',
+        () => _errorMessage = context.t('auth.agreeTerms'),
       );
       return;
     }
@@ -161,15 +180,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   String _friendlyError(String code) {
     switch (code) {
       case 'email-already-in-use':
-        return 'An account already exists with this email.';
+        return context.t('auth.errEmailInUse');
       case 'invalid-email':
-        return 'Please enter a valid email address.';
+        return context.t('auth.errInvalidEmail');
       case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters.';
+        return context.t('auth.errWeakPassword');
       case 'operation-not-allowed':
-        return 'Email/password accounts are not enabled.';
+        return context.t('auth.errEmailPwNotEnabled');
       default:
-        return 'Sign up failed. Please try again.';
+        return context.t('auth.errSignUpFailed');
     }
   }
 
@@ -229,24 +248,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      const _FieldLabel('FULL NAME'),
+                      _FieldLabel(context.t('auth.fullName').toUpperCase()),
                       const SizedBox(height: 6),
                       _AuthTextField(
                         controller: _nameController,
                         icon: CupertinoIcons.person,
-                        hintText: 'Your name',
+                        hintText: context.t('auth.nameHint'),
                         textInputAction: TextInputAction.next,
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? context.t('validation.enterName')
                             : null,
                       ),
                       const SizedBox(height: 20),
-                      const _FieldLabel('EMAIL'),
+                      _FieldLabel(context.t('auth.email').toUpperCase()),
                       const SizedBox(height: 6),
                       _AuthTextField(
                         controller: _emailController,
                         icon: CupertinoIcons.mail,
-                        hintText: 'Email address',
+                        hintText: context.t('auth.emailHint'),
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         validator: (v) {
@@ -260,22 +279,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      const _FieldLabel('PASSWORD'),
+                      _FieldLabel(context.t('auth.password').toUpperCase()),
                       const SizedBox(height: 6),
                       _PasswordInputField(
                         controller: _passwordController,
                         obscure: _obscurePassword,
-                        hintText: 'Password',
+                        hintText: context.t('auth.password'),
                         textInputAction: TextInputAction.next,
                         onToggle: () =>
                             setState(() => _obscurePassword = !_obscurePassword),
                         onChanged: (_) => setState(() {}),
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Please enter a password';
+                            return context.t('auth.enterPassword');
                           }
                           if (v.length < 6) {
-                            return 'At least 6 characters required';
+                            return context.t('auth.minPassword');
                           }
                           return null;
                         },
@@ -289,21 +308,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      const _FieldLabel('CONFIRM PASSWORD'),
+                      _FieldLabel(context.t('auth.confirmPassword').toUpperCase()),
                       const SizedBox(height: 6),
                       _PasswordInputField(
                         controller: _confirmPasswordController,
                         obscure: _obscureConfirm,
-                        hintText: 'Re-enter password',
+                        hintText: context.t('auth.reenterPassword'),
                         textInputAction: TextInputAction.done,
                         onToggle: () =>
                             setState(() => _obscureConfirm = !_obscureConfirm),
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Please confirm your password';
+                            return context.t('auth.enterConfirmPassword');
                           }
                           if (v != _passwordController.text) {
-                            return 'Passwords do not match';
+                            return context.t('auth.passwordMismatch');
                           }
                           return null;
                         },
@@ -349,7 +368,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                     recognizer: TapGestureRecognizer()
-                                      ..onTap = () {},
+                                      ..onTap = () => _openUrl(_kTermsUrl),
                                   ),
                                   TextSpan(
                                     text: context.t('auth.and'),
@@ -362,7 +381,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                     recognizer: TapGestureRecognizer()
-                                      ..onTap = () {},
+                                      ..onTap = () => _openUrl(_kPrivacyUrl),
                                   ),
                                 ],
                               ),

@@ -142,7 +142,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted && _isLoading) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Sign in timed out. Please try again.';
+          _errorMessage = context.t('auth.errSignInTimeout');
         });
       }
     });
@@ -154,8 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage =
-                'Biometric authentication failed. Please use your password.';
+            _errorMessage = context.t('auth.errBiometricFailed');
           });
         }
         return;
@@ -187,8 +186,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage =
-                'No saved credentials found. Sign in once with your password to enable Face ID.';
+            _errorMessage = context.t('auth.errNoSavedCreds');
           });
         }
         return;
@@ -204,7 +202,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _isLoading = false;
           _errorMessage =
               e.code == 'wrong-password' || e.code == 'invalid-credential'
-                  ? 'Your password changed. Sign in with your password once to re-enable Face ID.'
+                  ? context.t('auth.errPasswordChanged')
                   : _friendlyError(e.code);
         });
       }
@@ -213,7 +211,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Sign in failed. Please use your password.';
+          _errorMessage = context.t('auth.errSignInFailedPassword');
         });
       }
     } finally {
@@ -246,7 +244,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() {
           _errorMessage = (msg.contains('canceled') || msg.contains('cancelled'))
               ? null
-              : 'Google sign-in failed. Please try again.';
+              : context.t('auth.errGoogleFailed');
           _isLoading = false;
         });
       }
@@ -314,18 +312,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _friendlyError(String code) {
     switch (code) {
       case 'user-not-found':
-        return 'No account found with this email.';
+        return context.t('auth.errNoAccount');
       case 'wrong-password':
       case 'invalid-credential':
-        return 'Incorrect password. Please try again.';
+        return context.t('auth.errIncorrectPassword');
       case 'invalid-email':
-        return 'Please enter a valid email address.';
+        return context.t('auth.errInvalidEmail');
       case 'user-disabled':
-        return 'This account has been disabled.';
+        return context.t('auth.errUserDisabled');
       case 'too-many-requests':
-        return 'Too many failed attempts. Please try again later.';
+        return context.t('auth.errTooManyRequests');
       default:
-        return 'Sign in failed. Please try again.';
+        return context.t('auth.errSignInFailed');
     }
   }
 
@@ -388,11 +386,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 36),
-                      _FieldLabel('EMAIL'),
+                      _FieldLabel(context.t('auth.email').toUpperCase()),
                       const SizedBox(height: 6),
                       _EmailField(controller: _emailController),
                       const SizedBox(height: 20),
-                      _FieldLabel('PASSWORD'),
+                      _FieldLabel(context.t('auth.password').toUpperCase()),
                       const SizedBox(height: 6),
                       _PasswordField(
                         controller: _passwordController,
@@ -463,15 +461,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Expanded(
-                            child: _SocialButton(
-                              label: 'Apple',
-                              isApple: true,
-                              isLoading: _isLoading,
-                              onPressed: _appleSignIn,
+                          // ignore: dead_code
+                          if (false) ...[
+                            Expanded(
+                              child: _SocialButton(
+                                label: 'Apple',
+                                isApple: true,
+                                isLoading: _isLoading,
+                                onPressed: _appleSignIn,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
+                            const SizedBox(width: 12),
+                          ],
                           Expanded(
                             child: _SocialButton(
                               label: 'Google',
@@ -583,7 +584,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           padding: const EdgeInsets.only(top: 12),
           child: CupertinoTextField(
             controller: emailCtrl,
-            placeholder: 'Email address',
+            placeholder: context.t('auth.emailHint'),
             keyboardType: TextInputType.emailAddress,
           ),
         ),
@@ -879,8 +880,10 @@ class _BiometricButton extends StatelessWidget {
         icon: const Icon(Icons.face_retouching_natural, size: 22),
         label: Text(
           email != null
-              ? 'Sign in as ${email!.split('@').first}'
-              : 'Sign in with Face ID',
+              ? context
+                    .t('auth.signInAs')
+                    .replaceAll('{name}', email!.split('@').first)
+              : context.t('auth.signInWithFaceId'),
         ),
       ),
     );

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="index, follow" />
+<title>Privacy Policy — Trackora</title>
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --ink-soft: #6b6b70;
+    --accent: #5b5bd6;
+    --line: #ececf1;
+    --bg: #f7f7fb;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 22px 96px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 40px 36px;
+  }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; margin: 34px 0 10px; }
+  p, li { font-size: 16px; color: var(--ink); }
+  .muted { color: var(--ink-soft); font-size: 14px; margin-top: 0; }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 6px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  strong { font-weight: 650; }
+  .pill {
+    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--accent);
+    background: rgba(91,91,214,0.10); padding: 5px 12px; border-radius: 999px; margin-bottom: 18px;
+  }
+  hr { border: none; border-top: 1px solid var(--line); margin: 32px 0; }
+  .foot { text-align: center; color: var(--ink-soft); font-size: 13px; margin-top: 28px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #f2f2f7; --ink-soft: #9a9aa2; --line: #2a2a30; --bg: #0f0f12; --card: #1a1a1f; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <span class="pill">Trackora</span>
+      <h1>Privacy Policy</h1>
+      <p class="muted">Last updated: 11 June 2026</p>
+
+      <p>Trackora ("we", "us", or "the app") is a personal expense and finance tracker. This policy explains what information the app collects, how it is used, and the choices you have. We built Trackora to keep your financial data private — we do not sell your data, and we do not run advertising or third-party analytics trackers.</p>
+
+      <h2>1. Information we collect</h2>
+      <p><strong>Account information.</strong> When you create an account, we collect your email address. If you sign in with <strong>Apple</strong> or <strong>Google</strong>, we receive your email address and (where you allow it) your name from that provider. Authentication is handled by Firebase Authentication (Google).</p>
+      <p><strong>Financial data you enter.</strong> The content you add — expenses, income, accounts and balances, installments, savings plans, borrowing/lending records, precious-metal and stock holdings, travel and shared-group expenses, and any notes or categories — is stored so the app can show it back to you across your devices.</p>
+      <p><strong>Receipt images.</strong> If you attach a receipt photo, the image is uploaded to secure cloud storage (Supabase) under your account. Text recognition (OCR) on receipts runs <strong>on your device</strong>; the photo itself is the only thing stored.</p>
+      <p><strong>On-device data that never leaves your phone.</strong> Biometric unlock (Face ID / Touch ID / fingerprint) is handled entirely by your device's operating system — we never receive or store your biometric data. A local offline cache of your entries is kept on the device so the app works without a connection.</p>
+
+      <h2>2. How we use your information</h2>
+      <ul>
+        <li>To provide the core features of the app and sync your data across your devices.</li>
+        <li>To authenticate you and keep your account secure.</li>
+        <li>To convert amounts between currencies and display up-to-date exchange rates and, if you use them, stock prices.</li>
+        <li>To respond to support requests you send us.</li>
+      </ul>
+      <p>We do <strong>not</strong> use your financial data for advertising, profiling, or sale to third parties.</p>
+
+      <h2>3. Where your data is stored and who processes it</h2>
+      <p>We rely on a small number of trusted service providers ("sub-processors") to operate the app:</p>
+      <ul>
+        <li><strong>Google Firebase</strong> (Authentication, Cloud Firestore database) — stores your account and financial entries. See Google's <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">privacy and security</a> documentation.</li>
+        <li><strong>Supabase</strong> — stores receipt images you upload. See <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase's privacy policy</a>.</li>
+        <li><strong>Frankfurter</strong> (frankfurter.app) — provides currency exchange rates. Only currency codes are requested; no personal data is sent.</li>
+        <li><strong>Yahoo Finance</strong> — provides stock and precious-metal prices when you use those features. Only ticker symbols are requested; no personal data is sent.</li>
+      </ul>
+
+      <h2>4. Sign in with Apple</h2>
+      <p>If you choose Sign in with Apple, you may use Apple's "Hide My Email" feature, which gives us a private relay address instead of your real one. We support this and will communicate with you only through whichever address you provide.</p>
+
+      <h2>5. Data sharing</h2>
+      <p>We do not sell, rent, or trade your personal information. We share data only with the service providers listed above (solely to run the app), or where required by law. If you use shared-group or travel-split features, the entries you add to a group are visible to other members of that group.</p>
+
+      <h2>6. Data retention and deletion</h2>
+      <p>We keep your data for as long as your account is active. You can delete your account at any time from within the app (<strong>Settings → Account → Delete account</strong>), which removes your account and associated data from our systems. You may also contact us to request deletion. Locally cached data is removed when you sign out or uninstall the app.</p>
+
+      <h2>7. Security</h2>
+      <p>Data is transmitted over encrypted connections (HTTPS/TLS) and stored on infrastructure operated by our providers with access controls in place. No method of transmission or storage is 100% secure, but we take reasonable measures to protect your information.</p>
+
+      <h2>8. Children</h2>
+      <p>Trackora is not directed to children under 13 (or the minimum age required in your country), and we do not knowingly collect personal information from them.</p>
+
+      <h2>9. Your rights</h2>
+      <p>Depending on where you live (for example under the GDPR or CCPA), you may have the right to access, correct, export, or delete your personal data, and to object to or restrict certain processing. You can exercise most of these directly in the app, or by contacting us at the address below.</p>
+
+      <h2>10. Changes to this policy</h2>
+      <p>We may update this policy from time to time. When we do, we will revise the "Last updated" date above and, for significant changes, notify you within the app.</p>
+
+      <h2>11. Contact us</h2>
+      <p>If you have any questions about this policy or your data, contact us at:<br />
+      <a href="mailto:chia5026@gmail.com">chia5026@gmail.com</a></p>
+
+      <hr />
+      <p class="muted">This policy is also available alongside our <a href="/terms">Terms of Service</a>.</p>
+    </div>
+    <p class="foot">© 2026 Trackora. All rights reserved.</p>
+  </div>
+</body>
+</html>

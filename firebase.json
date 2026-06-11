@@ -5,6 +5,15 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "public": "public",
+    "cleanUrls": true,
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
   "flutter": {
     "platforms": {
       "android": {

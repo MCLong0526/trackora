@@ -326,9 +326,9 @@ class _PrimaryButtonState extends State<_PrimaryButton>
             borderRadius: BorderRadius.circular(AppRadius.chip),
             ),
           alignment: Alignment.center,
-          child: const Text(
-            'Create an account',
-            style: TextStyle(
+          child: Text(
+            context.t('auth.createAccountBtn'),
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.white,
@@ -491,8 +491,8 @@ class _BalanceCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'TOTAL BALANCE',
-            style: TextStyle(
+            context.t('home.totalBalance').toUpperCase(),
+            style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
               letterSpacing: 1.4,
@@ -540,8 +540,8 @@ class _BalanceCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'this month',
-                style: TextStyle(
+                context.t('welcome.thisMonth'),
+                style: const TextStyle(
                   fontSize: 10,
                   color: AppColors.inkSoft,
                 ),
@@ -601,8 +601,8 @@ class _ChartCard extends StatelessWidget {
           _MiniDonutChart(),
           const SizedBox(height: 6),
           Text(
-            'SPENDING',
-            style: TextStyle(
+            context.t('welcome.spending').toUpperCase(),
+            style: const TextStyle(
               fontSize: 8,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.0,
@@ -653,9 +653,9 @@ class _ExpenseTransactionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Food · Lunch',
-                style: TextStyle(
+              Text(
+                context.t('welcome.sampleTxn'),
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF111111),

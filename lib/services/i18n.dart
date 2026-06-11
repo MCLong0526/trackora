@@ -711,6 +711,7 @@ class AppStrings {
     'auth.terms': 'Terms',
     'auth.and': ' and ',
     'auth.privacyPolicy': 'Privacy Policy',
+    'auth.linkOpenError': 'Could not open the link. Please try again.',
     'auth.welcomeBackTitle': 'Welcome\nback',
     // Dashboard extras.
     'home.activity': 'Activity',
@@ -1292,6 +1293,173 @@ class AppStrings {
     'settings.notSignedInFirebase': 'Not signed in to Firebase.',
     'settings.syncFailedDot': 'Sync failed.',
     'settings.couldNotStartLA': 'Could not start Live Activity: {error}',
+    // ── Auth / login / signup ──────────────────────────────────────────
+    'auth.errSignInTimeout': 'Sign in timed out. Please try again.',
+    'auth.errBiometricFailed':
+        'Biometric authentication failed. Please use your password.',
+    'auth.errNoSavedCreds':
+        'No saved credentials found. Sign in once with your password to enable Face ID.',
+    'auth.errPasswordChanged':
+        'Your password changed. Sign in with your password once to re-enable Face ID.',
+    'auth.errSignInFailedPassword': 'Sign in failed. Please use your password.',
+    'auth.errGoogleFailed': 'Google sign-in failed. Please try again.',
+    'auth.errNoAccount': 'No account found with this email.',
+    'auth.errIncorrectPassword': 'Incorrect password. Please try again.',
+    'auth.errInvalidEmail': 'Please enter a valid email address.',
+    'auth.errUserDisabled': 'This account has been disabled.',
+    'auth.errTooManyRequests':
+        'Too many failed attempts. Please try again later.',
+    'auth.errSignInFailed': 'Sign in failed. Please try again.',
+    'auth.emailHint': 'Email address',
+    'auth.signInAs': 'Sign in as {name}',
+    'auth.signInWithFaceId': 'Sign in with Face ID',
+    'auth.pwWeak': 'Weak',
+    'auth.pwFair': 'Fair',
+    'auth.pwGood': 'Good',
+    'auth.pwStrong': 'Strong',
+    'auth.agreeTerms': 'Please agree to the Terms and Privacy Policy.',
+    'auth.errEmailInUse': 'An account already exists with this email.',
+    'auth.errWeakPassword': 'Password is too weak. Use at least 6 characters.',
+    'auth.errEmailPwNotEnabled': 'Email/password accounts are not enabled.',
+    'auth.errSignUpFailed': 'Sign up failed. Please try again.',
+    'auth.fullName': 'Full Name',
+    'auth.nameHint': 'Your name',
+    'auth.reenterPassword': 'Re-enter password',
+    'auth.enterConfirmPassword': 'Please confirm your password',
+    // ── Welcome preview ────────────────────────────────────────────────
+    'welcome.thisMonth': 'this month',
+    'welcome.spending': 'Spending',
+    'welcome.sampleTxn': 'Food · Lunch',
+    // ── Add/Edit expense ───────────────────────────────────────────────
+    'expense.swipeToClose': 'swipe down to close',
+    'expense.splitBill': 'Split bill',
+    'expense.splitBillSubtitle': 'Share this expense with others',
+    'expense.splitWith': 'Split with',
+    'expense.splitEach': '{n} people · {amount} each',
+    'expense.splitTotal': '{n} people · {amount} total',
+    'expense.splitByPercentage': '{n} people · by percentage',
+    'expense.splitByShares': '{n} people · by shares',
+    'expense.splitEstTail': ' · est. {amount}',
+    'expense.transferAccountsHint': "e.g. Maybank → Touch 'n Go",
+    'expense.toPersonHint': 'e.g. John, Company ABC',
+    'expense.fromPersonHint': 'e.g. Sarah, Client XYZ',
+    // ── Home / dashboard ───────────────────────────────────────────────
+    'home.yesterday': 'Yesterday',
+    'home.hideBalance': 'Hide balance amounts',
+    'home.showBalance': 'Show balance amounts',
+    'home.cycleLabel': 'Cycle: {range}',
+    // ── Common ─────────────────────────────────────────────────────────
+    'common.est': 'est.',
+    'common.left': 'left',
+    // ── Settings ───────────────────────────────────────────────────────
+    'settings.nameHintEg': 'e.g. John',
+    // ── Statistics ─────────────────────────────────────────────────────
+    'stats.shareSubject': 'Trackora — Statistics',
+    'stats.weekdayInitials': 'S,M,T,W,T,F,S',
+    'stats.summaryInstallmentMo': 'Installment / mo',
+    // ── How Trackora Works (tips screen) ───────────────────────────────
+    'tips.screenTitle': 'How Trackora Works',
+    'tips.screenSubtitle': 'Tap a topic to see step-by-step instructions.',
+    'tips.stepOf': 'Step {n} of {total}',
+    'tips.next': 'Next',
+    'tips.add.title': 'Add a Record in Seconds',
+    'tips.add.sub': 'Track any expense, income or transfer instantly',
+    'tips.add.s1t': 'Tap the + Button',
+    'tips.add.s1b':
+        'The purple + button at the bottom of your screen opens the quick-add speed dial. Tap it any time to start a new record.',
+    'tips.add.s2t': 'Choose Your Record Type',
+    'tips.add.s2b':
+        'Pick from Expense, Income, Transfer, or Receive. Each type has its own button in the speed dial that fans out.',
+    'tips.add.s3t': 'Enter Amount with Smart Numpad',
+    'tips.add.s3b':
+        'Use the smart numpad to type your amount. It supports + − × ÷ so you can calculate a split without leaving the screen.',
+    'tips.add.s4t': 'Pick Category & Save',
+    'tips.add.s4b':
+        'Select a category, optionally add a note or snap a receipt, then tap Save. The record appears on your dashboard instantly.',
+    'tips.backTap.title': 'Double-Tap the Back of Your Phone',
+    'tips.backTap.sub': 'Open Quick Add without unlocking your screen',
+    'tips.backTap.s1t': 'Open iPhone Settings',
+    'tips.backTap.s1b':
+        'On your iPhone, open the Settings app and go to Accessibility → Touch. This is where Back Tap is configured.',
+    'tips.backTap.s2t': 'Scroll Down to Back Tap',
+    'tips.backTap.s2b':
+        'At the bottom of the Touch screen you\'ll find "Back Tap". Tap it to reveal the Double Tap and Triple Tap options.',
+    'tips.backTap.s3t': 'Set Double Tap → Trackora',
+    'tips.backTap.s3b':
+        'Tap "Double Tap", scroll down to App Shortcuts, and select Trackora. This links your back-tap gesture to Quick Add.',
+    'tips.backTap.s4t': 'Double-Tap to Add Instantly',
+    'tips.backTap.s4b':
+        'Now double-tap the back of your iPhone any time — even from the lock screen — and Quick Add opens immediately.',
+    'tips.customize.title': 'Customize Your Manage Page',
+    'tips.customize.sub': 'Show only the features you actually use',
+    'tips.customize.s1t': 'Go to the Budget Tab',
+    'tips.customize.s1b':
+        'Tap the Budget tab (second from the right in the bottom nav). The Manage section lists all your financial tools.',
+    'tips.customize.s2t': 'Tap the Customize Button',
+    'tips.customize.s2b':
+        'Look for the edit / customize icon at the top of the Manage section. Tap it to open the module visibility sheet.',
+    'tips.customize.s3t': 'Toggle Modules On or Off',
+    'tips.customize.s3b':
+        'Each module (Installments, Savings, Travel Groups, etc.) has a toggle. Turn off features you don\'t use to keep things clean.',
+    'tips.customize.s4t': 'Your Manage Page Updates',
+    'tips.customize.s4b':
+        'Hidden modules disappear from the Manage page immediately. You can always come back here to re-enable them.',
+    'tips.cycle.title': 'Match Your Salary Cycle',
+    'tips.cycle.sub': 'Reports that reset on your actual pay day',
+    'tips.cycle.s1t': 'Go to the Budget Tab',
+    'tips.cycle.s1b':
+        'Tap the Budget tab. The Expense Cycle option is available in the Manage section — look for the cycle settings icon.',
+    'tips.cycle.s2t': 'Open Expense Cycle',
+    'tips.cycle.s2b':
+        'Tap the cycle icon to open the Expense Cycle sheet. Here you can switch between calendar month and a custom start day.',
+    'tips.cycle.s3t': 'Enable & Set Your Salary Day',
+    'tips.cycle.s3b':
+        'Toggle "Custom Cycle" on, then pick the day of the month your salary arrives — e.g. the 15th or 25th.',
+    'tips.cycle.s4t': 'All Reports Align to Your Pay Day',
+    'tips.cycle.s4b':
+        'Your Dashboard totals, Budget, and Statistics now reset from your pay day — not the 1st of the calendar month.',
+    'tips.split.title': 'Split Bills & Generate Receipt',
+    'tips.split.sub': 'Divide shared costs and share a clean receipt image',
+    'tips.split.s1t': 'Open an Expense Form',
+    'tips.split.s1b':
+        'Add a new expense or edit an existing one. Scroll down on the form — you\'ll see a "Split Bill" section near the bottom.',
+    'tips.split.s2t': 'Add People to the Split',
+    'tips.split.s2b':
+        'Tap "+ Add Person" to pick from your contacts or People list. Enter each person\'s share amount — the remaining balance updates live.',
+    'tips.split.s3t': 'Confirm the Split',
+    'tips.split.s3b':
+        'Once the remaining balance reaches zero the split is complete. Adjust any amounts until everything balances out.',
+    'tips.split.s4t': 'Generate & Share Receipt',
+    'tips.split.s4b':
+        'Tap "Generate Receipt" to create a shareable image showing who owes what. Send it via WhatsApp or any other app.',
+    'tips.travel.title': 'Travel Groups with Invite Code',
+    'tips.travel.sub': 'Track shared trip expenses with friends and family',
+    'tips.travel.s1t': 'Go to Assets → Travel Groups',
+    'tips.travel.s1b':
+        'Tap the Assets tab (rightmost in bottom nav), then open Travel Groups. Tap + to create a new trip.',
+    'tips.travel.s2t': 'Share the Invite Code',
+    'tips.travel.s2b':
+        'Your trip gets a unique invite code automatically. Share it with your travel companions via message or QR code.',
+    'tips.travel.s3t': 'Friends Join with the Code',
+    'tips.travel.s3b':
+        'Your travel companions create or open a Travel Group, tap "Join", and enter your invite code. They\'re instantly added.',
+    'tips.travel.s4t': 'Everyone Records & Splits',
+    'tips.travel.s4b':
+        'Any group member can add expenses. Trackora calculates the total per person and suggests settlements automatically.',
+    'tips.group.title': 'Group Expense for Partners',
+    'tips.group.sub': 'Track shared household spending together',
+    'tips.group.s1t': 'Switch to Group Mode',
+    'tips.group.s1b':
+        'On the Dashboard, tap the "Personal / Group" toggle at the top of the screen to switch to your shared group view.',
+    'tips.group.s2t': 'Create or Join a Group',
+    'tips.group.s2b':
+        'Create a new expense group for your household, then invite your partner by sharing the group ID. They join in seconds.',
+    'tips.group.s3t': 'Add Shared Expenses',
+    'tips.group.s3b':
+        'In Group mode, the + button adds expenses visible to all group members. Everyone can add, view, and manage records.',
+    'tips.group.s4t': 'Track Combined Spending',
+    'tips.group.s4b':
+        'Your group Dashboard shows combined totals, budgets, and category breakdowns — perfect for managing finances together.',
   };
 
   static const _zh = <String, String>{
@@ -1885,6 +2053,7 @@ class AppStrings {
     'auth.terms': '服务条款',
     'auth.and': '和',
     'auth.privacyPolicy': '隐私政策',
+    'auth.linkOpenError': '无法打开链接，请重试。',
     'auth.welcomeBackTitle': '欢迎\n回来',
     'home.activity': '动态',
 
@@ -2453,6 +2622,141 @@ class AppStrings {
     'settings.notSignedInFirebase': '尚未登录 Firebase。',
     'settings.syncFailedDot': '同步失败。',
     'settings.couldNotStartLA': '无法启动实时活动：{error}',
+    // ── Auth / login / signup ──────────────────────────────────────────
+    'auth.errSignInTimeout': '登录超时，请重试。',
+    'auth.errBiometricFailed': '生物识别验证失败，请使用密码登录。',
+    'auth.errNoSavedCreds': '未找到已保存的凭据。请先使用密码登录一次以启用 Face ID。',
+    'auth.errPasswordChanged': '您的密码已更改。请使用密码登录一次以重新启用 Face ID。',
+    'auth.errSignInFailedPassword': '登录失败，请使用密码登录。',
+    'auth.errGoogleFailed': 'Google 登录失败，请重试。',
+    'auth.errNoAccount': '未找到使用此电子邮件的账户。',
+    'auth.errIncorrectPassword': '密码不正确，请重试。',
+    'auth.errInvalidEmail': '请输入有效的电子邮件地址。',
+    'auth.errUserDisabled': '此账户已被停用。',
+    'auth.errTooManyRequests': '失败尝试次数过多，请稍后再试。',
+    'auth.errSignInFailed': '登录失败，请重试。',
+    'auth.emailHint': '电子邮件地址',
+    'auth.signInAs': '以 {name} 身份登录',
+    'auth.signInWithFaceId': '使用 Face ID 登录',
+    'auth.pwWeak': '弱',
+    'auth.pwFair': '一般',
+    'auth.pwGood': '良好',
+    'auth.pwStrong': '强',
+    'auth.agreeTerms': '请同意条款和隐私政策。',
+    'auth.errEmailInUse': '此电子邮件已存在账户。',
+    'auth.errWeakPassword': '密码太弱，请至少使用 6 个字符。',
+    'auth.errEmailPwNotEnabled': '电子邮件/密码账户未启用。',
+    'auth.errSignUpFailed': '注册失败，请重试。',
+    'auth.fullName': '全名',
+    'auth.nameHint': '您的姓名',
+    'auth.reenterPassword': '再次输入密码',
+    'auth.enterConfirmPassword': '请确认您的密码',
+    // ── Welcome preview ────────────────────────────────────────────────
+    'welcome.thisMonth': '本月',
+    'welcome.spending': '支出',
+    'welcome.sampleTxn': '餐饮 · 午餐',
+    // ── Add/Edit expense ───────────────────────────────────────────────
+    'expense.swipeToClose': '向下滑动关闭',
+    'expense.splitBill': '分摊账单',
+    'expense.splitBillSubtitle': '与他人分摊此支出',
+    'expense.splitWith': '分摊给',
+    'expense.splitEach': '{n} 人 · 每人 {amount}',
+    'expense.splitTotal': '{n} 人 · 共 {amount}',
+    'expense.splitByPercentage': '{n} 人 · 按百分比',
+    'expense.splitByShares': '{n} 人 · 按份额',
+    'expense.splitEstTail': ' · 约 {amount}',
+    'expense.transferAccountsHint': "例如 Maybank → Touch 'n Go",
+    'expense.toPersonHint': '例如 张三、ABC 公司',
+    'expense.fromPersonHint': '例如 李四、客户 XYZ',
+    // ── Home / dashboard ───────────────────────────────────────────────
+    'home.yesterday': '昨天',
+    'home.hideBalance': '隐藏余额金额',
+    'home.showBalance': '显示余额金额',
+    'home.cycleLabel': '周期：{range}',
+    // ── Common ─────────────────────────────────────────────────────────
+    'common.est': '约',
+    'common.left': '剩余',
+    // ── Settings ───────────────────────────────────────────────────────
+    'settings.nameHintEg': '例如 张三',
+    // ── Statistics ─────────────────────────────────────────────────────
+    'stats.shareSubject': 'Trackora — 统计',
+    'stats.weekdayInitials': '日,一,二,三,四,五,六',
+    'stats.summaryInstallmentMo': '分期 / 每月',
+    // ── How Trackora Works (tips screen) ───────────────────────────────
+    'tips.screenTitle': 'Trackora 使用指南',
+    'tips.screenSubtitle': '点击主题查看分步说明。',
+    'tips.stepOf': '第 {n} 步，共 {total} 步',
+    'tips.next': '下一步',
+    'tips.add.title': '几秒钟添加一笔记录',
+    'tips.add.sub': '即时记录任何支出、收入或转账',
+    'tips.add.s1t': '点击「+」按钮',
+    'tips.add.s1b': '屏幕底部的紫色「+」按钮会打开快速添加菜单。随时点击即可开始一笔新记录。',
+    'tips.add.s2t': '选择记录类型',
+    'tips.add.s2b': '可选择支出、收入、转账或收款。每种类型在展开的快速菜单中都有独立按钮。',
+    'tips.add.s3t': '使用智能数字键盘输入金额',
+    'tips.add.s3b': '使用智能数字键盘输入金额，支持 + − × ÷，无需离开当前页面即可计算分摊。',
+    'tips.add.s4t': '选择类别并保存',
+    'tips.add.s4b': '选择一个类别，可选填备注或拍摄收据，然后点击保存。记录会立即出现在主页上。',
+    'tips.backTap.title': '双击手机背面',
+    'tips.backTap.sub': '无需解锁即可打开快速添加',
+    'tips.backTap.s1t': '打开 iPhone 设置',
+    'tips.backTap.s1b': '在 iPhone 上打开「设置」应用，进入「辅助功能 → 触控」。轻点背面就是在这里配置。',
+    'tips.backTap.s2t': '向下滚动找到「轻点背面」',
+    'tips.backTap.s2b': '在「触控」页面底部可找到「轻点背面」。点击它即可显示「轻点两下」和「轻点三下」选项。',
+    'tips.backTap.s3t': '将「轻点两下」设为 Trackora',
+    'tips.backTap.s3b': '点击「轻点两下」，向下滚动到「App 快捷指令」，选择 Trackora。这样就把轻点背面的手势链接到快速添加。',
+    'tips.backTap.s4t': '双击即可即时添加',
+    'tips.backTap.s4b': '现在随时双击 iPhone 背面——即使在锁屏状态下——也能立即打开快速添加。',
+    'tips.customize.title': '自定义你的管理页',
+    'tips.customize.sub': '只显示你真正使用的功能',
+    'tips.customize.s1t': '进入「预算」标签页',
+    'tips.customize.s1b': '点击「预算」标签页（底部导航右起第二个）。「管理」部分列出了你所有的财务工具。',
+    'tips.customize.s2t': '点击自定义按钮',
+    'tips.customize.s2b': '在「管理」部分顶部找到编辑/自定义图标，点击它打开模块显示设置。',
+    'tips.customize.s3t': '开启或关闭模块',
+    'tips.customize.s3b': '每个模块（分期、储蓄、旅行群组等）都有一个开关。关闭你不使用的功能，让界面保持简洁。',
+    'tips.customize.s4t': '管理页即时更新',
+    'tips.customize.s4b': '隐藏的模块会立即从管理页消失。你随时可以回到这里重新启用它们。',
+    'tips.cycle.title': '配合你的发薪周期',
+    'tips.cycle.sub': '让报表在你实际发薪日重置',
+    'tips.cycle.s1t': '进入「预算」标签页',
+    'tips.cycle.s1b': '点击「预算」标签页。「支出周期」选项位于「管理」部分——查找周期设置图标。',
+    'tips.cycle.s2t': '打开支出周期',
+    'tips.cycle.s2b': '点击周期图标打开「支出周期」设置。在这里你可以在日历月和自定义起始日之间切换。',
+    'tips.cycle.s3t': '启用并设置发薪日',
+    'tips.cycle.s3b': '开启「自定义周期」，然后选择每月发薪的日期——例如 15 号或 25 号。',
+    'tips.cycle.s4t': '所有报表对齐你的发薪日',
+    'tips.cycle.s4b': '你的主页总额、预算和统计现在会从发薪日重置——而不是日历月的 1 号。',
+    'tips.split.title': '拆分账单并生成收据',
+    'tips.split.sub': '分摊共同费用并分享清晰的收据图片',
+    'tips.split.s1t': '打开支出表单',
+    'tips.split.s1b': '添加新支出或编辑现有支出。在表单中向下滚动——你会在底部看到「拆分账单」部分。',
+    'tips.split.s2t': '将人员加入拆分',
+    'tips.split.s2b': '点击「+ 添加人员」从联系人或人员列表中选择。输入每个人的分摊金额——剩余余额会实时更新。',
+    'tips.split.s3t': '确认拆分',
+    'tips.split.s3b': '当剩余余额归零时拆分即完成。调整任意金额直到全部平衡。',
+    'tips.split.s4t': '生成并分享收据',
+    'tips.split.s4b': '点击「生成收据」创建一张显示谁欠多少的可分享图片。通过 WhatsApp 或任何其他应用发送。',
+    'tips.travel.title': '带邀请码的旅行群组',
+    'tips.travel.sub': '与亲友一起记录共享旅行支出',
+    'tips.travel.s1t': '进入「资产 → 旅行群组」',
+    'tips.travel.s1b': '点击「资产」标签页（底部导航最右侧），然后打开「旅行群组」。点击「+」创建一次新旅程。',
+    'tips.travel.s2t': '分享邀请码',
+    'tips.travel.s2b': '你的旅程会自动获得一个唯一邀请码。通过消息或二维码分享给你的旅伴。',
+    'tips.travel.s3t': '朋友用邀请码加入',
+    'tips.travel.s3b': '你的旅伴创建或打开一个旅行群组，点击「加入」，输入你的邀请码即可即时加入。',
+    'tips.travel.s4t': '人人记录与分摊',
+    'tips.travel.s4b': '任何群组成员都可以添加支出。Trackora 会计算每人的总额并自动建议结算方案。',
+    'tips.group.title': '伴侣共享支出',
+    'tips.group.sub': '一起记录共同的家庭开销',
+    'tips.group.s1t': '切换到群组模式',
+    'tips.group.s1b': '在主页顶部点击「个人 / 群组」切换开关，切换到你的共享群组视图。',
+    'tips.group.s2t': '创建或加入群组',
+    'tips.group.s2b': '为你的家庭创建一个新的支出群组，然后通过分享群组 ID 邀请你的伴侣。他们几秒钟即可加入。',
+    'tips.group.s3t': '添加共享支出',
+    'tips.group.s3b': '在群组模式下，「+」按钮添加的支出对所有群组成员可见。每个人都可以添加、查看和管理记录。',
+    'tips.group.s4t': '追踪合并支出',
+    'tips.group.s4b': '你的群组主页显示合并的总额、预算和类别明细——非常适合共同管理财务。',
   };
 
   static const _ms = <String, String>{
@@ -3073,6 +3377,7 @@ class AppStrings {
     'auth.terms': 'Terma',
     'auth.and': ' dan ',
     'auth.privacyPolicy': 'Polisi Privasi',
+    'auth.linkOpenError': 'Tidak dapat membuka pautan. Sila cuba lagi.',
     'auth.welcomeBackTitle': 'Selamat\nkembali',
     'home.activity': 'Aktiviti',
 
@@ -3657,6 +3962,175 @@ class AppStrings {
     'settings.notSignedInFirebase': 'Belum log masuk ke Firebase.',
     'settings.syncFailedDot': 'Segerak gagal.',
     'settings.couldNotStartLA': 'Gagal mula Live Activity: {error}',
+    // ── Auth / login / signup ──────────────────────────────────────────
+    'auth.errSignInTimeout': 'Log masuk tamat masa. Sila cuba lagi.',
+    'auth.errBiometricFailed':
+        'Pengesahan biometrik gagal. Sila gunakan kata laluan anda.',
+    'auth.errNoSavedCreds':
+        'Tiada kelayakan disimpan. Log masuk sekali dengan kata laluan untuk mengaktifkan Face ID.',
+    'auth.errPasswordChanged':
+        'Kata laluan anda telah berubah. Log masuk dengan kata laluan sekali untuk mengaktifkan semula Face ID.',
+    'auth.errSignInFailedPassword':
+        'Log masuk gagal. Sila gunakan kata laluan anda.',
+    'auth.errGoogleFailed': 'Log masuk Google gagal. Sila cuba lagi.',
+    'auth.errNoAccount': 'Tiada akaun ditemui dengan e-mel ini.',
+    'auth.errIncorrectPassword': 'Kata laluan salah. Sila cuba lagi.',
+    'auth.errInvalidEmail': 'Sila masukkan alamat e-mel yang sah.',
+    'auth.errUserDisabled': 'Akaun ini telah dinyahaktifkan.',
+    'auth.errTooManyRequests':
+        'Terlalu banyak percubaan gagal. Sila cuba lagi kemudian.',
+    'auth.errSignInFailed': 'Log masuk gagal. Sila cuba lagi.',
+    'auth.emailHint': 'Alamat e-mel',
+    'auth.signInAs': 'Log masuk sebagai {name}',
+    'auth.signInWithFaceId': 'Log masuk dengan Face ID',
+    'auth.pwWeak': 'Lemah',
+    'auth.pwFair': 'Sederhana',
+    'auth.pwGood': 'Baik',
+    'auth.pwStrong': 'Kuat',
+    'auth.agreeTerms': 'Sila bersetuju dengan Terma dan Dasar Privasi.',
+    'auth.errEmailInUse': 'Akaun dengan e-mel ini sudah wujud.',
+    'auth.errWeakPassword':
+        'Kata laluan terlalu lemah. Gunakan sekurang-kurangnya 6 aksara.',
+    'auth.errEmailPwNotEnabled': 'Akaun e-mel/kata laluan tidak diaktifkan.',
+    'auth.errSignUpFailed': 'Pendaftaran gagal. Sila cuba lagi.',
+    'auth.fullName': 'Nama Penuh',
+    'auth.nameHint': 'Nama anda',
+    'auth.reenterPassword': 'Masukkan semula kata laluan',
+    'auth.enterConfirmPassword': 'Sila sahkan kata laluan anda',
+    // ── Welcome preview ────────────────────────────────────────────────
+    'welcome.thisMonth': 'bulan ini',
+    'welcome.spending': 'Perbelanjaan',
+    'welcome.sampleTxn': 'Makanan · Makan tengah hari',
+    // ── Add/Edit expense ───────────────────────────────────────────────
+    'expense.swipeToClose': 'leret ke bawah untuk tutup',
+    'expense.splitBill': 'Kongsi bil',
+    'expense.splitBillSubtitle': 'Kongsi perbelanjaan ini dengan orang lain',
+    'expense.splitWith': 'Kongsi dengan',
+    'expense.splitEach': '{n} orang · {amount} setiap satu',
+    'expense.splitTotal': '{n} orang · jumlah {amount}',
+    'expense.splitByPercentage': '{n} orang · mengikut peratusan',
+    'expense.splitByShares': '{n} orang · mengikut bahagian',
+    'expense.splitEstTail': ' · anggaran {amount}',
+    'expense.transferAccountsHint': "cth. Maybank → Touch 'n Go",
+    'expense.toPersonHint': 'cth. John, Syarikat ABC',
+    'expense.fromPersonHint': 'cth. Sarah, Klien XYZ',
+    // ── Home / dashboard ───────────────────────────────────────────────
+    'home.yesterday': 'Semalam',
+    'home.hideBalance': 'Sembunyikan jumlah baki',
+    'home.showBalance': 'Tunjukkan jumlah baki',
+    'home.cycleLabel': 'Kitaran: {range}',
+    // ── Common ─────────────────────────────────────────────────────────
+    'common.est': 'anggaran',
+    'common.left': 'baki',
+    // ── Settings ───────────────────────────────────────────────────────
+    'settings.nameHintEg': 'cth. John',
+    // ── Statistics ─────────────────────────────────────────────────────
+    'stats.shareSubject': 'Trackora — Statistik',
+    'stats.weekdayInitials': 'A,I,S,R,K,J,S',
+    'stats.summaryInstallmentMo': 'Ansuran / sebulan',
+    // ── How Trackora Works (tips screen) ───────────────────────────────
+    'tips.screenTitle': 'Cara Trackora Berfungsi',
+    'tips.screenSubtitle': 'Ketik topik untuk melihat arahan langkah demi langkah.',
+    'tips.stepOf': 'Langkah {n} daripada {total}',
+    'tips.next': 'Seterusnya',
+    'tips.add.title': 'Tambah Rekod dalam Beberapa Saat',
+    'tips.add.sub': 'Jejak sebarang perbelanjaan, pendapatan atau pemindahan serta-merta',
+    'tips.add.s1t': 'Ketik Butang +',
+    'tips.add.s1b':
+        'Butang + ungu di bahagian bawah skrin membuka menu tambah pantas. Ketik bila-bila masa untuk mula rekod baharu.',
+    'tips.add.s2t': 'Pilih Jenis Rekod Anda',
+    'tips.add.s2b':
+        'Pilih daripada Perbelanjaan, Pendapatan, Pemindahan atau Terima. Setiap jenis ada butang sendiri dalam menu yang terbuka.',
+    'tips.add.s3t': 'Masukkan Jumlah dengan Pad Nombor Pintar',
+    'tips.add.s3b':
+        'Guna pad nombor pintar untuk taip jumlah. Ia menyokong + − × ÷ supaya anda boleh kira pembahagian tanpa meninggalkan skrin.',
+    'tips.add.s4t': 'Pilih Kategori & Simpan',
+    'tips.add.s4b':
+        'Pilih kategori, tambah nota atau ambil gambar resit jika perlu, kemudian ketik Simpan. Rekod muncul di papan pemuka serta-merta.',
+    'tips.backTap.title': 'Ketik Dua Kali Belakang Telefon Anda',
+    'tips.backTap.sub': 'Buka Tambah Pantas tanpa membuka kunci skrin',
+    'tips.backTap.s1t': 'Buka Tetapan iPhone',
+    'tips.backTap.s1b':
+        'Pada iPhone, buka apl Tetapan dan pergi ke Kebolehaksesan → Sentuh. Di sinilah Ketik Belakang dikonfigurasi.',
+    'tips.backTap.s2t': 'Skrol ke Bawah ke Ketik Belakang',
+    'tips.backTap.s2b':
+        'Di bahagian bawah skrin Sentuh anda akan jumpa "Ketik Belakang". Ketik untuk dedahkan pilihan Ketik Dua Kali dan Ketik Tiga Kali.',
+    'tips.backTap.s3t': 'Tetapkan Ketik Dua Kali → Trackora',
+    'tips.backTap.s3b':
+        'Ketik "Ketik Dua Kali", skrol ke bawah ke Pintasan Apl, dan pilih Trackora. Ini memautkan gerak isyarat ketik belakang ke Tambah Pantas.',
+    'tips.backTap.s4t': 'Ketik Dua Kali untuk Tambah Serta-merta',
+    'tips.backTap.s4b':
+        'Kini ketik dua kali belakang iPhone bila-bila masa — walaupun dari skrin kunci — dan Tambah Pantas akan terbuka serta-merta.',
+    'tips.customize.title': 'Sesuaikan Halaman Urus Anda',
+    'tips.customize.sub': 'Tunjukkan hanya ciri yang anda guna',
+    'tips.customize.s1t': 'Pergi ke Tab Bajet',
+    'tips.customize.s1b':
+        'Ketik tab Bajet (kedua dari kanan dalam navigasi bawah). Bahagian Urus menyenaraikan semua alat kewangan anda.',
+    'tips.customize.s2t': 'Ketik Butang Sesuaikan',
+    'tips.customize.s2b':
+        'Cari ikon edit / sesuaikan di bahagian atas seksyen Urus. Ketik untuk buka helaian keterlihatan modul.',
+    'tips.customize.s3t': 'Hidup atau Matikan Modul',
+    'tips.customize.s3b':
+        'Setiap modul (Ansuran, Simpanan, Kumpulan Pelancongan, dll.) ada togol. Matikan ciri yang anda tidak guna untuk kekal kemas.',
+    'tips.customize.s4t': 'Halaman Urus Anda Dikemas Kini',
+    'tips.customize.s4b':
+        'Modul tersembunyi hilang dari halaman Urus serta-merta. Anda boleh kembali ke sini untuk mengaktifkannya semula.',
+    'tips.cycle.title': 'Padankan Kitaran Gaji Anda',
+    'tips.cycle.sub': 'Laporan yang ditetapkan semula pada hari gaji sebenar anda',
+    'tips.cycle.s1t': 'Pergi ke Tab Bajet',
+    'tips.cycle.s1b':
+        'Ketik tab Bajet. Pilihan Kitaran Perbelanjaan tersedia dalam bahagian Urus — cari ikon tetapan kitaran.',
+    'tips.cycle.s2t': 'Buka Kitaran Perbelanjaan',
+    'tips.cycle.s2b':
+        'Ketik ikon kitaran untuk buka helaian Kitaran Perbelanjaan. Di sini anda boleh bertukar antara bulan kalendar dan hari mula tersuai.',
+    'tips.cycle.s3t': 'Aktif & Tetapkan Hari Gaji Anda',
+    'tips.cycle.s3b':
+        'Hidupkan "Kitaran Tersuai", kemudian pilih hari dalam bulan gaji anda masuk — cth. 15hb atau 25hb.',
+    'tips.cycle.s4t': 'Semua Laporan Sejajar dengan Hari Gaji',
+    'tips.cycle.s4b':
+        'Jumlah Papan Pemuka, Bajet dan Statistik kini ditetapkan semula dari hari gaji anda — bukan 1hb bulan kalendar.',
+    'tips.split.title': 'Pecah Bil & Jana Resit',
+    'tips.split.sub': 'Bahagikan kos dikongsi dan kongsi imej resit yang kemas',
+    'tips.split.s1t': 'Buka Borang Perbelanjaan',
+    'tips.split.s1b':
+        'Tambah perbelanjaan baharu atau edit yang sedia ada. Skrol ke bawah pada borang — anda akan nampak bahagian "Pecah Bil" berhampiran bawah.',
+    'tips.split.s2t': 'Tambah Orang ke Pembahagian',
+    'tips.split.s2b':
+        'Ketik "+ Tambah Orang" untuk pilih dari kenalan atau senarai Orang. Masukkan jumlah bahagian setiap orang — baki dikemas kini secara langsung.',
+    'tips.split.s3t': 'Sahkan Pembahagian',
+    'tips.split.s3b':
+        'Apabila baki mencapai sifar, pembahagian selesai. Laraskan mana-mana jumlah sehingga semuanya seimbang.',
+    'tips.split.s4t': 'Jana & Kongsi Resit',
+    'tips.split.s4b':
+        'Ketik "Jana Resit" untuk cipta imej boleh kongsi yang menunjukkan siapa hutang apa. Hantar melalui WhatsApp atau apl lain.',
+    'tips.travel.title': 'Kumpulan Pelancongan dengan Kod Jemputan',
+    'tips.travel.sub': 'Jejak perbelanjaan perjalanan dikongsi dengan rakan dan keluarga',
+    'tips.travel.s1t': 'Pergi ke Aset → Kumpulan Pelancongan',
+    'tips.travel.s1b':
+        'Ketik tab Aset (paling kanan dalam navigasi bawah), kemudian buka Kumpulan Pelancongan. Ketik + untuk cipta perjalanan baharu.',
+    'tips.travel.s2t': 'Kongsi Kod Jemputan',
+    'tips.travel.s2b':
+        'Perjalanan anda mendapat kod jemputan unik secara automatik. Kongsikannya dengan rakan perjalanan melalui mesej atau kod QR.',
+    'tips.travel.s3t': 'Rakan Sertai dengan Kod',
+    'tips.travel.s3b':
+        'Rakan perjalanan anda cipta atau buka Kumpulan Pelancongan, ketik "Sertai", dan masukkan kod jemputan anda. Mereka ditambah serta-merta.',
+    'tips.travel.s4t': 'Semua Rekod & Bahagi',
+    'tips.travel.s4b':
+        'Mana-mana ahli kumpulan boleh tambah perbelanjaan. Trackora kira jumlah setiap orang dan cadangkan penyelesaian secara automatik.',
+    'tips.group.title': 'Perbelanjaan Kumpulan untuk Pasangan',
+    'tips.group.sub': 'Jejak perbelanjaan isi rumah dikongsi bersama',
+    'tips.group.s1t': 'Tukar ke Mod Kumpulan',
+    'tips.group.s1b':
+        'Pada Papan Pemuka, ketik togol "Peribadi / Kumpulan" di bahagian atas skrin untuk tukar ke paparan kumpulan dikongsi anda.',
+    'tips.group.s2t': 'Cipta atau Sertai Kumpulan',
+    'tips.group.s2b':
+        'Cipta kumpulan perbelanjaan baharu untuk isi rumah anda, kemudian jemput pasangan dengan berkongsi ID kumpulan. Mereka sertai dalam beberapa saat.',
+    'tips.group.s3t': 'Tambah Perbelanjaan Dikongsi',
+    'tips.group.s3b':
+        'Dalam mod Kumpulan, butang + menambah perbelanjaan yang dilihat oleh semua ahli kumpulan. Semua orang boleh tambah, lihat dan urus rekod.',
+    'tips.group.s4t': 'Jejak Perbelanjaan Gabungan',
+    'tips.group.s4b':
+        'Papan Pemuka kumpulan anda menunjukkan jumlah gabungan, bajet dan pecahan kategori — sesuai untuk urus kewangan bersama.',
   };
 
   String t(String key) {

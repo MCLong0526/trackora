@@ -2,32 +2,36 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/i18n.dart';
 import '../../theme/app_theme.dart';
 
 // ── Data model ─────────────────────────────────────────────────────────────────
+//
+// Topics and steps store i18n *keys* (not literal text) so the whole screen can
+// stay `const` while still rendering in the active language via `context.t()`.
 
 class _TipStep {
   final IconData icon;
-  final String title;
-  final String description;
+  final String titleKey;
+  final String bodyKey;
 
   const _TipStep({
     required this.icon,
-    required this.title,
-    required this.description,
+    required this.titleKey,
+    required this.bodyKey,
   });
 }
 
 class _Topic {
-  final String title;
-  final String subtitle;
+  final String titleKey;
+  final String subtitleKey;
   final IconData icon;
   final Color color;
   final List<_TipStep> steps;
 
   const _Topic({
-    required this.title,
-    required this.subtitle,
+    required this.titleKey,
+    required this.subtitleKey,
     required this.icon,
     required this.color,
     required this.steps,
@@ -38,232 +42,204 @@ class _Topic {
 
 const List<_Topic> _kTopics = [
   _Topic(
-    title: 'Add a Record in Seconds',
-    subtitle: 'Track any expense, income or transfer instantly',
+    titleKey: 'tips.add.title',
+    subtitleKey: 'tips.add.sub',
     icon: CupertinoIcons.bolt_fill,
     color: Color(0xFF6C63FF),
     steps: [
       _TipStep(
         icon: CupertinoIcons.plus_circle_fill,
-        title: 'Tap the + Button',
-        description:
-            'The purple + button at the bottom of your screen opens the quick-add speed dial. Tap it any time to start a new record.',
+        titleKey: 'tips.add.s1t',
+        bodyKey: 'tips.add.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.arrow_up_arrow_down_circle_fill,
-        title: 'Choose Your Record Type',
-        description:
-            'Pick from Expense, Income, Transfer, or Receive. Each type has its own button in the speed dial that fans out.',
+        titleKey: 'tips.add.s2t',
+        bodyKey: 'tips.add.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.number,
-        title: 'Enter Amount with Smart Numpad',
-        description:
-            'Use the smart numpad to type your amount. It supports + − × ÷ so you can calculate a split without leaving the screen.',
+        titleKey: 'tips.add.s3t',
+        bodyKey: 'tips.add.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.checkmark_circle_fill,
-        title: 'Pick Category & Save',
-        description:
-            'Select a category, optionally add a note or snap a receipt, then tap Save. The record appears on your dashboard instantly.',
+        titleKey: 'tips.add.s4t',
+        bodyKey: 'tips.add.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Double-Tap the Back of Your Phone',
-    subtitle: 'Open Quick Add without unlocking your screen',
+    titleKey: 'tips.backTap.title',
+    subtitleKey: 'tips.backTap.sub',
     icon: CupertinoIcons.hand_point_right_fill,
     color: Color(0xFFFF6B6B),
     steps: [
       _TipStep(
         icon: CupertinoIcons.settings,
-        title: 'Open iPhone Settings',
-        description:
-            'On your iPhone, open the Settings app and go to Accessibility → Touch. This is where Back Tap is configured.',
+        titleKey: 'tips.backTap.s1t',
+        bodyKey: 'tips.backTap.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.hand_point_right_fill,
-        title: 'Scroll Down to Back Tap',
-        description:
-            'At the bottom of the Touch screen you\'ll find "Back Tap". Tap it to reveal the Double Tap and Triple Tap options.',
+        titleKey: 'tips.backTap.s2t',
+        bodyKey: 'tips.backTap.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.app_fill,
-        title: 'Set Double Tap → Trackora',
-        description:
-            'Tap "Double Tap", scroll down to App Shortcuts, and select Trackora. This links your back-tap gesture to Quick Add.',
+        titleKey: 'tips.backTap.s3t',
+        bodyKey: 'tips.backTap.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.bolt_fill,
-        title: 'Double-Tap to Add Instantly',
-        description:
-            'Now double-tap the back of your iPhone any time — even from the lock screen — and Quick Add opens immediately.',
+        titleKey: 'tips.backTap.s4t',
+        bodyKey: 'tips.backTap.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Customize Your Manage Page',
-    subtitle: 'Show only the features you actually use',
+    titleKey: 'tips.customize.title',
+    subtitleKey: 'tips.customize.sub',
     icon: CupertinoIcons.slider_horizontal_3,
     color: Color(0xFF34C759),
     steps: [
       _TipStep(
         icon: CupertinoIcons.chart_bar_alt_fill,
-        title: 'Go to the Budget Tab',
-        description:
-            'Tap the Budget tab (second from the right in the bottom nav). The Manage section lists all your financial tools.',
+        titleKey: 'tips.customize.s1t',
+        bodyKey: 'tips.customize.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.pencil_circle_fill,
-        title: 'Tap the Customize Button',
-        description:
-            'Look for the edit / customize icon at the top of the Manage section. Tap it to open the module visibility sheet.',
+        titleKey: 'tips.customize.s2t',
+        bodyKey: 'tips.customize.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.power,
-        title: 'Toggle Modules On or Off',
-        description:
-            'Each module (Installments, Savings, Travel Groups, etc.) has a toggle. Turn off features you don\'t use to keep things clean.',
+        titleKey: 'tips.customize.s3t',
+        bodyKey: 'tips.customize.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.sparkles,
-        title: 'Your Manage Page Updates',
-        description:
-            'Hidden modules disappear from the Manage page immediately. You can always come back here to re-enable them.',
+        titleKey: 'tips.customize.s4t',
+        bodyKey: 'tips.customize.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Match Your Salary Cycle',
-    subtitle: 'Reports that reset on your actual pay day',
+    titleKey: 'tips.cycle.title',
+    subtitleKey: 'tips.cycle.sub',
     icon: CupertinoIcons.calendar_badge_plus,
     color: Color(0xFFFF9F0A),
     steps: [
       _TipStep(
         icon: CupertinoIcons.chart_bar_alt_fill,
-        title: 'Go to the Budget Tab',
-        description:
-            'Tap the Budget tab. The Expense Cycle option is available in the Manage section — look for the cycle settings icon.',
+        titleKey: 'tips.cycle.s1t',
+        bodyKey: 'tips.cycle.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.calendar,
-        title: 'Open Expense Cycle',
-        description:
-            'Tap the cycle icon to open the Expense Cycle sheet. Here you can switch between calendar month and a custom start day.',
+        titleKey: 'tips.cycle.s2t',
+        bodyKey: 'tips.cycle.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.checkmark_circle_fill,
-        title: 'Enable & Set Your Salary Day',
-        description:
-            'Toggle "Custom Cycle" on, then pick the day of the month your salary arrives — e.g. the 15th or 25th.',
+        titleKey: 'tips.cycle.s3t',
+        bodyKey: 'tips.cycle.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.chart_bar_fill,
-        title: 'All Reports Align to Your Pay Day',
-        description:
-            'Your Dashboard totals, Budget, and Statistics now reset from your pay day — not the 1st of the calendar month.',
+        titleKey: 'tips.cycle.s4t',
+        bodyKey: 'tips.cycle.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Split Bills & Generate Receipt',
-    subtitle: 'Divide shared costs and share a clean receipt image',
+    titleKey: 'tips.split.title',
+    subtitleKey: 'tips.split.sub',
     icon: CupertinoIcons.person_2_fill,
     color: Color(0xFF007AFF),
     steps: [
       _TipStep(
         icon: CupertinoIcons.doc_text_fill,
-        title: 'Open an Expense Form',
-        description:
-            'Add a new expense or edit an existing one. Scroll down on the form — you\'ll see a "Split Bill" section near the bottom.',
+        titleKey: 'tips.split.s1t',
+        bodyKey: 'tips.split.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.person_badge_plus_fill,
-        title: 'Add People to the Split',
-        description:
-            'Tap "+ Add Person" to pick from your contacts or People list. Enter each person\'s share amount — the remaining balance updates live.',
+        titleKey: 'tips.split.s2t',
+        bodyKey: 'tips.split.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.equal_circle_fill,
-        title: 'Confirm the Split',
-        description:
-            'Once the remaining balance reaches zero the split is complete. Adjust any amounts until everything balances out.',
+        titleKey: 'tips.split.s3t',
+        bodyKey: 'tips.split.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.share_solid,
-        title: 'Generate & Share Receipt',
-        description:
-            'Tap "Generate Receipt" to create a shareable image showing who owes what. Send it via WhatsApp or any other app.',
+        titleKey: 'tips.split.s4t',
+        bodyKey: 'tips.split.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Travel Groups with Invite Code',
-    subtitle: 'Track shared trip expenses with friends and family',
+    titleKey: 'tips.travel.title',
+    subtitleKey: 'tips.travel.sub',
     icon: CupertinoIcons.airplane,
     color: Color(0xFFBF5AF2),
     steps: [
       _TipStep(
         icon: CupertinoIcons.square_stack_3d_up_fill,
-        title: 'Go to Assets → Travel Groups',
-        description:
-            'Tap the Assets tab (rightmost in bottom nav), then open Travel Groups. Tap + to create a new trip.',
+        titleKey: 'tips.travel.s1t',
+        bodyKey: 'tips.travel.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.qrcode,
-        title: 'Share the Invite Code',
-        description:
-            'Your trip gets a unique invite code automatically. Share it with your travel companions via message or QR code.',
+        titleKey: 'tips.travel.s2t',
+        bodyKey: 'tips.travel.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.person_2_fill,
-        title: 'Friends Join with the Code',
-        description:
-            'Your travel companions create or open a Travel Group, tap "Join", and enter your invite code. They\'re instantly added.',
+        titleKey: 'tips.travel.s3t',
+        bodyKey: 'tips.travel.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.chart_pie_fill,
-        title: 'Everyone Records & Splits',
-        description:
-            'Any group member can add expenses. Trackora calculates the total per person and suggests settlements automatically.',
+        titleKey: 'tips.travel.s4t',
+        bodyKey: 'tips.travel.s4b',
       ),
     ],
   ),
 
   _Topic(
-    title: 'Group Expense for Partners',
-    subtitle: 'Track shared household spending together',
+    titleKey: 'tips.group.title',
+    subtitleKey: 'tips.group.sub',
     icon: CupertinoIcons.heart_fill,
     color: Color(0xFFFF375F),
     steps: [
       _TipStep(
         icon: CupertinoIcons.arrow_2_squarepath,
-        title: 'Switch to Group Mode',
-        description:
-            'On the Dashboard, tap the "Personal / Group" toggle at the top of the screen to switch to your shared group view.',
+        titleKey: 'tips.group.s1t',
+        bodyKey: 'tips.group.s1b',
       ),
       _TipStep(
         icon: CupertinoIcons.person_2_fill,
-        title: 'Create or Join a Group',
-        description:
-            'Create a new expense group for your household, then invite your partner by sharing the group ID. They join in seconds.',
+        titleKey: 'tips.group.s2t',
+        bodyKey: 'tips.group.s2b',
       ),
       _TipStep(
         icon: CupertinoIcons.plus_circle_fill,
-        title: 'Add Shared Expenses',
-        description:
-            'In Group mode, the + button adds expenses visible to all group members. Everyone can add, view, and manage records.',
+        titleKey: 'tips.group.s3t',
+        bodyKey: 'tips.group.s3b',
       ),
       _TipStep(
         icon: CupertinoIcons.chart_bar_fill,
-        title: 'Track Combined Spending',
-        description:
-            'Your group Dashboard shows combined totals, budgets, and category breakdowns — perfect for managing finances together.',
+        titleKey: 'tips.group.s4t',
+        bodyKey: 'tips.group.s4b',
       ),
     ],
   ),
@@ -293,7 +269,7 @@ class HowTrackoraWorksScreen extends StatelessWidget {
               child: Icon(CupertinoIcons.back, color: brand.ink, size: 22),
             ),
             title: Text(
-              'How Trackora Works',
+              context.t('tips.screenTitle'),
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -307,7 +283,7 @@ class HowTrackoraWorksScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                'Tap a topic to see step-by-step instructions.',
+                context.t('tips.screenSubtitle'),
                 style: TextStyle(fontSize: 14, color: brand.inkSoft),
               ),
             ),
@@ -412,7 +388,7 @@ class _TopicCardState extends State<_TopicCard>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        t.title,
+                        context.t(t.titleKey),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -421,7 +397,7 @@ class _TopicCardState extends State<_TopicCard>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        t.subtitle,
+                        context.t(t.subtitleKey),
                         style: TextStyle(
                           fontSize: 12,
                           color: brand.inkSoft,
@@ -554,7 +530,7 @@ class _TopicDetailScreenState extends State<_TopicDetailScreen> {
                   step: steps[i],
                   stepNumber: i + 1,
                   totalSteps: steps.length,
-                  topicTitle: widget.topic.title,
+                  topicTitle: context.t(widget.topic.titleKey),
                   color: color,
                 ),
               ),
@@ -613,7 +589,9 @@ class _TopicDetailScreenState extends State<_TopicDetailScreen> {
                           ),
                           child: Center(
                             child: Text(
-                              isLast ? 'Done' : 'Next',
+                              isLast
+                                  ? context.t('common.done')
+                                  : context.t('tips.next'),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -682,7 +660,10 @@ class _StepPageState extends State<_StepPage>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              'Step ${widget.stepNumber} of ${widget.totalSteps}',
+              context
+                  .t('tips.stepOf')
+                  .replaceAll('{n}', '${widget.stepNumber}')
+                  .replaceAll('{total}', '${widget.totalSteps}'),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -712,7 +693,7 @@ class _StepPageState extends State<_StepPage>
 
           // Step title
           Text(
-            widget.step.title,
+            context.t(widget.step.titleKey),
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
@@ -725,7 +706,7 @@ class _StepPageState extends State<_StepPage>
 
           // Description
           Text(
-            widget.step.description,
+            context.t(widget.step.bodyKey),
             style: TextStyle(
               fontSize: 15,
               color: brand.inkSoft,

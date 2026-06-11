@@ -435,7 +435,10 @@ class _NetWorthCard extends StatelessWidget {
           const SizedBox(height: 6),
 
           Text(
-            '$ownedPctInt% assets · $owedPctInt% liabilities',
+            context
+                .t('asset.assetsLiabilitiesPercent')
+                .replaceAll('{owned}', '$ownedPctInt')
+                .replaceAll('{owed}', '$owedPctInt'),
             style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E96), fontWeight: FontWeight.w500),
           ),
 

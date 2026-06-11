@@ -509,6 +509,7 @@ Map<String, double> computeAccountBalanceMap(
   List<Expense> all, {
   List<PreciousMetal> metals = const [],
   List<StockInvestment> stocks = const [],
+  List<GroupExpenseItem> groupExpenses = const [],
   double Function(double amount, String fromCode)? toBase,
 }) {
   final currencyCodes = <String, String?>{
@@ -559,6 +560,12 @@ Map<String, double> computeAccountBalanceMap(
       final isSell = (tx['type'] as String?) == 'sell';
       balances[aid] = (balances[aid] ?? 0) + (isSell ? amt : -amt);
     }
+  }
+  // Group expenses: deduct from the account used by the payer.
+  for (final g in groupExpenses) {
+    final aid = g.paidByAccountId;
+    if (aid == null || !balances.containsKey(aid)) continue;
+    balances[aid] = (balances[aid] ?? 0) - g.amount;
   }
   return balances;
 }

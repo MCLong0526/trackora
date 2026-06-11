@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Trackora</title>
+<style>
+  :root {
+    --ink: #1c1c1e; --ink-soft: #6b6b70; --accent: #5b5bd6;
+    --line: #ececf1; --bg: #f7f7fb; --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 24px;
+    padding: 48px 40px; max-width: 420px; width: calc(100% - 44px); text-align: center;
+  }
+  .logo {
+    width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 20px;
+    background: linear-gradient(135deg, #6d6df0, #5b5bd6);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 30px; font-weight: 700;
+  }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+  p { color: var(--ink-soft); font-size: 15px; line-height: 1.6; margin: 0 0 26px; }
+  .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  a {
+    display: inline-block; padding: 12px 22px; border-radius: 999px; font-size: 15px;
+    font-weight: 600; text-decoration: none; color: var(--accent);
+    background: rgba(91,91,214,0.10); transition: background 0.2s ease;
+  }
+  a:hover { background: rgba(91,91,214,0.18); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #f2f2f7; --ink-soft: #9a9aa2; --line: #2a2a30; --bg: #0f0f12; --card: #1a1a1f; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">T</div>
+    <h1>Trackora</h1>
+    <p>A clean, iOS-first expense tracker. Keep your spending, savings, and assets in one private place.</p>
+    <div class="links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+  </div>
+</body>
+</html>
