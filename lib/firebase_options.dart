@@ -59,7 +59,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyB4L3ep_9pXE4q1PQlzjpy0nTc6DNF2Wns',
-    appId: '1:957463431763:ios:84e546b95b097a4fee14a6',
+    appId: '1:957463431763:ios:976cffeb7bf07ee4ee14a6',
     messagingSenderId: '957463431763',
     projectId: 'trackora-9c965',
     storageBucket: 'trackora-9c965.firebasestorage.app',

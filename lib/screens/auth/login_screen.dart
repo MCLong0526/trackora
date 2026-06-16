@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
@@ -44,6 +44,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _biometricEnabled = false;
   String? _biometricEmail;
   bool _biometricInProgress = false;
+
+  // Sign in with Apple is offered on Apple platforms. App Store Review
+  // guideline 4.8 requires it as an equivalent option wherever a third-party
+  // login (here, Google) is offered.
+  bool get _showAppleSignIn =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   void initState() {
@@ -263,32 +271,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       } else {
         _goHome();
       }
-    } on SignInWithAppleAuthorizationException catch (e) {
-      // DIAGNOSTIC (temporary): surface the real reason while debugging.
-      debugPrint('Apple sign-in — NATIVE error: ${e.code} — ${e.message}');
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.code == AuthorizationErrorCode.canceled
-              ? null
-              : 'Apple (native) failed: ${e.code.name} — ${e.message}';
-          _isLoading = false;
-        });
-      }
     } on FirebaseAuthException catch (e) {
-      // DIAGNOSTIC (temporary): surface the real Firebase code/message.
-      debugPrint('Apple sign-in — FIREBASE error: ${e.code} — ${e.message}');
+      // A user-cancelled Apple prompt comes back as a Firebase cancel code —
+      // that is not an error, so just stop the spinner.
+      const cancelCodes = {
+        'canceled',
+        'cancelled',
+        'web-context-canceled',
+        'user-canceled',
+      };
+      if (kDebugMode) {
+        debugPrint('Apple sign-in — Firebase error: ${e.code} — ${e.message}');
+      }
       if (mounted) {
         setState(() {
-          _errorMessage = 'Apple (Firebase) failed: ${e.code} — ${e.message}';
+          _errorMessage = cancelCodes.contains(e.code)
+              ? null
+              : context.t('auth.errAppleFailed');
           _isLoading = false;
         });
       }
     } catch (e) {
-      // DIAGNOSTIC (temporary): surface any other error.
-      debugPrint('Apple sign-in — OTHER error: $e');
+      if (kDebugMode) {
+        debugPrint('Apple sign-in — other error: $e');
+      }
       if (mounted) {
         setState(() {
-          _errorMessage = 'Apple sign-in failed: $e';
+          _errorMessage = context.t('auth.errAppleFailed');
           _isLoading = false;
         });
       }
@@ -461,8 +470,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          // ignore: dead_code
-                          if (false) ...[
+                          if (_showAppleSignIn) ...[
                             Expanded(
                               child: _SocialButton(
                                 label: 'Apple',

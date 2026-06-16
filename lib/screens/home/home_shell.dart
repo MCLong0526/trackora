@@ -9,7 +9,6 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
-import '../onboarding/onboarding_screen.dart';
 import '../settings/settings_screen.dart';
 import 'dashboard_screen.dart';
 import 'statistics_screen.dart';
@@ -31,35 +30,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     BudgetScreen(),
     SettingsScreen(),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _maybeShowOnboarding();
-  }
-
-  /// On the very first launch of a new account, run the full onboarding
-  /// flow (display name, currency, language) followed by a quick tour.
-  Future<void> _maybeShowOnboarding() async {
-    final prefs = ref.read(prefsServiceProvider);
-    final done = await prefs.isFirstLaunchDone();
-    if (done || !mounted) return;
-    await prefs.markFirstLaunchDone();
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.of(context).push(
-        PageRouteBuilder<void>(
-          fullscreenDialog: true,
-          opaque: true,
-          transitionDuration: const Duration(milliseconds: 320),
-          pageBuilder: (_, _, _) => const OnboardingScreen(),
-          transitionsBuilder: (_, anim, _, child) =>
-              FadeTransition(opacity: anim, child: child),
-        ),
-      );
-    });
-  }
 
   @override
   Widget build(BuildContext context) {

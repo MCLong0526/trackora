@@ -30,7 +30,6 @@ import '../../widgets/section_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../widgets/account_carousel_section.dart' show showAddAccountSheet;
 import '../auth/welcome_screen.dart';
-import '../tips/how_trackora_works_screen.dart';
 import '../../main.dart' show rootNavKey;
 
 enum _CsvExportRangeMode { month, all }
@@ -211,17 +210,6 @@ class SettingsScreen extends ConsumerWidget {
             _GroupHeader(label: context.t('settings.about')),
             _GroupCard(
               children: [
-                _Tile(
-                  icon: CupertinoIcons.book_fill,
-                  iconColor: AppColors.sky,
-                  label: context.t('settings.howTrackoraWorks'),
-                  onTap: () => Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => const HowTrackoraWorksScreen(),
-                    ),
-                  ),
-                ),
-                _GroupDivider(),
                 _Tile(
                   icon: CupertinoIcons.info,
                   iconColor: AppColors.sand,

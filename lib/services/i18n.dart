@@ -1303,6 +1303,7 @@ class AppStrings {
         'Your password changed. Sign in with your password once to re-enable Face ID.',
     'auth.errSignInFailedPassword': 'Sign in failed. Please use your password.',
     'auth.errGoogleFailed': 'Google sign-in failed. Please try again.',
+    'auth.errAppleFailed': 'Apple sign-in failed. Please try again.',
     'auth.errNoAccount': 'No account found with this email.',
     'auth.errIncorrectPassword': 'Incorrect password. Please try again.',
     'auth.errInvalidEmail': 'Please enter a valid email address.',
@@ -2629,6 +2630,7 @@ class AppStrings {
     'auth.errPasswordChanged': '您的密码已更改。请使用密码登录一次以重新启用 Face ID。',
     'auth.errSignInFailedPassword': '登录失败，请使用密码登录。',
     'auth.errGoogleFailed': 'Google 登录失败，请重试。',
+    'auth.errAppleFailed': 'Apple 登录失败，请重试。',
     'auth.errNoAccount': '未找到使用此电子邮件的账户。',
     'auth.errIncorrectPassword': '密码不正确，请重试。',
     'auth.errInvalidEmail': '请输入有效的电子邮件地址。',
@@ -3973,6 +3975,7 @@ class AppStrings {
     'auth.errSignInFailedPassword':
         'Log masuk gagal. Sila gunakan kata laluan anda.',
     'auth.errGoogleFailed': 'Log masuk Google gagal. Sila cuba lagi.',
+    'auth.errAppleFailed': 'Log masuk Apple gagal. Sila cuba lagi.',
     'auth.errNoAccount': 'Tiada akaun ditemui dengan e-mel ini.',
     'auth.errIncorrectPassword': 'Kata laluan salah. Sila cuba lagi.',
     'auth.errInvalidEmail': 'Sila masukkan alamat e-mel yang sah.',

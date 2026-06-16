@@ -1,13 +1,7 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../app_config.dart';
 import '../models/app_user.dart';
@@ -179,31 +173,20 @@ class AuthService {
     return await _auth.signInWithCredential(credential);
   }
 
-  /// Signs in with Apple via Firebase Auth.
-  /// Returns null if the user cancelled the flow.
+  /// Signs in with Apple via Firebase's native provider flow.
+  ///
+  /// Uses [FirebaseAuth.signInWithProvider], which presents the native Apple
+  /// sign-in sheet on iOS and lets Firebase manage the nonce end-to-end. This
+  /// avoids the `invalid-credential` ("Invalid OAuth response from apple.com")
+  /// failures the manual id-token + nonce flow is prone to.
   Future<UserCredential?> signInWithApple() async {
     if (storageMode == StorageMode.local) {
       throw UnsupportedError('Sign in is only available in Firebase mode.');
     }
-    // Firebase validates the Apple identity token against a nonce: send the
-    // SHA-256 of a random nonce to Apple, then hand Firebase the raw value.
-    // (Apple's authorizationCode is NOT an OAuth access token — passing it as
-    // one makes Firebase reject the credential with `invalid-credential`.)
-    // DIAGNOSTIC (temporary): proves the corrected build is actually running.
-    debugPrint('🍎 Apple sign-in: nonce flow active (idToken + rawNonce, no accessToken)');
-    final rawNonce = _generateNonce();
-    final appleCredential = await SignInWithApple.getAppleIDCredential(
-      scopes: [
-        AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName,
-      ],
-      nonce: _sha256OfString(rawNonce),
-    );
-    final oauthCredential = OAuthProvider('apple.com').credential(
-      idToken: appleCredential.identityToken,
-      rawNonce: rawNonce,
-    );
-    return await _auth.signInWithCredential(oauthCredential);
+    final appleProvider = AppleAuthProvider()
+      ..addScope('email')
+      ..addScope('name');
+    return await _auth.signInWithProvider(appleProvider);
   }
 
   // ── Account deletion ────────────────────────────────────────────────────────
@@ -281,36 +264,13 @@ class AuthService {
   Future<void> reauthWithApple() async {
     final user = _auth.currentUser;
     if (user == null) throw const ReauthRequiredException('No signed-in user.');
-    final rawNonce = _generateNonce();
-    final appleCredential = await SignInWithApple.getAppleIDCredential(
-      scopes: [
-        AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName,
-      ],
-      nonce: _sha256OfString(rawNonce),
-    );
-    final oauthCredential = OAuthProvider('apple.com').credential(
-      idToken: appleCredential.identityToken,
-      rawNonce: rawNonce,
-    );
-    await user.reauthenticateWithCredential(oauthCredential);
+    final appleProvider = AppleAuthProvider()
+      ..addScope('email')
+      ..addScope('name');
+    await user.reauthenticateWithProvider(appleProvider);
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
-
-  /// A cryptographically-random nonce string for Apple sign-in.
-  String _generateNonce([int length = 32]) {
-    const charset =
-        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-    final random = Random.secure();
-    return List.generate(
-      length,
-      (_) => charset[random.nextInt(charset.length)],
-    ).join();
-  }
-
-  String _sha256OfString(String input) =>
-      sha256.convert(utf8.encode(input)).toString();
 
   Future<void> _deleteFirestoreData(String uid) async {
     final db = FirebaseFirestore.instance;
