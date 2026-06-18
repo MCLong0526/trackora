@@ -310,6 +310,22 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       title: 'Trackora',
       navigatorKey: rootNavKey,
       debugShowCheckedModeBanner: false,
+      // Clamp the system text scale so large Dynamic Type / accessibility
+      // sizes never break the layout into clipped or overlapping text
+      // (keeps typography readable on iPad and large displays), while still
+      // honouring moderate text-size preferences.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              minScaleFactor: 1.0,
+              maxScaleFactor: 1.3,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,

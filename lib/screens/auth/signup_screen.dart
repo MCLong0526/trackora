@@ -194,7 +194,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
+    // Auth screens use a fixed light background by design, so force the
+    // light colour palette here. Otherwise, when the device is in dark mode
+    // `context.brand` resolves to the dark (near-white) ink and renders
+    // near-invisible text on the light background.
+    const brand = BrandColors.light;
     final password = _passwordController.text;
     final strength = _passwordStrength(password);
 
@@ -490,7 +494,7 @@ class _BackButton extends StatelessWidget {
         child: Icon(
           CupertinoIcons.chevron_left,
           size: 18,
-          color: context.brand.ink,
+          color: AppColors.ink,
         ),
       ),
     );
@@ -538,7 +542,7 @@ class _AuthTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      style: TextStyle(fontSize: 15, color: context.brand.ink),
+      style: TextStyle(fontSize: 15, color: AppColors.ink),
       decoration: InputDecoration(
         isDense: true,
         hintText: hintText,
@@ -592,7 +596,7 @@ class _PasswordInputField extends StatelessWidget {
       obscureText: obscure,
       textInputAction: textInputAction,
       onChanged: onChanged,
-      style: TextStyle(fontSize: 15, color: context.brand.ink),
+      style: TextStyle(fontSize: 15, color: AppColors.ink),
       decoration: InputDecoration(
         isDense: true,
         hintText: hintText,

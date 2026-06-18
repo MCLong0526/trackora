@@ -345,7 +345,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
+    // Auth screens use a fixed light background by design, so force the
+    // light colour palette here. Otherwise, when the device is in dark mode
+    // `context.brand` resolves to the dark (near-white) ink and renders
+    // near-invisible text on the light background.
+    const brand = BrandColors.light;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -654,7 +658,7 @@ class _BackButton extends StatelessWidget {
         child: Icon(
           CupertinoIcons.chevron_left,
           size: 18,
-          color: context.brand.ink,
+          color: AppColors.ink,
         ),
       ),
     );
@@ -689,7 +693,7 @@ class _EmailField extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
-      style: TextStyle(fontSize: 15, color: context.brand.ink),
+      style: TextStyle(fontSize: 15, color: AppColors.ink),
       decoration: InputDecoration(
         isDense: true,
         contentPadding:
@@ -742,7 +746,7 @@ class _PasswordField extends StatelessWidget {
       obscureText: obscure,
       textInputAction: TextInputAction.done,
       onFieldSubmitted: onSubmitted,
-      style: TextStyle(fontSize: 15, color: context.brand.ink),
+      style: TextStyle(fontSize: 15, color: AppColors.ink),
       decoration: InputDecoration(
         isDense: true,
         contentPadding:
@@ -940,7 +944,7 @@ class _SocialButton extends StatelessWidget {
     return OutlinedButton(
       style: OutlinedButton.styleFrom(
         backgroundColor: Colors.white,
-        foregroundColor: context.brand.ink,
+        foregroundColor: AppColors.ink,
         side: BorderSide(color: AppColors.divider),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.field),
@@ -955,7 +959,7 @@ class _SocialButton extends StatelessWidget {
           Icon(
             isApple ? Icons.apple : Icons.g_mobiledata_rounded,
             size: isApple ? 20 : 26,
-            color: context.brand.ink,
+            color: AppColors.ink,
           ),
           const SizedBox(width: 8),
           Text(label),
