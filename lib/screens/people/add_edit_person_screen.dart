@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/person.dart';
+import '../../services/person_propagation_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -104,6 +105,17 @@ class _AddEditPersonScreenState extends ConsumerState<AddEditPersonScreen> {
       final svc = ref.read(personServiceProvider);
       if (_isEdit) {
         await svc.update(user.uid, person);
+        // Keep every transaction that holds a denormalised copy of this person
+        // (split bill members, borrow / lending records) in sync with the edit.
+        await PersonPropagationService.propagatePersonUpdate(
+          uid: user.uid,
+          person: person,
+          oldName: widget.person!.name,
+          isOnline: ref.read(isOnlineProvider),
+        );
+        // Refresh the one-shot split-bill aggregate so owed amounts, names and
+        // avatar colours update on the People / detail screens right away.
+        ref.invalidate(allSplitBillsProvider);
       } else {
         await svc.add(user.uid, person);
       }
