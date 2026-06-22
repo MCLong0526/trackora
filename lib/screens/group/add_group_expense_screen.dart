@@ -335,27 +335,29 @@ class _AddGroupExpenseScreenState
     final hasNew = _newReceipt != null;
     final hasExisting = _existingReceiptUrl != null;
 
+    final brand = context.brand;
+
     if (!hasNew && !hasExisting) {
       return InkWell(
         onTap: _pickReceipt,
         borderRadius: BorderRadius.circular(18),
-        child: const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(
             children: [
               SizedBox(
                 width: 28,
                 height: 28,
-                child: Icon(CupertinoIcons.paperclip, color: Color(0xFF0B0B0F), size: 18),
+                child: Icon(CupertinoIcons.paperclip, color: brand.ink, size: 18),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Attach receipt',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF8E8E96)),
+                  style: TextStyle(fontSize: 14, color: brand.inkSoft),
                 ),
               ),
-              Icon(CupertinoIcons.chevron_right, color: Color(0xFFC9C9CF), size: 14),
+              Icon(CupertinoIcons.chevron_right, color: brand.inkSoft, size: 14),
             ],
           ),
         ),
@@ -366,10 +368,10 @@ class _AddGroupExpenseScreenState
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 28,
             height: 28,
-            child: Icon(CupertinoIcons.paperclip, color: Color(0xFF0B0B0F), size: 18),
+            child: Icon(CupertinoIcons.paperclip, color: brand.ink, size: 18),
           ),
           const SizedBox(width: 12),
           if (hasNew)
@@ -399,7 +401,7 @@ class _AddGroupExpenseScreenState
           Expanded(
             child: Text(
               hasNew ? 'New attachment' : 'Saved attachment',
-              style: const TextStyle(fontSize: 14, color: Color(0xFF0B0B0F), fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: 14, color: brand.ink, fontWeight: FontWeight.w500),
             ),
           ),
           GestureDetector(
@@ -1591,12 +1593,12 @@ class _AddGroupExpenseScreenState
                                       width: 28,
                                       height: 28,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFF4F4F7),
+                                        color: brand.background,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Icon(
+                                      child: Icon(
                                         CupertinoIcons.creditcard_fill,
-                                        color: Color(0xFF5B5B66),
+                                        color: brand.inkSoft,
                                         size: 14,
                                       ),
                                     ),
@@ -1633,14 +1635,14 @@ class _AddGroupExpenseScreenState
                                     width: 28,
                                     height: 28,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF4F4F7),
+                                      color: brand.background,
                                       borderRadius:
                                           BorderRadius.circular(8),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       CupertinoIcons
                                           .arrow_left_right,
-                                      color: Color(0xFF5B5B66),
+                                      color: brand.inkSoft,
                                       size: 14,
                                     ),
                                   ),
@@ -1684,12 +1686,12 @@ class _AddGroupExpenseScreenState
                                 // Date
                                 _EntryRow(
                                   onTap: _pickDate,
-                                  leading: const SizedBox(
+                                  leading: SizedBox(
                                     width: 28,
                                     height: 28,
                                     child: Icon(
                                       CupertinoIcons.calendar,
-                                      color: Color(0xFF0B0B0F),
+                                      color: brand.ink,
                                       size: 20,
                                     ),
                                   ),
@@ -1729,12 +1731,12 @@ class _AddGroupExpenseScreenState
                                           16, 10, 16, 10),
                                   child: Row(
                                     children: [
-                                      const SizedBox(
+                                      SizedBox(
                                         width: 28,
                                         height: 28,
                                         child: Icon(
                                           CupertinoIcons.doc,
-                                          color: Color(0xFF0B0B0F),
+                                          color: brand.ink,
                                           size: 18,
                                         ),
                                       ),
@@ -1749,9 +1751,9 @@ class _AddGroupExpenseScreenState
                                           textCapitalization:
                                               TextCapitalization
                                                   .sentences,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 14,
-                                            color: Color(0xFF0B0B0F),
+                                            color: brand.ink,
                                             fontWeight:
                                                 FontWeight.w600,
                                           ),
@@ -2044,6 +2046,7 @@ class _EntryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -2056,10 +2059,10 @@ class _EntryRow extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF0B0B0F),
+                  color: brand.ink,
                   letterSpacing: -0.2,
                 ),
               ),
@@ -2078,7 +2081,7 @@ class _EntryDivider extends StatelessWidget {
     return Container(
       height: 1,
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      color: const Color(0xFFEEEEF1),
+      color: context.brand.divider,
     );
   }
 }
@@ -2100,10 +2103,12 @@ class _PaidBySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      decoration: const BoxDecoration(
-        color: _kBg,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: isDark ? brand.background : _kBg,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(30),
           topRight: Radius.circular(30),
         ),
@@ -2119,7 +2124,7 @@ class _PaidBySheet extends StatelessWidget {
               width: 40,
               height: 5,
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D1D6),
+                color: brand.divider,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -2127,17 +2132,17 @@ class _PaidBySheet extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             context.t('groupExpense.whoPaid'),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0B0B0F),
+              color: brand.ink,
               letterSpacing: -0.4,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             context.t('groupExpense.whoPaidDesc'),
-            style: const TextStyle(fontSize: 14, color: Color(0xFF5B5B66)),
+            style: TextStyle(fontSize: 14, color: brand.inkSoft),
           ),
           const SizedBox(height: 18),
           ...members.map((m) {
@@ -2154,7 +2159,7 @@ class _PaidBySheet extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: selected
@@ -2192,18 +2197,18 @@ class _PaidBySheet extends StatelessWidget {
                         children: [
                           Text(
                             name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF0B0B0F),
+                              color: brand.ink,
                             ),
                           ),
                           if (!isYou)
                             Text(
                               m.displayName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 13,
-                                  color: Color(0xFF8E8E96)),
+                                  color: brand.inkSoft),
                             ),
                         ],
                       ),
@@ -2411,10 +2416,13 @@ class _SplitSheetState extends State<_SplitSheet> {
 
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      decoration: const BoxDecoration(
-        color: _kBg,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: isDark ? brand.background : _kBg,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(30),
           topRight: Radius.circular(30),
         ),
@@ -2438,7 +2446,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                       width: 40,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD1D1D6),
+                        color: brand.divider,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -2446,10 +2454,10 @@ class _SplitSheetState extends State<_SplitSheet> {
                   const SizedBox(height: 14),
                   Text(
                     context.t('groupExpense.howToSplit'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0B0B0F),
+                      color: brand.ink,
                       letterSpacing: -0.4,
                     ),
                   ),
@@ -2460,8 +2468,8 @@ class _SplitSheetState extends State<_SplitSheet> {
                           .replaceAll('{amount}',
                               '${widget.symbol}${widget.amount.toStringAsFixed(2)}')
                           .replaceAll('{partner}', widget.partnerName),
-                      style: const TextStyle(
-                          fontSize: 14, color: Color(0xFF5B5B66)),
+                      style: TextStyle(
+                          fontSize: 14, color: brand.inkSoft),
                     ),
                   const SizedBox(height: 4),
                 ],
@@ -2495,7 +2503,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
                     color: selected
@@ -2528,10 +2536,10 @@ class _SplitSheetState extends State<_SplitSheet> {
                                   Flexible(
                                     child: Text(
                                       opt.title,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0B0B0F),
+                                        color: brand.ink,
                                         letterSpacing: -0.2,
                                       ),
                                     ),
@@ -2558,7 +2566,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                               const SizedBox(height: 3),
                               Text(
                                 opt.subtitle,
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E96)),
+                                style: TextStyle(fontSize: 13, color: brand.inkSoft),
                               ),
                               if (opt.mode == _SplitMode.even) ...[
                                 const SizedBox(height: 10),
@@ -2634,7 +2642,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                                       children: [
                                         Text(
                                           context.t('groupExpense.yourAmount').replaceAll('{symbol}', widget.symbol),
-                                          style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
+                                          style: TextStyle(fontSize: 13, color: brand.inkSoft),
                                         ),
                                         const SizedBox(height: 8),
                                         TextField(
@@ -2649,7 +2657,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                                             prefixText: '${widget.symbol}  ',
                                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                             filled: true,
-                                            fillColor: const Color(0xFFF2F2F7),
+                                            fillColor: brand.background,
                                             border: OutlineInputBorder(
                                               borderRadius: BorderRadius.circular(10),
                                               borderSide: BorderSide.none,
@@ -2670,7 +2678,7 @@ class _SplitSheetState extends State<_SplitSheet> {
                                           final partnerAmt = (widget.amount - myAmt).clamp(0.0, widget.amount);
                                           return Text(
                                             '${widget.partnerName}: ${widget.symbol}${partnerAmt.toStringAsFixed(2)}',
-                                            style: const TextStyle(fontSize: 13, color: Color(0xFF5B5B66)),
+                                            style: TextStyle(fontSize: 13, color: brand.inkSoft),
                                           );
                                         }),
                                       ],
@@ -2700,7 +2708,10 @@ class _SplitSheetState extends State<_SplitSheet> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [_kBg.withValues(alpha: 0), _kBg],
+                          colors: [
+                            (isDark ? brand.background : _kBg).withValues(alpha: 0),
+                            isDark ? brand.background : _kBg,
+                          ],
                         ),
                       ),
                     ),

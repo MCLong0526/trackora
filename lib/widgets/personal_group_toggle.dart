@@ -70,6 +70,8 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
     final hasGroup = groups.isNotEmpty;
     final memberCount = hasGroup ? groups.first.members.length : 0;
     final isPersonal = mode == HomeMode.personal;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brand = widget.brand;
 
     // Animate when mode changes from outside (tap elsewhere, not drag).
     ref.listen<HomeMode>(homeModeProvider, (_, next) {
@@ -81,7 +83,7 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFFEFEFF4),
+        color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFEFEFF4),
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(4),
@@ -149,16 +151,16 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
                     width: _pillW,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? const Color(0xFF3A3A3C) : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.07),
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.07),
                             blurRadius: 3,
                             offset: const Offset(0, 1),
                           ),
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
+                            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -187,8 +189,8 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
                               duration: const Duration(milliseconds: 200),
                               style: TextStyle(
                                 color: isPersonal
-                                    ? const Color(0xFF0B0B0F)
-                                    : const Color(0xFF8E8E96),
+                                    ? brand.ink
+                                    : brand.inkSoft,
                                 fontSize: 14,
                                 fontWeight: isPersonal
                                     ? FontWeight.w600
@@ -233,7 +235,7 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
                                               color: const Color(0xFFEAE3F8),
                                               shape: BoxShape.circle,
                                               border: Border.all(
-                                                color: Colors.white,
+                                                color: isDark ? const Color(0xFF3A3A3C) : Colors.white,
                                                 width: 1.5,
                                               ),
                                             ),
@@ -249,7 +251,7 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
                                                 color: const Color(0xFFD7F4E5),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
-                                                  color: Colors.white,
+                                                  color: isDark ? const Color(0xFF3A3A3C) : Colors.white,
                                                   width: 1.5,
                                                 ),
                                               ),
@@ -264,8 +266,8 @@ class _PersonalGroupToggleState extends ConsumerState<PersonalGroupToggle>
                                   duration: const Duration(milliseconds: 200),
                                   style: TextStyle(
                                     color: !isPersonal
-                                        ? const Color(0xFF0B0B0F)
-                                        : const Color(0xFF8E8E96),
+                                        ? brand.ink
+                                        : brand.inkSoft,
                                     fontSize: 14,
                                     fontWeight: !isPersonal
                                         ? FontWeight.w600

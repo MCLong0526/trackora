@@ -300,7 +300,7 @@ class _MiniAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: context.brand.surface, width: 2),
       ),
       child: Center(
         child: Text(
@@ -782,7 +782,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 32),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: brand.surface,
               borderRadius: BorderRadius.circular(28),
             ),
             child: Center(
@@ -808,7 +808,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
             onTap: _coordinator.closeAll,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: brand.surface,
                 borderRadius: BorderRadius.circular(28),
               ),
               child: ClipRRect(
@@ -855,7 +855,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: brand.surface,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: const Color(0xFF1A6CFF).withValues(alpha: 0.3),
@@ -1521,7 +1521,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7),
+                color: brand.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: LayoutBuilder(
@@ -1715,6 +1715,7 @@ class _GroupMenuSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final me = group.members.where((m) => m.uid == userId).firstOrNull;
     final partner = group.members.where((m) => m.uid != userId).firstOrNull;
 
@@ -1770,7 +1771,7 @@ class _GroupMenuSheet extends ConsumerWidget {
               width: double.infinity,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFFE4ECFE),
+                color: const Color(0xFF1A6CFF).withValues(alpha: isDark ? 0.25 : 0.10),
                 borderRadius: BorderRadius.circular(14),
                 onPressed: () {
                   Navigator.pop(context);
@@ -1808,7 +1809,7 @@ class _GroupMenuSheet extends ConsumerWidget {
               width: double.infinity,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFFFFEEEE),
+                color: const Color(0xFFD93025).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
                 onPressed: () async {
                   final confirmed = await showCupertinoDialog<bool>(
@@ -1903,7 +1904,7 @@ class _GroupMenuSheet extends ConsumerWidget {
               width: double.infinity,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFFFFEEEE),
+                color: const Color(0xFFD93025).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
                 onPressed: () async {
                   final confirmed = await showDialog<bool>(
@@ -2052,7 +2053,7 @@ class _DeleteGroupDialogState extends State<_DeleteGroupDialog>
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFEEEE),
+                  color: const Color(0xFFD93025).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(

@@ -44,7 +44,6 @@ class PersonAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brand = context.brand;
     final idx = colorIndex ?? personColorIndex(name);
     final bg = personAvatarBg(idx);
     final hasEmoji = emoji != null && emoji!.isNotEmpty;
@@ -62,7 +61,7 @@ class PersonAvatar extends StatelessWidget {
         style: TextStyle(
           fontSize: fs,
           fontWeight: hasEmoji ? FontWeight.normal : FontWeight.w600,
-          color: brand.ink,
+          color: foregroundOn(bg),
         ),
       ),
     );

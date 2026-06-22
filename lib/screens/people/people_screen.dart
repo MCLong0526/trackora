@@ -626,14 +626,14 @@ class _TypeBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 10, color: brand.ink),
+          Icon(icon, size: 10, color: foregroundOn(bg)),
           const SizedBox(width: 3),
           Text(
             type.label,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: brand.ink,
+              color: foregroundOn(bg),
             ),
           ),
         ],

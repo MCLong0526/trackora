@@ -252,7 +252,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: brand.surface,
                         borderRadius: BorderRadius.circular(28),
                       ),
                       child: Column(
@@ -365,7 +365,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF4F4F7),
+                              color: brand.surface,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Row(
@@ -446,7 +446,7 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: brand.surface,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
                               color: brand.divider,
@@ -520,7 +520,7 @@ class _CodeBox extends StatelessWidget {
       width: 46,
       height: 58,
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F7),
+        color: context.brand.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Center(
