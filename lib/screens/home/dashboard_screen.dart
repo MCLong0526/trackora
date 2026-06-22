@@ -1333,8 +1333,8 @@ class _InlineBudgetBar extends StatelessWidget {
               Text(
                 visible
                     ? overspent
-                        ? '-${formatMoney(symbol, -remaining)}  ·  ${pct.toStringAsFixed(0)}%'
-                        : '${formatMoney(symbol, remaining)} ${context.t('common.left')}  ·  ${pct.toStringAsFixed(0)}%'
+                        ? '-${formatMoney(symbol, -remaining)}  ·  ${context.t('home.used')} ${pct.toStringAsFixed(0)}%'
+                        : '${context.t('common.left')} ${formatMoney(symbol, remaining)}  ·  ${context.t('home.used')} ${pct.toStringAsFixed(0)}%'
                     : '$symbol ****',
                 style: TextStyle(
                   fontSize: 11,

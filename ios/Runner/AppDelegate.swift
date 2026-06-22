@@ -17,6 +17,10 @@ import WatchConnectivity
   private var _pendingDeepLink: String?
   private var _deepLinkChannel: FlutterMethodChannel?
 
+  // Opaque overlay shown while the app is inactive/backgrounded so financial
+  // data isn't visible in the iOS App Switcher snapshot.
+  private var _privacyView: UIView?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -163,5 +167,69 @@ import WatchConnectivity
       // Engine not ready yet — will flush in installShareImportService.
       _pendingShareImport = true
     }
+  }
+
+  // MARK: - App Switcher privacy
+
+  // Cover the UI before iOS snapshots it for the App Switcher, and reveal it
+  // again once the app is active. This keeps balances and transactions out of
+  // the background preview.
+  override func applicationWillResignActive(_ application: UIApplication) {
+    showPrivacyScreen()
+    super.applicationWillResignActive(application)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    hidePrivacyScreen()
+    super.applicationDidBecomeActive(application)
+  }
+
+  private func privacyWindow() -> UIWindow? {
+    if let w = window { return w }
+    let scenes = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+    if let key = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }) {
+      return key
+    }
+    return scenes.flatMap { $0.windows }.first
+  }
+
+  private func showPrivacyScreen() {
+    guard _privacyView == nil, let window = privacyWindow() else { return }
+
+    let cover = UIView(frame: window.bounds)
+    cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    // Opaque so nothing underneath shows through in the snapshot.
+    cover.backgroundColor = UIColor.systemBackground
+
+    let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    blur.frame = cover.bounds
+    blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    cover.addSubview(blur)
+
+    let label = UILabel()
+    label.text = "Trackora"
+    label.font = UIFont.systemFont(ofSize: 28, weight: .bold)
+    label.textColor = UIColor.label
+    label.textAlignment = .center
+    label.translatesAutoresizingMaskIntoConstraints = false
+    cover.addSubview(label)
+    NSLayoutConstraint.activate([
+      label.centerXAnchor.constraint(equalTo: cover.centerXAnchor),
+      label.centerYAnchor.constraint(equalTo: cover.centerYAnchor),
+    ])
+
+    window.addSubview(cover)
+    _privacyView = cover
+  }
+
+  private func hidePrivacyScreen() {
+    guard let cover = _privacyView else { return }
+    _privacyView = nil
+    UIView.animate(
+      withDuration: 0.2,
+      animations: { cover.alpha = 0 },
+      completion: { _ in cover.removeFromSuperview() }
+    )
   }
 }
