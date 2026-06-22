@@ -872,7 +872,7 @@ class _CardFront extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            account.displayName,
+                            account.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -882,6 +882,23 @@ class _CardFront extends ConsumerWidget {
                               letterSpacing: -0.1,
                             ),
                           ),
+                          // Show the remark on its own line so it stays legible
+                          // (the combined "name · remark" used to truncate).
+                          if (account.remark != null &&
+                              account.remark!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              account.remark!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: pal.ink.withValues(alpha: 0.62),
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

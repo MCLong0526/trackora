@@ -163,13 +163,13 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
             margin: const EdgeInsets.all(8),
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: brand.surface,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               CupertinoIcons.chevron_back,
-              color: Color(0xFF0B0B0F),
+              color: brand.ink,
               size: 18,
             ),
           ),
@@ -207,8 +207,8 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                     const SizedBox(height: 10),
                     Text(
                       context.t('group.askPartnerCode'),
-                      style: const TextStyle(
-                        color: Color(0xFF5B5B66),
+                      style: TextStyle(
+                        color: brand.inkSoft,
                         fontSize: 15,
                         height: 1.5,
                       ),
@@ -254,7 +254,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: brand.surface,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
@@ -290,7 +290,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                           vertical: 14,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: brand.surface,
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: Row(
@@ -412,21 +412,28 @@ class _InputBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Filled / active boxes sit slightly raised above the empty ones.
+    final filledBg =
+        isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final emptyBg = isDark ? brand.surface : const Color(0xFFF4F4F7);
+
     Color bgColor;
     Color? borderColor;
     double borderWidth = 0;
 
     if (char != null) {
       // Filled
-      bgColor = Colors.white;
+      bgColor = filledBg;
     } else if (isActive) {
       // Active/current
-      bgColor = Colors.white;
+      bgColor = filledBg;
       borderColor = const Color(0xFF1A6CFF);
       borderWidth = 2;
     } else {
       // Empty/inactive
-      bgColor = const Color(0xFFF4F4F7);
+      bgColor = emptyBg;
     }
 
     return Container(
@@ -438,7 +445,7 @@ class _InputBox extends StatelessWidget {
         border: borderColor != null
             ? Border.all(color: borderColor, width: borderWidth)
             : null,
-        boxShadow: char != null
+        boxShadow: char != null && !isDark
             ? [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.06),
@@ -454,11 +461,11 @@ class _InputBox extends StatelessWidget {
           if (char != null)
             Text(
               char!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 fontFamily: 'monospace',
-                color: Color(0xFF0B0B0F),
+                color: brand.ink,
               ),
             )
           else if (isActive && cursorVisible)

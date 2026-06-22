@@ -481,6 +481,7 @@ class _ExchangeRateSheetState extends ConsumerState<ExchangeRateSheet>
                             hintText: 'Search currency…',
                             hintStyle: TextStyle(fontSize: 16, color: mutedColor, letterSpacing: -0.2),
                             border: InputBorder.none, isDense: true,
+                            filled: false,
                             contentPadding: EdgeInsets.zero,
                           ),
                           onChanged: (v) => setState(() => _query = v),
@@ -1329,6 +1330,7 @@ class _ConverterRow extends StatelessWidget {
                       color: inkColor, letterSpacing: -0.5),
                   decoration: InputDecoration(
                     border: InputBorder.none, isDense: true,
+                    filled: false,
                     contentPadding: EdgeInsets.zero,
                     hintText: '0',
                     hintStyle: TextStyle(fontSize: 26, fontWeight: FontWeight.w600,
@@ -1433,6 +1435,7 @@ class _MiniCurrencyPickerState extends State<_MiniCurrencyPicker> {
                           hintText: 'Search…',
                           hintStyle: TextStyle(fontSize: 15, color: mutedColor),
                           border: InputBorder.none, isDense: true,
+                          filled: false,
                           contentPadding: EdgeInsets.zero,
                         ),
                         onChanged: (v) => setState(() => _query = v),

@@ -88,13 +88,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             margin: const EdgeInsets.all(8),
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: brand.surface,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               CupertinoIcons.chevron_back,
-              color: Color(0xFF0B0B0F),
+              color: brand.ink,
               size: 18,
             ),
           ),
@@ -239,7 +239,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                 context.t('group.heroSubtitle'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: const Color(0xFF5B5B66),
+                  color: brand.inkSoft,
                   fontSize: 15,
                   height: 1.5,
                 ),
@@ -255,7 +255,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
@@ -385,8 +385,8 @@ class _FeaturePill extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: Color(0xFF0B0B0F),
+            style: TextStyle(
+              color: context.brand.ink,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),

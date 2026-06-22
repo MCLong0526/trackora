@@ -297,6 +297,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         updated = _splitMembers.map((m) => m.copyWith(amount: each)).toList();
       case SplitMode.percent:
       case SplitMode.shares:
+      case SplitMode.amount:
+        // For custom amounts (and percent / shares) keep each member's
+        // proportion of the bill and rescale to the new total so the parts
+        // always add up correctly.
         final oldTotal = _splitBillTotal > 0
             ? _splitBillTotal
             : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
@@ -307,8 +311,6 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     ))
                 .toList()
             : _splitMembers.map((m) => m.copyWith(amount: newTotal / n)).toList();
-      case SplitMode.amount:
-        updated = _splitMembers;
     }
     setState(() {
       _splitBillTotal = newTotal;

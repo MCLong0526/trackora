@@ -24,6 +24,14 @@ class PersonDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final user = ref.watch(authStateProvider).valueOrNull;
+    // Re-read the contact from the live provider so an edit (name / colour /
+    // emoji) made on the edit screen is reflected here the moment we return.
+    final people = ref.watch(peopleProvider).valueOrNull;
+    final person = people?.cast<Person?>().firstWhere(
+              (p) => p?.id == this.person.id,
+              orElse: () => this.person,
+            ) ??
+        this.person;
     final bills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
     final converter = ref.watch(currencyConverterProvider).valueOrNull;
     final baseCode = converter?.base ??
