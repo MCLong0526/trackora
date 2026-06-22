@@ -1098,31 +1098,18 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required bool isOnline,
   }) async {
     try {
-      final existingLocal = await LocalSplitBillRepository()
-          .getSplitBillByExpenseId(uid, expenseId);
-      if (existingLocal != null) {
-        await LocalSplitBillRepository().deleteSplitBill(
-          uid,
-          existingLocal.id,
-          expenseId,
-        );
-      }
-
-      if (isOnline) {
-        try {
-          final existingRemote = await SplitBillRepository()
-              .getSplitBillByExpenseId(uid, expenseId);
-          if (existingRemote != null) {
-            await SplitBillRepository().deleteSplitBill(uid, existingRemote.id);
-          }
-        } catch (firestoreErr) {
-          dev.log(
-            '[SAVE] Firestore split-bill delete failed: $firestoreErr',
-            name: 'AddEditExpense',
-          );
-        }
-      }
+      // Removing the bill also removes the money it collected: this deletes
+      // each settlement-backing "receive" expense plus the bill itself so
+      // Activity, account balances and the People page don't keep stale data.
+      await SplitSettlementService.deleteBillForSourceExpense(
+        uid: uid,
+        expenseId: expenseId,
+        isOnline: isOnline,
+      );
       _splitBill = null;
+      // Refresh the split-bill aggregate so the People / contact screens drop
+      // the deleted bill's owed amounts immediately.
+      ref.invalidate(allSplitBillsProvider);
     } catch (e) {
       dev.log('[SAVE] Split-bill delete error: $e', name: 'AddEditExpense');
     }

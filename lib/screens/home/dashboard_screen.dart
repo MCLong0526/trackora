@@ -464,6 +464,15 @@ class DashboardScreen extends ConsumerWidget {
                                             expenseId: expense.id,
                                             isOnline: isOnline,
                                           );
+                                          // If this is a split-bill source,
+                                          // remove its bill + collected
+                                          // settlement "receive" expenses too.
+                                          await SplitSettlementService
+                                              .deleteBillForSourceExpense(
+                                            uid: uid,
+                                            expenseId: expense.id,
+                                            isOnline: isOnline,
+                                          );
                                           if (storageMode == StorageMode.firebase) {
                                             await SyncService().deleteExpense(
                                               userId: uid,
@@ -474,6 +483,7 @@ class DashboardScreen extends ConsumerWidget {
                                             await LocalExpenseRepository()
                                                 .deleteExpense(uid, expense.id);
                                           }
+                                          ref.invalidate(allSplitBillsProvider);
                                           if (!context.mounted) return;
                                           AppToast.show(
                                             context,
@@ -1842,6 +1852,13 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
         expenseId: expense.id,
         isOnline: isOnline,
       );
+      // If this is a split-bill source, remove its bill + collected settlement
+      // "receive" expenses too.
+      await SplitSettlementService.deleteBillForSourceExpense(
+        uid: uid,
+        expenseId: expense.id,
+        isOnline: isOnline,
+      );
       if (storageMode == StorageMode.firebase) {
         await SyncService().deleteExpense(
           userId: uid,
@@ -1851,6 +1868,7 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
       } else {
         await LocalExpenseRepository().deleteExpense(uid, expense.id);
       }
+      ref.invalidate(allSplitBillsProvider);
       if (!context.mounted) return;
       AppToast.show(
         context,

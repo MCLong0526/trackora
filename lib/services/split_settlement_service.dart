@@ -1,11 +1,69 @@
 import '../app_config.dart';
 import '../models/split_bill.dart';
+import '../repositories/local_expense_repository.dart';
 import '../repositories/local_split_bill_repository.dart';
 import '../repositories/split_bill_repository.dart';
+import 'sync_service.dart';
 
 /// Keeps split bills in sync when their settlement ("receive") expenses are
 /// deleted from the Activity list.
 class SplitSettlementService {
+  /// Deletes the split bill whose source (origin) expense is [expenseId], along
+  /// with every settlement-backing "receive" expense it had collected. This
+  /// keeps the Activity list, account balances and the People page correct when
+  /// the original split transaction is removed. No-op when [expenseId] has no
+  /// linked bill (e.g. it's a settlement or a plain expense).
+  static Future<void> deleteBillForSourceExpense({
+    required String uid,
+    required String expenseId,
+    required bool isOnline,
+  }) async {
+    SplitBill? local;
+    try {
+      local = await LocalSplitBillRepository()
+          .getSplitBillByExpenseId(uid, expenseId);
+    } catch (_) {}
+
+    SplitBill? remote;
+    if (storageMode == StorageMode.firebase && isOnline) {
+      try {
+        remote = await SplitBillRepository()
+            .getSplitBillByExpenseId(uid, expenseId);
+      } catch (_) {}
+    }
+
+    if (local == null && remote == null) return;
+
+    // Delete every "receive" expense that backed a collected settlement so the
+    // money collected from members disappears together with the bill.
+    final settlementExpenseIds = <String>{
+      ...?local?.settlements.map((s) => s.expenseId),
+      ...?remote?.settlements.map((s) => s.expenseId),
+    }..removeWhere((id) => id.isEmpty);
+    for (final sid in settlementExpenseIds) {
+      try {
+        if (storageMode == StorageMode.firebase) {
+          await SyncService()
+              .deleteExpense(userId: uid, expenseId: sid, isOnline: isOnline);
+        } else {
+          await LocalExpenseRepository().deleteExpense(uid, sid);
+        }
+      } catch (_) {}
+    }
+
+    if (local != null) {
+      try {
+        await LocalSplitBillRepository()
+            .deleteSplitBill(uid, local.id, expenseId);
+      } catch (_) {}
+    }
+    if (storageMode == StorageMode.firebase && isOnline && remote != null) {
+      try {
+        await SplitBillRepository().deleteSplitBill(uid, remote.id);
+      } catch (_) {}
+    }
+  }
+
   /// If [expenseId] is a settlement (receive) expense linked to a split bill,
   /// removes that settlement and reverts the corresponding member back to
   /// owing (status → pending, payment restored). No-op when the expense is not
