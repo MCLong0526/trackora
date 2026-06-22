@@ -14,6 +14,7 @@ import 'repositories/local_storage.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/expenses/quick_add_sheet.dart';
+import 'screens/expenses/voice_add_sheet.dart';
 import 'screens/home/home_shell.dart';
 import 'models/account.dart';
 import 'models/expense.dart';
@@ -22,6 +23,7 @@ import 'services/i18n.dart';
 import 'services/interest_service.dart';
 import 'services/live_activity_service.dart';
 import 'services/prefs_service.dart';
+import 'services/voice_expense_parser.dart';
 import 'services/widget_intent_service.dart';
 import 'services/widget_sync_service.dart';
 import 'state/providers.dart';
@@ -120,6 +122,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       DeepLinkService.attach(rootNavKey);
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
+      _maybeOpenVoiceAdd();
       _restoreLiveActivity();
       _accrueInterest();
     });
@@ -136,6 +139,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     if (state == AppLifecycleState.resumed) {
       _drainWidgetQueue();
       _maybeOpenQuickAdd();
+      _maybeOpenVoiceAdd();
       // Detect a share that was made while the app was in background.
       // Covers the case where extensionContext.open() didn't fire the URL.
       DeepLinkService.checkAndOpenPendingShare(rootNavKey);
@@ -244,6 +248,20 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
       final ctx = rootNavKey.currentContext;
       if (ctx == null) return;
       QuickAddSheet.show(ctx);
+    });
+  }
+
+  /// Drains a phrase captured by the "Add Expense by Voice" Siri App Intent,
+  /// parses it, and opens the confirmation screen pre-filled. Never auto-saves.
+  Future<void> _maybeOpenVoiceAdd() async {
+    final phrase = await _widgetIntents.consumePendingVoicePhrase();
+    if (phrase == null) return;
+    final base = ref.read(currencyCodeProvider).valueOrNull;
+    final parsed = const VoiceExpenseParser().parse(phrase, defaultCurrency: base);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = rootNavKey.currentContext;
+      if (ctx == null) return;
+      pushVoiceExpenseConfirmation(ctx, parsed);
     });
   }
 

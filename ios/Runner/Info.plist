@@ -20,6 +20,10 @@
 	<string>Trackora uses the camera to attach receipts to expenses.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Trackora needs access to your photos to attach receipts to expenses.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Trackora uses the microphone so you can add expenses by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Trackora transcribes your speech on-device to fill in an expense for you to confirm.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleURLTypes</key>

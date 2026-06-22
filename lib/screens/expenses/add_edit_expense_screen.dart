@@ -48,6 +48,14 @@ class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final double? initialAmount;
   final String? initialToAccountId;
 
+  // Pre-fill values for a brand-new entry (used by Voice / Siri add). They are
+  // only applied when not editing or copying, and never auto-save — the user
+  // still confirms on this screen.
+  final String? initialNote;
+  final String? initialCategory;
+  final DateTime? initialDate;
+  final String? initialCurrencyCode;
+
   const AddEditExpenseScreen({
     super.key,
     this.expense,
@@ -55,6 +63,10 @@ class AddEditExpenseScreen extends ConsumerStatefulWidget {
     this.initialType,
     this.initialAmount,
     this.initialToAccountId,
+    this.initialNote,
+    this.initialCategory,
+    this.initialDate,
+    this.initialCurrencyCode,
   });
 
   @override
@@ -240,8 +252,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       if (template.type == EntryType.transfer && template.toAccountId != null) {
         _isAccountTransfer = true;
       }
-    } else if (widget.initialAmount != null && widget.initialAmount! > 0) {
-      _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+    } else {
+      // Brand-new entry — apply any pre-fills (e.g. from Voice / Siri add).
+      if (widget.initialAmount != null && widget.initialAmount! > 0) {
+        _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+      }
+      if (widget.initialNote != null && widget.initialNote!.trim().isNotEmpty) {
+        _noteController.text = widget.initialNote!.trim();
+      }
+      if (widget.initialCategory != null &&
+          widget.initialCategory!.trim().isNotEmpty) {
+        _category = widget.initialCategory!.trim();
+      }
+      if (widget.initialDate != null) {
+        _date = widget.initialDate!;
+      }
     }
 
     final initialTypeIndex = _typeIndexFor(_type);
@@ -1119,7 +1144,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final mainCode = await ref.read(currencyCodeProvider.future);
     if (!mounted) return;
     final template = widget.expense ?? widget.copyFrom;
-    setState(() => _currencyCode = template?.originalCurrency ?? mainCode);
+    setState(() => _currencyCode =
+        template?.originalCurrency ?? widget.initialCurrencyCode ?? mainCode);
     _captureBaseline();
   }
 

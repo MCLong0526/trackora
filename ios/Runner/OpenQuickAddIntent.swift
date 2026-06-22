@@ -55,7 +55,43 @@ struct OpenQuickAddIntent: AppIntent {
     }
 }
 
-/// Registers the App Shortcut so it shows up in:
+/// App Intent that captures a spoken expense phrase via Siri (Siri does the
+/// speech-to-text natively) and hands it to the Flutter app for parsing and
+/// confirmation. The phrase is written to the App Group UserDefaults under
+/// `pending_voice_phrase`; the Flutter side drains it on resume (see
+/// `lib/services/widget_intent_service.dart` → `consumePendingVoicePhrase`)
+/// and opens a pre-filled entry. Nothing is saved without the user confirming.
+@available(iOS 16.0, *)
+struct VoiceAddExpenseIntent: AppIntent {
+    static var title: LocalizedStringResource = "Add Expense by Voice"
+    static var description = IntentDescription(
+        "Say an expense like \u{201C}RM18 for lunch at Starbucks\u{201D} and Trackora opens a pre-filled entry to confirm."
+    )
+    static var openAppWhenRun: Bool = true
+
+    static let appGroup = "group.com.michaelchia.trackora"
+    static let pendingKey = "pending_voice_phrase"
+
+    @Parameter(
+        title: "Expense",
+        description: "What you spent, e.g. RM18 for lunch at Starbucks",
+        requestValueDialog: IntentDialog("What did you spend?")
+    )
+    var phrase: String
+
+    init() {}
+    init(phrase: String) { self.phrase = phrase }
+
+    func perform() async throws -> some IntentResult {
+        if let defaults = UserDefaults(suiteName: Self.appGroup) {
+            defaults.set(phrase, forKey: Self.pendingKey)
+            defaults.set(Date().timeIntervalSince1970, forKey: "\(Self.pendingKey)_ts")
+        }
+        return .result()
+    }
+}
+
+/// Registers the App Shortcuts so they show up in:
 ///   - Siri ("Hey Siri, quick add expense")
 ///   - Shortcuts app (suggested)
 ///   - Spotlight
@@ -76,6 +112,16 @@ struct TrackoraAppShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Quick Add Expense",
             systemImageName: "plus.circle.fill"
+        )
+        AppShortcut(
+            intent: VoiceAddExpenseIntent(),
+            phrases: [
+                "Add expense \(\.$phrase) in \(.applicationName)",
+                "Add \(\.$phrase) in \(.applicationName)",
+                "Log \(\.$phrase) in \(.applicationName)",
+            ],
+            shortTitle: "Add Expense by Voice",
+            systemImageName: "mic.fill"
         )
     }
 }

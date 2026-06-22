@@ -29,6 +29,7 @@ import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../expenses/add_edit_expense_screen.dart';
 import '../expenses/import_receipt_screen.dart';
+import '../expenses/voice_add_sheet.dart';
 import '../precious_metals/precious_metals_screen.dart';
 import '../stocks/stock_detail_screen.dart';
 import '../travel/travel_groups_screen.dart';
@@ -221,6 +222,11 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   Row(
                     children: [
+                      GlassCircleButton(
+                        icon: CupertinoIcons.mic_fill,
+                        onTap: () => VoiceAddSheet.show(context),
+                      ),
+                      const SizedBox(width: 8),
                       GlassCircleButton(
                         icon: visible
                             ? CupertinoIcons.eye

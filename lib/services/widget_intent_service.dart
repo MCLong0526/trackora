@@ -16,6 +16,21 @@ import '../repositories/expense_repository.dart';
 class WidgetIntentService {
   static const _key = 'pending_widget_expenses_json';
   static const _kPendingQuickAdd = 'pending_open_quickadd';
+  static const _kPendingVoicePhrase = 'pending_voice_phrase';
+
+  /// Returns the phrase captured by the "Add Expense by Voice" Siri App Intent
+  /// (transcribed natively by Siri), or null. Cleared after the read so the
+  /// confirmation screen only opens once per invocation. iOS-only.
+  Future<String?> consumePendingVoicePhrase() async {
+    try {
+      final raw = await HomeWidget.getWidgetData<String>(_kPendingVoicePhrase);
+      if (raw == null || raw.trim().isEmpty) return null;
+      await HomeWidget.saveWidgetData<String>(_kPendingVoicePhrase, '');
+      return raw.trim();
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Returns `true` if the iOS App Shortcut "Quick Add Expense" was
   /// invoked (e.g. from Back Tap, Siri, or the Action Button). The flag
