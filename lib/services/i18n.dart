@@ -250,6 +250,8 @@ class AppStrings {
     'category.emptyHint': 'No custom categories yet. Tap + to create one.',
     'category.nameHint': 'Category name',
     'category.icon': 'Icon',
+    'category.searchIcons': 'Search icons',
+    'category.noIcons': 'No icons match your search',
     'category.color': 'Color',
     'category.deleteTitle': 'Delete Category',
     'category.deleteConfirm':
@@ -1672,6 +1674,8 @@ class AppStrings {
     'category.emptyHint': '还没有自定义类别。点击 + 创建一个。',
     'category.nameHint': '类别名称',
     'category.icon': '图标',
+    'category.searchIcons': '搜索图标',
+    'category.noIcons': '没有匹配的图标',
     'category.color': '颜色',
     'category.deleteTitle': '删除类别',
     'category.deleteConfirm': '删除此类别？现有记录会保留其标签。',
@@ -3028,6 +3032,8 @@ class AppStrings {
     'category.emptyHint': 'Belum ada kategori tersuai. Ketik + untuk mencipta.',
     'category.nameHint': 'Nama kategori',
     'category.icon': 'Ikon',
+    'category.searchIcons': 'Cari ikon',
+    'category.noIcons': 'Tiada ikon sepadan',
     'category.color': 'Warna',
     'category.deleteTitle': 'Padam Kategori',
     'category.deleteConfirm':

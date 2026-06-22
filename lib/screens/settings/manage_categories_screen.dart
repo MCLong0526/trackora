@@ -299,6 +299,8 @@ class _CategoryEditorSheet extends StatefulWidget {
 
 class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
   late final TextEditingController _nameCtrl;
+  final _iconSearchCtrl = TextEditingController();
+  String _iconQuery = '';
   late String _iconKey;
   late int _colorIndex;
   String? _error;
@@ -316,6 +318,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _iconSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -450,40 +453,104 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                 const SizedBox(height: 18),
                 _label(context.t('category.icon'), brand),
                 const SizedBox(height: 10),
+                // Search box to filter the (large) icon set by name.
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.field),
+                    border: Border.all(color: brand.divider),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.search,
+                          size: 16, color: brand.inkSoft),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _iconSearchCtrl,
+                          style: TextStyle(fontSize: 14, color: brand.ink),
+                          onChanged: (v) =>
+                              setState(() => _iconQuery = v.trim().toLowerCase()),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 11),
+                            hintText: context.t('category.searchIcons'),
+                            hintStyle:
+                                TextStyle(fontSize: 14, color: brand.inkSoft),
+                          ),
+                        ),
+                      ),
+                      if (_iconQuery.isNotEmpty)
+                        GestureDetector(
+                          onTap: () {
+                            _iconSearchCtrl.clear();
+                            setState(() => _iconQuery = '');
+                          },
+                          child: Icon(CupertinoIcons.xmark_circle_fill,
+                              size: 16, color: brand.inkSoft),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 // Fixed-height scrollable grid so the sheet stays compact, with
                 // gradient fade edges like other scrollable areas.
                 SizedBox(
                   height: 184,
-                  child: FadingEdgeList(
-                    fadeColor: brand.background,
-                    topHeight: 14,
-                    bottomHeight: 22,
-                    child: GridView.count(
-                      crossAxisCount: 6,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      children: kCategoryIconChoices.entries.map((e) {
-                        final selected = e.key == _iconKey;
-                        return GestureDetector(
-                          onTap: () => setState(() => _iconKey = e.key),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: selected ? style.accent : brand.surface,
-                              shape: BoxShape.circle,
-                              border: selected
-                                  ? null
-                                  : Border.all(color: brand.divider),
-                            ),
-                            child: Icon(
-                              e.value,
-                              size: 20,
-                              color: selected ? Colors.white : brand.inkSoft,
-                            ),
+                  child: Builder(
+                    builder: (context) {
+                      final entries = kCategoryIconChoices.entries
+                          .where((e) =>
+                              _iconQuery.isEmpty ||
+                              e.key.toLowerCase().contains(_iconQuery))
+                          .toList();
+                      if (entries.isEmpty) {
+                        return Center(
+                          child: Text(
+                            context.t('category.noIcons'),
+                            style:
+                                TextStyle(fontSize: 13, color: brand.inkSoft),
                           ),
                         );
-                      }).toList(),
-                    ),
+                      }
+                      return FadingEdgeList(
+                        fadeColor: brand.background,
+                        topHeight: 14,
+                        bottomHeight: 22,
+                        child: GridView.count(
+                          crossAxisCount: 6,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          children: entries.map((e) {
+                            final selected = e.key == _iconKey;
+                            return GestureDetector(
+                              onTap: () => setState(() => _iconKey = e.key),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                      selected ? style.accent : brand.surface,
+                                  shape: BoxShape.circle,
+                                  border: selected
+                                      ? null
+                                      : Border.all(color: brand.divider),
+                                ),
+                                child: Icon(
+                                  e.value,
+                                  size: 20,
+                                  color:
+                                      selected ? Colors.white : brand.inkSoft,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 18),

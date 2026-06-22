@@ -643,8 +643,16 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               if (mounted)
                 AppToast.show(context, '${investment.symbol} updated');
             } else {
+              // Generate a single stable id up front so the local Hive copy and
+              // the Firestore copy share it. Otherwise local.add() and
+              // firebase.add() each mint their own id, and "Sync now" later
+              // re-uploads the local-id copy as a second Firestore document —
+              // duplicating the record in Activity and account history.
+              final stableId = investment.id.isEmpty
+                  ? DateTime.now().microsecondsSinceEpoch.toString()
+                  : investment.id;
               final withTx = StockInvestment(
-                id: investment.id,
+                id: stableId,
                 symbol: investment.symbol,
                 name: investment.name,
                 quantity: investment.quantity,
