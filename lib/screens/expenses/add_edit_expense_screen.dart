@@ -114,8 +114,45 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   double _splitBillTotal =
       0.0; // total of the whole bill (not just payer's share)
   SplitBill? _splitBill;
-  
+
+  // Signature of the entry's fields when it was first loaded. Used to detect
+  // unsaved edits so we can warn before closing (so the split-with / settle /
+  // receipt screens never read a stale amount).
+  String? _initialSig;
+
   bool get _isEdit => widget.expense != null;
+
+  // A compact fingerprint of every user-editable field. Two signatures differ
+  // iff something meaningful changed.
+  String _currentSig() {
+    final members = _splitMembers
+        .map((m) => '${m.id}:${m.amount.toStringAsFixed(4)}')
+        .join(',');
+    return [
+      _amountController.text.trim(),
+      _noteController.text.trim(),
+      _category,
+      _date.millisecondsSinceEpoch,
+      _type,
+      _accountId,
+      _toAccountId,
+      _isAccountTransfer,
+      _counterpartController.text.trim(),
+      _currencyCode,
+      _newReceipt?.path,
+      _existingReceiptUrl,
+      _splitBillEnabled,
+      _splitMode,
+      _splitBillTotal.toStringAsFixed(4),
+      members,
+    ].join('|');
+  }
+
+  // Re-baseline the dirty tracker (called after the original entry + its split
+  // bill finish loading, so async loads aren't mistaken for user edits).
+  void _captureBaseline() => _initialSig = _currentSig();
+
+  bool get _isDirty => _initialSig != null && _currentSig() != _initialSig;
 
   Color get _typeColor {
     switch (_type) {
@@ -223,6 +260,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (_isEdit) _loadSplitBill();
     if (widget.copyFrom != null) _loadSplitBillForCopy();
 
+    // Baseline the dirty tracker now; the async loads above re-baseline once
+    // their data lands.
+    _captureBaseline();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _entranceCtrl.forward();
     });
@@ -327,6 +368,50 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (mounted) Navigator.pop(context);
   }
 
+  // Close path that first checks for unsaved edits. If the user changed
+  // something (e.g. bumped the split-bill total) and hasn't pressed Update,
+  // ask whether to save so the split-with / settle / receipt screens stay in
+  // sync. Only guarded when editing an existing entry.
+  Future<void> _attemptClose() async {
+    if (_saving || !_isEdit || !_isDirty) {
+      _animatedClose();
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    // Return the dragged sheet to its resting position while the user decides.
+    if (_dragOffset > 0) _snapBack();
+    final action = await showCupertinoDialog<String>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(context.t('expense.unsavedTitle')),
+        content: Text(context.t('expense.unsavedMessage')),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: Text(context.t('expense.keepEditing')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            child: Text(context.t('expense.discardChanges')),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx, 'update'),
+            child: Text(context.t('groupExpense.update')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'discard') {
+      _animatedClose();
+    } else if (action == 'update') {
+      _save();
+    }
+    // 'cancel' / dismissed → stay on the form.
+  }
+
   Widget _buildDragHandle(BrandColors brand) {
     final pillW = (36.0 + (_dragOffset * 0.3).clamp(0.0, 20.0));
     final accent = _typeAccents[_typeIndexFor(_type)];
@@ -343,7 +428,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       onVerticalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
         if (_dragOffset > 90 || velocity > 600) {
-          _animatedClose();
+          _attemptClose();
         } else {
           _snapBack();
         }
@@ -1046,6 +1131,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (!mounted) return;
     final template = widget.expense ?? widget.copyFrom;
     setState(() => _currencyCode = template?.originalCurrency ?? mainCode);
+    _captureBaseline();
   }
 
   Future<void> _loadSplitBill() async {
@@ -1090,6 +1176,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         // Keep the stored expense amount in the field (the full bill total for
         // bills created with the deduct-total behaviour).
       });
+      _captureBaseline();
     } catch (e) {
       dev.log('[LOAD] Split-bill load error: $e', name: 'AddEditExpense');
     }
@@ -1127,6 +1214,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         _splitMode = bill.splitMode;
         _splitBillTotal = bill.totalAmount;
       });
+      _captureBaseline();
     } catch (e) {
       dev.log('[COPY] Split-bill copy load error: $e', name: 'AddEditExpense');
     }
@@ -1263,7 +1351,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     final dateLabel = DateFormat('MMM d, yyyy').format(_date);
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
 
-    return Scaffold(
+    return PopScope(
+      // Block the implicit system back/swipe so we can run the unsaved-changes
+      // check first; _attemptClose pops manually when appropriate.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _attemptClose();
+      },
+      child: Scaffold(
       backgroundColor: brand.background,
       body: AnimatedBuilder(
         animation: _closeCtrl,
@@ -1377,6 +1472,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             ),
           ),
         ),
+      ),
       ),
     );
   }

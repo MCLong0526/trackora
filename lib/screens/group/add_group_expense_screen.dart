@@ -111,6 +111,25 @@ class _AddGroupExpenseScreenState
   double get _parsedAmount =>
       double.tryParse(_amountCtrl.text.trim()) ?? 0;
 
+  // Theme-aware tokens for the group "hero card". In light mode they keep the
+  // original lavender palette; in dark mode they flip to a dark elevated card
+  // with readable light-lavender ink so the screen matches the personal
+  // expense dark design instead of showing a bright purple block.
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _cardTint => _isDark ? const Color(0xFF221E2B) : _kGroupTint;
+  Color get _groupInk => _isDark ? const Color(0xFFD9C9F5) : _kGroupInk;
+  Color get _groupInkSoft =>
+      _isDark ? const Color(0xFF9C90B6) : _kGroupInkSoft;
+  // Faded amount-placeholder ink.
+  Color get _groupInkFaint =>
+      _isDark ? const Color(0x66D9C9F5) : const Color(0x516B4FB2);
+  // Inner translucent tile sitting on top of the hero card.
+  Color get _groupTileBg => _isDark
+      ? Colors.white.withValues(alpha: 0.06)
+      : context.brand.surface.withValues(alpha: 0.55);
+  // Primary save-button fill (vivid purple in dark so white text stays legible).
+  Color get _groupBtnBg => _isDark ? const Color(0xFF7C5CD6) : _kGroupInk;
+
   @override
   void initState() {
     super.initState();
@@ -304,7 +323,7 @@ class _AddGroupExpenseScreenState
               width: pillW,
               height: 4,
               decoration: BoxDecoration(
-                color: _kGroupInkSoft.withValues(alpha: 0.35),
+                color: _groupInkSoft.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -313,7 +332,7 @@ class _AddGroupExpenseScreenState
               'swipe down to close',
               style: TextStyle(
                 fontSize: 11,
-                color: _kGroupInkSoft.withValues(alpha: 0.55),
+                color: _groupInkSoft.withValues(alpha: 0.55),
                 letterSpacing: 0.2,
               ),
             ),
@@ -410,10 +429,10 @@ class _AddGroupExpenseScreenState
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFF6B4FB2).withValues(alpha: 0.10),
+                color: const Color(0xFF6B4FB2).withValues(alpha: _isDark ? 0.28 : 0.10),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.pencil, size: 15, color: Color(0xFF6B4FB2)),
+              child: Icon(CupertinoIcons.pencil, size: 15, color: _isDark ? const Color(0xFFCBB8F0) : const Color(0xFF6B4FB2)),
             ),
           ),
           const SizedBox(width: 8),
@@ -1078,7 +1097,7 @@ class _AddGroupExpenseScreenState
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
                   child: Container(
-                  color: _kGroupTint,
+                  color: _cardTint,
                   child: Stack(
                     children: [
                       NotificationListener<ScrollMetricsNotification>(
@@ -1103,8 +1122,7 @@ class _AddGroupExpenseScreenState
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
-                                  color: brand.surface
-                                      .withValues(alpha: 0.55),
+                                  color: _groupTileBg,
                                   borderRadius:
                                       BorderRadius.circular(14),
                                 ),
@@ -1145,10 +1163,10 @@ class _AddGroupExpenseScreenState
                                   children: [
                                     Text(
                                       context.t('groupExpense.title'),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.w700,
-                                        color: _kGroupInk,
+                                        color: _groupInk,
                                         letterSpacing: -0.4,
                                         height: 1.1,
                                       ),
@@ -1158,9 +1176,9 @@ class _AddGroupExpenseScreenState
                                       context
                                           .t('groupExpense.splittingWith')
                                           .replaceAll('{name}', partnerName),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
-                                        color: _kGroupInkSoft,
+                                        color: _groupInkSoft,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -1175,10 +1193,10 @@ class _AddGroupExpenseScreenState
                           // "Total amount" label
                           Text(
                             context.t('groupExpense.totalAmount'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: _kGroupInkSoft,
+                              color: _groupInkSoft,
                               letterSpacing: 0.2,
                             ),
                           ),
@@ -1194,10 +1212,10 @@ class _AddGroupExpenseScreenState
                               children: [
                                 Text(
                                   symbol,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
-                                    color: _kGroupInk,
+                                    color: _groupInk,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
@@ -1214,13 +1232,12 @@ class _AddGroupExpenseScreenState
                                       fontSize: 34,
                                       fontWeight: FontWeight.w700,
                                       color: amount > 0
-                                          ? _kGroupInk
-                                          : const Color(
-                                              0x516B4FB2),
+                                          ? _groupInk
+                                          : _groupInkFaint,
                                       letterSpacing: -1.0,
                                       height: 1.0,
                                     ),
-                                    decoration: const InputDecoration(
+                                    decoration: InputDecoration(
                                       border: InputBorder.none,
                                       enabledBorder: InputBorder.none,
                                       focusedBorder: InputBorder.none,
@@ -1230,7 +1247,7 @@ class _AddGroupExpenseScreenState
                                       hintStyle: TextStyle(
                                         fontSize: 34,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0x516B4FB2),
+                                        color: _groupInkFaint,
                                         letterSpacing: -1.0,
                                         height: 1.0,
                                       ),
@@ -1257,7 +1274,7 @@ class _AddGroupExpenseScreenState
                           Container(
                             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                             decoration: BoxDecoration(
-                              color: brand.surface.withValues(alpha: 0.55),
+                              color: _groupTileBg,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -1279,10 +1296,10 @@ class _AddGroupExpenseScreenState
                                           children: [
                                             Text(
                                               context.t('groupExpense.you'),
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.w600,
-                                                color: _kGroupInkSoft,
+                                                color: _groupInkSoft,
                                                 letterSpacing: 0.2,
                                               ),
                                             ),
@@ -1290,9 +1307,9 @@ class _AddGroupExpenseScreenState
                                               children: [
                                                 Text(
                                                   symbol,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 12,
-                                                    color: _kGroupInk,
+                                                    color: _groupInk,
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
@@ -1301,12 +1318,12 @@ class _AddGroupExpenseScreenState
                                                     controller: _youCtrl,
                                                     cursorHeight: 13.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 13,
                                                       fontWeight: FontWeight.w700,
-                                                      color: _kGroupInk,
+                                                      color: _groupInk,
                                                     ),
-                                                    decoration: const InputDecoration(
+                                                    decoration: InputDecoration(
                                                       border: InputBorder.none,
                                                       enabledBorder: InputBorder.none,
                                                       focusedBorder: InputBorder.none,
@@ -1315,7 +1332,7 @@ class _AddGroupExpenseScreenState
                                                       hintText: '0.00',
                                                       hintStyle: TextStyle(
                                                         fontSize: 13,
-                                                        color: _kGroupInkSoft,
+                                                        color: _groupInkSoft,
                                                         fontWeight: FontWeight.w600,
                                                       ),
                                                     ),
@@ -1334,7 +1351,7 @@ class _AddGroupExpenseScreenState
                                 Container(
                                   width: 1,
                                   height: 30,
-                                  color: const Color(0x2E6B4FB2),
+                                  color: _groupInkSoft.withValues(alpha: 0.25),
                                 ),
                                 const SizedBox(width: 8),
                                 // PARTNER
@@ -1354,10 +1371,10 @@ class _AddGroupExpenseScreenState
                                           children: [
                                             Text(
                                               partnerName.toUpperCase().split(' ').first,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.w600,
-                                                color: _kGroupInkSoft,
+                                                color: _groupInkSoft,
                                                 letterSpacing: 0.2,
                                               ),
                                             ),
@@ -1365,9 +1382,9 @@ class _AddGroupExpenseScreenState
                                               children: [
                                                 Text(
                                                   symbol,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 12,
-                                                    color: _kGroupInk,
+                                                    color: _groupInk,
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
@@ -1376,12 +1393,12 @@ class _AddGroupExpenseScreenState
                                                     controller: _partnerCtrl,
                                                     cursorHeight: 13.0,
                                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 13,
                                                       fontWeight: FontWeight.w700,
-                                                      color: _kGroupInk,
+                                                      color: _groupInk,
                                                     ),
-                                                    decoration: const InputDecoration(
+                                                    decoration: InputDecoration(
                                                       border: InputBorder.none,
                                                       enabledBorder: InputBorder.none,
                                                       focusedBorder: InputBorder.none,
@@ -1390,7 +1407,7 @@ class _AddGroupExpenseScreenState
                                                       hintText: '0.00',
                                                       hintStyle: TextStyle(
                                                         fontSize: 13,
-                                                        color: _kGroupInkSoft,
+                                                        color: _groupInkSoft,
                                                         fontWeight: FontWeight.w600,
                                                       ),
                                                     ),
@@ -1414,10 +1431,10 @@ class _AddGroupExpenseScreenState
                           // Category label
                           Text(
                             context.t('groupExpense.category'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: _kGroupInk,
+                              color: _groupInk,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -1480,8 +1497,8 @@ class _AddGroupExpenseScreenState
                                           style: TextStyle(
                                             fontSize: 9,
                                             color: active
-                                                ? _kGroupInk
-                                                : _kGroupInkSoft,
+                                                ? _groupInk
+                                                : _groupInkSoft,
                                             fontWeight: active
                                                 ? FontWeight.w600
                                                 : FontWeight.w400,
@@ -1569,16 +1586,16 @@ class _AddGroupExpenseScreenState
                                     children: [
                                       Text(
                                         paidByName,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 14,
-                                          color: Color(0xFF5B5B66),
+                                          color: brand.inkSoft,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                           CupertinoIcons
                                               .chevron_right,
-                                          color: Color(0xFFC9C9CF),
+                                          color: brand.inkSoft,
                                           size: 14),
                                     ],
                                   ),
@@ -1613,14 +1630,14 @@ class _AddGroupExpenseScreenState
                                                     orElse: () => null,
                                                   )?.name ?? context.t('groupExpense.select'))
                                               : context.t('groupExpense.select'),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 14,
-                                            color: Color(0xFF5B5B66),
+                                            color: brand.inkSoft,
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        const Icon(CupertinoIcons.chevron_right,
-                                            color: Color(0xFFC9C9CF), size: 14),
+                                        Icon(CupertinoIcons.chevron_right,
+                                            color: brand.inkSoft, size: 14),
                                       ],
                                     ),
                                   ),
@@ -1672,10 +1689,10 @@ class _AddGroupExpenseScreenState
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                           CupertinoIcons
                                               .chevron_right,
-                                          color: Color(0xFFC9C9CF),
+                                          color: brand.inkSoft,
                                           size: 14),
                                     ],
                                   ),
@@ -1702,16 +1719,16 @@ class _AddGroupExpenseScreenState
                                       Text(
                                         DateFormat('MMM d, yyyy')
                                             .format(_date),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 14,
-                                          color: Color(0xFF8E8E96),
+                                          color: brand.inkSoft,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                           CupertinoIcons
                                               .chevron_right,
-                                          color: Color(0xFFC9C9CF),
+                                          color: brand.inkSoft,
                                           size: 14),
                                     ],
                                   ),
@@ -1761,9 +1778,9 @@ class _AddGroupExpenseScreenState
                                             border: InputBorder.none,
                                             hintText: context
                                                 .t('groupExpense.note'),
-                                            hintStyle: const TextStyle(
+                                            hintStyle: TextStyle(
                                               fontSize: 14,
-                                              color: Color(0xFF8E8E96),
+                                              color: brand.inkSoft,
                                               fontWeight: FontWeight.w400,
                                             ),
                                             isDense: true,
@@ -1799,7 +1816,7 @@ class _AddGroupExpenseScreenState
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [_kGroupTint.withValues(alpha: 0), _kGroupTint],
+                                      colors: [_cardTint.withValues(alpha: 0), _cardTint],
                                     ),
                                   ),
                                 ),
@@ -1819,7 +1836,7 @@ class _AddGroupExpenseScreenState
                                     gradient: LinearGradient(
                                       begin: Alignment.topCenter,
                                       end: Alignment.bottomCenter,
-                                      colors: [_kGroupTint, _kGroupTint.withValues(alpha: 0)],
+                                      colors: [_cardTint, _cardTint.withValues(alpha: 0)],
                                     ),
                                   ),
                                 ),
@@ -1900,7 +1917,7 @@ class _AddGroupExpenseScreenState
                             color: _saveSuccess
                                 ? const Color(0xFF1FBE71)
                                 : (_saving || _parsedAmount > 0)
-                                    ? _kGroupInk
+                                    ? _groupBtnBg
                                     : brand.surface,
                             borderRadius: BorderRadius.circular(28),
                           ),
