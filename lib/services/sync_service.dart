@@ -15,8 +15,10 @@ import '../repositories/firebase_installment_repository.dart';
 import '../repositories/firebase_precious_metal_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/firebase_stock_investment_repository.dart';
+import '../repositories/firebase_custom_category_repository.dart';
 import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
+import '../repositories/local_custom_category_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_precious_metal_repository.dart';
@@ -433,6 +435,16 @@ class SyncService {
       await SyncService.clearEntityPendingDeletes(uid, 'person');
     }
 
+    // Custom category deletes
+    final catDelIds = SyncService.getEntityPendingDeleteIds(uid, 'category');
+    if (catDelIds.isNotEmpty) {
+      final fbCats = FirebaseCustomCategoryRepository();
+      for (final id in catDelIds) {
+        try { await fbCats.delete(uid, id); } catch (_) {}
+      }
+      await SyncService.clearEntityPendingDeletes(uid, 'category');
+    }
+
     // Precious Metal deletes
     final metalDelIds = SyncService.getEntityPendingDeleteIds(uid, 'metal');
     if (metalDelIds.isNotEmpty) {
@@ -535,6 +547,19 @@ class SyncService {
       if (p.id.isEmpty || personDeletedSet.contains(p.id)) continue;
       try {
         await fbPeople.add(uid, p);
+      } catch (_) {}
+    }
+
+    // Custom categories
+    final localCats = LocalCustomCategoryRepository();
+    final fbCats = FirebaseCustomCategoryRepository();
+    final catDeletedSet =
+        SyncService.getEntityPendingDeleteIds(uid, 'category').toSet();
+    final cats = await localCats.getAll(uid).first;
+    for (final c in cats) {
+      if (c.id.isEmpty || catDeletedSet.contains(c.id)) continue;
+      try {
+        await fbCats.upsert(uid, c);
       } catch (_) {}
     }
 

@@ -7,16 +7,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app_config.dart';
 import '../models/account.dart';
 import '../models/borrow_lending.dart';
+import '../models/custom_category.dart';
 import '../models/expense.dart';
 import '../models/installment.dart';
 import '../models/app_user.dart';
 import '../models/person.dart';
+import '../models/split_bill.dart';
 import '../models/precious_metal.dart';
 import '../models/saving_plan.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/borrow_lending_repository.dart';
+import '../repositories/custom_category_repository.dart';
 import '../repositories/expense_repository.dart';
 import '../repositories/firebase_account_repository.dart';
+import '../repositories/firebase_custom_category_repository.dart';
 import '../repositories/firebase_borrow_lending_repository.dart';
 import '../repositories/firebase_expense_repository.dart';
 import '../repositories/firebase_installment_repository.dart';
@@ -26,13 +30,16 @@ import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/installment_repository.dart';
 import '../repositories/local_account_repository.dart';
 import '../repositories/local_borrow_lending_repository.dart';
+import '../repositories/local_custom_category_repository.dart';
 import '../repositories/local_expense_repository.dart';
 import '../repositories/local_installment_repository.dart';
 import '../repositories/local_person_repository.dart';
 import '../repositories/local_precious_metal_repository.dart';
 import '../repositories/local_saving_plan_repository.dart';
+import '../repositories/local_split_bill_repository.dart';
 import '../repositories/person_repository.dart';
 import '../repositories/precious_metal_repository.dart';
+import '../repositories/split_bill_repository.dart';
 import '../repositories/saving_plan_repository.dart';
 import '../services/auth_service.dart';
 import '../services/borrow_lending_service.dart';
@@ -48,6 +55,7 @@ import '../services/saving_plan_service.dart';
 import '../services/storage_service.dart';
 import '../services/sync_service.dart';
 import '../services/travel_group_service.dart';
+import '../theme/app_theme.dart';
 import '../services/watch_service.dart';
 import '../services/widget_sync_service.dart';
 import '../repositories/travel_group_repository.dart';
@@ -240,6 +248,114 @@ final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
   }
   return stream;
 });
+
+// ── Custom categories ─────────────────────────────────────────────────────
+final customCategoryRepositoryProvider =
+    Provider<CustomCategoryRepository>((ref) {
+  switch (storageMode) {
+    case StorageMode.local:
+      return LocalCustomCategoryRepository();
+    case StorageMode.firebase:
+      final isOnline = ref.watch(isOnlineProvider);
+      return isOnline
+          ? FirebaseCustomCategoryRepository()
+          : LocalCustomCategoryRepository();
+  }
+});
+
+/// Stream of all user-defined categories. Offline-aware: mirrors Firebase data
+/// into Hive so categories stay available offline.
+final customCategoriesProvider =
+    StreamProvider.autoDispose<List<CustomCategory>>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const []);
+  final stream = ref.watch(customCategoryRepositoryProvider).getAll(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    return stream.asyncMap((items) async {
+      final local = LocalCustomCategoryRepository();
+      final deletedIds =
+          SyncService.getEntityPendingDeleteIds(user.uid, 'category').toSet();
+      for (final c in items) {
+        if (c.id.isNotEmpty && !deletedIds.contains(c.id)) {
+          await local.update(user.uid, c);
+        }
+      }
+      return deletedIds.isEmpty
+          ? items
+          : items.where((c) => !deletedIds.contains(c.id)).toList();
+    });
+  }
+  return stream;
+});
+
+/// Keeps the global [styleFor] registry in sync with the user's custom
+/// categories so their icon/colour resolve everywhere. Watch this once high in
+/// the widget tree (see TrackoraApp).
+final customCategoryStyleRegistryProvider = Provider<void>((ref) {
+  final cats = ref.watch(customCategoriesProvider).valueOrNull ?? const [];
+  setCustomCategoryStyles({
+    for (final c in cats)
+      c.name: customCategoryStyle(iconKey: c.iconKey, colorIndex: c.colorIndex),
+  });
+});
+
+/// Custom category names for the given flow (income vs expense).
+List<String> customCategoryNames(List<CustomCategory> cats,
+        {required bool income}) =>
+    cats.where((c) => c.isIncome == income).map((c) => c.name).toList();
+
+// ── Split bills (for the Contacts "owes you" view) ────────────────────────
+/// All split bills for the active user — local-first, merged with Firestore
+/// when online (both stores share the same bill id, so merge by id is safe).
+final allSplitBillsProvider =
+    FutureProvider.autoDispose<List<SplitBill>>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return const [];
+  final local = await LocalSplitBillRepository().getAllSplitBills(user.uid);
+  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+    try {
+      final remote = await SplitBillRepository().watchSplitBills(user.uid).first;
+      final byId = {for (final b in local) b.id: b};
+      for (final r in remote) {
+        byId[r.id] = r;
+      }
+      return byId.values.toList();
+    } catch (_) {}
+  }
+  return local;
+});
+
+/// What a person still owes across all split bills.
+class PersonOwedSummary {
+  /// Total outstanding (in base currency when [toBase] is supplied, else raw).
+  final double total;
+
+  /// Bills where this person is still an unpaid debtor.
+  final List<({SplitBill bill, SplitMember member})> pending;
+
+  const PersonOwedSummary(this.total, this.pending);
+}
+
+PersonOwedSummary personOwedSummary(
+  List<SplitBill> bills,
+  Person person, {
+  double Function(double amount, String fromCode)? toBase,
+}) {
+  double total = 0;
+  final pending = <({SplitBill bill, SplitMember member})>[];
+  final lowerName = person.name.trim().toLowerCase();
+  for (final b in bills) {
+    for (final m in b.members) {
+      if (m.isPayer || m.status == SplitMemberStatus.paid) continue;
+      final matches = (m.personId != null && m.personId == person.id) ||
+          (m.personId == null && m.name.trim().toLowerCase() == lowerName);
+      if (!matches) continue;
+      pending.add((bill: b, member: m));
+      total += toBase != null ? toBase(m.amount, b.currency) : m.amount;
+    }
+  }
+  return PersonOwedSummary(total, pending);
+}
 
 /// Stream of all borrow / lending records for the active user.
 final borrowLendingProvider = StreamProvider.autoDispose<List<BorrowLending>>((

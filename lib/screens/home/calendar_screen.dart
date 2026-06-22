@@ -760,7 +760,7 @@ class _RecordRow extends StatelessWidget {
                   ),
                   if (account != null)
                     Text(
-                      account.name as String,
+                      account.displayName as String,
                       style: TextStyle(
                         fontSize: 11,
                         color: brand.inkSoft,

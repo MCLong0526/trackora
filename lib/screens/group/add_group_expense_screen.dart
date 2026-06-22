@@ -739,7 +739,9 @@ class _AddGroupExpenseScreenState
       context: context,
       builder: (_) => Container(
         height: 260,
-        color: _kBg,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? context.brand.background
+            : _kBg,
         child: CupertinoDatePicker(
           mode: CupertinoDatePickerMode.date,
           initialDateTime: _date,
@@ -990,6 +992,9 @@ class _AddGroupExpenseScreenState
             ? userMember!.displayName[0].toUpperCase()
             : 'Y';
 
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final catMeta = _kCategories.firstWhere(
       (c) => c.label == _category,
       orElse: () => _kCategories.last,
@@ -1037,7 +1042,7 @@ class _AddGroupExpenseScreenState
       behavior: HitTestBehavior.opaque,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: isDark ? brand.background : _kBg,
       body: AnimatedBuilder(
         animation: _closeCtrl,
         builder: (context, child) {
@@ -1096,7 +1101,7 @@ class _AddGroupExpenseScreenState
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
-                                  color: Colors.white
+                                  color: brand.surface
                                       .withValues(alpha: 0.55),
                                   borderRadius:
                                       BorderRadius.circular(14),
@@ -1110,7 +1115,7 @@ class _AddGroupExpenseScreenState
                                       children: [
                                         _GroupAvatar(
                                             initial: userInitial,
-                                            bg: Colors.white,
+                                            bg: brand.surface,
                                             fg: const Color(
                                                 0xFF5A4AAB),
                                             size: 26),
@@ -1120,7 +1125,7 @@ class _AddGroupExpenseScreenState
                                             child: _GroupAvatar(
                                                 initial:
                                                     partnerInitial,
-                                                bg: Colors.white,
+                                                bg: brand.surface,
                                                 fg: const Color(
                                                     0xFF1FBE71),
                                                 size: 26),
@@ -1250,7 +1255,7 @@ class _AddGroupExpenseScreenState
                           Container(
                             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.55),
+                              color: brand.surface.withValues(alpha: 0.55),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -1262,7 +1267,7 @@ class _AddGroupExpenseScreenState
                                     children: [
                                       _GroupAvatar(
                                           initial: userInitial,
-                                          bg: Colors.white,
+                                          bg: brand.surface,
                                           fg: const Color(0xFF5A4AAB),
                                           size: 22),
                                       const SizedBox(width: 6),
@@ -1337,7 +1342,7 @@ class _AddGroupExpenseScreenState
                                     children: [
                                       _GroupAvatar(
                                           initial: partnerInitial,
-                                          bg: Colors.white,
+                                          bg: brand.surface,
                                           fg: const Color(0xFF1FBE71),
                                           size: 22),
                                       const SizedBox(width: 6),
@@ -1441,7 +1446,7 @@ class _AddGroupExpenseScreenState
                                           decoration: BoxDecoration(
                                             color: active
                                                 ? cat.color
-                                                : Colors.white,
+                                                : brand.surface,
                                             shape: BoxShape.circle,
                                             boxShadow: active
                                                 ? null
@@ -1532,7 +1537,7 @@ class _AddGroupExpenseScreenState
                           // Inner white card
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: brand.surface,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Column(
@@ -1855,7 +1860,7 @@ class _AddGroupExpenseScreenState
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: brand.surface,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -1894,7 +1899,7 @@ class _AddGroupExpenseScreenState
                                 ? const Color(0xFF1FBE71)
                                 : (_saving || _parsedAmount > 0)
                                     ? _kGroupInk
-                                    : Colors.white,
+                                    : brand.surface,
                             borderRadius: BorderRadius.circular(28),
                           ),
                           child: Center(

@@ -547,7 +547,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
         final base = a.balance;
         if (!a.account.type.isLiability && base > 0) {
           assetRows.add((
-            label: a.account.name,
+            label: a.account.displayName,
             amount: base,
             icon: _iconForType(a.account.type),
             bg: _bgForType(a.account.type),
@@ -578,7 +578,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
         final base = a.balance;
         if (a.account.type.isLiability && base < 0) {
           assetRows.add((
-            label: a.account.name,
+            label: a.account.displayName,
             amount: base.abs(),
             icon: _iconForType(a.account.type),
             bg: _bgForType(a.account.type),
@@ -586,7 +586,7 @@ class _NetWorthDetailSheet extends StatelessWidget {
           ));
         } else if (!a.account.type.isLiability && base < 0) {
           assetRows.add((
-            label: a.account.name,
+            label: a.account.displayName,
             amount: base.abs(),
             icon: _iconForType(a.account.type),
             bg: const Color(0xFFFEE2E2),

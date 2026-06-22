@@ -250,6 +250,7 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
   @override
   Widget build(BuildContext context) {
     ref.watch(autoSyncProvider); // keep offline→online sync listener alive
+    ref.watch(customCategoryStyleRegistryProvider); // keep custom styles fresh
     final auth = ref.watch(authStateProvider);
 
     // Attach the Apple Watch bridge once we have a signed-in / offline user.

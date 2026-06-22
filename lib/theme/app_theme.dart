@@ -497,5 +497,138 @@ const Map<String, CategoryStyle> kCategoryStyles = {
   ),
 };
 
+/// Curated icon set users can pick from when creating a custom category.
+/// All icons are referenced statically so they survive icon tree-shaking.
+const Map<String, IconData> kCategoryIconChoices = {
+  // Shopping / money
+  'bag': CupertinoIcons.bag,
+  'bagfill': CupertinoIcons.bag_fill,
+  'cart': CupertinoIcons.cart,
+  'cartfill': CupertinoIcons.cart_fill,
+  'creditcard': CupertinoIcons.creditcard,
+  'creditcardfill': CupertinoIcons.creditcard_fill,
+  'money': CupertinoIcons.money_dollar_circle,
+  'dollar': CupertinoIcons.money_dollar,
+  'euro': CupertinoIcons.money_euro,
+  'pound': CupertinoIcons.money_pound,
+  'yen': CupertinoIcons.money_yen,
+  'bitcoin': CupertinoIcons.bitcoin,
+  'chartbar': CupertinoIcons.chart_bar,
+  'chartpie': CupertinoIcons.chart_pie,
+  'tag': CupertinoIcons.tag,
+  'tagfill': CupertinoIcons.tag_fill,
+  'gift': CupertinoIcons.gift,
+  'giftfill': CupertinoIcons.gift_fill,
+  'cube': CupertinoIcons.cube_box,
+  // Transport / travel
+  'car': CupertinoIcons.car_detailed,
+  'bus': CupertinoIcons.bus,
+  'tram': CupertinoIcons.tram_fill,
+  'airplane': CupertinoIcons.airplane,
+  'map': CupertinoIcons.map,
+  'location': CupertinoIcons.location_solid,
+  'compass': CupertinoIcons.compass,
+  'flag': CupertinoIcons.flag,
+  // Home / living
+  'house': CupertinoIcons.house,
+  'housefill': CupertinoIcons.house_fill,
+  'bed': CupertinoIcons.bed_double_fill,
+  'building': CupertinoIcons.building_2_fill,
+  'umbrella': CupertinoIcons.umbrella,
+  'lightbulb': CupertinoIcons.lightbulb,
+  'bolt': CupertinoIcons.bolt,
+  'drop': CupertinoIcons.drop,
+  'flame': CupertinoIcons.flame,
+  'wifi': CupertinoIcons.wifi,
+  'phone': CupertinoIcons.phone,
+  // Entertainment / media
+  'film': CupertinoIcons.film,
+  'tv': CupertinoIcons.tv,
+  'music': CupertinoIcons.music_note,
+  'music2': CupertinoIcons.music_note_2,
+  'headphones': CupertinoIcons.headphones,
+  'mic': CupertinoIcons.mic,
+  'gamecontroller': CupertinoIcons.game_controller,
+  'camera': CupertinoIcons.camera,
+  'photo': CupertinoIcons.photo,
+  'book': CupertinoIcons.book,
+  'bookmark': CupertinoIcons.bookmark,
+  'sports': CupertinoIcons.sportscourt,
+  'paw': CupertinoIcons.paw,
+  // Health / personal
+  'heart': CupertinoIcons.heart,
+  'heartfill': CupertinoIcons.heart_fill,
+  'bandage': CupertinoIcons.bandage,
+  'person': CupertinoIcons.person,
+  'people': CupertinoIcons.person_2,
+  'family': CupertinoIcons.person_3,
+  'star': CupertinoIcons.star,
+  'starfill': CupertinoIcons.star_fill,
+  // Work / tools / misc
+  'briefcase': CupertinoIcons.briefcase,
+  'doc': CupertinoIcons.doc_text,
+  'folder': CupertinoIcons.folder_fill,
+  'mail': CupertinoIcons.mail,
+  'chat': CupertinoIcons.chat_bubble_2,
+  'pencil': CupertinoIcons.pencil,
+  'paintbrush': CupertinoIcons.paintbrush,
+  'scissors': CupertinoIcons.scissors,
+  'wrench': CupertinoIcons.wrench,
+  'hammer': CupertinoIcons.hammer,
+  'gear': CupertinoIcons.gear_alt_fill,
+  'lock': CupertinoIcons.lock_fill,
+  'calendar': CupertinoIcons.calendar,
+  'clock': CupertinoIcons.clock,
+  'bell': CupertinoIcons.bell,
+  'globe': CupertinoIcons.globe,
+  'sun': CupertinoIcons.sun_max_fill,
+  'moon': CupertinoIcons.moon_fill,
+  'cloud': CupertinoIcons.cloud_fill,
+  'leaf': CupertinoIcons.leaf_arrow_circlepath,
+};
+
+/// Curated pastel-background + accent pairs for custom categories.
+const List<({Color background, Color accent})> kCategoryColorChoices = [
+  (background: AppColors.peach, accent: Color(0xFFB36A1F)),
+  (background: AppColors.sky, accent: Color(0xFF2A6FB5)),
+  (background: AppColors.lilac, accent: Color(0xFF6B40A8)),
+  (background: AppColors.blush, accent: Color(0xFFB23A4A)),
+  (background: AppColors.sage, accent: Color(0xFF3F7E2C)),
+  (background: AppColors.butter, accent: Color(0xFFA0801C)),
+  (background: AppColors.mint, accent: Color(0xFF1F7A60)),
+  (background: AppColors.sand, accent: Color(0xFF6B6B70)),
+  (background: Color(0xFFFFF3C4), accent: Color(0xFFB8860B)),
+];
+
+IconData categoryIconFor(String iconKey) =>
+    kCategoryIconChoices[iconKey] ?? CupertinoIcons.tag;
+
+/// Builds a [CategoryStyle] for a custom category from its stored icon key and
+/// colour index.
+CategoryStyle customCategoryStyle({
+  required String iconKey,
+  required int colorIndex,
+}) {
+  final c = kCategoryColorChoices[colorIndex % kCategoryColorChoices.length];
+  return CategoryStyle(
+    background: c.background,
+    accent: c.accent,
+    icon: categoryIconFor(iconKey),
+  );
+}
+
+/// Runtime registry of user-defined category styles, keyed by category name.
+/// Kept in sync with the custom categories provider so [styleFor] resolves
+/// custom categories the same way it does built-ins.
+final Map<String, CategoryStyle> _customCategoryStyles = {};
+
+void setCustomCategoryStyles(Map<String, CategoryStyle> styles) {
+  _customCategoryStyles
+    ..clear()
+    ..addAll(styles);
+}
+
 CategoryStyle styleFor(String category) =>
-    kCategoryStyles[category] ?? kCategoryStyles['Others']!;
+    kCategoryStyles[category] ??
+    _customCategoryStyles[category] ??
+    kCategoryStyles['Others']!;

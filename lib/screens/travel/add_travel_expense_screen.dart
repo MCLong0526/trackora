@@ -18,13 +18,19 @@ const _blue = Color(0xFF0066CC);
 const _hairline = Color(0xFFE0E0E0);
 const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink48 = Color(0xFF7A7A7A);
 
+/// Primary text/icon ink resolved for the current brightness.
+Color _ink(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _inkColor;
+
+// Default color left null so text inherits the ambient theme-aware ink.
 TextStyle _display(double sz, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
-    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
+    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color);
 
 TextStyle _body(double sz, {FontWeight weight = FontWeight.w400, Color? color}) =>
-    TextStyle(fontSize: sz, fontWeight: weight, color: color ?? _inkColor, height: 1.4);
+    TextStyle(fontSize: sz, fontWeight: weight, color: color, height: 1.4);
 
 TextStyle _eyebrow({Color? color}) =>
     TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: color ?? _ink48);
@@ -623,7 +629,7 @@ class _AddTravelExpenseScreenState
                                   duration: const Duration(milliseconds: 200),
                                   style: _body(12,
                                       weight: selected ? FontWeight.w600 : FontWeight.w400,
-                                      color: selected ? _blue : _inkColor),
+                                      color: selected ? _blue : _ink(context)),
                                   child: Text(
                                     m.name.split(' ').first,
                                     maxLines: 1,
@@ -719,7 +725,7 @@ class _AddTravelExpenseScreenState
                                   textAlign: TextAlign.center,
                                   style: _body(12,
                                       weight: selected ? FontWeight.w600 : FontWeight.w400,
-                                      color: selected ? _inkColor : _ink48),
+                                      color: selected ? _ink(context) : _ink48),
                                 ),
                               ),
                             ),

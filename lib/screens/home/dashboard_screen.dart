@@ -16,6 +16,7 @@ import '../../repositories/local_split_bill_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
+import '../../services/split_settlement_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -429,6 +430,11 @@ class DashboardScreen extends ConsumerWidget {
                                             user.uid,
                                             expense.id,
                                           ),
+                                      splitUnsettledCount: user == null
+                                          ? 0
+                                          : LocalSplitBillRepository
+                                              .unsettledCountSync(
+                                                  user.uid, expense.id),
                                       onTap: () => Navigator.push(
                                         context,
                                         CupertinoPageRoute(
@@ -449,10 +455,16 @@ class DashboardScreen extends ConsumerWidget {
                                         if (user == null) return;
                                         final uid = user.uid;
                                         try {
+                                          final isOnline = storageMode ==
+                                                  StorageMode.firebase &&
+                                              ref.read(isOnlineProvider);
+                                          await SplitSettlementService
+                                              .revertIfSettlement(
+                                            uid: uid,
+                                            expenseId: expense.id,
+                                            isOnline: isOnline,
+                                          );
                                           if (storageMode == StorageMode.firebase) {
-                                            final isOnline = ref.read(
-                                              isOnlineProvider,
-                                            );
                                             await SyncService().deleteExpense(
                                               userId: uid,
                                               expenseId: expense.id,
@@ -1822,8 +1834,15 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
     if (user == null) return;
     final uid = user.uid;
     try {
+      final isOnline =
+          storageMode == StorageMode.firebase && ref.read(isOnlineProvider);
+      // If this is a split-bill settlement record, revert the member to owing.
+      await SplitSettlementService.revertIfSettlement(
+        uid: uid,
+        expenseId: expense.id,
+        isOnline: isOnline,
+      );
       if (storageMode == StorageMode.firebase) {
-        final isOnline = ref.read(isOnlineProvider);
         await SyncService().deleteExpense(
           userId: uid,
           expenseId: expense.id,

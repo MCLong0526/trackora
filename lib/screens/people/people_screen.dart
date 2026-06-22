@@ -10,6 +10,9 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/fading_edge_list.dart';
 import '../../widgets/person_avatar.dart';
 import 'add_edit_person_screen.dart';
+import 'person_detail_screen.dart';
+
+const _kOwedColor = Color(0xFF1F7A60);
 
 class _PeopleCoordinator extends ValueNotifier<String?> {
   _PeopleCoordinator() : super(null);
@@ -54,6 +57,10 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
     final brand = context.brand;
     final async = ref.watch(peopleProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
+    final allBills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
+    final converter = ref.watch(currencyConverterProvider).valueOrNull;
+    final currencySymbol =
+        ref.watch(currencySymbolProvider).valueOrNull ?? 'RM';
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -144,16 +151,29 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                     itemCount: list.length,
                     separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _PersonSwipeActions(
-                      person: list[i],
-                      userId: user?.uid,
-                      coordinator: _coordinator,
-                      onEdit: () => _openEdit(context, list[i]),
-                      child: _PersonCard(
-                        person: list[i],
-                        onTap: () => _openEdit(context, list[i]),
-                      ),
-                    ),
+                    itemBuilder: (ctx, i) {
+                      final p = list[i];
+                      final summary = personOwedSummary(
+                        allBills,
+                        p,
+                        toBase: converter != null
+                            ? (amt, from) => converter.toBase(amt, from)
+                            : null,
+                      );
+                      return _PersonSwipeActions(
+                        person: p,
+                        userId: user?.uid,
+                        coordinator: _coordinator,
+                        onEdit: () => _openEdit(context, p),
+                        child: _PersonCard(
+                          person: p,
+                          owedAmount:
+                              summary.total > 0 ? summary.total : null,
+                          currencySymbol: currencySymbol,
+                          onTap: () => _openDetail(context, p),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -178,6 +198,13 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
       CupertinoPageRoute(builder: (_) => AddEditPersonScreen(person: p)),
     );
   }
+
+  void _openDetail(BuildContext context, Person p) {
+    Navigator.push(
+      context,
+      CupertinoPageRoute(builder: (_) => PersonDetailScreen(person: p)),
+    );
+  }
 }
 
 // ── Person card ───────────────────────────────────────────────────────────────
@@ -185,15 +212,20 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
 class _PersonCard extends StatelessWidget {
   final Person person;
   final VoidCallback onTap;
+  final double? owedAmount;
+  final String currencySymbol;
 
   const _PersonCard({
     required this.person,
     required this.onTap,
+    this.owedAmount,
+    this.currencySymbol = 'RM',
   });
 
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final owed = owedAmount;
 
     return GestureDetector(
       onTap: onTap,
@@ -258,6 +290,31 @@ class _PersonCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (owed != null) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Owes you',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '$currencySymbol ${owed.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _kOwedColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+            ],
             Icon(CupertinoIcons.chevron_right, size: 16, color: brand.inkSoft),
           ],
         ),

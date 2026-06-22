@@ -23,20 +23,29 @@ const _blue = Color(0xFF0066CC);
 const _hairline = Color(0xFFE0E0E0);
 const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink48 = Color(0xFF7A7A7A);
 const _red = Color(0xFFFF3B30);
 const _green = Color(0xFF28A968);
+
+/// Primary text/icon ink resolved for the current brightness so content stays
+/// legible in dark mode.
+Color _ink(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _inkColor;
 
 const _memberBgs = [
   Color(0xFFE8E8EA), Color(0xFFDCDCE0), Color(0xFFD0D0D5),
   Color(0xFFC4C4CA), Color(0xFFB8B8BF),
 ];
 
+// Default text color is left null so it inherits the ambient (theme-aware)
+// ink — near-black in light mode, near-white in dark mode. Pass [color] to
+// override (e.g. accent colors).
 TextStyle _display(double sz, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
-    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
+    TextStyle(fontSize: sz, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color);
 
 TextStyle _body(double sz, {FontWeight weight = FontWeight.w400, Color? color}) =>
-    TextStyle(fontSize: sz, fontWeight: weight, color: color ?? _inkColor, height: 1.4);
+    TextStyle(fontSize: sz, fontWeight: weight, color: color, height: 1.4);
 
 TextStyle _eyebrow({Color? color}) =>
     TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: color ?? _ink48);
@@ -137,7 +146,7 @@ class _TravelGroupDetailScreenState
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                             child: Row(
                               children: [
-                                Icon(CupertinoIcons.pencil, color: _inkColor, size: 20),
+                                Icon(CupertinoIcons.pencil, color: _ink(context), size: 20),
                                 const SizedBox(width: 12),
                                 Text(context.t('common.edit'),
                                     style: _body(17)),
@@ -308,12 +317,12 @@ class _TravelGroupDetailScreenState
                 children: [
                   _CircleBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(CupertinoIcons.back, size: 18, color: _inkColor),
+                    child: Icon(CupertinoIcons.back, size: 18, color: _ink(context)),
                   ),
                   const Spacer(),
                   _CircleBtn(
                     onTap: () => _showMore(members),
-                    child: const Icon(CupertinoIcons.ellipsis, size: 16, color: _inkColor),
+                    child: Icon(CupertinoIcons.ellipsis, size: 16, color: _ink(context)),
                   ),
                 ],
               ),
@@ -610,7 +619,7 @@ class _StatsCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: _display(20, tracking: -0.4, color: valueColor ?? _inkColor),
+            style: _display(20, tracking: -0.4, color: valueColor),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

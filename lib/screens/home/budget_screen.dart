@@ -532,7 +532,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
         id: 'expenseCycle',
         icon: CupertinoIcons.calendar_badge_plus,
         iconBg: AppColors.butter,
-        iconColor: AppColors.ink,
+        iconColor: const Color(0xFFB8870A),
         label: context.t('budget.expenseCycle'),
         onTap: () => _showCycleSheet(context),
       ),
@@ -1103,6 +1103,10 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
   @override
   Widget build(BuildContext context) {
     final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveBg = isDark
+        ? widget.item.iconColor.withValues(alpha: 0.18)
+        : widget.item.iconBg;
     return GestureDetector(
       onTapDown: (_) => _press.reverse(),
       onTapUp: (_) {
@@ -1123,15 +1127,17 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: widget.item.iconBg,
+                  color: effectiveBg,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: widget.item.iconBg.withValues(alpha: 0.55),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+                  boxShadow: isDark
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: widget.item.iconBg.withValues(alpha: 0.55),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                 ),
                 child: Icon(
                   widget.item.icon,

@@ -21,10 +21,16 @@ const _paper = Color(0xFFFFFFFF);
 const _paperEdge = Color(0xFFE5E5EA);
 const _blue = Color(0xFF0055BB);
 const _inkColor = Color(0xFF1A1614);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink60 = Color(0xFF6B6259);
 const _green = Color(0xFF2A8C52);
 const _red = Color(0xFFCC2B22);
 const _kReceiptW = 300.0;
+
+/// Ink for screen chrome (nav, title) resolved for the current brightness.
+/// The receipt card itself is always white paper, so its text keeps [_inkColor].
+Color _chromeInk(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _inkColor;
 
 // ── Screen ─────────────────────────────────────────────────────────────────────
 
@@ -155,19 +161,19 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 children: [
                   _NavBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       CupertinoIcons.back,
                       size: 18,
-                      color: _inkColor,
+                      color: _chromeInk(context),
                     ),
                   ),
                   const Spacer(),
-                  const Text(
+                  Text(
                     'Receipt',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      color: _inkColor,
+                      color: _chromeInk(context),
                     ),
                   ),
                   const Spacer(),

@@ -171,13 +171,13 @@ class _GroupInviteScreenState extends ConsumerState<GroupInviteScreen> {
             margin: const EdgeInsets.all(8),
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: brand.surface,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               CupertinoIcons.chevron_back,
-              color: Color(0xFF0B0B0F),
+              color: brand.ink,
               size: 18,
             ),
           ),
@@ -526,11 +526,11 @@ class _CodeBox extends StatelessWidget {
       child: Center(
         child: Text(
           char,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w700,
             fontFamily: 'monospace',
-            color: Color(0xFF0B0B0F),
+            color: context.brand.ink,
           ),
         ),
       ),

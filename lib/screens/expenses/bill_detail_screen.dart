@@ -1,20 +1,24 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:io';
 
+import '../../app_config.dart';
+import '../../models/account.dart';
+import '../../models/expense.dart';
 import '../../models/split_bill.dart';
+import '../../repositories/local_expense_repository.dart';
+import '../../repositories/local_split_bill_repository.dart';
 import '../../repositories/split_bill_repository.dart';
+import '../../screens/expenses/bill_receipt_screen.dart';
+import '../../services/i18n.dart';
+import '../../services/sync_service.dart';
+import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
-const _kPurple = Color(0xFF6B40A8);
+const _kGreen = Color(0xFF1F7A60);
 
 const _kAvatarColors = [
   Color(0xFF6B40A8),
@@ -26,23 +30,31 @@ const _kAvatarColors = [
   Color(0xFF5C3A9E),
 ];
 
-Color _avatarColor(int colorIndex) => _kAvatarColors[colorIndex % _kAvatarColors.length];
+Color _avatarColor(int colorIndex) =>
+    _kAvatarColors[colorIndex % _kAvatarColors.length];
 
-/// Full tracking screen for a SplitBill.
-class BillDetailScreen extends StatefulWidget {
+/// Full tracking + settle screen for a SplitBill.
+class BillDetailScreen extends ConsumerStatefulWidget {
   final SplitBill bill;
   final String uid;
 
-  const BillDetailScreen({super.key, required this.bill, required this.uid});
+  /// Account the original expense was paid from — used as the default
+  /// destination when collecting a settlement.
+  final String? defaultAccountId;
+
+  const BillDetailScreen({
+    super.key,
+    required this.bill,
+    required this.uid,
+    this.defaultAccountId,
+  });
 
   @override
-  State<BillDetailScreen> createState() => _BillDetailScreenState();
+  ConsumerState<BillDetailScreen> createState() => _BillDetailScreenState();
 }
 
-class _BillDetailScreenState extends State<BillDetailScreen> {
+class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
   late SplitBill _bill;
-  final _receiptKey = GlobalKey();
-  bool _sharing = false;
 
   @override
   void initState() {
@@ -50,89 +62,140 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     _bill = widget.bill;
   }
 
-  Future<void> _markPaid(SplitMember member) async {
-    final updated = member.copyWith(
-      status: SplitMemberStatus.paid,
-      paidAt: DateTime.now(),
-    );
-    final newMembers = _bill.members.map((m) => m.id == member.id ? updated : m).toList();
-    final newBill = _bill.copyWith(members: newMembers, updatedAt: DateTime.now());
+  /// Persists the updated bill, local-first then Firestore best-effort so it
+  /// works offline.
+  Future<void> _persistBill(SplitBill newBill) async {
     try {
-      await SplitBillRepository().updateSplitBill(widget.uid, newBill);
-      setState(() => _bill = newBill);
-      if (newBill.isClosed && mounted) {
-        AppToast.show(context, 'Bill closed! All settled.', type: AppToastType.success);
-      }
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(context, 'Failed to update: $e', type: AppToastType.error);
-      }
+      await LocalSplitBillRepository().updateSplitBill(widget.uid, newBill);
+    } catch (_) {}
+    if (ref.read(isOnlineProvider)) {
+      try {
+        await SplitBillRepository().updateSplitBill(widget.uid, newBill);
+      } catch (_) {}
     }
   }
 
-  void _remind(SplitMember member) {
-    final msg = 'Hey ${member.name}, you owe me '
-        '${_bill.currencySymbol} ${member.amount.toStringAsFixed(2)} '
-        'for "${_bill.title}". Please settle when you can!';
-    Clipboard.setData(ClipboardData(text: msg));
-    AppToast.show(context, 'Reminder copied to clipboard!', type: AppToastType.info);
-  }
-
-  Future<void> _shareBill() async {
-    if (_sharing) return;
-    setState(() => _sharing = true);
-    try {
-      // Render receipt widget to image
-      final boundary = _receiptKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/bill_${_bill.billNumber}.png');
-      await file.writeAsBytes(bytes);
-      if (!mounted) return;
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Bill ${_bill.billNumber} — ${_bill.title}\n'
-            'Total: ${_bill.currencySymbol} ${_bill.totalAmount.toStringAsFixed(2)}\n'
-            'Split between ${_bill.members.length} people.',
-      );
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(context, 'Failed to share: $e', type: AppToastType.error);
-      }
-    } finally {
-      if (mounted) setState(() => _sharing = false);
-    }
-  }
-
-  void _showMarkPaidSheet() {
-    final debtors = _bill.debtors.where((m) => m.status != SplitMemberStatus.paid).toList();
-    if (debtors.isEmpty) {
-      AppToast.show(context, 'Everyone has already paid!', type: AppToastType.info);
+  /// Collects a debtor's share. Lets the user enter the amount received
+  /// (default = remaining owed) and the account to receive into, posts an
+  /// income ("receive"), updates the bill, then pops back to the previous page.
+  Future<void> _settle(SplitMember member) async {
+    final accounts = ref.read(accountsProvider).valueOrNull ?? const <Account>[];
+    if (accounts.isEmpty) {
+      AppToast.show(context, context.t('split.needAccount'),
+          type: AppToastType.error);
       return;
     }
-    showCupertinoModalPopup<void>(
+
+    final result = await showModalBottomSheet<({double amount, String accountId})>(
       context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Mark someone as paid'),
-        actions: debtors.map((m) {
-          return CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _markPaid(m);
-            },
-            child: Text('${m.name} — ${_bill.currencySymbol} ${m.amount.toStringAsFixed(2)}'),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SettleSheet(
+        member: member,
+        accounts: accounts,
+        defaultAccountId: widget.defaultAccountId,
+        currencySymbol: _bill.currencySymbol,
       ),
     );
+    if (result == null || !mounted) return;
+
+    // Capture localized strings before further awaits (avoid context across gaps).
+    final settlementLabel = context.t('split.settlementNote');
+    final settledLabel = context.t('split.settled');
+
+    final uid = widget.uid;
+    final now = DateTime.now();
+    final remaining = member.amount;
+    final settledAmount =
+        result.amount >= remaining ? remaining : result.amount;
+
+    // FX: freeze a converted amount when the bill currency differs from base.
+    final mainCode = await ref.read(currencyCodeProvider.future);
+    String? originalCurrency;
+    double? fxRate;
+    double? baseAmt;
+    if (_bill.currency != mainCode) {
+      originalCurrency = _bill.currency;
+      try {
+        fxRate = await ref.read(exchangeRateServiceProvider).getRate(
+              from: _bill.currency,
+              to: mainCode,
+              base: mainCode,
+            );
+      } catch (_) {}
+      if (fxRate != null) baseAmt = settledAmount * fxRate;
+    }
+
+    final settlement = Expense(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      amount: settledAmount,
+      category: 'Others',
+      note: '$settlementLabel: ${member.name} · ${_bill.title}',
+      date: now,
+      type: EntryType.receive,
+      accountId: result.accountId,
+      counterpart: member.name,
+      originalCurrency: originalCurrency,
+      exchangeRate: fxRate,
+      baseCurrencyAmount: baseAmt,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    final isOnline = ref.read(isOnlineProvider);
+    final repo = ref.read(expenseRepositoryProvider);
+    if (isOnline) {
+      try {
+        await repo.addExpense(uid, settlement);
+        await LocalExpenseRepository().upsertExpense(uid, settlement);
+      } catch (_) {
+        await LocalExpenseRepository().upsertExpense(uid, settlement);
+        if (storageMode == StorageMode.firebase) {
+          await SyncService().markPending(uid, settlement.id);
+        }
+      }
+    } else {
+      await LocalExpenseRepository().upsertExpense(uid, settlement);
+      if (storageMode == StorageMode.firebase) {
+        await SyncService().markPending(uid, settlement.id);
+      }
+    }
+
+    // Full payment closes the member; a partial payment reduces what they owe.
+    final isFull = settledAmount >= remaining - 0.005;
+    final updatedMember = member.copyWith(
+      amount: isFull ? member.amount : (remaining - settledAmount),
+      status: isFull ? SplitMemberStatus.paid : SplitMemberStatus.pending,
+      paidAt: isFull ? now : member.paidAt,
+    );
+    final newMembers =
+        _bill.members.map((m) => m.id == member.id ? updatedMember : m).toList();
+    // Record the collected payment, backed by the "receive" expense just posted.
+    // Deleting that expense later (from Activity) reverts this settlement.
+    final newSettlement = SplitSettlement(
+      memberId: member.id,
+      amount: settledAmount,
+      accountId: result.accountId,
+      expenseId: settlement.id,
+      date: now,
+    );
+    final newBill = _bill.copyWith(
+      members: newMembers,
+      settlements: [..._bill.settlements, newSettlement],
+      updatedAt: now,
+    );
+    await _persistBill(newBill);
+    if (!mounted) return;
+    setState(() => _bill = newBill);
+
+    AppToast.show(
+      context,
+      '$settledLabel · ${_bill.currencySymbol} ${settledAmount.toStringAsFixed(2)}',
+      type: AppToastType.success,
+    );
+    // Return to the transaction page; signal that a settlement happened so the
+    // caller can play its "done" animation.
+    Navigator.pop(context, true);
   }
 
   @override
@@ -140,7 +203,8 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     final brand = context.brand;
     final debtors = _bill.debtors;
     final progress = _bill.totalAmount > 0
-        ? (_bill.collected / (_bill.totalAmount - _bill.payer.amount)).clamp(0.0, 1.0)
+        ? (_bill.collected / (_bill.totalAmount - _bill.payer.amount))
+            .clamp(0.0, 1.0)
         : 0.0;
     final progressPct = (progress * 100).round();
     final dateStr = DateFormat('MMM d, yyyy').format(_bill.date);
@@ -150,84 +214,37 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       appBar: AppBar(
         backgroundColor: brand.background,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
             margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: brand.surface, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: brand.surface, shape: BoxShape.circle),
             child: Icon(CupertinoIcons.chevron_left, size: 18, color: brand.ink),
           ),
         ),
         title: Text(
-          'Bill Detail',
-          style: TextStyle(fontWeight: FontWeight.w700, color: brand.ink, fontSize: 17),
+          context.t('split.manageSettle'),
+          style: TextStyle(
+              fontWeight: FontWeight.w700, color: brand.ink, fontSize: 17),
         ),
-        actions: [
-          CupertinoButton(
-            padding: const EdgeInsets.only(right: 8),
-            onPressed: () => _showMoreMenu(context),
-            child: Icon(CupertinoIcons.ellipsis_circle, color: brand.ink),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Hero card ──
             _heroCard(dateStr, progressPct, progress, brand),
-            const SizedBox(height: 20),
-            // ── Share button ──
-            GestureDetector(
-              onTap: _shareBill,
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _kPurple.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _kPurple.withValues(alpha: 0.25)),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_sharing)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _kPurple),
-                        )
-                      else
-                        const Icon(CupertinoIcons.share, size: 18, color: _kPurple),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Share bill',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _kPurple,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
-            // ── Who owes you ──
-            Row(
-              children: [
-                Text(
-                  'WHO OWES YOU · ${debtors.length}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF8E8E93),
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
+            Text(
+              '${context.t('split.whoOwesYou')} · ${debtors.length}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8E8E93),
+                letterSpacing: 1,
+              ),
             ),
             const SizedBox(height: 12),
             Container(
@@ -237,41 +254,70 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.card),
-                child: Column(
-                  children: _buildDebtorRows(debtors, brand),
+                child: Column(children: _buildDebtorRows(debtors, brand)),
+              ),
+            ),
+            if (_bill.settlements.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                context.t('split.receiveRecords').toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8E8E93),
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  child: Column(children: _buildSettlementRows(brand)),
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () => Navigator.push<void>(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => BillReceiptScreen(bill: _bill),
+                ),
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6B40A8),
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(CupertinoIcons.doc_text,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      context.t('group.generateReceipt'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            // ── Mark paid link ──
-            GestureDetector(
-              onTap: _showMarkPaidSheet,
-              child: const Center(
-                child: Text(
-                  '+ Mark someone paid manually',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _kPurple,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // ── Footer note ──
             Text(
-              'When everyone settles, this bill closes automatically and posts the income back to your Funds.',
+              context.t('split.settleFooter'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: brand.inkSoft),
-            ),
-            // ── Off-screen receipt (for sharing) ──
-            const SizedBox(height: 40),
-            Transform.translate(
-              offset: const Offset(10000, 0), // hide off-screen
-              child: RepaintBoundary(
-                key: _receiptKey,
-                child: _ReceiptCard(bill: _bill),
-              ),
             ),
           ],
         ),
@@ -279,7 +325,8 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     );
   }
 
-  Widget _heroCard(String dateStr, int progressPct, double progress, BrandColors brand) {
+  Widget _heroCard(
+      String dateStr, int progressPct, double progress, BrandColors brand) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -294,25 +341,21 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'BILL ${_bill.billNumber}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 1,
-                  ),
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'BILL ${_bill.billNumber}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 1,
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -326,7 +369,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$dateStr · ${_bill.members.length} people · ${_bill.splitMode.name[0].toUpperCase()}${_bill.splitMode.name.substring(1)} split',
+            '$dateStr · ${_bill.members.length} people',
             style: const TextStyle(fontSize: 13, color: Colors.white70),
           ),
           const SizedBox(height: 16),
@@ -336,10 +379,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('BILL TOTAL', style: TextStyle(fontSize: 10, color: Colors.white60, letterSpacing: 0.8)),
+                    const Text('BILL TOTAL',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white60,
+                            letterSpacing: 0.8)),
                     Text(
                       '${_bill.currencySymbol} ${_bill.totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white),
                     ),
                   ],
                 ),
@@ -348,10 +398,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('OUTSTANDING', style: TextStyle(fontSize: 10, color: Colors.white60, letterSpacing: 0.8)),
+                    const Text('OUTSTANDING',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white60,
+                            letterSpacing: 0.8)),
                     Text(
                       '${_bill.currencySymbol} ${_bill.outstanding.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white),
                     ),
                   ],
                 ),
@@ -364,13 +421,14 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
             child: LinearProgressIndicator(
               value: progress,
               backgroundColor: Colors.white.withValues(alpha: 0.2),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF9FF0C8)),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF9FF0C8)),
               minHeight: 6,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            '$progressPct% paid back',
+            '$progressPct% ${context.t('split.paidBack')}',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ],
@@ -383,7 +441,8 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       return [
         Padding(
           padding: const EdgeInsets.all(20),
-          child: Text('No one else in this split.', style: TextStyle(color: brand.inkSoft)),
+          child: Text(context.t('split.noOneElse'),
+              style: TextStyle(color: brand.inkSoft)),
         ),
       ];
     }
@@ -407,13 +466,10 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     if (isPaid) {
       final paidAt = m.paidAt;
       final paidStr = paidAt != null ? _relativeTime(paidAt) : 'recently';
-      statusText = 'Paid · $paidStr';
-      statusColor = const Color(0xFF1F7A60);
-    } else if (m.status == SplitMemberStatus.reminded) {
-      statusText = 'Reminded';
-      statusColor = const Color(0xFFA0801C);
+      statusText = '${context.t('split.settled')} · $paidStr';
+      statusColor = _kGreen;
     } else {
-      statusText = 'Not sent';
+      statusText = '${_bill.currencySymbol} ${m.amount.toStringAsFixed(2)} ${context.t('split.outstandingLc')}';
       statusColor = const Color(0xFF8E8E93);
     }
 
@@ -446,95 +502,137 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
               children: [
                 Text(
                   m.name,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: brand.ink),
                 ),
-                Text(statusText, style: TextStyle(fontSize: 12, color: statusColor)),
+                Text(statusText,
+                    style: TextStyle(fontSize: 12, color: statusColor)),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            '${_bill.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: isPaid ? const Color(0xFF1F7A60) : brand.ink,
-            ),
-          ),
           const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () {
-              if (isPaid) return;
-              HapticFeedback.selectionClick();
-              _remind(m);
-            },
-            child: Container(
+          if (isPaid)
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: isPaid
-                    ? const Color(0xFFCFEFE2)
-                    : _kPurple.withValues(alpha: 0.1),
+                color: const Color(0xFFCFEFE2),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isPaid) ...[
-                    const Icon(CupertinoIcons.checkmark_alt, size: 12, color: Color(0xFF1F7A60)),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'PAID',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1F7A60),
-                        letterSpacing: 0.5,
-                      ),
+                children: const [
+                  Icon(CupertinoIcons.checkmark_alt, size: 12, color: _kGreen),
+                  SizedBox(width: 4),
+                  Text(
+                    'PAID',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _kGreen,
+                      letterSpacing: 0.5,
                     ),
-                  ] else ...[
-                    const Text(
-                      'REMIND',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _kPurple,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
+            )
+          else
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _settle(m);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _kGreen,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  context.t('split.settle').toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  void _showMoreMenu(BuildContext context) {
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showMarkPaidSheet();
-            },
-            child: const Text('Mark someone as paid'),
+  List<Widget> _buildSettlementRows(BrandColors brand) {
+    final items = [..._bill.settlements]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final divider = Container(
+      height: 0.5,
+      margin: const EdgeInsets.only(left: 62),
+      color: brand.divider,
+    );
+    final rows = <Widget>[];
+    for (int i = 0; i < items.length; i++) {
+      if (i > 0) rows.add(divider);
+      rows.add(_settlementRow(items[i], brand));
+    }
+    return rows;
+  }
+
+  Widget _settlementRow(SplitSettlement s, BrandColors brand) {
+    final member = _bill.members.firstWhere(
+      (m) => m.id == s.memberId,
+      orElse: () => SplitMember(
+        id: s.memberId,
+        name: context.t('split.someone'),
+        colorIndex: 0,
+        amount: 0,
+      ),
+    );
+    final dateStr = DateFormat('MMM d, yyyy · h:mm a').format(s.date);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _avatarColor(member.colorIndex),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Icon(CupertinoIcons.arrow_down_left,
+                  size: 18, color: Colors.white),
+            ),
           ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _shareBill();
-            },
-            child: const Text('Share bill receipt'),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.name,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: brand.ink),
+                ),
+                Text(dateStr,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF8E8E93))),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '+ ${_bill.currencySymbol} ${s.amount.toStringAsFixed(2)}',
+            style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700, color: _kGreen),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
       ),
     );
   }
@@ -548,135 +646,185 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
   }
 }
 
-// ─── Shareable Receipt Card ────────────────────────────────────────────────────
+/// Bottom sheet to settle a debtor: enter the amount received and pick the
+/// account to receive it into.
+class _SettleSheet extends StatefulWidget {
+  final SplitMember member;
+  final List<Account> accounts;
+  final String? defaultAccountId;
+  final String currencySymbol;
 
-class _ReceiptCard extends StatelessWidget {
-  final SplitBill bill;
+  const _SettleSheet({
+    required this.member,
+    required this.accounts,
+    required this.defaultAccountId,
+    required this.currencySymbol,
+  });
 
-  const _ReceiptCard({required this.bill});
+  @override
+  State<_SettleSheet> createState() => _SettleSheetState();
+}
+
+class _SettleSheetState extends State<_SettleSheet> {
+  late final TextEditingController _amountCtrl;
+  late String _accountId;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(
+        text: widget.member.amount.toStringAsFixed(2));
+    _accountId = widget.defaultAccountId != null &&
+            widget.accounts.any((a) => a.id == widget.defaultAccountId)
+        ? widget.defaultAccountId!
+        : widget.accounts.first.id;
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+    if (amount <= 0) return;
+    Navigator.pop(context, (amount: amount, accountId: _accountId));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = DateFormat('MMM d, yyyy').format(bill.date);
-    final payer = bill.payer;
-    final splitLabel = '${bill.splitMode.name[0].toUpperCase()}${bill.splitMode.name.substring(1)}';
+    final brand = context.brand;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      width: 320,
-      color: Colors.white,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          const Text(
-            'TRACKORA · BILL',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 2,
-              color: Color(0xFF6B40A8),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            bill.billNumber,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
-          ),
-          Text(dateStr, style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93))),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Color(0xFFEAEAEC)),
-          ),
-          // Title info
-          Text(
-            bill.title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Paid by ${payer.name} · Split $splitLabel · ${bill.members.length} people',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B6B70)),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Color(0xFFEAEAEC)),
-          ),
-          // Bill total
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Bill Total', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              Text(
-                '${bill.currencySymbol} ${bill.totalAmount.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF6B40A8)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Per person', style: TextStyle(fontSize: 12, color: Color(0xFF6B6B70))),
-              Text(
-                '${bill.currencySymbol} ${(bill.totalAmount / bill.members.length).toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF6B6B70)),
-              ),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Color(0xFFEAEAEC)),
-          ),
-          // Person list
-          ...bill.members.map((m) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: _avatarColor(m.colorIndex),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          m.initials,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: BoxDecoration(
+          color: brand.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: brand.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '${context.t('split.settle')} · ${widget.member.name}',
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: brand.ink),
+                ),
+                const SizedBox(height: 16),
+                _label(context.t('split.amountReceived'), brand),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.field),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(widget.currencySymbol,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: brand.inkSoft)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _amountCtrl,
+                          autofocus: false,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: brand.ink),
+                          decoration: const InputDecoration(
+                            hintText: '0.00',
+                            border: InputBorder.none,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        m.isPayer ? '${m.name} (paid)' : m.name,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF111111)),
-                      ),
-                    ),
-                    Text(
-                      '${bill.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              )),
-          const Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Divider(height: 1, color: Color(0xFFEAEAEC)),
+                const SizedBox(height: 18),
+                _label(context.t('split.receiveInto'), brand),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: widget.accounts.map((a) {
+                    final selected = a.id == _accountId;
+                    final isDefault = a.id == widget.defaultAccountId;
+                    return GestureDetector(
+                      onTap: () => setState(() => _accountId = a.id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: selected ? _kGreen : brand.surface,
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
+                          border: selected
+                              ? null
+                              : Border.all(color: brand.divider),
+                        ),
+                        child: Text(
+                          isDefault
+                              ? '${a.displayName} · ${context.t('split.original')}'
+                              : a.displayName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : brand.ink,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: _kGreen),
+                    onPressed: _confirm,
+                    child: Text(context.t('split.settle')),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Generated by Trackora',
-            style: TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
-          ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _label(String text, BrandColors brand) => Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+          color: brand.inkSoft,
+        ),
+      );
 }

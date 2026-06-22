@@ -20,6 +20,31 @@ class LocalSplitBillRepository {
         .containsKey('splitbill_expense_${uid}_$expenseId');
   }
 
+  /// Number of non-payer members who still owe (status != paid) for the split
+  /// bill linked to [expenseId]. Returns 0 when there is no bill. Synchronous so
+  /// it can drive a badge in list rows.
+  static int unsettledCountSync(String uid, String expenseId) {
+    if (!Hive.isBoxOpen(LocalStorage.splitBillsBoxName)) return 0;
+    final box = LocalStorage.splitBills;
+    final id = box.get('splitbill_expense_${uid}_$expenseId') as String?;
+    if (id == null) return 0;
+    final raw = box.get('splitbill_${uid}_$id') as String?;
+    if (raw == null) return 0;
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final members = map['members'] as List<dynamic>? ?? const [];
+      var count = 0;
+      for (final e in members) {
+        final m = Map<String, dynamic>.from(e as Map);
+        if (m['isPayer'] as bool? ?? false) continue;
+        if ((m['status'] as String?) != 'paid') count++;
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<String> saveSplitBill(String uid, SplitBill bill) async {
     await LocalStorage.init();
     final id = bill.id.isEmpty

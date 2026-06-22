@@ -21,6 +21,7 @@ import '../../services/prefs_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import 'manage_categories_screen.dart';
 import '../../widgets/animated_donut_chart.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
@@ -173,6 +174,18 @@ class SettingsScreen extends ConsumerWidget {
                   label: context.t('settings.language'),
                   trailing: context.appLocaleLabel(appLocale),
                   onTap: () => _pickLanguage(context, ref, appLocale),
+                ),
+                _GroupDivider(),
+                _Tile(
+                  icon: CupertinoIcons.square_grid_2x2,
+                  iconColor: AppColors.peach,
+                  label: context.t('settings.categories'),
+                  onTap: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute(
+                      builder: (_) => const ManageCategoriesScreen(),
+                    ),
+                  ),
                 ),
               ],
             ),

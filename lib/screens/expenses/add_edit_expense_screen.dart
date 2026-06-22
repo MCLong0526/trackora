@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/account.dart';
+import '../../models/category_catalog.dart';
 import '../../models/expense.dart';
 import '../../models/split_bill.dart';
 import '../../repositories/local_expense_repository.dart';
@@ -18,11 +19,13 @@ import '../../repositories/local_split_bill_repository.dart';
 import '../../repositories/split_bill_repository.dart';
 import '../../screens/accounts/add_edit_account_screen.dart';
 import '../../models/person.dart';
-import '../../screens/expenses/bill_receipt_screen.dart';
+import '../../screens/expenses/bill_detail_screen.dart';
 import '../../screens/expenses/split_bill_screen.dart';
 import '../../screens/people/people_screen.dart';
+import '../../screens/settings/manage_categories_screen.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
+import '../../services/split_settlement_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -31,20 +34,10 @@ import '../../widgets/currency_picker.dart';
 import '../../widgets/receipt_preview.dart';
 import '../../widgets/section_card.dart';
 
-const kExpenseCategories = [
-  'Food',
-  'Groceries',
-  'Transport',
-  'Shopping',
-  'Entertainment',
-  'Health',
-  'Bills',
-  'PreciousMetal',
-  'Stock',
-  'Others',
-];
-
-const kIncomeCategories = ['Salary', 'PreciousMetal', 'Stock', 'Others'];
+// Re-exported so existing importers (e.g. quick_add_sheet) keep working while
+// the canonical lists live in models/category_catalog.dart.
+const kExpenseCategories = kDefaultExpenseCategories;
+const kIncomeCategories = kDefaultIncomeCategories;
 
 class AddEditExpenseScreen extends ConsumerStatefulWidget {
   final Expense? expense;
@@ -121,7 +114,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   double _splitBillTotal =
       0.0; // total of the whole bill (not just payer's share)
   SplitBill? _splitBill;
-
+  
   bool get _isEdit => widget.expense != null;
 
   Color get _typeColor {
@@ -245,6 +238,41 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (valid != _hasValidAmount) {
       setState(() => _hasValidAmount = valid);
     }
+    if (_splitBillEnabled && _splitMembers.isNotEmpty) {
+      final newTotal = double.tryParse(_amountController.text) ?? 0;
+      if (newTotal > 0 && (newTotal - _splitBillTotal).abs() > 0.001) {
+        _syncSplitToAmount(newTotal);
+      }
+    }
+  }
+
+  void _syncSplitToAmount(double newTotal) {
+    final n = _splitMembers.length;
+    if (n == 0) return;
+    List<SplitMember> updated;
+    switch (_splitMode) {
+      case SplitMode.equally:
+        final each = newTotal / n;
+        updated = _splitMembers.map((m) => m.copyWith(amount: each)).toList();
+      case SplitMode.percent:
+      case SplitMode.shares:
+        final oldTotal = _splitBillTotal > 0
+            ? _splitBillTotal
+            : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+        updated = oldTotal > 0
+            ? _splitMembers
+                .map((m) => m.copyWith(
+                      amount: newTotal * (m.amount / oldTotal),
+                    ))
+                .toList()
+            : _splitMembers.map((m) => m.copyWith(amount: newTotal / n)).toList();
+      case SplitMode.amount:
+        updated = _splitMembers;
+    }
+    setState(() {
+      _splitBillTotal = newTotal;
+      _splitMembers = updated;
+    });
   }
 
   @override
@@ -301,7 +329,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   Widget _buildDragHandle(BrandColors brand) {
     final pillW = (36.0 + (_dragOffset * 0.3).clamp(0.0, 20.0));
-    final accent = _kTypeAccents[_typeIndexFor(_type)];
+    final accent = _typeAccents[_typeIndexFor(_type)];
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragUpdate: (details) {
@@ -351,11 +379,25 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   }
 
   List<String> get _categories {
-    if (_type == EntryType.income) return kIncomeCategories;
     if (_type == EntryType.transfer || _type == EntryType.receive) {
       return const ['Transfer'];
     }
-    return kExpenseCategories;
+    final income = _type == EntryType.income;
+    final base = income ? kIncomeCategories : kExpenseCategories;
+    final custom = customCategoryNames(
+      ref.read(customCategoriesProvider).valueOrNull ?? const [],
+      income: income,
+    );
+    if (custom.isEmpty) return base;
+    // Insert custom categories just before the trailing 'Others' bucket.
+    final list = [...base];
+    final othersIdx = list.indexOf('Others');
+    if (othersIdx >= 0) {
+      list.insertAll(othersIdx, custom);
+    } else {
+      list.addAll(custom);
+    }
+    return list;
   }
 
   Future<void> _pickReceipt() async {
@@ -516,18 +558,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
 
     if (result != null) {
-      // Find payer's share — that's what the current user owes/spent
-      final payer = result.members.firstWhere(
-        (m) => m.isPayer,
-        orElse: () => result.members.first,
-      );
       setState(() {
         _splitBillEnabled = true;
         _splitMembers = result.members;
         _splitMode = result.splitMode;
         _splitBillTotal = result.totalAmount;
         _splitBill = null;
-        _amountController.text = payer.amount.toStringAsFixed(2);
+        // Deduct the FULL bill from the account (you paid the whole thing); the
+        // others' shares are tracked as owed and returned when they settle.
+        _amountController.text = result.totalAmount.toStringAsFixed(2);
       });
       // Prevent the amount field from auto-focusing when returning
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -776,6 +815,59 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     }
   }
 
+  /// Ensures every non-payer split member exists in Contacts (creating a Person
+  /// when needed) and links them via [SplitMember.personId] so the Contacts
+  /// screen can surface what each person owes.
+  Future<void> _ensureContactsForMembers(String uid) async {
+    final repo = ref.read(personRepositoryProvider);
+    List<Person> existing;
+    try {
+      existing = await repo.getAll(uid).first;
+    } catch (_) {
+      existing = ref.read(peopleProvider).valueOrNull ?? const [];
+    }
+    Person? findByName(String name) {
+      final lower = name.trim().toLowerCase();
+      for (final p in existing) {
+        if (p.name.trim().toLowerCase() == lower) return p;
+      }
+      return null;
+    }
+
+    final updated = <SplitMember>[];
+    for (final m in _splitMembers) {
+      if (m.isPayer || m.name.trim().isEmpty) {
+        updated.add(m);
+        continue;
+      }
+      if (m.personId != null && m.personId!.isNotEmpty) {
+        updated.add(m);
+        continue;
+      }
+      final match = findByName(m.name);
+      if (match != null) {
+        updated.add(m..personId = match.id);
+        continue;
+      }
+      final now = DateTime.now();
+      final newId = '${now.microsecondsSinceEpoch}${updated.length}';
+      final person = Person(
+        id: newId,
+        name: m.name.trim(),
+        type: PersonType.friend,
+        colorIndex: m.colorIndex,
+        createdAt: now,
+        updatedAt: now,
+      );
+      try {
+        await repo.add(uid, person);
+        existing = [...existing, person];
+      } catch (_) {}
+      updated.add(m..personId = newId);
+    }
+    _splitMembers = updated;
+  }
+
   Future<SplitBill?> _saveSplitBill({
     required String uid,
     required String expenseId,
@@ -783,6 +875,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     required bool isOnline,
   }) async {
     try {
+      await _ensureContactsForMembers(uid);
       final now2 = DateTime.now();
       // Persist the split bill in the *expense's* selected currency (not the
       // base currency) so the receipt renders the currency the user chose.
@@ -794,7 +887,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
           ? _noteController.text.trim()
           : category;
 
-      // Look up existing local record to preserve billNumber / createdAt.
+      // Look up existing local record to preserve billNumber / createdAt /
+      // settlements, and detect whether the total amount changed.
       final existingLocal = await LocalSplitBillRepository()
           .getSplitBillByExpenseId(uid, expenseId);
 
@@ -805,6 +899,48 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       final localId =
           existingLocal?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
 
+      // When the total amount changes on an existing bill, delete every recorded
+      // settlement expense so the members revert to owing. Otherwise carry the
+      // settlements forward so they aren't wiped on every edit.
+      List<SplitSettlement> settlements = const [];
+      var amountChanged = false;
+      if (existingLocal != null) {
+        amountChanged = (billTotal - existingLocal.totalAmount).abs() > 0.005;
+        if (amountChanged && existingLocal.settlements.isNotEmpty) {
+          for (final s in existingLocal.settlements) {
+            try {
+              if (isOnline) {
+                await SyncService().deleteExpense(
+                  userId: uid,
+                  expenseId: s.expenseId,
+                  isOnline: isOnline,
+                );
+              } else {
+                await LocalExpenseRepository().deleteExpense(uid, s.expenseId);
+              }
+            } catch (_) {}
+          }
+          // settlements stays empty — members revert to owing.
+        } else {
+          settlements = existingLocal.settlements;
+        }
+      }
+
+      // Revert any paid members to pending when the total changed so the
+      // "Manage split & settle" page no longer shows them as PAID.
+      final finalMembers = amountChanged
+          ? _splitMembers
+              .map(
+                (m) => m.status == SplitMemberStatus.paid
+                    ? m.copyWith(
+                        status: SplitMemberStatus.pending,
+                        paidAt: null,
+                      )
+                    : m,
+              )
+              .toList()
+          : _splitMembers;
+
       final bill = SplitBill(
         id: localId,
         expenseId: expenseId,
@@ -814,7 +950,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         currency: _currencyCode,
         currencySymbol: entrySymbol,
         splitMode: _splitMode,
-        members: _splitMembers,
+        members: finalMembers,
+        settlements: settlements,
         date: _date,
         createdAt: createdAt,
         updatedAt: now2,
@@ -845,6 +982,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 currencySymbol: bill.currencySymbol,
                 splitMode: bill.splitMode,
                 members: bill.members,
+                settlements: bill.settlements,
                 date: bill.date,
                 createdAt: bill.createdAt,
                 updatedAt: bill.updatedAt,
@@ -949,11 +1087,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         _splitMode = bill.splitMode;
         _splitBillTotal = bill.totalAmount;
         _splitBill = bill;
-        final payer = bill.members.firstWhere(
-          (m) => m.isPayer,
-          orElse: () => bill!.members.first,
-        );
-        _amountController.text = payer.amount.toStringAsFixed(2);
+        // Keep the stored expense amount in the field (the full bill total for
+        // bills created with the deduct-total behaviour).
       });
     } catch (e) {
       dev.log('[LOAD] Split-bill load error: $e', name: 'AddEditExpense');
@@ -1077,6 +1212,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       final isOnline =
           storageMode == StorageMode.firebase && ref.read(isOnlineProvider);
       await _deleteSplitBillForExpense(
+        uid: user.uid,
+        expenseId: expenseId,
+        isOnline: isOnline,
+      );
+      // If this expense is a split-bill settlement record, revert the member.
+      await SplitSettlementService.revertIfSettlement(
         uid: user.uid,
         expenseId: expenseId,
         isOnline: isOnline,
@@ -1280,7 +1421,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       children: List.generate(4, (i) {
         final distance = (_typePageOffset - i).abs().clamp(0.0, 1.0);
         final progress = 1.0 - distance;
-        final activeAccent = _kTypeAccents[_typeIndexFor(_type)];
+        final activeAccent = _typeAccents[_typeIndexFor(_type)];
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 3),
           width: 8.0 + (progress * 18.0),
@@ -1405,7 +1546,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                               size: 18,
                               color: isSelected
                                   ? Colors.white
-                                  : _kTypeAccents[i],
+                                  : _typeAccents[i],
                             ),
                             const SizedBox(height: 5),
                             Text(
@@ -1458,6 +1599,32 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     Color(0xFF2A6FB5),
   ];
 
+  // Brighter variants used as foreground / accent on dark surfaces so the
+  // expense / income / transfer / receive colors stay legible in dark mode.
+  static const _kTypeAccentsDark = [
+    Color(0xFFB99BEC),
+    Color(0xFF5FD3A0),
+    Color(0xFFEE8585),
+    Color(0xFF6FB2F0),
+  ];
+
+  /// Type accent palette adapted to the current brightness. Use for any accent
+  /// drawn as foreground (icon / text / dot) or as a tint over a theme-aware
+  /// surface. Filled surfaces that carry white content keep [_kTypeAccents].
+  List<Color> get _typeAccents =>
+      Theme.of(context).brightness == Brightness.dark
+          ? _kTypeAccentsDark
+          : _kTypeAccents;
+
+  /// Category accent brightened for legibility on dark surfaces (the category
+  /// pastel accents are tuned for light backgrounds).
+  Color _categoryAccent(String category) {
+    final a = styleFor(category).accent;
+    return Theme.of(context).brightness == Brightness.dark
+        ? Color.lerp(a, Colors.white, 0.45)!
+        : a;
+  }
+
   static const _kTypeIcons = [
     CupertinoIcons.minus_circle_fill,
     CupertinoIcons.plus_circle_fill,
@@ -1499,9 +1666,13 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       AppColors.sky,
     ];
 
-    final accent = _kTypeAccents[index];
-    final bg = bgColors[index];
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = _typeAccents[index];
+    // In dark mode the decorative pastel would hide the (light) ink content, so
+    // use a dark surface gently tinted with the accent instead.
+    final bg = isDark
+        ? Color.alphaBlend(accent.withValues(alpha: 0.12), brand.surface)
+        : bgColors[index];
 
     final cardChild = Container(
       margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
@@ -1575,12 +1746,14 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         type == EntryType.transfer ||
         type == EntryType.receive;
 
-    final bg = [
-      AppColors.lilac,
-      AppColors.mint,
-      AppColors.blush,
-      AppColors.sky,
-    ][_typeIndexFor(type)];
+    final bg = isDark
+        ? Color.alphaBlend(accent.withValues(alpha: 0.12), brand.surface)
+        : [
+            AppColors.lilac,
+            AppColors.mint,
+            AppColors.blush,
+            AppColors.sky,
+          ][_typeIndexFor(type)];
 
     return Stack(
       children: [
@@ -1778,7 +1951,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: styleFor(_category).accent,
+                      color: _categoryAccent(_category),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -1788,7 +1961,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                     style: TextStyle(
                       fontSize: compact ? 12 : 13,
                       fontWeight: FontWeight.w600,
-                      color: styleFor(_category).accent,
+                      color: _categoryAccent(_category),
                     ),
                   ),
                 ],
@@ -1947,13 +2120,54 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       height: compact ? 50 : 64,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        itemCount: cats.length,
+        // Clip to the card's content width (was Clip.none, which let chips
+        // bleed past the padding to the card edge) and leave a trailing gap
+        // matching the card's side inset so the row ends tidily, aligned with
+        // the fields card below.
+        clipBehavior: Clip.hardEdge,
+        padding: const EdgeInsets.only(top: 6, bottom: 6, right: 18),
+        itemCount: cats.length + 1,
         itemBuilder: (context, idx) {
+          if (idx == cats.length) {
+            // Trailing "+" chip to create a new custom category.
+            return GestureDetector(
+              onTap: () async {
+                FocusScope.of(context).unfocus();
+                HapticFeedback.selectionClick();
+                await Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const ManageCategoriesScreen(),
+                  ),
+                );
+                if (mounted) setState(() {});
+              },
+              child: Container(
+                width: itemSize,
+                height: itemSize,
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: brand.divider),
+                ),
+                child: Icon(CupertinoIcons.add,
+                    size: compact ? 17 : 20, color: brand.inkSoft),
+              ),
+            );
+          }
           final c = cats[idx];
           final selected = c == _category;
           final s = styleFor(c);
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          // On the dark card an unselected chip would blend into the surface and
+          // its dark accent icon would be hard to see, so lift the chip and
+          // brighten the icon in dark mode.
+          final unselectedBg = isDark
+              ? Color.alphaBlend(
+                  Colors.white.withValues(alpha: 0.10), brand.surface)
+              : brand.surface;
+          final unselectedIcon =
+              isDark ? Color.lerp(s.accent, Colors.white, 0.5)! : s.accent;
           return GestureDetector(
             onTap: () {
               if (_category == c) return;
@@ -1962,20 +2176,20 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               setState(() => _category = c);
             },
             child: Padding(
-              padding: EdgeInsets.only(right: idx < cats.length - 1 ? 8 : 0),
+              padding: const EdgeInsets.only(right: 8),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 width: itemSize,
                 height: itemSize,
                 decoration: BoxDecoration(
-                  color: selected ? s.accent : brand.surface,
+                  color: selected ? s.accent : unselectedBg,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   s.icon,
                   size: compact ? 17 : 20,
-                  color: selected ? Colors.white : s.accent,
+                  color: selected ? Colors.white : unselectedIcon,
                 ),
               ),
             ),
@@ -2256,7 +2470,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               if (_splitBillEnabled) ...[
                 divider,
                 _splitWithRow(brand),
-                if (_splitBill != null) ...[divider, _generateReceiptButton()],
+                if (_splitBill != null) ...[
+                  divider,
+                  _settleSplitButton(),
+                ],
               ],
             ],
             divider,
@@ -2516,43 +2733,52 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     );
   }
 
-  Future<void> _openBillReceipt() async {
-    final bill = _splitBill;
-    if (bill == null) return;
-
-    await Navigator.push(
-      context,
-      CupertinoPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => BillReceiptScreen(bill: bill),
-      ),
-    );
-    if (mounted) await _loadSplitBill();
-  }
-
-  Widget _generateReceiptButton() {
+  Widget _settleSplitButton() {
+    const green = Color(0xFF1F7A60);
     return GestureDetector(
-      onTap: _openBillReceipt,
+      onTap: () async {
+              final user = ref.read(authStateProvider).valueOrNull;
+              final bill = _splitBill;
+              if (user == null || bill == null) return;
+              final settled = await Navigator.push<bool>(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => BillDetailScreen(
+                    bill: bill,
+                    uid: user.uid,
+                    defaultAccountId: _accountId,
+                  ),
+                ),
+              );
+              if (!mounted) return;
+              // Refresh statuses after returning from the settle screen.
+              await _loadSplitBill();
+              if (settled == true && mounted) {
+                HapticFeedback.mediumImpact();
+              }
+            },
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF6B40A8),
+            color: green.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(9999),
+            border: Border.all(color: green.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(CupertinoIcons.doc_text, color: Colors.white, size: 16),
+              const Icon(CupertinoIcons.person_2_fill,
+                  color: green, size: 16),
               const SizedBox(width: 8),
               Text(
-                context.t('group.generateReceipt'),
+                context.t('split.manageSettle'),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: green,
                 ),
               ),
             ],
@@ -2561,6 +2787,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       ),
     );
   }
+
 
   static const _kSplitAvatarColors = [
     Color(0xFF6B40A8),
@@ -2627,7 +2854,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
               ),
             ),
             Text(
-              selected?.name ??
+              selected?.displayName ??
                   (available.isEmpty
                       ? context.t('expense.addAccount')
                       : context.t('expense.none')),
@@ -2882,7 +3109,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             color: _accentForType(a.type),
                           ),
                           title: Text(
-                            a.name,
+                            a.displayName,
                             style: TextStyle(
                               color: brand.ink,
                               fontWeight: FontWeight.w600,

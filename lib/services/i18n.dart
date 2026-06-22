@@ -236,6 +236,50 @@ class AppStrings {
     'category.Others': 'Others',
     'category.Salary': 'Salary',
 
+    // Custom categories.
+    'category.yourCategories': 'Your categories',
+    'category.builtIn': 'Built-in',
+    'category.builtInTag': 'Default',
+    'category.addCategory': 'Add Category',
+    'category.newCategory': 'New Category',
+    'category.emptyHint': 'No custom categories yet. Tap + to create one.',
+    'category.nameHint': 'Category name',
+    'category.icon': 'Icon',
+    'category.color': 'Color',
+    'category.deleteTitle': 'Delete Category',
+    'category.deleteConfirm':
+        'Delete this category? Existing entries keep their label.',
+    'category.deleted': 'Category deleted',
+    'category.updated': 'Category updated',
+    'category.created': 'Category created',
+    'category.errorEmpty': 'Please enter a name',
+    'category.errorDuplicate': 'A category with this name already exists',
+
+    // Split bill / settle.
+    'split.settle': 'Settle',
+    'split.settled': 'Settled',
+    'split.settleSomeone': 'Settle someone',
+    'split.whoSettled': 'Who settled up?',
+    'split.manageSettle': 'Manage split & settle',
+    'split.receiveInto': 'Receive payment into',
+    'split.original': 'Original',
+    'split.needAccount': 'Add an account first to receive the payment.',
+    'split.settlementNote': 'Settlement',
+    'split.billClosed': 'Bill closed! Everyone settled.',
+    'split.settleFooter':
+        'Settling posts the amount back into your chosen account as income.',
+    'split.owesYou': 'Owes you',
+    'split.owedTransactions': 'Pending split bills',
+    'split.allSettledPerson': 'All settled up — nothing owed.',
+    'split.whoOwesYou': 'WHO OWES YOU',
+    'split.paidBack': 'paid back',
+    'split.noOneElse': 'No one else in this split.',
+    'split.outstandingLc': 'outstanding',
+    'split.amountReceived': 'Amount received',
+    'split.settleDone': 'Settled',
+    'split.receiveRecords': 'Receive records',
+    'split.someone': 'Someone',
+
     // Quick add sheet.
     'quickAdd.title': 'Quick add',
     'quickAdd.tapToStart': 'Tap to start',
@@ -456,6 +500,7 @@ class AppStrings {
     'settings.startingSavings': 'Starting savings',
     'settings.appearance': 'Appearance',
     'settings.language': 'Language',
+    'settings.categories': 'Categories',
     'settings.exportCsv': 'Export to CSV',
     'settings.importCsv': 'Import CSV',
     'settings.about': 'About',
@@ -787,6 +832,10 @@ class AppStrings {
     'account.newTitle': 'New Account',
     'account.typeLabel': 'Account Type',
     'account.nameLabel': 'Account Name',
+    'account.remarkLabel': 'Remark (optional)',
+    'account.remarkHint': 'e.g. Card 1, Salary, Joint',
+    'account.remarkHelper':
+        'Add a note to tell apart accounts with the same name (e.g. two cards from the same bank).',
     'account.dangerZone': 'Danger Zone',
     'account.dangerDesc': 'Permanently removes this account. Cannot be undone.',
     'account.updateBtn': 'Update Account',
@@ -1605,6 +1654,48 @@ class AppStrings {
     'category.Others': '其他',
     'category.Salary': '薪资',
 
+    // Custom categories.
+    'category.yourCategories': '你的类别',
+    'category.builtIn': '内置',
+    'category.builtInTag': '默认',
+    'category.addCategory': '添加类别',
+    'category.newCategory': '新类别',
+    'category.emptyHint': '还没有自定义类别。点击 + 创建一个。',
+    'category.nameHint': '类别名称',
+    'category.icon': '图标',
+    'category.color': '颜色',
+    'category.deleteTitle': '删除类别',
+    'category.deleteConfirm': '删除此类别？现有记录会保留其标签。',
+    'category.deleted': '已删除类别',
+    'category.updated': '已更新类别',
+    'category.created': '已创建类别',
+    'category.errorEmpty': '请输入名称',
+    'category.errorDuplicate': '已存在同名类别',
+
+    // Split bill / settle.
+    'split.settle': '结算',
+    'split.settled': '已结算',
+    'split.settleSomeone': '结算某人',
+    'split.whoSettled': '谁已结清？',
+    'split.manageSettle': '管理分摊与结算',
+    'split.receiveInto': '收款到',
+    'split.original': '原账户',
+    'split.needAccount': '请先添加一个账户以接收付款。',
+    'split.settlementNote': '结算',
+    'split.billClosed': '账单已结清！所有人都已结算。',
+    'split.settleFooter': '结算后金额将作为收入存入你选择的账户。',
+    'split.owesYou': '欠你',
+    'split.owedTransactions': '待结算的分摊账单',
+    'split.allSettledPerson': '已全部结清 — 无欠款。',
+    'split.whoOwesYou': '谁欠你',
+    'split.paidBack': '已偿还',
+    'split.noOneElse': '此分摊没有其他人。',
+    'split.outstandingLc': '未结',
+    'split.amountReceived': '收到金额',
+    'split.settleDone': '已结算',
+    'split.receiveRecords': '收款记录',
+    'split.someone': '某人',
+
     'quickAdd.title': '快速添加',
     'quickAdd.tapToStart': '点击开始',
     'quickAdd.rearrangeHint': '长按以重新排列',
@@ -1809,6 +1900,7 @@ class AppStrings {
     'settings.startingSavings': '初始储蓄',
     'settings.appearance': '外观',
     'settings.language': '语言',
+    'settings.categories': '类别',
     'settings.exportCsv': '导出 CSV',
     'settings.importCsv': '导入 CSV',
     'settings.about': '关于',
@@ -2129,6 +2221,9 @@ class AppStrings {
     'account.newTitle': '新账户',
     'account.typeLabel': '账户类型',
     'account.nameLabel': '账户名称',
+    'account.remarkLabel': '备注（可选）',
+    'account.remarkHint': '例如：卡1、工资、联名',
+    'account.remarkHelper': '添加备注以区分同名账户（例如同一家银行的两张卡）。',
     'account.dangerZone': '危险操作',
     'account.dangerDesc': '永久删除此账户，操作不可撤销。',
     'account.updateBtn': '更新账户',
@@ -2910,6 +3005,50 @@ class AppStrings {
     'category.Others': 'Lain-lain',
     'category.Salary': 'Gaji',
 
+    // Custom categories.
+    'category.yourCategories': 'Kategori anda',
+    'category.builtIn': 'Terbina dalam',
+    'category.builtInTag': 'Lalai',
+    'category.addCategory': 'Tambah Kategori',
+    'category.newCategory': 'Kategori Baru',
+    'category.emptyHint': 'Belum ada kategori tersuai. Ketik + untuk mencipta.',
+    'category.nameHint': 'Nama kategori',
+    'category.icon': 'Ikon',
+    'category.color': 'Warna',
+    'category.deleteTitle': 'Padam Kategori',
+    'category.deleteConfirm':
+        'Padam kategori ini? Rekod sedia ada kekalkan labelnya.',
+    'category.deleted': 'Kategori dipadam',
+    'category.updated': 'Kategori dikemas kini',
+    'category.created': 'Kategori dicipta',
+    'category.errorEmpty': 'Sila masukkan nama',
+    'category.errorDuplicate': 'Kategori dengan nama ini sudah wujud',
+
+    // Split bill / settle.
+    'split.settle': 'Selesai',
+    'split.settled': 'Diselesaikan',
+    'split.settleSomeone': 'Selesaikan seseorang',
+    'split.whoSettled': 'Siapa yang dah bayar?',
+    'split.manageSettle': 'Urus pecahan & penyelesaian',
+    'split.receiveInto': 'Terima bayaran ke',
+    'split.original': 'Asal',
+    'split.needAccount': 'Tambah akaun dahulu untuk menerima bayaran.',
+    'split.settlementNote': 'Penyelesaian',
+    'split.billClosed': 'Bil selesai! Semua dah bayar.',
+    'split.settleFooter':
+        'Penyelesaian memasukkan jumlah ke akaun pilihan anda sebagai pendapatan.',
+    'split.owesYou': 'Hutang anda',
+    'split.owedTransactions': 'Bil pecahan tertunggak',
+    'split.allSettledPerson': 'Semua selesai — tiada hutang.',
+    'split.whoOwesYou': 'SIAPA BERHUTANG',
+    'split.paidBack': 'dibayar balik',
+    'split.noOneElse': 'Tiada orang lain dalam pecahan ini.',
+    'split.outstandingLc': 'tertunggak',
+    'split.amountReceived': 'Jumlah diterima',
+    'split.settleDone': 'Selesai',
+    'split.receiveRecords': 'Rekod terimaan',
+    'split.someone': 'Seseorang',
+
     'quickAdd.title': 'Tambah pantas',
     'quickAdd.tapToStart': 'Ketik untuk mula',
     'quickAdd.rearrangeHint': 'Tekan lama untuk susun semula',
@@ -3128,6 +3267,7 @@ class AppStrings {
     'settings.startingSavings': 'Simpanan awal',
     'settings.appearance': 'Penampilan',
     'settings.language': 'Bahasa',
+    'settings.categories': 'Kategori',
     'settings.exportCsv': 'Eksport CSV',
     'settings.importCsv': 'Import CSV',
     'settings.about': 'Tentang',
@@ -3454,6 +3594,10 @@ class AppStrings {
     'account.newTitle': 'Akaun Baru',
     'account.typeLabel': 'Jenis Akaun',
     'account.nameLabel': 'Nama Akaun',
+    'account.remarkLabel': 'Catatan (pilihan)',
+    'account.remarkHint': 'cth. Kad 1, Gaji, Bersama',
+    'account.remarkHelper':
+        'Tambah catatan untuk membezakan akaun yang sama nama (cth. dua kad dari bank yang sama).',
     'account.dangerZone': 'Zon Bahaya',
     'account.dangerDesc': 'Memadam akaun ini secara kekal. Tidak boleh dibatalkan.',
     'account.updateBtn': 'Kemaskini Akaun',
@@ -4156,7 +4300,13 @@ extension StringsLookup on BuildContext {
     return AppStrings(code).t(key);
   }
 
-  String categoryLabel(String category) => t('category.$category');
+  String categoryLabel(String category) {
+    final key = 'category.$category';
+    final label = t(key);
+    // Built-in categories have a translation; custom categories don't, so fall
+    // back to their raw name instead of showing the lookup key.
+    return label == key ? category : label;
+  }
 
   String appLocaleLabel(AppLocale locale) {
     return switch (locale) {

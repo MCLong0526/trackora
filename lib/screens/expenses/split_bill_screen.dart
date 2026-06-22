@@ -76,6 +76,13 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   final _scrollCtrl = ScrollController();
   String? _justAddedId;
 
+  // Theme-adaptive colors — set at the top of build() before sub-methods run.
+  Color _thInk = _kInk;
+  Color _thMuted = _kInkMuted;
+  Color _thHairline = _kHairline;
+  Color _thParchment = _kParchment;
+  Color _thPurpleSoft = _kPurpleSoft;
+
   // Per-member controllers
   final Map<String, TextEditingController> _amountCtrls = {};
   final Map<String, TextEditingController> _percentCtrls = {};
@@ -363,7 +370,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
               padding: const EdgeInsets.only(left: 8),
               child: Text(
                 widget.currencySymbol,
-                style: const TextStyle(color: _kInkMuted),
+                style: TextStyle(color: _thMuted),
               ),
             ),
           ),
@@ -432,6 +439,13 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     final canvasColor = isDark ? brand.surface : _kCanvas;
     final parchmentColor = isDark ? brand.background : _kParchment;
 
+    // Update adaptive tokens so sub-methods always read current theme.
+    _thInk = isDark ? brand.ink : _kInk;
+    _thMuted = isDark ? brand.inkSoft : _kInkMuted;
+    _thHairline = isDark ? brand.divider : _kHairline;
+    _thParchment = isDark ? brand.surface : _kParchment;
+    _thPurpleSoft = isDark ? _kPurple.withValues(alpha: 0.18) : _kPurpleSoft;
+
     return Scaffold(
       backgroundColor: parchmentColor,
       body: SafeArea(
@@ -488,10 +502,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _kParchment,
+                color: _thParchment,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.xmark, size: 16, color: _kInk),
+              child: Icon(CupertinoIcons.xmark, size: 16, color: _thInk),
             ),
           ),
           const SizedBox(width: 14),
@@ -499,21 +513,21 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Split bill',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
-                    color: _kInk,
+                    color: _thInk,
                     letterSpacing: -0.374,
                   ),
                 ),
                 Text(
                   '${widget.expenseTitle.isEmpty ? "Expense" : widget.expenseTitle} · '
                   '${widget.currencySymbol} ${_totalAmount.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: _kInkMuted,
+                    color: _thMuted,
                     letterSpacing: -0.12,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -537,7 +551,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _kPurpleSoft,
+        color: _thPurpleSoft,
         borderRadius: BorderRadius.circular(_kRoundedLg),
         border: Border.all(color: _kPurple.withValues(alpha: 0.12)),
       ),
@@ -644,10 +658,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             const SizedBox(height: 4),
             Text(
               '≈ ${widget.baseCurrencySymbol} ${(_owedAmount * widget.fxToBase!).toStringAsFixed(2)} est.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: _kInkMuted,
+                color: _thMuted,
                 letterSpacing: -0.12,
               ),
             ),
@@ -674,10 +688,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
   Widget _sectionLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        color: _kInkMuted,
+        color: _thMuted,
         letterSpacing: 1,
       ),
     );
@@ -692,7 +706,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       decoration: BoxDecoration(
         color: canvasColor,
         borderRadius: BorderRadius.circular(_kRoundedLg),
-        border: Border.all(color: _kHairline),
+        border: Border.all(color: _thHairline),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -716,7 +730,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           width: 80,
           height: 80,
           decoration: BoxDecoration(
-            color: _kPurpleSoft,
+            color: _thPurpleSoft,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _kPurple, width: 2),
           ),
@@ -796,10 +810,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
         const SizedBox(height: 6),
         Text(
           m.name.split(' ').first,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: _kInkMuted,
+            color: _thMuted,
             letterSpacing: -0.12,
           ),
         ),
@@ -814,10 +828,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       children: [
         Text(
           'SPLIT BETWEEN · ${_members.length}',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: _kInkMuted,
+            color: _thMuted,
             letterSpacing: 1,
           ),
         ),
@@ -856,7 +870,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       decoration: BoxDecoration(
         color: parchmentColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _kHairline),
+        border: Border.all(color: _thHairline),
       ),
       child: Row(
         children: List.generate(modes.length, (i) {
@@ -896,7 +910,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                       fontWeight: isSelected
                           ? FontWeight.w600
                           : FontWeight.w400,
-                      color: isSelected ? _kPurple : _kInkMuted,
+                      color: isSelected ? _kPurple : _thMuted,
                       letterSpacing: -0.12,
                     ),
                   ),
@@ -915,13 +929,13 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     final hairline = Container(
       height: 0.5,
       margin: const EdgeInsets.only(left: 62),
-      color: _kHairline,
+      color: _thHairline,
     );
     return Container(
       decoration: BoxDecoration(
         color: canvasColor,
         borderRadius: BorderRadius.circular(_kRoundedLg),
-        border: Border.all(color: _kHairline),
+        border: Border.all(color: _thHairline),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(_kRoundedLg),
@@ -976,10 +990,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                     children: [
                       Text(
                         m.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: _kInk,
+                          color: _thInk,
                           letterSpacing: -0.374,
                         ),
                       ),
@@ -991,7 +1005,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: _kPurpleSoft,
+                            color: _thPurpleSoft,
                             borderRadius: BorderRadius.circular(_kRoundedSm),
                           ),
                           child: const Text(
@@ -1010,9 +1024,9 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                   const SizedBox(height: 2),
                   Text(
                     _subtitleFor(m),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: _kInkMuted,
+                      color: _thMuted,
                       letterSpacing: -0.12,
                     ),
                   ),
@@ -1066,10 +1080,10 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       case SplitMode.equally:
         return Text(
           '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: _kInk,
+            color: _thInk,
             letterSpacing: -0.374,
           ),
         );
@@ -1111,9 +1125,9 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             const SizedBox(height: 3),
             Text(
               '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: _kInkMuted,
+                color: _thMuted,
                 letterSpacing: -0.12,
               ),
             ),
@@ -1142,9 +1156,9 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
             const SizedBox(height: 3),
             Text(
               '${widget.currencySymbol} ${m.amount.toStringAsFixed(2)}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: _kInkMuted,
+                color: _thMuted,
                 letterSpacing: -0.12,
               ),
             ),
@@ -1168,16 +1182,16 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textInputAction: TextInputAction.done,
         textAlign: TextAlign.right,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: _kInk,
+          color: _thInk,
           letterSpacing: -0.224,
         ),
         decoration: BoxDecoration(
-          color: _kParchment,
+          color: _thParchment,
           borderRadius: BorderRadius.circular(_kRoundedSm),
-          border: Border.all(color: _kHairline),
+          border: Border.all(color: _thHairline),
         ),
         padding: EdgeInsets.only(
           left: prefix != null ? 2 : 8,
@@ -1190,7 +1204,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   prefix,
-                  style: const TextStyle(fontSize: 12, color: _kInkMuted),
+                  style: TextStyle(fontSize: 12, color: _thMuted),
                 ),
               )
             : null,
@@ -1199,7 +1213,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
                 padding: const EdgeInsets.only(right: 7),
                 child: Text(
                   suffix,
-                  style: const TextStyle(fontSize: 12, color: _kInkMuted),
+                  style: TextStyle(fontSize: 12, color: _thMuted),
                 ),
               )
             : null,

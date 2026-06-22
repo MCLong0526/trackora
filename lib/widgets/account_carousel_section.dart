@@ -872,7 +872,7 @@ class _CardFront extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            account.name,
+                            account.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -1138,7 +1138,7 @@ class _CardBack extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              account.name,
+              account.displayName,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -1423,7 +1423,7 @@ class _AllTransactionsSheetState extends State<_AllTransactionsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.account.name,
+                        widget.account.displayName,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -1952,6 +1952,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
   AccountType _swatchColor = AccountType.bank;
   final _nameCtrl = TextEditingController();
   final _balanceCtrl = TextEditingController();
+  final _remarkCtrl = TextEditingController();
   bool _success = false;
   bool _saving = false;
   double _animatedBalance = 0;
@@ -2005,6 +2006,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     _confettiCtrl.dispose();
     _nameCtrl.dispose();
     _balanceCtrl.dispose();
+    _remarkCtrl.dispose();
     _interestCtrl.dispose();
     super.dispose();
   }
@@ -2027,6 +2029,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
       _swatchColor = t.type;
       _nameCtrl.clear();
       _balanceCtrl.clear();
+      _remarkCtrl.clear();
       _animatedBalance = 0;
       _success = false;
     });
@@ -2060,6 +2063,8 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
     final rawBalance = double.tryParse(_balanceCtrl.text) ?? 0.0;
     final opening = t.type.isLiability ? -rawBalance.abs() : rawBalance;
     final name = _nameCtrl.text.trim().isEmpty ? t.defaultName : _nameCtrl.text.trim();
+    final remarkText = _remarkCtrl.text.trim();
+    final remark = remarkText.isEmpty ? null : remarkText;
 
     // Optional interest (asset accounts only).
     final interestRate = double.tryParse(_interestCtrl.text.trim());
@@ -2076,6 +2081,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
           type: t.type,
           openingBalance: opening,
           currencyCode: _currencyCode,
+          remark: remark,
           createdAt: now,
           interestRatePercent: hasInterest ? interestRate : null,
           interestPeriod: hasInterest ? _interestPeriod : null,
@@ -2219,6 +2225,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet>
                     pal: pal,
                     nameCtrl: _nameCtrl,
                     balanceCtrl: _balanceCtrl,
+                    remarkCtrl: _remarkCtrl,
                     animatedBalance: _animatedBalance,
                     success: _success,
                     saving: _saving,
@@ -2720,6 +2727,7 @@ class _Step2 extends StatefulWidget {
   final _Pal pal;
   final TextEditingController nameCtrl;
   final TextEditingController balanceCtrl;
+  final TextEditingController remarkCtrl;
   final double animatedBalance;
   final bool success;
   final bool saving;
@@ -2739,6 +2747,7 @@ class _Step2 extends StatefulWidget {
     required this.pal,
     required this.nameCtrl,
     required this.balanceCtrl,
+    required this.remarkCtrl,
     required this.animatedBalance,
     required this.success,
     required this.saving,
@@ -3336,6 +3345,49 @@ class _Step2State extends State<_Step2> {
                             ),
                           ),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: brand.divider,
+                    indent: 16),
+                // Remark row — lets users tell apart same-name accounts.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t('account.remarkLabel').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 0.5,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: widget.remarkCtrl,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: brand.ink,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: context.t('account.remarkHint'),
+                          hintStyle: TextStyle(
+                            color: brand.inkSoft,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
                     ],
                   ),

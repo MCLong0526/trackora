@@ -262,7 +262,7 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(
@@ -273,21 +273,21 @@ class _GroupPendingScreenState extends ConsumerState<GroupPendingScreen>
                         children: [
                           Text(
                             context.t('group.yourCode'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF8E8E96),
+                              color: brand.inkSoft,
                               letterSpacing: 0.6,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             _displayCode,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
                               fontFamily: 'monospace',
-                              color: Color(0xFF0B0B0F),
+                              color: brand.ink,
                               letterSpacing: 2,
                             ),
                           ),

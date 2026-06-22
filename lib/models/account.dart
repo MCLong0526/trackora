@@ -161,6 +161,11 @@ class Account {
   /// Null means the account uses the user's main/base currency.
   final String? currencyCode;
 
+  /// Optional free-text remark to distinguish accounts that share the same
+  /// provider name (e.g. two "Affin Bank" credit cards → "Card 1" / "Card 2").
+  /// Null / empty means no remark.
+  final String? remark;
+
   /// Optional interest rate (percent per [interestPeriod]) earned on this
   /// account's balance. Null / 0 means no interest accrual.
   final double? interestRatePercent;
@@ -180,10 +185,19 @@ class Account {
     required this.openingBalance,
     required this.createdAt,
     this.currencyCode,
+    this.remark,
     this.interestRatePercent,
     this.interestPeriod,
     this.lastInterestAt,
   });
+
+  /// Name shown to the user, appending the [remark] when present so accounts
+  /// that share the same provider name can be told apart.
+  String get displayName {
+    final r = remark?.trim();
+    if (r == null || r.isEmpty) return name;
+    return '$name · $r';
+  }
 
   factory Account.fromMap(Map<String, dynamic> data, {required String id}) {
     return Account(
@@ -193,6 +207,9 @@ class Account {
       openingBalance: (data['openingBalance'] as num?)?.toDouble() ?? 0.0,
       createdAt: _readDate(data['createdAt']),
       currencyCode: data['currencyCode'] as String?,
+      remark: (data['remark'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : (data['remark'] as String?)?.trim(),
       interestRatePercent: (data['interestRatePercent'] as num?)?.toDouble(),
       interestPeriod: data['interestPeriod'] as String?,
       lastInterestAt: data['lastInterestAt'] != null
@@ -209,6 +226,7 @@ class Account {
       'openingBalance': openingBalance,
       'createdAt': createdAt.toIso8601String(),
       if (currencyCode != null) 'currencyCode': currencyCode,
+      if (remark != null && remark!.trim().isNotEmpty) 'remark': remark!.trim(),
       if (interestRatePercent != null)
         'interestRatePercent': interestRatePercent,
       if (interestPeriod != null) 'interestPeriod': interestPeriod,
@@ -226,6 +244,7 @@ class Account {
     double? openingBalance,
     DateTime? createdAt,
     Object? currencyCode = _sentinel,
+    Object? remark = _sentinel,
     Object? interestRatePercent = _sentinel,
     Object? interestPeriod = _sentinel,
     Object? lastInterestAt = _sentinel,
@@ -239,6 +258,7 @@ class Account {
       currencyCode: identical(currencyCode, _sentinel)
           ? this.currencyCode
           : currencyCode as String?,
+      remark: identical(remark, _sentinel) ? this.remark : remark as String?,
       interestRatePercent: identical(interestRatePercent, _sentinel)
           ? this.interestRatePercent
           : interestRatePercent as double?,

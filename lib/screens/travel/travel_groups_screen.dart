@@ -18,23 +18,39 @@ const _blue = Color(0xFF0066CC);
 const _hairline = Color(0xFFE0E0E0);
 const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink80 = Color(0xFF333333);
 const _ink48 = Color(0xFF7A7A7A);
 const _ink24 = Color(0x3D1D1D1F);
+
+/// Primary text/icon ink resolved for the current brightness.
+Color _ink(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _inkColor;
+
+/// Secondary body text — `_ink80` in light mode, light grey in dark mode.
+Color _soft(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? const Color(0xFFD1D1D6) : _ink80;
+
+/// Muted / caption text — `_ink48` in light, mid-grey in dark.
+Color _muted(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? const Color(0xFFA1A1A6) : _ink48;
 // Achromatic member fills
 const _memberBgs = [
   Color(0xFFE8E8EA), Color(0xFFDCDCE0), Color(0xFFD0D0D5),
   Color(0xFFC4C4CA), Color(0xFFB8B8BF),
 ];
 
+// Default color left null so text inherits the ambient theme-aware ink.
 TextStyle _display(double size, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color ?? _inkColor);
+    TextStyle(fontSize: size, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color);
 
 TextStyle _body(double size, {int weight = 400, Color? color}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.values[weight ~/ 100], letterSpacing: -0.374, height: 1.47, color: color ?? _inkColor);
+    TextStyle(fontSize: size, fontWeight: FontWeight.values[weight ~/ 100], letterSpacing: -0.374, height: 1.47, color: color);
 
-TextStyle _eyebrow({Color color = _ink48}) =>
-    TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, height: 1.3, color: color);
+TextStyle _eyebrow({Color? color, bool isDark = false}) {
+  final c = color ?? (isDark ? const Color(0xFFA1A1A6) : _ink48);
+  return TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, height: 1.3, color: c);
+}
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -80,7 +96,7 @@ class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
                 children: [
                   _CircleBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(CupertinoIcons.back, size: 16, color: _inkColor),
+                    child: Icon(CupertinoIcons.back, size: 16, color: _ink(context)),
                   ),
                   _CircleBtn(
                     onTap: () => Navigator.push(
@@ -90,7 +106,7 @@ class _TravelGroupsScreenState extends ConsumerState<TravelGroupsScreen> {
                         builder: (_) => const AddEditTravelGroupScreen(),
                       ),
                     ),
-                    child: const Icon(CupertinoIcons.add, size: 18, color: _inkColor),
+                    child: Icon(CupertinoIcons.add, size: 18, color: _ink(context)),
                   ),
                 ],
               ),
@@ -126,11 +142,11 @@ class _ErrorBody extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(CupertinoIcons.exclamationmark_triangle, size: 40, color: _ink48),
+            Icon(CupertinoIcons.exclamationmark_triangle, size: 40, color: _muted(context)),
             const SizedBox(height: 12),
             Text('${context.t('common.error')}: $error',
                 textAlign: TextAlign.center,
-                style: _body(15, color: _ink48)),
+                style: _body(15, color: _muted(context))),
           ],
         ),
       ),
@@ -179,7 +195,7 @@ class _Body extends ConsumerWidget {
               const SizedBox(height: 14),
               Text(
                 'Log who paid and who shared each bill —\nwe\'ll close the loop at the end of the trip.',
-                style: _body(17, color: _ink80),
+                style: _body(17, color: _soft(context)),
               ),
               const SizedBox(height: 22),
               Row(
@@ -333,12 +349,12 @@ class _TripCardActive extends ConsumerWidget {
                 ? 'You owe: ${group.currency} ${amtFmt.format(myNet.abs())}'
                 : 'All settled up!';
     final balanceColor = myNet == null
-        ? _ink80
+        ? _soft(context)
         : myNet > 0.005
             ? const Color(0xFF28A968)
             : myNet < -0.005
                 ? const Color(0xFFFF3B30)
-                : _ink48;
+                : _muted(context);
 
     return GestureDetector(
       onTap: onOpen,
@@ -371,7 +387,7 @@ class _TripCardActive extends ConsumerWidget {
               '${fmt.format(group.startDate)}'
               '${group.endDate != null ? ' – ${fmtFull.format(group.endDate!)}' : ''}'
               ' · $memberCount travelers',
-              style: _body(15, color: _ink80),
+              style: _body(15, color: _soft(context)),
             ),
 
             const SizedBox(height: 22),
@@ -384,7 +400,7 @@ class _TripCardActive extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('TRIP TOTAL', style: _eyebrow()),
+                      Text('TRIP TOTAL', style: _eyebrow(isDark: isDark)),
                       const SizedBox(height: 4),
                       expensesAsync.isLoading
                           ? const CupertinoActivityIndicator()
@@ -578,7 +594,7 @@ class _InviteCodeRowState extends State<_InviteCodeRow> {
             ),
           ),
           const SizedBox(width: 8),
-          Text('Tap to share · hold to copy', style: _eyebrow(color: _ink48)),
+          Text('Tap to share · hold to copy', style: _eyebrow(color: _muted(context))),
         ],
       ),
     );
@@ -618,11 +634,11 @@ class _TripListRow extends StatelessWidget {
                       Row(
                         children: [
                           Text(group.name,
-                              style: _body(17, weight: 600, color: _inkColor)),
+                              style: _body(17, weight: 600)),
                           const SizedBox(width: 6),
                           Text(
                             '· SETTLED',
-                            style: _eyebrow(color: _ink48),
+                            style: _eyebrow(color: _muted(context)),
                           ),
                         ],
                       ),
@@ -630,13 +646,13 @@ class _TripListRow extends StatelessWidget {
                       Text(
                         '${fmt.format(group.startDate)}'
                         '${group.endDate != null ? ' – ${fmt.format(group.endDate!)}' : ''}',
-                        style: _body(13, color: _ink48),
+                        style: _body(13, color: _muted(context)),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text('All clear', style: _body(13, color: _ink48)),
+                Text('All clear', style: _body(13, color: _muted(context))),
                 const SizedBox(width: 8),
                 const Icon(CupertinoIcons.chevron_right, size: 12, color: _ink24),
               ],
@@ -674,12 +690,12 @@ class _EmptyHint extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('NO TRIPS YET', style: _eyebrow()),
+          Text('NO TRIPS YET', style: _eyebrow(isDark: isDark)),
           const SizedBox(height: 12),
           Text(
             'Create a group to track\nshared travel expenses.',
             textAlign: TextAlign.center,
-            style: _body(17, color: _ink80),
+            style: _body(17, color: _soft(context)),
           ),
         ],
       ),
@@ -715,9 +731,10 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 12),
-      child: Text(label, style: _eyebrow()),
+      child: Text(label, style: _eyebrow(isDark: isDark)),
     );
   }
 }
@@ -829,7 +846,7 @@ class _LiveMemberStack extends StatelessWidget {
                 child: Center(
                   child: Text(initial,
                       style: TextStyle(
-                        fontSize: size * 0.36, fontWeight: FontWeight.w700, color: _inkColor)),
+                        fontSize: size * 0.36, fontWeight: FontWeight.w700, color: _ink(context))),
                 ),
               ),
             );
@@ -846,7 +863,7 @@ class _LiveMemberStack extends StatelessWidget {
                 child: Center(
                   child: Text('+$more',
                       style: TextStyle(
-                        fontSize: size * 0.34, fontWeight: FontWeight.w600, color: _inkColor)),
+                        fontSize: size * 0.34, fontWeight: FontWeight.w600, color: _ink(context))),
                 ),
               ),
             ),
@@ -912,7 +929,7 @@ class _MembersPopup extends StatelessWidget {
                           Text(group.name, style: _display(20, tracking: -0.4)),
                           const SizedBox(height: 2),
                           Text('${members.length} travelers',
-                              style: _eyebrow(color: _ink48)),
+                              style: _eyebrow(color: _muted(context))),
                         ],
                       ),
                     ),
@@ -947,7 +964,7 @@ class _MembersPopup extends StatelessWidget {
                           const Icon(CupertinoIcons.link, size: 14, color: _blue),
                           const SizedBox(width: 8),
                           Text('Invite code: ',
-                              style: _body(13, color: _ink48)),
+                              style: _body(13, color: _muted(context))),
                           Text(group.inviteCode!,
                               style: _body(13, weight: 700,
                                   color: _blue).copyWith(letterSpacing: 2)),
@@ -1013,7 +1030,7 @@ class _MembersPopup extends StatelessWidget {
                                   ]),
                                   if (m.email != null && m.email!.isNotEmpty)
                                     Text(m.email!,
-                                        style: _body(12, color: _ink48)),
+                                        style: _body(12, color: _muted(context))),
                                 ],
                               ),
                             ),
@@ -1142,10 +1159,10 @@ class _JoinWithCodeSheetState extends ConsumerState<_JoinWithCodeSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('Join a Trip', style: _body(18, weight: 700, color: _inkColor)),
+                Text('Join a Trip', style: _body(18, weight: 700)),
                 const SizedBox(height: 6),
                 Text('Enter the 6-character invite code shared by the trip organiser.',
-                    style: _body(14, color: _ink48)),
+                    style: _body(14, color: _muted(context))),
                 const SizedBox(height: 20),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1156,7 +1173,7 @@ class _JoinWithCodeSheetState extends ConsumerState<_JoinWithCodeSheet> {
                     autofocus: false,
                     textCapitalization: TextCapitalization.characters,
                     maxLength: 8,
-                    style: _body(20, weight: 600, color: _inkColor),
+                    style: _body(20, weight: 600, color: _ink(context)),
                     decoration: InputDecoration(
                       hintText: 'e.g. AB12CD',
                       hintStyle: _body(20, weight: 600, color: _ink48),

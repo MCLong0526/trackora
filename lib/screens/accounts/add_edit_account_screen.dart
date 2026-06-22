@@ -101,6 +101,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
   final _customNameController = TextEditingController();
+  final _remarkController = TextEditingController();
 
   AccountType _type = AccountType.cash;
   String? _selectedProvider;
@@ -158,6 +159,8 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
         _nameController.text = a.name;
       }
 
+      if (a.remark != null) _remarkController.text = a.remark!;
+
       final rate = a.interestRatePercent;
       if (rate != null && rate > 0) {
         _interestController.text =
@@ -181,6 +184,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     _nameController.dispose();
     _balanceController.dispose();
     _customNameController.dispose();
+    _remarkController.dispose();
     _interestController.dispose();
     super.dispose();
   }
@@ -213,6 +217,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
       final hasInterest =
           !_type.isLiability && interestRate != null && interestRate > 0;
 
+      final remarkText = _remarkController.text.trim();
+      final remark = remarkText.isEmpty ? null : remarkText;
+
       if (_isEdit) {
         final existing = widget.account!;
         final wasInterest = (existing.interestRatePercent ?? 0) > 0;
@@ -221,6 +228,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           type: _type,
           openingBalance: openingBalance,
           currencyCode: _currencyCode,
+          remark: remark,
           interestRatePercent: hasInterest ? interestRate : null,
           interestPeriod: hasInterest ? _interestPeriod : null,
           // Keep the existing checkpoint if interest was already on; start
@@ -238,6 +246,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
           openingBalance: openingBalance,
           createdAt: now,
           currencyCode: _currencyCode,
+          remark: remark,
           interestRatePercent: hasInterest ? interestRate : null,
           interestPeriod: hasInterest ? _interestPeriod : null,
           lastInterestAt: hasInterest ? now : null,
@@ -364,6 +373,18 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               ),
               const SizedBox(height: 10),
               _nameCard(brand),
+              const SizedBox(height: 22),
+              _sectionLabel(context.t('account.remarkLabel'), brand),
+              const SizedBox(height: 10),
+              _remarkCard(brand),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  context.t('account.remarkHelper'),
+                  style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                ),
+              ),
               const SizedBox(height: 22),
               _sectionLabel(
                 _type.isLiability ? 'Balance Owed' : 'Opening Balance',
@@ -887,6 +908,46 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _remarkCard(BrandColors brand) {
+    return Container(
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 12),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(CupertinoIcons.tag, size: 18, color: brand.inkSoft),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _remarkController,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: const TextStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: context.t('account.remarkHint'),
+                    hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

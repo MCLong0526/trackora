@@ -427,7 +427,7 @@ class _CreditCardPayTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  card.name,
+                  card.displayName,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

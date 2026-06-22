@@ -6,14 +6,13 @@ import 'package:intl/intl.dart';
 import '../../models/travel_group.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
 const _hairline = Color(0xFFE0E0E0);
 const _parchment = Color(0xFFF5F5F7);
-const _inkColor = Color(0xFF1D1D1F);
-const _ink80 = Color(0xFF333333);
 const _ink48 = Color(0xFF7A7A7A);
 const _ink24 = Color(0x3D1D1D1F);
 const _memberBgs = [
@@ -21,14 +20,17 @@ const _memberBgs = [
   Color(0xFFC4C4CA), Color(0xFFB8B8BF),
 ];
 
-TextStyle _display(double size, {double tracking = -0.374, double lh = 1.10}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: _inkColor);
+// Default color left null so text inherits the ambient theme-aware ink.
+TextStyle _display(double size, {double tracking = -0.374, double lh = 1.10, Color? color}) =>
+    TextStyle(fontSize: size, fontWeight: FontWeight.w600, letterSpacing: tracking, height: lh, color: color);
 
 TextStyle _body(double size, {int weight = 400, Color? color}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.values[weight ~/ 100], letterSpacing: -0.374, height: 1.47, color: color ?? _inkColor);
+    TextStyle(fontSize: size, fontWeight: FontWeight.values[weight ~/ 100], letterSpacing: -0.374, height: 1.47, color: color);
 
-TextStyle _eyebrow({Color color = _ink48}) =>
-    TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: color);
+TextStyle _eyebrow({Color? color, bool isDark = false}) {
+  final c = color ?? (isDark ? const Color(0xFFA1A1A6) : _ink48);
+  return TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: c);
+}
 
 // ── Model for a pending traveler (before the group is saved) ──────────────────
 
@@ -217,6 +219,7 @@ class _AddEditTravelGroupScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brand = context.brand;
     final bg = isDark ? const Color(0xFF1C1C1E) : _parchment;
     final dateFormat = DateFormat('MMM d, yyyy');
     final dayFormat = DateFormat('EEEE');
@@ -237,7 +240,7 @@ class _AddEditTravelGroupScreenState
                 child: Container(
                   width: 40, height: 5,
                   decoration: BoxDecoration(
-                    color: _ink24, borderRadius: BorderRadius.circular(100),
+                    color: brand.divider, borderRadius: BorderRadius.circular(100),
                   ),
                 ),
               ),
@@ -277,7 +280,7 @@ class _AddEditTravelGroupScreenState
                             style: TextStyle(
                               fontSize: 17, fontWeight: FontWeight.w600,
                               letterSpacing: -0.2,
-                              color: _nameCtrl.text.trim().isEmpty ? _ink24 : _blue,
+                              color: _nameCtrl.text.trim().isEmpty ? brand.divider : _blue,
                             ),
                           ),
                   ),
@@ -303,7 +306,7 @@ class _AddEditTravelGroupScreenState
                         const SizedBox(height: 14),
                         Text(
                           'Name it, set the dates, and pick who\'s coming. Everyone on Trackora syncs automatically.',
-                          style: _body(17, color: _ink80),
+                          style: _body(17, color: brand.ink),
                         ),
                       ],
                     ),
@@ -325,7 +328,7 @@ class _AddEditTravelGroupScreenState
                           style: _body(17, weight: 600),
                           decoration: InputDecoration(
                             hintText: 'e.g. Bali Trip',
-                            hintStyle: _body(17, weight: 600, color: _ink24),
+                            hintStyle: _body(17, weight: 600, color: brand.divider),
                             border: InputBorder.none,
                           ),
                           onChanged: (_) => setState(() {}),
@@ -418,7 +421,7 @@ class _AddEditTravelGroupScreenState
                       padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
                       child: Text(
                         'An invite code is generated when you create the trip. Mates not yet on Trackora can join later — their share is held against their name until then.',
-                        style: _body(13, color: _ink48),
+                        style: _body(13, color: brand.inkSoft),
                       ),
                     ),
 
@@ -508,13 +511,13 @@ class _TravelerRow extends StatelessWidget {
                   color: bg, shape: BoxShape.circle,
                   border: traveler.isYou
                       ? Border.all(color: _blue, width: 1.5)
-                      : Border.all(color: _hairline, width: 0.5),
+                      : Border.all(color: context.brand.divider, width: 0.5),
                 ),
                 child: Center(
                   child: Text(
                     traveler.name[0].toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: _inkColor,
+                    style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: context.brand.ink,
                     ),
                   ),
                 ),
@@ -527,9 +530,9 @@ class _TravelerRow extends StatelessWidget {
                   children: [
                     Text(traveler.name, style: _body(15, weight: 600)),
                     if (traveler.email != null)
-                      Text(traveler.email!, style: _body(13, color: _ink48)),
+                      Text(traveler.email!, style: _body(13, color: context.brand.inkSoft)),
                     if (traveler.isYou)
-                      Text('Trip owner', style: _body(13, color: _ink48)),
+                      Text('Trip owner', style: _body(13, color: context.brand.inkSoft)),
                   ],
                 ),
               ),
@@ -543,8 +546,8 @@ class _TravelerRow extends StatelessWidget {
               else if (onRemove != null)
                 GestureDetector(
                   onTap: onRemove,
-                  child: const Icon(CupertinoIcons.minus_circle,
-                      size: 20, color: _ink48),
+                  child: Icon(CupertinoIcons.minus_circle,
+                      size: 20, color: context.brand.inkSoft),
                 ),
             ],
           ),
@@ -571,7 +574,7 @@ class _FormSectionLabel extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: _eyebrow()),
+          Text(label, style: _eyebrow(isDark: Theme.of(context).brightness == Brightness.dark)),
           if (right != null)
             GestureDetector(
               onTap: onRight,
@@ -643,11 +646,11 @@ class _FormRow extends StatelessWidget {
                   children: [
                     Text(value, style: _body(15, weight: 600)),
                     if (sub != null)
-                      Text(sub!, style: _body(12, color: _ink48)),
+                      Text(sub!, style: _body(12, color: context.brand.inkSoft)),
                   ],
                 ),
                 const SizedBox(width: 8),
-                const Icon(CupertinoIcons.chevron_right, size: 12, color: _ink24),
+                Icon(CupertinoIcons.chevron_right, size: 12, color: context.brand.divider),
               ],
             ),
           ),
@@ -705,7 +708,8 @@ class _AddTravelerSheetState extends State<_AddTravelerSheet> {
                 child: Container(
                   width: 40, height: 5,
                   decoration: BoxDecoration(
-                    color: _ink24, borderRadius: BorderRadius.circular(100),
+                    color: isDark ? const Color(0xFF3A3A3C) : _ink24,
+                    borderRadius: BorderRadius.circular(100),
                   ),
                 ),
               ),
@@ -822,7 +826,7 @@ class _SheetField extends StatelessWidget {
         style: _body(16),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: _body(16, color: _ink48),
+          hintStyle: _body(16, color: context.brand.inkSoft),
           border: InputBorder.none,
         ),
       ),
@@ -893,6 +897,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
+    final muted = isDark ? const Color(0xFFA1A1A6) : _ink48;
     final searchBg = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
 
     final filtered = _query.isEmpty
@@ -918,7 +923,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
           Center(
             child: Container(
               width: 40, height: 5,
-              decoration: BoxDecoration(color: _ink24, borderRadius: BorderRadius.circular(100)),
+              decoration: BoxDecoration(color: divider, borderRadius: BorderRadius.circular(100)),
             ),
           ),
           const SizedBox(height: 14),
@@ -945,7 +950,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
               decoration: BoxDecoration(color: searchBg, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  const Icon(CupertinoIcons.search, size: 16, color: _ink48),
+                  Icon(CupertinoIcons.search, size: 16, color: muted),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -953,7 +958,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
                       style: _body(15),
                       decoration: InputDecoration(
                         hintText: 'Search currency…',
-                        hintStyle: _body(15, color: _ink48),
+                        hintStyle: _body(15, color: muted),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
@@ -990,7 +995,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(code, style: _body(16, weight: 600)),
-                              Text(name, style: _body(13, color: _ink48)),
+                              Text(name, style: _body(13, color: muted)),
                             ],
                           ),
                         ),
@@ -1045,7 +1050,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               CupertinoButton(
                 child: Text(
                   context.t('common.cancel'),
-                  style: const TextStyle(color: _ink48),
+                  style: TextStyle(color: isDark ? const Color(0xFFA1A1A6) : _ink48),
                 ),
                 onPressed: () => Navigator.pop(context),
               ),

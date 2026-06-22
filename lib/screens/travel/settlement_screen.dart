@@ -14,9 +14,14 @@ const _blue = Color(0xFF0066CC);
 const _hairline = Color(0xFFE0E0E0);
 const _parchment = Color(0xFFF5F5F7);
 const _inkColor = Color(0xFF1D1D1F);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink48 = Color(0xFF7A7A7A);
 const _positiveColor = Color(0xFF28A968);
 const _negativeColor = Color(0xFFFF3B30);
+
+/// Primary text/icon ink resolved for the current brightness.
+Color _ink(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _inkColor;
 
 const _memberBgs = [
   Color(0xFFE8E8EA), Color(0xFFDCDCE0), Color(0xFFD0D0D5),
@@ -30,14 +35,14 @@ TextStyle _display(double size,
         fontWeight: FontWeight.w600,
         letterSpacing: tracking,
         height: lh,
-        color: color ?? _inkColor);
+        color: color);
 
 TextStyle _body(double size,
         {FontWeight weight = FontWeight.w400, Color? color}) =>
     TextStyle(
         fontSize: size,
         fontWeight: weight,
-        color: color ?? _inkColor,
+        color: color,
         height: 1.4);
 
 TextStyle _eyebrow({Color? color}) => TextStyle(
@@ -107,7 +112,7 @@ class SettlementScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
-                          color: _inkColor,
+                          color: _ink(context),
                         ),
                       ),
                     ),
@@ -177,10 +182,10 @@ class SettlementScreen extends StatelessWidget {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(m.name,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.w500,
-                                              color: _inkColor)),
+                                              color: _ink(context))),
                                     ),
                                     Text(
                                       '${isPositive ? '+' : '−'}${group.currency} ${fmt.format(balance.net.abs())}',
@@ -218,10 +223,10 @@ class SettlementScreen extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(context.t('common.cancel'),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w600,
-                                color: _inkColor)),
+                                color: _ink(context))),
                       ),
                     ),
                   ),
@@ -255,8 +260,8 @@ class SettlementScreen extends StatelessWidget {
                 children: [
                   _CircleBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(CupertinoIcons.back,
-                        size: 18, color: _inkColor),
+                    child: Icon(CupertinoIcons.back,
+                        size: 18, color: _ink(context)),
                   ),
                   Expanded(
                     child: Center(

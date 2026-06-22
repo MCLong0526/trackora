@@ -96,10 +96,10 @@ class _GroupDashboardScreenState extends ConsumerState<GroupDashboardScreen> {
                         const SizedBox(height: 2),
                         Text(
                           context.t('settings.appName'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF0B0B0F),
+                            color: brand.ink,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -220,7 +220,7 @@ class GroupAvatarPill extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.brand.surface,
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
@@ -488,7 +488,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
         Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 22, 22),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: brand.surface,
             borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
@@ -565,7 +565,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF7F7FA),
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -699,7 +699,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7F7FA),
+                    color: brand.surface,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -731,10 +731,10 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
           children: [
             Text(
               context.t('group.activity'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0B0B0F),
+                color: brand.ink,
                 letterSpacing: -0.3,
               ),
             ),
@@ -1434,7 +1434,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              tileColor: selected ? const Color(0xFFE4ECFE) : Colors.white,
+              tileColor: selected ? const Color(0xFFE4ECFE) : ctx.brand.surface,
               title: Text(
                 DateFormat('MMMM yyyy').format(month),
                 style: TextStyle(
@@ -1540,7 +1540,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
                           width: pillWidth,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: brand.surface,
                               borderRadius: BorderRadius.circular(13),
                               boxShadow: [
                                 BoxShadow(
@@ -1583,7 +1583,7 @@ class _ReceiptPickerSheetState extends State<_ReceiptPickerSheet> {
                   vertical: 15,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: brand.surface,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(
@@ -1693,7 +1693,7 @@ class _PeriodTab extends StatelessWidget {
               curve: Curves.easeInOut,
               style: TextStyle(
                 color: selected
-                    ? const Color(0xFF0B0B0F)
+                    ? context.brand.ink
                     : const Color(0xFF8E8E96),
                 fontSize: 15,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -1719,9 +1719,9 @@ class _GroupMenuSheet extends ConsumerWidget {
     final partner = group.members.where((m) => m.uid != userId).firstOrNull;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
       child: Column(
@@ -2065,19 +2065,19 @@ class _DeleteGroupDialogState extends State<_DeleteGroupDialog>
             const SizedBox(height: 16),
             Text(
               context.t('group.deleteGroup'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0B0B0F),
+                color: context.brand.ink,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               context.t('group.deleteGroupPermanent'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF6B7280),
+                color: context.brand.inkSoft,
               ),
             ),
             const SizedBox(height: 24),
@@ -2089,16 +2089,16 @@ class _DeleteGroupDialogState extends State<_DeleteGroupDialog>
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF4F4F7),
+                        color: context.brand.surface,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         context.t('common.cancel'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0B0B0F),
+                          color: context.brand.ink,
                         ),
                       ),
                     ),

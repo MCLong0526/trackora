@@ -20,7 +20,13 @@ const _paper = Colors.white;
 const _paperEdge = Color(0xFFE0E0E0);
 const _purple = Color(0xFF6B40A8);
 const _ink = Color(0xFF1A1614);
+const _inkDark = Color(0xFFF2F2F4);
 const _ink60 = Color(0xFF6B6259);
+
+/// Ink for screen chrome (nav, title) resolved for the current brightness.
+/// The receipt card itself is always white paper, so its text keeps [_ink].
+Color _chromeInk(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _inkDark : _ink;
 const _green = Color(0xFF2A8C52);
 const _kReceiptW = 320.0;
 
@@ -139,19 +145,19 @@ class _BillReceiptScreenState extends ConsumerState<BillReceiptScreen> {
                 children: [
                   _NavBtn(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(
+                    child: Icon(
                       CupertinoIcons.back,
                       size: 18,
-                      color: _ink,
+                      color: _chromeInk(context),
                     ),
                   ),
                   const Spacer(),
-                  const Text(
+                  Text(
                     'Receipt',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      color: _ink,
+                      color: _chromeInk(context),
                     ),
                   ),
                   const Spacer(),
@@ -507,6 +513,77 @@ class _ReceiptCard extends StatelessWidget {
               ),
             ),
           ),
+          if (bill.settlements.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DottedRule(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 2),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'SETTLE HISTORY',
+                  style: TextStyle(
+                    fontSize: 7,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: _ink60,
+                  ),
+                ),
+              ),
+            ),
+            ...(() {
+              final sorted = [...bill.settlements]
+                ..sort((a, b) => a.date.compareTo(b.date));
+              return sorted.map((s) {
+                final member = bill.members.firstWhere(
+                  (m) => m.id == s.memberId,
+                  orElse: () => SplitMember(
+                    id: s.memberId,
+                    name: 'Unknown',
+                    colorIndex: 0,
+                    amount: 0,
+                  ),
+                );
+                final dateStr =
+                    DateFormat('MMM d, yyyy').format(s.date);
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _resolveName(member.name),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12, color: _ink),
+                            ),
+                            Text(
+                              dateStr,
+                              style: const TextStyle(
+                                  fontSize: 8, color: _ink60),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '+ ${bill.currencySymbol} ${s.amount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _green,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList();
+            })(),
+          ],
           const SizedBox(height: 8),
           _DottedRule(),
           Padding(

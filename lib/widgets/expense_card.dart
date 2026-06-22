@@ -34,6 +34,10 @@ class ExpenseCard extends StatefulWidget {
   /// When true, shows a small split-bill indicator in the trailing row.
   final bool hasSplitBill;
 
+  /// Number of people who still owe on this expense's split bill. When > 0 a
+  /// badge is shown so the user knows money is still outstanding.
+  final int splitUnsettledCount;
+
   /// Optional coordinator for one-at-a-time swipe behavior.
   final ValueNotifier<String?>? coordinator;
 
@@ -52,6 +56,7 @@ class ExpenseCard extends StatefulWidget {
     this.account,
     this.flat = false,
     this.hasSplitBill = false,
+    this.splitUnsettledCount = 0,
     this.coordinator,
     this.rowId,
   });
@@ -233,6 +238,7 @@ class _ExpenseCardState extends State<ExpenseCard>
       account: widget.account,
       flat: widget.flat,
       hasSplitBill: widget.hasSplitBill,
+      splitUnsettledCount: widget.splitUnsettledCount,
     );
 
     if (!canSwipeLeft && !canSwipeRight) return card;
@@ -311,6 +317,7 @@ class _CardContents extends StatelessWidget {
   final Account? account;
   final bool flat;
   final bool hasSplitBill;
+  final int splitUnsettledCount;
 
   const _CardContents({
     required this.expense,
@@ -320,6 +327,7 @@ class _CardContents extends StatelessWidget {
     this.account,
     this.flat = false,
     this.hasSplitBill = false,
+    this.splitUnsettledCount = 0,
   });
 
   @override
@@ -377,14 +385,52 @@ class _CardContents extends StatelessWidget {
 
     final rowContent = Row(
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: style.background,
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: Icon(style.icon, size: 20, color: style.accent),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: style.background,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(style.icon, size: 20, color: style.accent),
+            ),
+            if (hasSplitBill)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: splitUnsettledCount > 0
+                        ? const Color(0xFFE8820E)
+                        : const Color(0xFF1F7A60),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Center(
+                    child: splitUnsettledCount > 0
+                        ? const Text(
+                            '!',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          )
+                        : const Icon(
+                            CupertinoIcons.checkmark_alt,
+                            size: 9,
+                            color: Colors.white,
+                          ),
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -452,10 +498,6 @@ class _CardContents extends StatelessWidget {
               const SizedBox(width: 6),
               Icon(CupertinoIcons.paperclip, size: 14, color: brand.inkSoft),
             ],
-            if (hasSplitBill) ...[
-              const SizedBox(width: 6),
-              Icon(CupertinoIcons.person_2_fill, size: 13, color: brand.inkSoft),
-            ],
           ],
         ),
       ],
@@ -489,7 +531,7 @@ class _CardContents extends StatelessWidget {
   }
 
   String _buildSubtitle(String dateStr, Account? acct) {
-    if (acct != null) return '$dateStr · ${acct.name}';
+    if (acct != null) return '$dateStr · ${acct.displayName}';
     return dateStr;
   }
 }

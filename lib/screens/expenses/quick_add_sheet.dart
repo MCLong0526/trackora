@@ -73,6 +73,24 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   double get _amount => _amountCents / 100;
 
+  /// Built-in expense categories plus the user's custom expense categories,
+  /// inserted before the trailing 'Others' bucket.
+  List<String> get _quickCats {
+    final custom = customCategoryNames(
+      ref.read(customCategoriesProvider).valueOrNull ?? const [],
+      income: false,
+    );
+    if (custom.isEmpty) return kExpenseCategories;
+    final list = [...kExpenseCategories];
+    final i = list.indexOf('Others');
+    if (i >= 0) {
+      list.insertAll(i, custom);
+    } else {
+      list.addAll(custom);
+    }
+    return list;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -475,7 +493,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         child: Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: kExpenseCategories.map((c) {
+                          children: _quickCats.map((c) {
                             final selected = c == _category;
                             final s = styleFor(c);
                             return GestureDetector(

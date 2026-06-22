@@ -42,6 +42,9 @@ class FirebaseAccountRepository implements AccountRepository {
       'type': account.type.encode,
       'openingBalance': account.openingBalance,
       if (account.currencyCode != null) 'currencyCode': account.currencyCode,
+      'remark': (account.remark != null && account.remark!.trim().isNotEmpty)
+          ? account.remark!.trim()
+          : FieldValue.delete(),
       // Interest fields are cleared (deleted) when turned off so disabling
       // interest actually removes the config online.
       'interestRatePercent':
@@ -74,6 +77,8 @@ class FirebaseAccountRepository implements AccountRepository {
     'openingBalance': account.openingBalance,
     'createdAt': Timestamp.fromDate(account.createdAt),
     if (account.currencyCode != null) 'currencyCode': account.currencyCode,
+    if (account.remark != null && account.remark!.trim().isNotEmpty)
+      'remark': account.remark!.trim(),
     if (account.interestRatePercent != null)
       'interestRatePercent': account.interestRatePercent,
     if (account.interestPeriod != null)
