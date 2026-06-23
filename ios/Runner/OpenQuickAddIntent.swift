@@ -116,9 +116,9 @@ struct TrackoraAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: VoiceAddExpenseIntent(),
             phrases: [
-                "Add expense \(\.$phrase) in \(.applicationName)",
-                "Add \(\.$phrase) in \(.applicationName)",
-                "Log \(\.$phrase) in \(.applicationName)",
+                "Add expense by voice in \(.applicationName)",
+                "Voice add expense in \(.applicationName)",
+                "Dictate expense in \(.applicationName)",
             ],
             shortTitle: "Add Expense by Voice",
             systemImageName: "mic.fill"

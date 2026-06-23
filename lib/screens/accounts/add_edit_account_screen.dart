@@ -363,11 +363,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               const SizedBox(height: 22),
               _sectionLabel(
                 _hasProviderList
-                    ? (_type == AccountType.bank
-                        ? 'Bank'
-                        : _type == AccountType.creditCard
-                            ? 'Credit Card'
-                            : 'E-Wallet')
+                    ? _providerTypeLabel()
                     : context.t('account.nameLabel'),
                 brand,
               ),
@@ -787,15 +783,45 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
     );
   }
 
+  // Localized "Bank" / "Credit Card" / "E-Wallet" label for the provider rows.
+  String _providerTypeLabel() {
+    switch (_type) {
+      case AccountType.bank:
+        return context.t('account.typeBank');
+      case AccountType.creditCard:
+        return context.t('account.typeCreditCard');
+      default:
+        return context.t('account.typeEWallet');
+    }
+  }
+
+  // Localized placeholder for the free-text name field (cash, savings, etc.).
+  String _localizedNamePlaceholder() {
+    switch (_type) {
+      case AccountType.investment:
+        return context.t('account.nameHintInvestment');
+      case AccountType.savings:
+        return context.t('account.nameHintSavings');
+      case AccountType.crypto:
+        return context.t('account.nameHintCrypto');
+      case AccountType.forex:
+        return context.t('account.nameHintForex');
+      case AccountType.loan:
+      case AccountType.mortgage:
+      case AccountType.bnpl:
+      case AccountType.otherLiability:
+        return context.t('account.nameHintDebt');
+      default:
+        return context.t('account.nameHintDefault');
+    }
+  }
+
   Widget _providerRow(BrandColors brand) {
-    final label = _type == AccountType.bank
-        ? 'Bank'
-        : _type == AccountType.creditCard
-            ? 'Credit Card'
-            : 'E-Wallet';
+    final label = _providerTypeLabel();
     final display = _useCustomName
-        ? 'Custom'
-        : (_selectedProvider ?? 'Select $label');
+        ? context.t('account.customLabel')
+        : (_selectedProvider ??
+            context.t('account.selectProvider').replaceAll('{type}', label));
 
     return InkWell(
       onTap: () => _showProviderPicker(brand),
@@ -836,11 +862,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   }
 
   Widget _customNameRow(BrandColors brand) {
-    final hint = _type == AccountType.bank
-        ? 'Enter bank name'
-        : _type == AccountType.creditCard
-            ? 'Enter card name'
-            : 'Enter e-wallet name';
+    final hint = context
+        .t('account.enterProviderName')
+        .replaceAll('{type}', _providerTypeLabel());
 
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 12),
@@ -893,7 +917,7 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
               textCapitalization: TextCapitalization.words,
               style: const TextStyle(fontSize: 15),
               decoration: InputDecoration(
-                hintText: _type.namePlaceholder,
+                hintText: _localizedNamePlaceholder(),
                 hintStyle: TextStyle(color: brand.inkSoft, fontSize: 15),
                 filled: false,
                 border: InputBorder.none,
@@ -1211,11 +1235,9 @@ class _AddEditAccountScreenState extends ConsumerState<AddEditAccountScreen> {
   void _showProviderPicker(BrandColors brand) {
     FocusScope.of(context).unfocus();
     final allProviders = List<String>.from(_providers);
-    final label = _type == AccountType.bank
-        ? 'Select Bank'
-        : _type == AccountType.creditCard
-            ? 'Select Credit Card'
-            : 'Select E-Wallet';
+    final label = context
+        .t('account.selectProvider')
+        .replaceAll('{type}', _providerTypeLabel());
 
     showModalBottomSheet<void>(
       context: context,

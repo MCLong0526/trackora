@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app_config.dart';
 import 'firebase_options.dart';
@@ -53,6 +55,10 @@ class _TrackoraBootstrapState extends State<TrackoraBootstrap> {
       );
       await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
     }
+    // Load locale data so DateFormat (month/day names) can render in zh / ms,
+    // not just English. Intl.defaultLocale is kept in sync in TrackoraApp.build.
+    await initializeDateFormatting();
+
     // Always init local storage — used as offline cache for group expenses
     // even in Firebase mode.
     await LocalStorage.init();
@@ -325,6 +331,11 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
     );
 
     final appLocale = ref.watch(localeProvider).toLocale();
+    // Drive bare DateFormat(...) calls (e.g. "Jun 2026") off the active locale
+    // so dates localize everywhere without threading a locale through each call.
+    // `system` mode (appLocale == null) follows the device language.
+    Intl.defaultLocale = appLocale?.languageCode ??
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
     return MaterialApp(
       title: 'Trackora',
       navigatorKey: rootNavKey,
@@ -342,7 +353,17 @@ class _TrackoraAppState extends ConsumerState<TrackoraApp>
               maxScaleFactor: 1.3,
             ),
           ),
-          child: child ?? const SizedBox.shrink(),
+          // Tap any empty space to dismiss the keyboard / numpad app-wide.
+          // Translucent so taps still reach buttons, fields and scroll views;
+          // only taps that nothing else handles fall through to here.
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              final focus = FocusManager.instance.primaryFocus;
+              if (focus != null && focus.hasFocus) focus.unfocus();
+            },
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
       theme: AppTheme.light(),

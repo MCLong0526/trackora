@@ -74,9 +74,9 @@ class SavingPlanDetailScreen extends ConsumerWidget {
               children: [
                 _Hero(plan: plan, symbol: symbol),
                 const SizedBox(height: 20),
-                const Text(
-                  'PLAN',
-                  style: TextStyle(
+                Text(
+                  context.t('sp.detailTitle').toUpperCase(),
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF8E8E93),
@@ -129,12 +129,14 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                 try {
                   await ref.read(savingPlanServiceProvider).markCompleted(user.uid, plan);
                   if (context.mounted) {
-                    AppToast.show(context, 'Plan completed', type: AppToastType.success);
+                    AppToast.show(context, context.t('sp.planCompleted'),
+                        type: AppToastType.success);
                     Navigator.pop(context);
                   }
                 } catch (_) {
                   if (context.mounted) {
-                    AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
+                    AppToast.show(context, context.t('sp.failComplete'),
+                        type: AppToastType.error);
                   }
                 }
               },
@@ -147,11 +149,13 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                 try {
                   await ref.read(savingPlanServiceProvider).setCancelled(user.uid, plan, false);
                   if (context.mounted) {
-                    AppToast.show(context, 'Plan reactivated', type: AppToastType.success);
+                    AppToast.show(context, context.t('sp.planReactivated'),
+                        type: AppToastType.success);
                   }
                 } catch (_) {
                   if (context.mounted) {
-                    AppToast.show(context, 'Failed to reactivate', type: AppToastType.error);
+                    AppToast.show(context, context.t('sp.failReactivate'),
+                        type: AppToastType.error);
                   }
                 }
               },
@@ -165,15 +169,17 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                 try {
                   await ref.read(savingPlanServiceProvider).setCancelled(user.uid, plan, true);
                   if (context.mounted) {
-                    AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+                    AppToast.show(context, context.t('sp.planCancelled'),
+                        type: AppToastType.success);
                   }
                 } catch (_) {
                   if (context.mounted) {
-                    AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+                    AppToast.show(context, context.t('sp.failCancel'),
+                        type: AppToastType.error);
                   }
                 }
               },
-              child: const Text('Cancel plan'),
+              child: Text(context.t('sp.cancelPlan')),
             ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -201,12 +207,14 @@ class SavingPlanDetailScreen extends ConsumerWidget {
                 try {
                   await ref.read(savingPlanServiceProvider).delete(user.uid, plan.id);
                   if (context.mounted) {
-                    AppToast.show(context, 'Plan deleted', type: AppToastType.success);
+                    AppToast.show(context, context.t('sp.planDeleted'),
+                        type: AppToastType.success);
                     Navigator.pop(context);
                   }
                 } catch (_) {
                   if (context.mounted) {
-                    AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+                    AppToast.show(context, context.t('sp.failDelete'),
+                        type: AppToastType.error);
                   }
                 }
               }
@@ -315,11 +323,13 @@ Future<void> _showAddContributionSheet(
           ),
         );
     if (context.mounted) {
-      AppToast.show(context, 'Contribution added', type: AppToastType.success);
+      AppToast.show(context, context.t('sp.contribAdded'),
+            type: AppToastType.success);
     }
   } catch (_) {
     if (context.mounted) {
-      AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+      AppToast.show(context, context.t('sp.failAddContrib'),
+            type: AppToastType.error);
     }
   }
 }
@@ -682,7 +692,7 @@ class _SlotCell extends ConsumerWidget {
               Icon(CupertinoIcons.checkmark_alt, size: 12, color: AppColors.income)
             else if (isCurrent)
               Text(
-                'NOW',
+                context.t('sp.now'),
                 style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
@@ -733,11 +743,13 @@ class _SlotCell extends ConsumerWidget {
         try {
           await svc.removeContribution(user.uid, plan, targetId);
           if (context.mounted) {
-            AppToast.show(context, 'Contribution removed', type: AppToastType.success);
+            AppToast.show(context, context.t('sp.contribRemoved'),
+            type: AppToastType.success);
           }
         } catch (_) {
           if (context.mounted) {
-            AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
+            AppToast.show(context, context.t('sp.failRemoveContrib'),
+            type: AppToastType.error);
           }
         }
       }
@@ -754,11 +766,13 @@ class _SlotCell extends ConsumerWidget {
           ),
         );
         if (context.mounted) {
-          AppToast.show(context, 'Contribution added', type: AppToastType.success);
+          AppToast.show(context, context.t('sp.contribAdded'),
+            type: AppToastType.success);
         }
       } catch (_) {
         if (context.mounted) {
-          AppToast.show(context, 'Failed to add contribution', type: AppToastType.error);
+          AppToast.show(context, context.t('sp.failAddContrib'),
+            type: AppToastType.error);
         }
       }
     }
@@ -921,11 +935,13 @@ class _ContributionHistory extends ConsumerWidget {
                     .read(savingPlanServiceProvider)
                     .removeContribution(user.uid, plan, c.id);
                 if (context.mounted) {
-                  AppToast.show(context, 'Contribution removed', type: AppToastType.success);
+                  AppToast.show(context, context.t('sp.contribRemoved'),
+            type: AppToastType.success);
                 }
               } catch (_) {
                 if (context.mounted) {
-                  AppToast.show(context, 'Failed to remove contribution', type: AppToastType.error);
+                  AppToast.show(context, context.t('sp.failRemoveContrib'),
+            type: AppToastType.error);
                 }
               }
             },

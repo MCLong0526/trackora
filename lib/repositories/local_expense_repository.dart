@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:hive/hive.dart';
 
 import '../models/expense.dart';
+import '../models/monthly_budget.dart';
 import 'expense_repository.dart';
 import 'local_storage.dart';
 
@@ -109,6 +111,37 @@ class LocalExpenseRepository implements ExpenseRepository {
   Future<void> setMonthlyBudget(String userId, double amount) async {
     await LocalStorage.init();
     await _meta.put(_budgetKey(userId), amount);
+    await _meta.put(
+        _budgetConfigKey(userId),
+        jsonEncode(MonthlyBudget(total: amount).toMap()));
+  }
+
+  @override
+  Stream<MonthlyBudget> getBudgetConfig(String userId) async* {
+    await LocalStorage.init();
+    final key = _budgetConfigKey(userId);
+    yield _readBudgetConfig(userId);
+    yield* _meta.watch(key: key).map((_) => _readBudgetConfig(userId));
+  }
+
+  @override
+  Future<void> setBudgetConfig(String userId, MonthlyBudget budget) async {
+    await LocalStorage.init();
+    await _meta.put(_budgetConfigKey(userId), jsonEncode(budget.toMap()));
+    // Keep the legacy double in sync so total-only consumers stay correct.
+    await _meta.put(_budgetKey(userId), budget.effectiveTotal);
+  }
+
+  MonthlyBudget _readBudgetConfig(String userId) {
+    final raw = _meta.get(_budgetConfigKey(userId));
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return MonthlyBudget.fromMap(
+            Map<String, dynamic>.from(jsonDecode(raw) as Map));
+      } catch (_) {}
+    }
+    // Fall back to the legacy single-number budget.
+    return MonthlyBudget(total: _readDouble(_budgetKey(userId)));
   }
 
   @override
@@ -167,6 +200,8 @@ class LocalExpenseRepository implements ExpenseRepository {
   String _expenseKey(String userId, String expenseId) => '$userId:$expenseId';
 
   String _budgetKey(String userId) => '$userId:monthlyBudget';
+
+  String _budgetConfigKey(String userId) => '$userId:monthlyBudgetConfig';
 
   String _openingSavingsKey(String userId) => '$userId:openingSavings';
 

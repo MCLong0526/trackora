@@ -496,20 +496,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     }
     final income = _type == EntryType.income;
     final base = income ? kIncomeCategories : kExpenseCategories;
-    final custom = customCategoryNames(
-      ref.read(customCategoriesProvider).valueOrNull ?? const [],
-      income: income,
-    );
+    // Most-recently-added custom categories first, then the built-ins.
+    final custom = ((ref.read(customCategoriesProvider).valueOrNull ?? const [])
+            .where((c) => c.isIncome == income)
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+        .map((c) => c.name)
+        .toList();
     if (custom.isEmpty) return base;
-    // Insert custom categories just before the trailing 'Others' bucket.
-    final list = [...base];
-    final othersIdx = list.indexOf('Others');
-    if (othersIdx >= 0) {
-      list.insertAll(othersIdx, custom);
-    } else {
-      list.addAll(custom);
-    }
-    return list;
+    return [...custom, ...base];
   }
 
   Future<void> _pickReceipt() async {
@@ -524,60 +519,45 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     }
   }
 
-  // Clear focus after a picker closes so the amount field doesn't regain
-  // focus and re-open the keyboard/numpad.
-  void _dismissKeyboard() {
-    if (!mounted) return;
-    FocusScope.of(context).unfocus();
-  }
+  // Localized noun for the current entry type, used in save/delete toasts so
+  // they read "Income saved" / "Transfer deleted" etc. instead of a generic
+  // "Entry saved".
+  String _typeNoun(BuildContext context) => context.t(switch (_type) {
+        EntryType.income => 'expense.income',
+        EntryType.transfer => 'expense.transfer',
+        EntryType.receive => 'expense.receive',
+        _ => 'expense.expense',
+      });
 
-  // ── Smart numpad behaviour around popup pickers ──────────────────────────────
-  // Remembers whether the amount field held focus when a popup picker
-  // (account / date / currency) was opened. The numpad should only re-open
-  // after picking when the user had *already* started entering an amount;
-  // tapping a popup field first (cold) must not pop the numpad.
-  bool _reopenNumpadAfterPicker = false;
+  // ── Numpad behaviour around popup pickers ────────────────────────────────────
+  // Opening a popup picker (account / date / currency) dismisses the keyboard,
+  // and it stays closed after the picker — it must never auto-reopen.
 
   // Call right before opening a popup picker.
   void _beginPicker() {
-    _reopenNumpadAfterPicker = _amountFocus.hasFocus;
     FocusScope.of(context).unfocus();
   }
 
   // Call right after a popup picker closes.
   void _endPicker() {
     if (!mounted) return;
-    if (_reopenNumpadAfterPicker) {
-      // Bring the numpad back by returning focus to the amount field, after the
-      // popped route finishes restoring focus.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _amountFocus.requestFocus();
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) FocusScope.of(context).unfocus();
-      });
-    }
-    _reopenNumpadAfterPicker = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   Future<void> _pickCurrency() async {
-    final reopen = _amountFocus.hasFocus;
+    FocusScope.of(context).unfocus();
     await showCurrencyPickerSheet(
       context,
       current: _currencyCode,
       onPicked: (code) => setState(() => _currencyCode = code),
     );
     if (!mounted) return;
-    if (reopen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _amountFocus.requestFocus();
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) FocusScope.of(context).unfocus();
-      });
-    }
+    // Keep the keyboard closed after picking.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   // Recompute fade visibility: top fade shows when scrolled away from the top,
@@ -905,9 +885,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         if (mounted) {
           AppToast.show(
             context,
-            _isEdit
-                ? context.t('expense.entryUpdated')
-                : context.t('expense.entrySaved'),
+            (_isEdit
+                    ? context.t('expense.updatedNamed')
+                    : context.t('expense.savedNamed'))
+                .replaceAll('{type}', _typeNoun(context)),
             type: AppToastType.success,
           );
         }
@@ -1352,7 +1333,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     if (mounted) {
       AppToast.show(
         context,
-        context.t('expense.entryDeleted'),
+        context.t('expense.deletedNamed').replaceAll('{type}', _typeNoun(context)),
         type: AppToastType.success,
       );
       Navigator.pop(context);
@@ -2028,20 +2009,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
             },
           ),
           SizedBox(height: sectionGap),
-          // Category section (expense / income)
+          // Category section (expense / income). Always use the compact sizing
+          // so the expense category row matches the income one.
           if (type == EntryType.expense || type == EntryType.income) ...[
             Padding(
-              padding: EdgeInsets.only(left: 2, bottom: compact ? 6 : 10),
+              padding: const EdgeInsets.only(left: 2, bottom: 6),
               child: Text(
                 context.t('expense.category'),
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: accent.withValues(alpha: 0.85),
-                  fontSize: compact ? 12 : 14,
+                  fontSize: 12,
                 ),
               ),
             ),
-            _categorySelector(brand, compact: compact),
+            _categorySelector(brand, compact: true),
             const SizedBox(height: 6),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
@@ -2239,8 +2221,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         padding: const EdgeInsets.only(top: 6, bottom: 6, right: 18),
         itemCount: cats.length + 1,
         itemBuilder: (context, idx) {
-          if (idx == cats.length) {
-            // Trailing "+" chip to create a new custom category.
+          if (idx == 0) {
+            // Leading "Customize" chip to create / manage custom categories.
             return GestureDetector(
               onTap: () async {
                 FocusScope.of(context).unfocus();
@@ -2253,20 +2235,23 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 );
                 if (mounted) setState(() {});
               },
-              child: Container(
-                width: itemSize,
-                height: itemSize,
-                decoration: BoxDecoration(
-                  color: brand.surface,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: brand.divider),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  width: itemSize,
+                  height: itemSize,
+                  decoration: BoxDecoration(
+                    color: brand.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: brand.divider),
+                  ),
+                  child: Icon(CupertinoIcons.add,
+                      size: compact ? 17 : 20, color: brand.inkSoft),
                 ),
-                child: Icon(CupertinoIcons.add,
-                    size: compact ? 17 : 20, color: brand.inkSoft),
               ),
             );
           }
-          final c = cats[idx];
+          final c = cats[idx - 1];
           final selected = c == _category;
           final s = styleFor(c);
           final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2367,7 +2352,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         ),
                         const SizedBox(width: 9),
                         Text(
-                          context.t('expense.entrySavedSuccess'),
+                          (_isEdit
+                                  ? context.t('expense.updatedNamed')
+                                  : context.t('expense.savedNamed'))
+                              .replaceAll('{type}', _typeNoun(context)),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -3152,7 +3140,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     } else if (result is String && result.trim().isNotEmpty) {
       setState(() => _counterpartController.text = result.trim());
     }
-    _dismissKeyboard();
+    // Keep the keyboard closed after the picker (post-frame so the closing
+    // route can't restore focus and re-pop it).
+    _endPicker();
   }
 
   void _showAccountPicker(

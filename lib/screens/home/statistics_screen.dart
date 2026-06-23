@@ -18,6 +18,7 @@ import '../../models/expense.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
 import '../../models/installment.dart' show Installment, InstallmentStatus;
+import '../../models/monthly_budget.dart';
 import '../../models/precious_metal.dart';
 import '../../models/saving_plan.dart' show SavingPlan, SavingPlanStatus;
 import '../../models/stock_investment.dart';
@@ -541,6 +542,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         // Overview is a lifetime snapshot (not period-filtered), so it sits
         // below the donut chart — the floating calendar / date-range button
         // stays anchored to the date-filtered "by category" chart above.
+        // By-category budget progress (only renders when that mode is on).
+        _BudgetByCategoryCard(symbol: symbol),
         if (showSummary) ...[
           const SizedBox(height: 14),
           const _FinancialSummaryCard(),
@@ -3948,4 +3951,122 @@ Color _donutColorFor(String category) {
     'Transfer': Color(0xFF78AEDD), // muted blue-gray
   };
   return colors[category] ?? const Color(0xFFA0A0AA);
+}
+
+/// Per-category budget progress, shown on Statistics only when the user budgets
+/// by category. One spent-vs-budget bar per budgeted category (green / amber /
+/// red), using the same category icons + colours as expenses.
+class _BudgetByCategoryCard extends ConsumerWidget {
+  final String symbol;
+  const _BudgetByCategoryCard({required this.symbol});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg =
+        ref.watch(budgetConfigProvider).valueOrNull ?? const MonthlyBudget();
+    if (!cfg.isByCategory || cfg.categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final brand = context.brand;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final catSpend = ref.watch(categorySpendThisCycleProvider);
+
+    final items = cfg.categories.entries
+        .map((e) => _CatBudgetRow(e.key, catSpend[e.key] ?? 0, e.value))
+        .toList()
+      ..sort((a, b) => b.ratio.compareTo(a.ratio));
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.t('budget.byCategoryTitle'),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: brand.inkSoft,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final it in items) _row(context, it, brand, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(
+      BuildContext context, _CatBudgetRow it, BrandColors brand, bool isDark) {
+    final style = styleFor(it.name);
+    final over = it.spent > it.budget + 0.005;
+    final near = !over && it.ratio >= 0.85;
+    final progress =
+        it.budget <= 0 ? 0.0 : (it.spent / it.budget).clamp(0.0, 1.0);
+    final base = isDark ? Color.lerp(style.accent, Colors.white, 0.4)! : style.accent;
+    final barColor = over
+        ? AppColors.expense
+        : near
+            ? const Color(0xFFE8820E)
+            : base;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(style.icon, size: 15, color: barColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  context.categoryLabel(it.name),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: brand.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${formatMoney(symbol, it.spent)} ${context.t('budget.ofBudget').replaceAll('{budget}', formatMoney(symbol, it.budget))}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: over ? AppColors.expense : brand.inkSoft,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 7,
+              backgroundColor: brand.divider,
+              valueColor: AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatBudgetRow {
+  final String name;
+  final double spent;
+  final double budget;
+  const _CatBudgetRow(this.name, this.spent, this.budget);
+  double get ratio => budget <= 0 ? 0 : spent / budget;
 }

@@ -12,6 +12,7 @@ import '../../app_config.dart';
 import '../../models/account.dart';
 import '../../models/stock_investment.dart';
 import '../../repositories/local_stock_investment_repository.dart';
+import '../../services/i18n.dart';
 import '../../services/stock_service.dart';
 import '../../services/sync_service.dart';
 import '../../state/providers.dart';
@@ -224,7 +225,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                     ),
                     const Spacer(),
                     Text(
-                      'Stocks',
+                      context.t('invest.stocks'),
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -293,18 +294,18 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                             borderRadius: BorderRadius.circular(23),
                           ),
                           alignment: Alignment.center,
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 CupertinoIcons.search,
                                 size: 16,
                                 color: Colors.white,
                               ),
-                              SizedBox(width: 6),
+                              const SizedBox(width: 6),
                               Text(
-                                'Search & Add Stock',
-                                style: TextStyle(
+                                context.t('stock.searchAdd'),
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
@@ -334,9 +335,9 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                             border: Border.all(color: _blue, width: 1.5),
                           ),
                           alignment: Alignment.center,
-                          child: const Text(
-                            'Sell',
-                            style: TextStyle(
+                          child: Text(
+                            context.t('stock.sell'),
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: _blue,
@@ -358,7 +359,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                 child: Row(
                   children: [
                     _FilterChip(
-                      label: 'All',
+                      label: context.t('stock.filterAll'),
                       selected: _filter == 'All',
                       onTap: () => setState(() => _filter = 'All'),
                     ),
@@ -380,7 +381,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                       child: Row(
                         children: [
                           Text(
-                            '$_sort ',
+                            '${_sortLabel(context, _sort)} ',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -603,7 +604,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       builder: (_) => _BuyStockSheet(
         result: result,
         quote: quote,
-        onSave: (investment, accountId) async {
+        onSave: (investment, accountId, date) async {
           final user = ref.read(authStateProvider).valueOrNull;
           if (user == null) return;
           try {
@@ -615,7 +616,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               id: existingId,
             );
             final newTx = {
-              'date': DateTime.now().toIso8601String(),
+              'date': date.toIso8601String(),
               'qty': investment.quantity,
               'price': investment.buyPrice,
               'currency': investment.currency ?? 'USD',
@@ -902,14 +903,14 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               Navigator.pop(ctx);
               _openDetail(context, stock);
             },
-            child: const Text('View Details'),
+            child: Text(context.t('stock.viewDetails')),
           ),
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(ctx);
               _openEditSheet(context, stock);
             },
-            child: const Text('Edit'),
+            child: Text(context.t('common.edit')),
           ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -932,32 +933,43 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                         user.uid, 'stock', stock.id);
                   }
                 }
-                if (mounted) AppToast.show(context, '${stock.symbol} removed');
+                if (mounted) {
+                  AppToast.show(context,
+                      context.t('stock.removed').replaceAll('{s}', stock.symbol));
+                }
               } catch (_) {
                 if (mounted)
                   AppToast.show(
                     context,
-                    'Failed to remove',
+                    context.t('stock.removeFailed'),
                     type: AppToastType.error,
                   );
               }
             },
-            child: const Text('Remove'),
+            child: Text(context.t('stock.remove')),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: Text(context.t('common.cancel')),
         ),
       ),
     );
   }
 
+  // Localized label for an internal sort key (kept stable for comparisons).
+  String _sortLabel(BuildContext context, String sort) =>
+      context.t(switch (sort) {
+        'Gain%' => 'stock.sortGain',
+        'Name' => 'stock.sortName',
+        _ => 'stock.sortValue',
+      });
+
   void _showSortSheet(BuildContext context) {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Sort by'),
+        title: Text(context.t('stock.sortBy')),
         actions: ['Value', 'Gain%', 'Name']
             .map(
               (s) => CupertinoActionSheetAction(
@@ -966,7 +978,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                   setState(() => _sort = s);
                 },
                 child: Text(
-                  s,
+                  _sortLabel(ctx, s),
                   style: TextStyle(
                     fontWeight: _sort == s ? FontWeight.w700 : FontWeight.w400,
                   ),
@@ -976,7 +988,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
             .toList(),
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: Text(context.t('common.cancel')),
         ),
       ),
     );
@@ -1052,7 +1064,7 @@ class _PortfolioHeader extends ConsumerWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              'LIVE · ${stocks.length} HOLDINGS · $marketsCount MARKET${marketsCount == 1 ? '' : 'S'}',
+              '${context.t('stock.live')} · ${context.t(stocks.length == 1 ? 'stock.holdingOne' : 'stock.holdingMany').replaceAll('{n}', '${stocks.length}')} · ${context.t(marketsCount == 1 ? 'stock.marketOne' : 'stock.marketMany').replaceAll('{n}', '$marketsCount')}',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -1094,7 +1106,7 @@ class _PortfolioHeader extends ConsumerWidget {
           Row(
             children: [
               Text(
-                '${todayGain >= 0 ? '+' : ''}$localSymbol ${NumberFormat('#,##0.00').format(todayGain)} today',
+                '${todayGain >= 0 ? '+' : ''}$localSymbol ${NumberFormat('#,##0.00').format(todayGain)} ${context.t('stock.today')}',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1103,7 +1115,7 @@ class _PortfolioHeader extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                '${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}% all-time',
+                '${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}% ${context.t('invest.allTime')}',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1114,7 +1126,7 @@ class _PortfolioHeader extends ConsumerWidget {
           )
         else
           Text(
-            'Est. total cost basis',
+            context.t('stock.costBasis'),
             style: TextStyle(fontSize: 13, color: brand.inkSoft),
           ),
       ],
@@ -1425,8 +1437,8 @@ class _StockListTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     stock.watchOnly
-                        ? 'Watchlist · ${stock.name ?? stock.symbol}'
-                        : '${_fmtQty(stock.quantity)} sh · ${_fmtPrice(stock.buyPrice, stock.currency)} avg',
+                        ? '${context.t('stock.watchlist')} · ${stock.name ?? stock.symbol}'
+                        : '${_fmtQty(stock.quantity)} ${context.t('stock.shares')} · ${_fmtPrice(stock.buyPrice, stock.currency)} ${context.t('stock.avg')}',
                     style: TextStyle(
                       fontSize: 12,
                       color: stock.watchOnly
@@ -1483,8 +1495,8 @@ class _StockListTile extends StatelessWidget {
                         color: _blue,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text(
-                        'BUY',
+                      child: Text(
+                        context.t('stock.buy'),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -1712,7 +1724,7 @@ class _EmptyPortfolio extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'No stocks yet',
+              context.t('stock.empty'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -2792,7 +2804,8 @@ class _TopMatchCard extends StatelessWidget {
 class _BuyStockSheet extends ConsumerStatefulWidget {
   final StockSearchResult result;
   final StockQuote? quote;
-  final Future<void> Function(StockInvestment, String? accountId) onSave;
+  final Future<void> Function(StockInvestment, String? accountId, DateTime date)
+      onSave;
 
   const _BuyStockSheet({
     required this.result,
@@ -2871,7 +2884,7 @@ class _BuyStockSheetState extends ConsumerState<_BuyStockSheet> {
       final effectiveAccountId =
           _selectedAccount?.id ?? (accounts.isNotEmpty ? accounts.first.id : null);
       await widget
-          .onSave(investment, effectiveAccountId)
+          .onSave(investment, effectiveAccountId, _date)
           .timeout(const Duration(seconds: 10));
       if (mounted) Navigator.pop(context);
     } catch (_) {

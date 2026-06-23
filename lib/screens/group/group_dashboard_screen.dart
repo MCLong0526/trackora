@@ -701,6 +701,7 @@ class _GroupDashboardContentState extends ConsumerState<GroupDashboardContent> {
                   decoration: BoxDecoration(
                     color: brand.surface,
                     borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: brand.divider),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1740,9 +1741,11 @@ class _GroupMenuSheet extends ConsumerWidget {
               ),
             ),
           ),
-          // Group name
+          // Group name (legacy English default → localized)
           Text(
-            group.name,
+            group.name == 'Our Group'
+                ? context.t('group.defaultName')
+                : group.name,
             style: TextStyle(
               color: brand.ink,
               fontSize: 17,

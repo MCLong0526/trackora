@@ -530,7 +530,7 @@ class _AddEditInstallmentScreenState
                   ),
 
                 // ── Section: Basic Info ──────────────────────────────
-                _SectionHeader(label: 'DETAILS'),
+                _SectionHeader(label: context.t('inst.sectionDetails')),
                 const SizedBox(height: 8),
                 SectionCard(
                   padding: EdgeInsets.zero,
@@ -816,7 +816,7 @@ class _AddEditInstallmentScreenState
                 const SizedBox(height: 24),
 
                 // ── Section: Schedule ────────────────────────────────
-                _SectionHeader(label: 'SCHEDULE'),
+                _SectionHeader(label: context.t('inst.sectionSchedule')),
                 const SizedBox(height: 8),
                 SectionCard(
                   padding: EdgeInsets.zero,

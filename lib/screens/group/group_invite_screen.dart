@@ -522,6 +522,7 @@ class _CodeBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.brand.surface,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.brand.divider),
       ),
       child: Center(
         child: Text(

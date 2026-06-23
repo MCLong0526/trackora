@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/person.dart';
+import '../../models/split_bill.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
 import '../../services/prefs_service.dart';
@@ -46,6 +47,19 @@ class PersonDetailScreen extends ConsumerWidget {
           ? null
           : (amount, from) => converter.toBase(amount, from),
     );
+
+    // Settled history: bills where this person was a debtor and has fully paid.
+    final lowerName = person.name.trim().toLowerCase();
+    final settled = <({SplitBill bill, SplitMember member})>[];
+    for (final b in bills) {
+      for (final m in b.members) {
+        if (m.isPayer || m.status != SplitMemberStatus.paid) continue;
+        final matches = (m.personId != null && m.personId == person.id) ||
+            (m.personId == null && m.name.trim().toLowerCase() == lowerName);
+        if (matches) settled.add((bill: b, member: m));
+      }
+    }
+    settled.sort((a, b) => b.bill.date.compareTo(a.bill.date));
 
     return Scaffold(
       backgroundColor: brand.background,
@@ -208,6 +222,69 @@ class PersonDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            const SizedBox(height: 22),
+            // ── Settled records (history) ───────────────────────────────
+            Text(
+              context.t('split.settledTransactions').toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: brand.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (settled.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                ),
+                child: Center(
+                  child: Text(
+                    context.t('split.noSettledPerson'),
+                    style: TextStyle(fontSize: 13, color: brand.inkSoft),
+                  ),
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: brand.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                ),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < settled.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 0.5, indent: 16, color: brand.divider),
+                      _BillRow(
+                        title: settled[i].bill.title,
+                        dateStr: DateFormat('MMM d, yyyy')
+                            .format(settled[i].bill.date),
+                        amountStr:
+                            '${settled[i].bill.currencySymbol} ${settled[i].member.amount.toStringAsFixed(2)}',
+                        accent: AppColors.income,
+                        onTap: user == null
+                            ? null
+                            : () async {
+                                await Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => BillDetailScreen(
+                                      bill: settled[i].bill,
+                                      uid: user.uid,
+                                    ),
+                                  ),
+                                );
+                                ref.invalidate(allSplitBillsProvider);
+                              },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -220,12 +297,14 @@ class _BillRow extends StatelessWidget {
   final String dateStr;
   final String amountStr;
   final VoidCallback? onTap;
+  final Color accent;
 
   const _BillRow({
     required this.title,
     required this.dateStr,
     required this.amountStr,
     this.onTap,
+    this.accent = AppColors.expense,
   });
 
   @override
@@ -242,11 +321,11 @@ class _BillRow extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: AppColors.expense.withValues(alpha: 0.12),
+                color: accent.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.person_2_fill,
-                  size: 16, color: AppColors.expense),
+              child: Icon(CupertinoIcons.person_2_fill,
+                  size: 16, color: accent),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -271,10 +350,10 @@ class _BillRow extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               amountStr,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: AppColors.expense,
+                color: accent,
               ),
             ),
             const SizedBox(width: 6),

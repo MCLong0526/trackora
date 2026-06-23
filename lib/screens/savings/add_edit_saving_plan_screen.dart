@@ -194,10 +194,10 @@ class _AddEditSavingPlanScreenState
     };
   }
 
-  String _periodsLabel() => switch (_frequency) {
-        SavingFrequency.daily => 'Days',
-        SavingFrequency.weekly => 'Weeks',
-        SavingFrequency.monthly => 'Months',
+  String _periodsLabel(BuildContext context) => switch (_frequency) {
+        SavingFrequency.daily => context.t('sp.unitDays'),
+        SavingFrequency.weekly => context.t('sp.unitWeeks'),
+        SavingFrequency.monthly => context.t('sp.unitMonths'),
       };
 
   // ── Date picker ──────────────────────────────────────────────
@@ -341,7 +341,7 @@ class _AddEditSavingPlanScreenState
         });
         AppToast.show(
           context,
-          _isEdit ? 'Plan updated' : 'Plan created',
+          _isEdit ? context.t('sp.planUpdated') : context.t('sp.planCreated'),
           type: AppToastType.success,
         );
         await Future.delayed(const Duration(milliseconds: 600));
@@ -464,12 +464,13 @@ class _AddEditSavingPlanScreenState
                             controller: _periodsCtrl,
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
-                              labelText:
-                                  'Number of ${_periodsLabel()}',
-                              hintText: 'e.g. 12',
+                              labelText: context
+                                  .t('sp.numberOf')
+                                  .replaceAll('{unit}', _periodsLabel(context)),
+                              hintText: context.t('sp.periodsHint'),
                               suffixText: _periodsIsAuto &&
                                       _periodsCtrl.text.isNotEmpty
-                                  ? 'auto'
+                                  ? context.t('sp.auto')
                                   : null,
                               suffixStyle: TextStyle(
                                   fontSize: 11, color: brand.accentDark),

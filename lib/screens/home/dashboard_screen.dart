@@ -37,6 +37,18 @@ import '../../widgets/personal_group_toggle.dart';
 import 'calendar_screen.dart';
 import '../group/group_dashboard_screen.dart';
 
+/// "{Expense|Income|Transfer|Receive} deleted" for the activity-list delete
+/// toast, so it isn't a generic "Entry deleted".
+String _entryDeletedMsg(BuildContext context, Expense e) {
+  final noun = context.t(switch (e.type) {
+    EntryType.income => 'expense.income',
+    EntryType.transfer => 'expense.transfer',
+    EntryType.receive => 'expense.receive',
+    _ => 'expense.expense',
+  });
+  return context.t('expense.deletedNamed').replaceAll('{type}', noun);
+}
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -493,7 +505,7 @@ class DashboardScreen extends ConsumerWidget {
                                           if (!context.mounted) return;
                                           AppToast.show(
                                             context,
-                                            context.t('expense.entryDeleted'),
+                                            _entryDeletedMsg(context, expense),
                                             type: AppToastType.info,
                                             icon: CupertinoIcons.trash,
                                           );
@@ -957,9 +969,11 @@ class _HomeOverviewCard extends ConsumerWidget {
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final budgetProgress = budget > 0
-        ? (budgetSpent / budget).clamp(0.0, 1.0)
-        : 0.0;
+    // The home card always shows the overall total cap (budget) vs spend; the
+    // per-category breakdown lives in the budget-details popup, opened by
+    // tapping the bar.
+    final budgetProgress =
+        budget > 0 ? (budgetSpent / budget).clamp(0.0, 1.0) : 0.0;
 
     final topBg = isDark ? const Color(0xFF201E2C) : brand.surface;
     final topInk = brand.ink;
@@ -1878,7 +1892,7 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
       if (!context.mounted) return;
       AppToast.show(
         context,
-        context.t('expense.entryDeleted'),
+        _entryDeletedMsg(context, expense),
         type: AppToastType.info,
         icon: CupertinoIcons.trash,
       );
@@ -1912,6 +1926,7 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final accounts = ref.watch(accountsProvider).valueOrNull ?? const [];
+    final user = ref.watch(authStateProvider).valueOrNull;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
@@ -2037,6 +2052,17 @@ class _AllBillsSheetState extends ConsumerState<_AllBillsSheet> {
                         currencySymbol: widget.symbol,
                         account: acct,
                         flat: true,
+                        // Match the home list: split-bill badge on the category
+                        // icon (and the paperclip when a receipt is attached).
+                        hasSplitBill: user != null &&
+                            LocalSplitBillRepository.hasSplitBillSync(
+                              user.uid,
+                              expense.id,
+                            ),
+                        splitUnsettledCount: user == null
+                            ? 0
+                            : LocalSplitBillRepository.unsettledCountSync(
+                                user.uid, expense.id),
                         onTap: () => Navigator.push(
                           context,
                           CupertinoPageRoute(

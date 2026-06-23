@@ -2,11 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../app_config.dart';
 import '../../models/account.dart';
+import '../../models/category_catalog.dart';
 import '../../models/expense.dart';
+import '../../models/monthly_budget.dart';
 import '../../models/precious_metal.dart';
 import '../../models/stock_investment.dart';
 import '../../repositories/local_expense_repository.dart';
@@ -29,10 +30,20 @@ import '../travel/travel_groups_screen.dart';
 import '../group/create_group_screen.dart';
 import '../group/group_dashboard_screen.dart';
 
-bool _isDiscretionary(Expense e) =>
-    e.type == EntryType.expense &&
-    e.category != 'Bills' &&
-    !e.note.contains('(installment)');
+/// Expense categories offered in the by-category budget editor: built-ins
+/// followed by the user's custom expense categories (same set as the expense
+/// picker uses).
+List<String> _budgetCategories(WidgetRef ref) {
+  final custom = ((ref.read(customCategoriesProvider).valueOrNull ?? const [])
+          .where((c) => !c.isIncome)
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+      .map((c) => c.name)
+      .toList();
+  // Custom categories first (most-recently-added), then the built-ins —
+  // matching the expense picker order.
+  return [...custom, ...kDefaultExpenseCategories];
+}
 
 Future<void> showMonthlyBudgetEditor(
   BuildContext context,
@@ -42,70 +53,37 @@ Future<void> showMonthlyBudgetEditor(
   String? userId,
 ) async {
   if (userId == null) return;
-  final controller = TextEditingController(
-    text: current > 0 ? current.toStringAsFixed(2) : '',
-  );
-  final result = await showModalBottomSheet<double>(
+  // Await the saved config so previously-entered category amounts are
+  // pre-filled (the provider may not be actively subscribed on this screen,
+  // in which case `.valueOrNull` would be null).
+  MonthlyBudget initial;
+  try {
+    initial = await ref.read(budgetConfigProvider.future);
+  } catch (_) {
+    initial = MonthlyBudget(total: current);
+  }
+  if (!context.mounted) return;
+  final categories = _budgetCategories(ref);
+
+  final result = await showModalBottomSheet<MonthlyBudget>(
     context: context,
     isScrollControlled: true,
     backgroundColor: context.brand.background,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (ctx) {
-      final brand = ctx.brand;
-      return Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              context.t('budget.setMonthlyBudget'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.t('budget.sheetSubtitle'),
-              style: TextStyle(color: brand.inkSoft, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              autofocus: false,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                prefixText: '$symbol  ',
-                hintText: '0.00',
-              ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                final v = double.tryParse(controller.text) ?? 0;
-                Navigator.pop(ctx, v);
-              },
-              child: Text(context.t('common.save')),
-            ),
-          ],
-        ),
-      );
-    },
+    builder: (ctx) => _BudgetEditorSheet(
+      initial: initial,
+      symbol: symbol,
+      categories: categories,
+    ),
   );
   if (result != null) {
     try {
-      await ref.read(expenseRepositoryProvider).setMonthlyBudget(userId, result);
-      // Mirror to local so budget is available offline
+      await ref.read(expenseRepositoryProvider).setBudgetConfig(userId, result);
+      // Mirror to local so budget is available offline.
       if (storageMode == StorageMode.firebase) {
-        await LocalExpenseRepository().setMonthlyBudget(userId, result);
+        await LocalExpenseRepository().setBudgetConfig(userId, result);
       }
       if (context.mounted) {
         AppToast.show(context, context.t('budget.updated'), type: AppToastType.success);
@@ -118,37 +96,117 @@ Future<void> showMonthlyBudgetEditor(
   }
 }
 
-Future<void> showMonthlyBudgetDetails(
-  BuildContext context,
-  WidgetRef ref, {
-  required double budget,
-  required double spent,
-  required String symbol,
-  required String? userId,
-  required DateTime month,
-}) async {
-  final remaining = budget - spent;
-  final usage = budget <= 0 ? 0.0 : spent / budget;
-  final usagePercent = budget <= 0 ? 0 : (usage * 100).round();
-  final editRequested = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: context.brand.background,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    builder: (ctx) {
-      final brand = ctx.brand;
-      final progress = usage.clamp(0.0, 1.0).toDouble();
-      final remainingColor = budget <= 0
-          ? brand.inkSoft
-          : remaining < 0
-          ? AppColors.expense
-          : AppColors.income;
-      return SafeArea(
+/// Budget editor with a Total / By-category toggle.
+class _BudgetEditorSheet extends StatefulWidget {
+  final MonthlyBudget initial;
+  final String symbol;
+  final List<String> categories;
+
+  const _BudgetEditorSheet({
+    required this.initial,
+    required this.symbol,
+    required this.categories,
+  });
+
+  @override
+  State<_BudgetEditorSheet> createState() => _BudgetEditorSheetState();
+}
+
+class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
+  late final TextEditingController _totalCtrl;
+  late final Map<String, TextEditingController> _catCtrls;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalCtrl = TextEditingController(
+      text: widget.initial.effectiveTotal > 0
+          ? _fmt(widget.initial.effectiveTotal)
+          : '',
+    );
+    _catCtrls = {
+      for (final c in widget.categories)
+        c: TextEditingController(
+          text: (widget.initial.categories[c] ?? 0) > 0
+              ? _fmt(widget.initial.categories[c]!)
+              : '',
+        ),
+    };
+    for (final c in _catCtrls.values) {
+      c.addListener(_onCategoryChanged);
+    }
+    _totalCtrl.addListener(_onTotalChanged);
+  }
+
+  @override
+  void dispose() {
+    _totalCtrl.dispose();
+    for (final c in _catCtrls.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  static String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+  double get _categoryTotal =>
+      _catCtrls.values.fold(0.0, (s, c) => s + (double.tryParse(c.text) ?? 0));
+
+  double get _typedTotal => double.tryParse(_totalCtrl.text) ?? 0;
+
+  // When the categories add up to more than the entered total, the total grows
+  // to match (the total can never be less than what's allocated).
+  void _onCategoryChanged() {
+    final sum = _categoryTotal;
+    if (sum > _typedTotal) {
+      final txt = _fmt(sum);
+      if (_totalCtrl.text != txt) {
+        _totalCtrl.value = TextEditingValue(
+          text: txt,
+          selection: TextSelection.collapsed(offset: txt.length),
+        );
+      }
+    }
+    setState(() {});
+  }
+
+  void _onTotalChanged() => setState(() {});
+
+  void _save() {
+    final map = <String, double>{};
+    _catCtrls.forEach((k, c) {
+      final v = double.tryParse(c.text) ?? 0;
+      if (v > 0) map[k] = v;
+    });
+    final sum = map.values.fold(0.0, (s, v) => s + v);
+    final typed = _typedTotal;
+    Navigator.pop(
+      context,
+      MonthlyBudget(
+        mode: map.isNotEmpty ? BudgetMode.category : BudgetMode.total,
+        total: typed > sum ? typed : sum,
+        categories: map,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final media = MediaQuery.of(context);
+    return Padding(
+      // Lift the whole sheet above the keyboard so the Save button is never
+      // covered by the numpad.
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: Column(
+            // Min height: the sheet is only as tall as its content (the
+            // category list is internally capped + scrollable), so it stays
+            // compact instead of filling the screen.
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -163,131 +221,173 @@ Future<void> showMonthlyBudgetDetails(
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.t('budget.detailsTitle'),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          DateFormat('MMMM yyyy').format(month),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: brand.inkSoft,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  CircleIconButton(
-                    icon: CupertinoIcons.xmark,
-                    size: 34,
-                    background: brand.surface,
-                    foreground: brand.ink,
-                    onTap: () => Navigator.pop(ctx, false),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              SectionCard(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _BudgetDetailMetric(
-                            label: context.t('budget.budgetAmount'),
-                            value: budget <= 0
-                                ? context.t('budget.monthlyNotSet')
-                                : formatMoney(symbol, budget),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _BudgetDetailMetric(
-                            label: context.t('budget.amountSpentThisMonth'),
-                            value: formatMoney(symbol, spent),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 8,
-                        backgroundColor: brand.divider,
-                        valueColor: AlwaysStoppedAnimation(
-                          usage > 1 ? AppColors.expense : AppColors.income,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _BudgetDetailMetric(
-                            label: context.t('budget.remainingBudget'),
-                            value: budget <= 0
-                                ? context.t('budget.setAction')
-                                : formatMoney(symbol, remaining.abs()),
-                            valueColor: remainingColor,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _BudgetDetailMetric(
-                            label: context.t('budget.usage'),
-                            value: budget <= 0
-                                ? '0%'
-                                : context
-                                      .t('budget.percentUsed')
-                                      .replaceFirst(
-                                        '{percent}',
-                                        '$usagePercent',
-                                      ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
               Text(
-                context.t('budget.detailsSubtitle'),
+                context.t('budget.setMonthlyBudget'),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.t('budget.sheetSubtitle'),
+                style: TextStyle(color: brand.inkSoft, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              // Overall total cap.
+              _totalField(brand),
+              const SizedBox(height: 8),
+              _allocatedHint(brand),
+              const SizedBox(height: 14),
+              Text(
+                context.t('budget.byCategoryTitle'),
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
                   color: brand.inkSoft,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 8),
+              // Cap the list to the space left after the keyboard / status bar
+              // so the title never runs off the top; scrolls past the cap.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: _listMaxHeight(context)),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final cat in widget.categories)
+                        _categoryRow(cat, brand),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(context.t('budget.editMonthlyBudget')),
+                onPressed: _save,
+                child: Text(context.t('common.save')),
               ),
             ],
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 
-  if (editRequested == true && context.mounted) {
-    await showMonthlyBudgetEditor(context, ref, budget, symbol, userId);
+  Widget _totalField(BrandColors brand) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: brand.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        children: [
+          Text(
+            context.t('budget.totalLabel'),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: brand.ink,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _totalCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              textInputAction: TextInputAction.done,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixText: '${widget.symbol} ',
+                hintText: '0',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _allocatedHint(BrandColors brand) {
+    final alloc = _categoryTotal;
+    final total = _typedTotal > alloc ? _typedTotal : alloc;
+    return Text(
+      context
+          .t('budget.allocatedOf')
+          .replaceAll('{alloc}', formatMoney(widget.symbol, alloc))
+          .replaceAll('{total}', formatMoney(widget.symbol, total)),
+      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+    );
+  }
+
+  // Available height for the category list given the current keyboard inset.
+  double _listMaxHeight(BuildContext context) {
+    final media = MediaQuery.of(context);
+    // Fixed chrome above/below the list (handle, title, subtitle, toggle,
+    // total card, Save) plus extra breathing room so the title sits well clear
+    // of the status bar when the numpad is up.
+    const fixedChrome = 430.0;
+    final available = media.size.height -
+        media.viewInsets.bottom -
+        media.padding.top -
+        fixedChrome;
+    return available.clamp(110.0, media.size.height * 0.30);
+  }
+
+  Widget _categoryRow(String cat, BrandColors brand) {
+    final s = styleFor(cat);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconColor = isDark ? Color.lerp(s.accent, Colors.white, 0.5)! : s.accent;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: s.background.withValues(alpha: isDark ? 0.22 : 1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(s.icon, size: 18, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              context.categoryLabel(cat),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: brand.ink,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: _catCtrls[cat],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixText: '${widget.symbol} ',
+                hintText: '0',
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -376,11 +476,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
 
   @override
   Widget build(BuildContext context) {
-    final expenses =
-        ref.watch(expensesProvider).valueOrNull ?? const <Expense>[];
     final budget = ref.watch(budgetProvider).valueOrNull ?? 0.0;
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
-    final month = ref.watch(selectedMonthProvider);
     final user = ref.watch(authStateProvider).valueOrNull;
     final visibleModules = ref.watch(moneyHubVisibilityProvider);
 
@@ -390,17 +487,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ref.read(openBudgetPopupProvider.notifier).state = false;
-        final discretionarySpent = expenses
-            .where(_isDiscretionary)
-            .fold<double>(0, (s, e) => s + e.convertedAmount);
-        showMonthlyBudgetDetails(
-          context, ref,
-          budget: budget,
-          spent: discretionarySpent,
-          symbol: symbol,
-          userId: user?.uid,
-          month: month,
-        );
+        showMonthlyBudgetEditor(context, ref, budget, symbol, user?.uid);
       });
     }
     // Accounts for carousel
@@ -425,10 +512,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
             ? null
             : (amt, code) => converter.toBase(amt, code));
 
-    final discretionarySpent = expenses
-        .where(_isDiscretionary)
-        .fold<double>(0, (s, e) => s + e.convertedAmount);
-
     // ── Quick-style button items — standard modules first, tools at end ─────────
     final quickItems = <_BudgetQuickItem>[
       if (visibleModules.contains('monthlyBudget'))
@@ -438,15 +521,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
           iconBg: AppColors.lilac,
           iconColor: kCategoryStyles['Shopping']!.accent,
           label: context.t('budget.badgeBudget'),
-          onTap: () => showMonthlyBudgetDetails(
-            context,
-            ref,
-            budget: budget,
-            spent: discretionarySpent,
-            symbol: symbol,
-            userId: user?.uid,
-            month: month,
-          ),
+          onTap: () =>
+              showMonthlyBudgetEditor(context, ref, budget, symbol, user?.uid),
         ),
       if (visibleModules.contains('savingPlans'))
         _BudgetQuickItem(
@@ -904,51 +980,6 @@ class _CycleSheetContent extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _BudgetDetailMetric extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  const _BudgetDetailMetric({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 11,
-            color: brand.inkSoft,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 17,
-              color: valueColor ?? brand.ink,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

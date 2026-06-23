@@ -15,6 +15,7 @@ import '../../repositories/local_expense_group_repository.dart';
 import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../settings/manage_categories_screen.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/receipt_preview.dart';
 
@@ -995,6 +996,22 @@ class _AddGroupExpenseScreenState
     ).whenComplete(_dismissKeyboard);
   }
 
+  /// Built-in group categories plus the user's custom expense categories, so
+  /// the group flow offers the same "customize" set as personal expenses.
+  List<_CatMeta> _buildCategoryMetas() {
+    // Most-recently-added custom categories first, then the built-ins.
+    final custom = ((ref.watch(customCategoriesProvider).valueOrNull ?? const [])
+            .where((c) => !c.isIncome)
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+    if (custom.isEmpty) return _kCategories;
+    final customMetas = [
+      for (final c in custom)
+        _CatMeta(c.name, styleFor(c.name).icon, styleFor(c.name).accent),
+    ];
+    return [...customMetas, ..._kCategories];
+  }
+
   @override
   Widget build(BuildContext context) {
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '';
@@ -1016,9 +1033,10 @@ class _AddGroupExpenseScreenState
     final brand = context.brand;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final catMeta = _kCategories.firstWhere(
+    final catMetas = _buildCategoryMetas();
+    final catMeta = catMetas.firstWhere(
       (c) => c.label == _category,
-      orElse: () => _kCategories.last,
+      orElse: () => catMetas.last,
     );
     final amount = _parsedAmount;
     final paidByMember = members.where((m) => m.uid == _paidByUid).firstOrNull;
@@ -1445,7 +1463,55 @@ class _AddGroupExpenseScreenState
                           SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
-                              children: _kCategories.map((cat) {
+                              children: [
+                                // Customize chip (leading): add / edit custom
+                                // categories.
+                                GestureDetector(
+                                  onTap: () async {
+                                    FocusScope.of(context).unfocus();
+                                    HapticFeedback.selectionClick();
+                                    await Navigator.push(
+                                      context,
+                                      CupertinoPageRoute(
+                                        builder: (_) =>
+                                            const ManageCategoriesScreen(),
+                                      ),
+                                    );
+                                    if (mounted) setState(() {});
+                                  },
+                                  child: Container(
+                                    margin:
+                                        const EdgeInsets.only(right: 10),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            color: brand.surface,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                                color: brand.divider),
+                                          ),
+                                          child: Icon(CupertinoIcons.add,
+                                              color: _groupInkSoft,
+                                              size: 18),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          context.t('category.customize'),
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: _groupInkSoft,
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                ...catMetas.map((cat) {
                                 final active =
                                     cat.label == _category;
                                 return GestureDetector(
@@ -1495,7 +1561,7 @@ class _AddGroupExpenseScreenState
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          cat.label,
+                                          context.categoryLabel(cat.label),
                                           style: TextStyle(
                                             fontSize: 9,
                                             color: active
@@ -1510,7 +1576,8 @@ class _AddGroupExpenseScreenState
                                     ),
                                   ),
                                 );
-                              }).toList(),
+                                }),
+                              ],
                             ),
                           ),
 

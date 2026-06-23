@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/expense.dart';
+import '../models/monthly_budget.dart';
 import 'expense_repository.dart';
 
 class FirebaseExpenseRepository implements ExpenseRepository {
@@ -84,7 +85,24 @@ class FirebaseExpenseRepository implements ExpenseRepository {
 
   @override
   Future<void> setMonthlyBudget(String userId, double amount) async {
-    await _budgetRef(userId).set({'monthly': amount}, SetOptions(merge: true));
+    await _budgetRef(userId).set(
+      {'monthly': amount, 'mode': 'total'},
+      SetOptions(merge: true),
+    );
+  }
+
+  @override
+  Stream<MonthlyBudget> getBudgetConfig(String userId) {
+    return _budgetRef(userId).snapshots().map((doc) {
+      if (!doc.exists) return const MonthlyBudget();
+      return MonthlyBudget.fromMap(doc.data() ?? const {});
+    });
+  }
+
+  @override
+  Future<void> setBudgetConfig(String userId, MonthlyBudget budget) async {
+    // Overwrite categories wholesale (merge would leave deleted ones behind).
+    await _budgetRef(userId).set(budget.toMap());
   }
 
   DocumentReference<Map<String, dynamic>> _savingsRef(String userId) {

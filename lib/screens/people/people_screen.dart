@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/person.dart';
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_toast.dart';
@@ -12,7 +13,18 @@ import '../../widgets/person_avatar.dart';
 import 'add_edit_person_screen.dart';
 import 'person_detail_screen.dart';
 
-const _kOwedColor = Color(0xFF1F7A60);
+// Owed amounts read as a debt owed to the user — show them in the expense red
+// so the People list matches the person-detail "Owes you" card.
+const _kOwedColor = AppColors.expense;
+
+// Localized label for a contact type (filter chips + person badge).
+String _personTypeLabel(BuildContext context, PersonType t) =>
+    context.t(switch (t) {
+      PersonType.friend => 'people.typeFriend',
+      PersonType.coworker => 'people.typeCoworker',
+      PersonType.family => 'people.typeFamily',
+      PersonType.other => 'people.typeOther',
+    });
 
 class _PeopleCoordinator extends ValueNotifier<String?> {
   _PeopleCoordinator() : super(null);
@@ -72,7 +84,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'People',
+          context.t('people.title'),
           style: TextStyle(
             color: brand.ink,
             fontWeight: FontWeight.w700,
@@ -96,7 +108,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: CupertinoSearchTextField(
               controller: _searchCtrl,
-              placeholder: 'Search by name or phone…',
+              placeholder: context.t('people.searchHint'),
               onChanged: (_) => setState(() {}),
             ),
           ),
@@ -107,7 +119,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
             child: Row(
               children: [
                 _FilterChip(
-                  label: 'All',
+                  label: context.t('people.filterAll'),
                   selected: _typeFilter == null,
                   onTap: () => setState(() => _typeFilter = null),
                   brand: brand,
@@ -116,7 +128,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                 ...PersonType.values.map((t) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _FilterChip(
-                        label: t.label,
+                        label: _personTypeLabel(context, t),
                         selected: _typeFilter == t,
                         onTap: () => setState(
                           () => _typeFilter = _typeFilter == t ? null : t,
@@ -142,7 +154,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                   if (list.isEmpty) {
                     return Center(
                       child: Text(
-                        'No results',
+                        context.t('people.noResults'),
                         style: TextStyle(color: brand.inkSoft),
                       ),
                     );
@@ -295,7 +307,7 @@ class _PersonCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Owes you',
+                    context.t('split.owesYou'),
                     style: TextStyle(
                       fontSize: 10,
                       color: brand.inkSoft,
@@ -442,17 +454,17 @@ class _PersonSwipeActionsState extends ConsumerState<_PersonSwipeActions>
     final ok = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Remove Person?'),
+        title: Text(context.t('people.removeTitle')),
         content: Text('Remove ${widget.person.name} from your people list?'),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(context.t('common.cancel')),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            child: Text(context.t('people.remove')),
           ),
         ],
       ),
@@ -461,11 +473,12 @@ class _PersonSwipeActionsState extends ConsumerState<_PersonSwipeActions>
       try {
         await ref.read(personServiceProvider).delete(userId, widget.person.id);
         if (mounted) {
-          AppToast.show(context, 'Person removed', type: AppToastType.success);
+          AppToast.show(context, context.t('people.removed'),
+              type: AppToastType.success);
         }
       } catch (_) {
         if (mounted) {
-          AppToast.show(context, 'Failed to remove person',
+          AppToast.show(context, context.t('people.removeFailed'),
               type: AppToastType.error);
         }
       }
@@ -494,7 +507,7 @@ class _PersonSwipeActionsState extends ConsumerState<_PersonSwipeActions>
               bottom: 0,
               width: _rightPanelW,
               child: _PSwipeAction(
-                label: 'Delete',
+                label: context.t('common.delete'),
                 icon: CupertinoIcons.trash_fill,
                 color: const Color.fromARGB(200, 255, 69, 58),
                 reveal: revealRight,
@@ -508,7 +521,7 @@ class _PersonSwipeActionsState extends ConsumerState<_PersonSwipeActions>
               bottom: 0,
               width: _leftPanelW,
               child: _PSwipeAction(
-                label: 'Edit',
+                label: context.t('common.edit'),
                 icon: CupertinoIcons.pencil,
                 color: const Color.fromARGB(200, 0, 122, 255),
                 reveal: revealLeft,
@@ -629,7 +642,7 @@ class _TypeBadge extends StatelessWidget {
           Icon(icon, size: 10, color: foregroundOn(bg)),
           const SizedBox(width: 3),
           Text(
-            type.label,
+            _personTypeLabel(context, type),
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -712,7 +725,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              'No people yet',
+              context.t('people.empty'),
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -729,7 +742,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(CupertinoIcons.add, size: 16),
-              label: const Text('Add Person'),
+              label: Text(context.t('people.addPerson')),
             ),
           ],
         ),
@@ -836,7 +849,7 @@ class _PersonOrNamePickerSheetState
               child: Row(
                 children: [
                   Text(
-                    'Select Person',
+                    context.t('people.selectPerson'),
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -848,7 +861,8 @@ class _PersonOrNamePickerSheetState
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: () => Navigator.pop(context),
-                    child: Text('Cancel', style: TextStyle(color: brand.inkSoft)),
+                    child: Text(context.t('common.cancel'),
+                        style: TextStyle(color: brand.inkSoft)),
                   ),
                 ],
               ),
@@ -891,7 +905,8 @@ class _PersonOrNamePickerSheetState
                         ),
                         Row(
                           children: [
-                            _tabChip('New', _showNew, brand, () {
+                            _tabChip(context.t('people.tabNew'), _showNew, brand,
+                                () {
                               // Dismiss the keyboard first so the height change
                               // animates smoothly instead of fighting the
                               // keyboard inset.
@@ -901,7 +916,8 @@ class _PersonOrNamePickerSheetState
                                 _searchCtrl.clear();
                               });
                             }),
-                            _tabChip('From Contacts', !_showNew, brand, () {
+                            _tabChip(context.t('people.tabContacts'), !_showNew,
+                                brand, () {
                               FocusScope.of(context).unfocus();
                               setState(() => _showNew = false);
                             }),
@@ -948,7 +964,7 @@ class _PersonOrNamePickerSheetState
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: CupertinoTextField(
               controller: _nameCtrl,
-              placeholder: 'Name',
+              placeholder: context.t('people.name'),
               autofocus: false,
               textCapitalization: TextCapitalization.words,
               onChanged: (_) => setState(() {}),
@@ -985,7 +1001,7 @@ class _PersonOrNamePickerSheetState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Save to my contacts',
+                      context.t('people.saveContacts'),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -1022,8 +1038,8 @@ class _PersonOrNamePickerSheetState
                     ? const CupertinoActivityIndicator()
                     : Text(
                         _saveToContacts
-                            ? 'Confirm & Save to Contacts'
-                            : 'Confirm',
+                            ? context.t('people.confirmSaveContacts')
+                            : context.t('people.confirm'),
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1082,7 +1098,9 @@ class _PersonOrNamePickerSheetState
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
                   child: Text(
-                    all.isEmpty ? 'No saved contacts yet.' : 'No matches.',
+                    all.isEmpty
+                        ? context.t('people.noSavedContacts')
+                        : context.t('people.noMatches'),
                     style: TextStyle(color: brand.inkSoft, fontSize: 13),
                   ),
                 );
@@ -1240,7 +1258,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
             child: Row(
               children: [
                 Text(
-                  'Select Person',
+                  context.t('people.selectPerson'),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -1252,7 +1270,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                   padding: EdgeInsets.zero,
                   onPressed: () => Navigator.pop(context),
                   child: Text(
-                    'Cancel',
+                    context.t('common.cancel'),
                     style: TextStyle(color: brand.inkSoft),
                   ),
                 ),
@@ -1263,7 +1281,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: CupertinoSearchTextField(
               controller: _searchCtrl,
-              placeholder: 'Search…',
+              placeholder: context.t('people.searchShort'),
               onChanged: (_) => setState(() {}),
             ),
           ),
@@ -1291,7 +1309,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                   child: Column(
                     children: [
                       Text(
-                        'No saved people yet.',
+                        context.t('people.noSavedPeople'),
                         style: TextStyle(color: brand.inkSoft, fontSize: 13),
                       ),
                       const SizedBox(height: 12),
@@ -1306,7 +1324,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                           );
                         },
                         icon: const Icon(CupertinoIcons.add, size: 14),
-                        label: const Text('Add Person'),
+                        label: Text(context.t('people.addPerson')),
                       ),
                     ],
                   ),
@@ -1316,7 +1334,7 @@ class _PersonPickerSheetState extends ConsumerState<PersonPickerSheet> {
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                   child: Text(
-                    'No results',
+                    context.t('people.noResults'),
                     style: TextStyle(color: brand.inkSoft, fontSize: 13),
                   ),
                 );

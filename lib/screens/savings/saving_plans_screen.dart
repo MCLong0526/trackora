@@ -130,11 +130,11 @@ class _SavingPlansScreenState extends ConsumerState<SavingPlansScreen> {
                                   key: ValueKey(_filter),
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    const Padding(
-                                      padding: EdgeInsets.only(bottom: 10),
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 10),
                                       child: Text(
-                                        'PLANS',
-                                        style: TextStyle(
+                                        context.t('sp.sectionPlans'),
+                                        style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                           color: Color(0xFF8E8E93),
@@ -305,7 +305,7 @@ class _Summary extends StatelessWidget {
               Container(width: 1, height: 32, color: brand.divider),
               Expanded(
                 child: _Stat(
-                  label: 'This week',
+                  label: context.t('sp.thisWeek'),
                   value: '+${formatMoney(symbol, thisWeek)}',
                   valueColor: AppColors.income,
                 ),
@@ -720,18 +720,21 @@ class _SavingPlanSwipeActionsState
     if (userId == null) return;
     if (widget.plan.status != SavingPlanStatus.active) {
       if (mounted) {
-        AppToast.show(context, 'Plan is not active', type: AppToastType.error);
+        AppToast.show(context, context.t('sp.notActive'),
+            type: AppToastType.error);
       }
       return;
     }
     try {
       await ref.read(savingPlanServiceProvider).markCompleted(userId, widget.plan);
       if (mounted) {
-        AppToast.show(context, 'Plan completed', type: AppToastType.success);
+        AppToast.show(context, context.t('sp.planCompleted'),
+            type: AppToastType.success);
       }
     } catch (_) {
       if (mounted) {
-        AppToast.show(context, 'Failed to complete plan', type: AppToastType.error);
+        AppToast.show(context, context.t('sp.failComplete'),
+            type: AppToastType.error);
       }
     }
   }
@@ -745,7 +748,7 @@ class _SavingPlanSwipeActionsState
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: Text(context.t('sp.deleteTitle')),
-        content: const Text('Are you sure you want to cancel this plan?'),
+        content: Text(context.t('sp.cancelConfirm')),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx, false),
@@ -754,7 +757,7 @@ class _SavingPlanSwipeActionsState
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Cancel Plan'),
+            child: Text(context.t('sp.cancelPlan')),
           ),
         ],
       ),
@@ -765,11 +768,13 @@ class _SavingPlanSwipeActionsState
             .read(savingPlanServiceProvider)
             .setCancelled(userId, widget.plan, true);
         if (mounted) {
-          AppToast.show(context, 'Plan cancelled', type: AppToastType.success);
+          AppToast.show(context, context.t('sp.planCancelled'),
+              type: AppToastType.success);
         }
       } catch (_) {
         if (mounted) {
-          AppToast.show(context, 'Failed to cancel', type: AppToastType.error);
+          AppToast.show(context, context.t('sp.failCancel'),
+              type: AppToastType.error);
         }
       }
     }
@@ -802,11 +807,13 @@ class _SavingPlanSwipeActionsState
       try {
         await ref.read(savingPlanServiceProvider).delete(userId, widget.plan.id);
         if (mounted) {
-          AppToast.show(context, 'Plan deleted', type: AppToastType.success);
+          AppToast.show(context, context.t('sp.planDeleted'),
+              type: AppToastType.success);
         }
       } catch (_) {
         if (mounted) {
-          AppToast.show(context, 'Failed to delete', type: AppToastType.error);
+          AppToast.show(context, context.t('sp.failDelete'),
+              type: AppToastType.error);
         }
       }
     }
@@ -836,7 +843,7 @@ class _SavingPlanSwipeActionsState
                 children: [
                   Expanded(
                     child: _SpSwipeAction(
-                      label: 'Complete',
+                      label: context.t('sp.complete'),
                       icon: CupertinoIcons.checkmark_circle_fill,
                       color: Color.fromARGB(200, 52, 199, 89),
                       reveal: (revealRight * 3).clamp(0.0, 1.0),
@@ -845,7 +852,7 @@ class _SavingPlanSwipeActionsState
                   ),
                   Expanded(
                     child: _SpSwipeAction(
-                      label: 'Cancel',
+                      label: context.t('common.cancel'),
                       icon: CupertinoIcons.xmark_circle_fill,
                       color: Color.fromARGB(200, 255, 149, 0),
                       reveal: (revealRight * 3 - 0.25).clamp(0.0, 1.0),
@@ -854,7 +861,7 @@ class _SavingPlanSwipeActionsState
                   ),
                   Expanded(
                     child: _SpSwipeAction(
-                      label: 'Delete',
+                      label: context.t('common.delete'),
                       icon: CupertinoIcons.trash_fill,
                       color: Color.fromARGB(200, 255, 69, 58),
                       reveal: (revealRight * 3 - 0.5).clamp(0.0, 1.0),
@@ -871,7 +878,7 @@ class _SavingPlanSwipeActionsState
               bottom: 0,
               width: _leftPanelW,
               child: _SpSwipeAction(
-                label: 'Edit',
+                label: context.t('common.edit'),
                 icon: CupertinoIcons.pencil,
                 color: Color.fromARGB(200, 0, 122, 255),
                 reveal: revealLeft,
@@ -1107,13 +1114,13 @@ class _StatusPill extends StatelessWidget {
           const Color(0xFF34C759).withValues(alpha: 0.15),
           const Color(0xFF34C759),
           CupertinoIcons.checkmark_circle_fill,
-          'Completed',
+          context.t('sp.statusCompleted'),
         ),
       SavingPlanStatus.cancelled => (
           const Color(0xFF8E8E93).withValues(alpha: 0.15),
           const Color(0xFF8E8E93),
           CupertinoIcons.xmark_circle_fill,
-          'Cancelled',
+          context.t('sp.statusCancelled'),
         ),
       SavingPlanStatus.active => (
           Colors.transparent,

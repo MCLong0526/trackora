@@ -1006,6 +1006,22 @@ class _PurchaseHistorySheetState
             ),
           ),
           Divider(height: 1, color: brand.divider),
+          if (_txns.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.swipe, size: 14, color: brand.inkSoft),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      context.t('common.swipeEditDelete'),
+                      style: TextStyle(fontSize: 12, color: brand.inkSoft),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (_txns.isEmpty)
             Padding(
               padding: const EdgeInsets.all(40),

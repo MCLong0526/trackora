@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_config.dart';
 import '../models/account.dart';
+import '../models/monthly_budget.dart';
 import '../models/borrow_lending.dart';
 import '../models/custom_category.dart';
 import '../models/expense.dart';
@@ -757,6 +758,45 @@ final budgetProvider = StreamProvider.autoDispose<double>((ref) {
     });
   }
   return ref.watch(expenseRepositoryProvider).getMonthlyBudget(user.uid);
+});
+
+/// Full budget config (total vs by-category) for the active user. Offline-aware,
+/// mirroring [budgetProvider]'s Firebase→local fallback.
+final budgetConfigProvider =
+    StreamProvider.autoDispose<MonthlyBudget>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(const MonthlyBudget());
+  if (storageMode == StorageMode.firebase) {
+    final isOnline = ref.watch(isOnlineProvider);
+    if (!isOnline) {
+      return LocalExpenseRepository().getBudgetConfig(user.uid);
+    }
+    return FirebaseExpenseRepository()
+        .getBudgetConfig(user.uid)
+        .asyncMap((cfg) async {
+      await LocalExpenseRepository().setBudgetConfig(user.uid, cfg);
+      return cfg;
+    });
+  }
+  return ref.watch(expenseRepositoryProvider).getBudgetConfig(user.uid);
+});
+
+/// Spending per category for the current budget cycle, in base currency, for
+/// expense-type entries only. Used by the by-category budget UI.
+final categorySpendThisCycleProvider =
+    Provider.autoDispose<Map<String, double>>((ref) {
+  final expenses = ref.watch(expensesProvider).valueOrNull ?? const [];
+  final converter = ref.watch(currencyConverterProvider).valueOrNull;
+  final out = <String, double>{};
+  for (final e in expenses) {
+    if (e.type != EntryType.expense) continue;
+    final amt = converter == null
+        ? e.amount
+        : (e.baseCurrencyAmount ??
+            converter.toBase(e.amount, e.originalCurrency ?? converter.base));
+    out[e.category] = (out[e.category] ?? 0) + amt;
+  }
+  return out;
 });
 
 final currencySymbolProvider = FutureProvider<String>(

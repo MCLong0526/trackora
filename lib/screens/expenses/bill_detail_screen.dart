@@ -202,10 +202,15 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
   Widget build(BuildContext context) {
     final brand = context.brand;
     final debtors = _bill.debtors;
-    final progress = _bill.totalAmount > 0
-        ? (_bill.collected / (_bill.totalAmount - _bill.payer.amount))
-            .clamp(0.0, 1.0)
-        : 0.0;
+    // What others owe you = the whole bill minus your own share. The progress
+    // and the "owed to you" stat are measured against this, NOT the bill total,
+    // so collecting RM100 on a RM200 bill (your share is RM100) reads as 100%.
+    final owedToYou =
+        (_bill.totalAmount - _bill.payer.amount).clamp(0.0, double.infinity);
+    final collected = _bill.collected;
+    final outstanding = _bill.outstanding;
+    final progress =
+        owedToYou > 0 ? (collected / owedToYou).clamp(0.0, 1.0) : 0.0;
     final progressPct = (progress * 100).round();
     final dateStr = DateFormat('MMM d, yyyy').format(_bill.date);
 
@@ -235,7 +240,8 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _heroCard(dateStr, progressPct, progress, brand),
+            _heroCard(dateStr, progressPct, progress, owedToYou, collected,
+                outstanding, brand),
             const SizedBox(height: 24),
             Text(
               '${context.t('split.whoOwesYou')} · ${debtors.length}',
@@ -326,7 +332,14 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
   }
 
   Widget _heroCard(
-      String dateStr, int progressPct, double progress, BrandColors brand) {
+      String dateStr,
+      int progressPct,
+      double progress,
+      double owedToYou,
+      double collected,
+      double outstanding,
+      BrandColors brand) {
+    String money(double v) => '${_bill.currencySymbol} ${v.toStringAsFixed(2)}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -369,49 +382,19 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$dateStr · ${_bill.members.length} people',
+            '$dateStr · ${context.t('split.peopleCount').replaceAll('{n}', '${_bill.members.length}')}',
             style: const TextStyle(fontSize: 13, color: Colors.white70),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('BILL TOTAL',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white60,
-                            letterSpacing: 0.8)),
-                    Text(
-                      '${_bill.currencySymbol} ${_bill.totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
-                    ),
-                  ],
-                ),
+                child: _heroStat(
+                    context.t('split.billTotal'), money(_bill.totalAmount)),
               ),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('OUTSTANDING',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.white60,
-                            letterSpacing: 0.8)),
-                    Text(
-                      '${_bill.currencySymbol} ${_bill.outstanding.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
-                    ),
-                  ],
-                ),
+                child: _heroStat(
+                    context.t('split.owedToYouLabel'), money(owedToYou)),
               ),
             ],
           ),
@@ -428,11 +411,29 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '$progressPct% ${context.t('split.paidBack')}',
+            '$progressPct% ${context.t('split.paidBack')}  ·  '
+            '${money(collected)} ${context.t('split.collectedLc')} · '
+            '${money(outstanding)} ${context.t('split.leftLc')}',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _heroStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10, color: Colors.white60, letterSpacing: 0.8)),
+        Text(
+          value,
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
+        ),
+      ],
     );
   }
 
@@ -465,7 +466,8 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
     Color statusColor;
     if (isPaid) {
       final paidAt = m.paidAt;
-      final paidStr = paidAt != null ? _relativeTime(paidAt) : 'recently';
+      final paidStr =
+          paidAt != null ? _relativeTime(context, paidAt) : context.t('split.recently');
       statusText = '${context.t('split.settled')} · $paidStr';
       statusColor = _kGreen;
     } else {
@@ -522,12 +524,13 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(CupertinoIcons.checkmark_alt, size: 12, color: _kGreen),
-                  SizedBox(width: 4),
+                children: [
+                  const Icon(CupertinoIcons.checkmark_alt,
+                      size: 12, color: _kGreen),
+                  const SizedBox(width: 4),
                   Text(
-                    'PAID',
-                    style: TextStyle(
+                    context.t('split.paidBadge'),
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: _kGreen,
@@ -637,11 +640,15 @@ class _BillDetailScreenState extends ConsumerState<BillDetailScreen> {
     );
   }
 
-  String _relativeTime(DateTime dt) {
+  String _relativeTime(BuildContext context, DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'yesterday';
+    if (diff.inMinutes < 60) {
+      return context.t('split.minAgo').replaceAll('{n}', '${diff.inMinutes}');
+    }
+    if (diff.inHours < 24) {
+      return context.t('split.hourAgo').replaceAll('{n}', '${diff.inHours}');
+    }
+    if (diff.inDays == 1) return context.t('split.yesterdayRel');
     return DateFormat('MMM d').format(dt);
   }
 }

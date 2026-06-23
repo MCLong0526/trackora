@@ -133,7 +133,14 @@ class _ExpenseCardState extends State<ExpenseCard>
 
     setState(() {
       _dragOffset += details.delta.dx;
-      if (_dragStartOffset < 0 || _direction == -1) {
+      // When a panel is already open, the opposite swipe only closes it (back
+      // toward 0) — it never jumps across to reveal the other side. From the
+      // closed state, the first drag direction picks which side opens.
+      if (_dragStartOffset > 0) {
+        _dragOffset = _dragOffset.clamp(0.0, _leftActionWidth);
+      } else if (_dragStartOffset < 0) {
+        _dragOffset = _dragOffset.clamp(-_rightActionWidth, 0.0);
+      } else if (_direction == -1) {
         _dragOffset = _dragOffset.clamp(-_rightActionWidth, 0.0);
       } else {
         _dragOffset = _dragOffset.clamp(0.0, _leftActionWidth);
@@ -143,22 +150,29 @@ class _ExpenseCardState extends State<ExpenseCard>
 
   void _onHorizontalDragEnd(DragEndDetails details) {
     final velocity = details.primaryVelocity ?? 0;
-    final shouldOpen = _dragOffset.abs() > _snapThreshold || velocity.abs() > 300;
 
-    final rightInvolved = _dragStartOffset < 0 || (_direction == -1 && _dragStartOffset == 0);
-    if (rightInvolved) {
-      // Right panel: snap open or close
-      if (shouldOpen && (widget.onDelete != null || widget.onEdit != null)) {
-        _animateTo(-_rightActionWidth);
-      } else {
-        _animateTo(0);
-      }
+    if (_dragStartOffset > 0) {
+      // Left (copy) panel was open: close it if dragged/flung back, else keep.
+      final close =
+          _dragOffset < _leftActionWidth - _snapThreshold || velocity < -300;
+      _animateTo(close ? 0 : _leftActionWidth);
+    } else if (_dragStartOffset < 0) {
+      // Right (edit/delete) panel was open: close it if dragged/flung back.
+      final close =
+          _dragOffset > -_rightActionWidth + _snapThreshold || velocity > 300;
+      _animateTo(close ? 0 : -_rightActionWidth);
     } else {
-      // Left panel: snap open — user must tap the button to copy
-      if (shouldOpen && widget.onCopy != null) {
-        _animateTo(_leftActionWidth);
+      // Closed → open the side matching the swipe direction.
+      final shouldOpen =
+          _dragOffset.abs() > _snapThreshold || velocity.abs() > 300;
+      if (_direction == -1) {
+        _animateTo(
+          shouldOpen && (widget.onDelete != null || widget.onEdit != null)
+              ? -_rightActionWidth
+              : 0,
+        );
       } else {
-        _animateTo(0);
+        _animateTo(shouldOpen && widget.onCopy != null ? _leftActionWidth : 0);
       }
     }
   }

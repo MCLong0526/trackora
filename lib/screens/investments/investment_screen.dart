@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/precious_metal.dart';
 import '../../models/stock_investment.dart';
+import '../../services/i18n.dart';
 import '../../services/stock_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
@@ -131,7 +132,9 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                   children: [
                     // INVESTMENTS · N ASSET CLASSES
                     Text(
-                      'INVESTMENTS${assetClasses > 0 ? ' · $assetClasses ASSET CLASS${assetClasses == 1 ? '' : 'ES'}' : ''}',
+                      assetClasses > 0
+                          ? '${context.t('invest.investments')} · ${context.t(assetClasses == 1 ? 'invest.assetClass' : 'invest.assetClasses').replaceAll('{n}', '$assetClasses')}'
+                          : context.t('invest.investments'),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -140,9 +143,9 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      'Everything you\nown, in one view.',
-                      style: TextStyle(
+                    Text(
+                      context.t('invest.heroTitle'),
+                      style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -1,
@@ -178,7 +181,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                     // All-time gain/loss
                     if (anyQuoteLoaded && allTimeGain != 0)
                       Text(
-                        '${allTimeGain >= 0 ? '+' : '-'}$symbol ${NumberFormat('#,##0').format(allTimeGain.abs())} (${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}%) · all-time',
+                        '${allTimeGain >= 0 ? '+' : '-'}$symbol ${NumberFormat('#,##0').format(allTimeGain.abs())} (${allTimeGain >= 0 ? '+' : ''}${allTimeGainPct.toStringAsFixed(2)}%) · ${context.t('invest.allTime')}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -187,7 +190,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       )
                     else
                       Text(
-                        'Est. total cost basis · all-time',
+                        context.t('invest.costBasisAllTime'),
                         style: TextStyle(fontSize: 13, color: brand.inkSoft),
                       ),
                   ],
@@ -206,7 +209,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ALLOCATION',
+                        context.t('invest.allocation'),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -250,7 +253,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Stocks ${(stocksPct * 100).round()}%',
+                              '${context.t('invest.stocks')} ${(stocksPct * 100).round()}%',
                               style: TextStyle(fontSize: 13, color: brand.ink),
                             ),
                             const SizedBox(width: 20),
@@ -265,7 +268,7 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Precious metals ${(metalsPct * 100).round()}%',
+                              '${context.t('invest.preciousMetals')} ${(metalsPct * 100).round()}%',
                               style: TextStyle(fontSize: 13, color: brand.ink),
                             ),
                           ],
@@ -290,11 +293,11 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       CupertinoPageRoute(builder: (_) => const StocksScreen()),
                     ),
                     leading: _StockAvatarRow(stocks: stocks.take(3).toList()),
-                    title: 'Stocks',
+                    title: context.t('invest.stocks'),
                     subtitle: stocks.isEmpty
-                        ? 'No holdings yet'
-                        : '${stocks.length} holding${stocks.length == 1 ? '' : 's'} · ${_marketsLabel(stocks)}',
-                    valueLabel: 'VALUE',
+                        ? context.t('invest.noHoldings')
+                        : '${context.t(stocks.length == 1 ? 'invest.holdingOne' : 'invest.holdingMany').replaceAll('{n}', '${stocks.length}')} · ${_marketsLabel(stocks)}',
+                    valueLabel: context.t('invest.value'),
                     value: stocks.isEmpty
                         ? '–'
                         : '$symbol ${NumberFormat('#,##0').format(stocksLive)}',
@@ -311,11 +314,11 @@ class _InvestmentScreenState extends ConsumerState<InvestmentScreen> {
                       CupertinoPageRoute(builder: (_) => const PreciousMetalsScreen()),
                     ),
                     leading: _MetalAvatarRow(),
-                    title: 'Precious metals',
+                    title: context.t('invest.preciousMetals'),
                     subtitle: metals.isEmpty
-                        ? 'No holdings yet'
+                        ? context.t('invest.noHoldings')
                         : _metalSubtitle(metalHoldings),
-                    valueLabel: 'VALUE',
+                    valueLabel: context.t('invest.value'),
                     value: metals.isEmpty
                         ? '–'
                         : '$symbol ${NumberFormat('#,##0').format(metalsCost)}',
