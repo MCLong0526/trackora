@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -19,6 +20,7 @@ import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
 import '../../models/installment.dart' show Installment, InstallmentStatus;
 import '../../models/monthly_budget.dart';
+import '../../models/split_bill.dart';
 import '../../models/precious_metal.dart';
 import '../../models/saving_plan.dart' show SavingPlan, SavingPlanStatus;
 import '../../models/stock_investment.dart';
@@ -28,11 +30,13 @@ import '../../services/money_format.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_donut_chart.dart';
+import '../../widgets/budget_segment_bar.dart';
 import '../../widgets/exchange_rate_sheet.dart';
 import '../../widgets/masked_amount.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
 import '../borrow_lending/borrow_lending_screen.dart';
+import '../expenses/add_edit_expense_screen.dart';
 import '../installments/installments_screen.dart';
 import '../investments/investment_screen.dart';
 import '../savings/saving_plans_screen.dart';
@@ -44,18 +48,39 @@ class StatisticsScreen extends ConsumerStatefulWidget {
   ConsumerState<StatisticsScreen> createState() => _StatisticsScreenState();
 }
 
-class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
+class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
+    with SingleTickerProviderStateMixin {
   _StatsPeriod _period = _StatsPeriod.month;
   late DateTime _anchor;
   bool _isSharing = false;
   DateTime? _customStart;
   DateTime? _customEnd;
+  final GlobalKey _budgetCardKey = GlobalKey();
+
+  // Card rearrange mode: long-press a card to enter; cards jiggle (iOS style)
+  // and can be dragged freely until the user taps Done.
+  bool _reorderMode = false;
+  late final AnimationController _jiggleCtrl;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _anchor = DateTime(now.year, now.month, 1);
+    _jiggleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _jiggleCtrl.dispose();
+    super.dispose();
+  }
+
+  void _exitReorderMode() {
+    if (_reorderMode) setState(() => _reorderMode = false);
   }
 
   _StatsRange _currentRange(BuildContext context) {
@@ -80,12 +105,19 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           final today = DateTime.now();
           final isCurrentMonth =
               _anchor.year == today.year && _anchor.month == today.month;
-          final effectiveMonth =
-              (isCurrentMonth && today.day < cycleDayStart)
-                  ? _anchor.month - 1
-                  : _anchor.month;
-          final cycleStart = DateTime(_anchor.year, effectiveMonth, cycleDayStart);
-          final cycleEnd = DateTime(_anchor.year, effectiveMonth + 1, cycleDayStart);
+          final effectiveMonth = (isCurrentMonth && today.day < cycleDayStart)
+              ? _anchor.month - 1
+              : _anchor.month;
+          final cycleStart = DateTime(
+            _anchor.year,
+            effectiveMonth,
+            cycleDayStart,
+          );
+          final cycleEnd = DateTime(
+            _anchor.year,
+            effectiveMonth + 1,
+            cycleDayStart,
+          );
           return _StatsRange(
             start: cycleStart,
             endExclusive: cycleEnd,
@@ -125,7 +157,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         );
       case _StatsPeriod.custom:
         if (_customStart == null || _customEnd == null) {
-          return _StatsRange(start: null, endExclusive: null, label: context.t('stats.filterAll'));
+          return _StatsRange(
+            start: null,
+            endExclusive: null,
+            label: context.t('stats.filterAll'),
+          );
         }
         return _StatsRange(
           start: _customStart,
@@ -134,65 +170,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               '${DateFormat('d MMM').format(_customStart!)} – '
               '${DateFormat('d MMM').format(_customEnd!)}',
         );
-    }
-  }
-
-  _StatsRange? _prevRange() {
-    final useCustomCycle = ref.watch(useCustomCycleProvider);
-    final cycleDayStart = ref.watch(cycleDayStartProvider);
-
-    switch (_period) {
-      case _StatsPeriod.week:
-        final start = _startOfWeek(_anchor).subtract(const Duration(days: 7));
-        return _StatsRange(
-          start: start,
-          endExclusive: start.add(const Duration(days: 7)),
-          label: DateFormat('MMM d').format(start),
-        );
-      case _StatsPeriod.month:
-        if (useCustomCycle && cycleDayStart > 1 && cycleDayStart <= 28) {
-          final today = DateTime.now();
-          final isCurrentMonth =
-              _anchor.year == today.year && _anchor.month == today.month;
-          final effectiveMonth =
-              (isCurrentMonth && today.day < cycleDayStart)
-                  ? _anchor.month - 1
-                  : _anchor.month;
-          final prevCycleStart = DateTime(_anchor.year, effectiveMonth - 1, cycleDayStart);
-          final prevCycleEnd = DateTime(_anchor.year, effectiveMonth, cycleDayStart);
-          return _StatsRange(
-            start: prevCycleStart,
-            endExclusive: prevCycleEnd,
-            label: DateFormat('d MMM').format(prevCycleStart),
-          );
-        }
-        final start = DateTime(_anchor.year, _anchor.month - 1, 1);
-        final end = DateTime(_anchor.year, _anchor.month, 1);
-        return _StatsRange(
-          start: start,
-          endExclusive: end,
-          label: DateFormat('MMM').format(start),
-        );
-      case _StatsPeriod.sixMonth:
-        final anchorStart = DateTime(_anchor.year, _anchor.month - 5, 1);
-        final prevEnd = anchorStart;
-        final prevStart = DateTime(prevEnd.year, prevEnd.month - 6, 1);
-        return _StatsRange(
-          start: prevStart,
-          endExclusive: prevEnd,
-          label: DateFormat('MMM').format(prevStart),
-        );
-      case _StatsPeriod.year:
-        final start = DateTime(_anchor.year - 1, 1, 1);
-        return _StatsRange(
-          start: start,
-          endExclusive: DateTime(_anchor.year, 1, 1),
-          label: DateFormat('yyyy').format(start),
-        );
-      case _StatsPeriod.all:
-        return null;
-      case _StatsPeriod.custom:
-        return null;
     }
   }
 
@@ -264,19 +241,21 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             DateTime.tryParse(tx['date'] as String? ?? '') ?? s.createdAt;
         final foreign =
             converter != null && baseCode != null && cur != baseCode;
-        pseudo.add(Expense(
-          id: 'stock_${s.id}_${tx['date'] ?? date.toIso8601String()}',
-          amount: amount,
-          category: 'Stock',
-          note: s.symbol,
-          date: date,
-          type: isSell ? EntryType.income : EntryType.expense,
-          accountId: accountId,
-          createdAt: date,
-          updatedAt: date,
-          originalCurrency: foreign ? cur : null,
-          baseCurrencyAmount: foreign ? converter.toBase(amount, cur) : null,
-        ));
+        pseudo.add(
+          Expense(
+            id: 'stock_${s.id}_${tx['date'] ?? date.toIso8601String()}',
+            amount: amount,
+            category: 'Stock',
+            note: s.symbol,
+            date: date,
+            type: isSell ? EntryType.income : EntryType.expense,
+            accountId: accountId,
+            createdAt: date,
+            updatedAt: date,
+            originalCurrency: foreign ? cur : null,
+            baseCurrencyAmount: foreign ? converter.toBase(amount, cur) : null,
+          ),
+        );
       }
     }
 
@@ -286,19 +265,21 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     for (final m in metals) {
       if (m.expenseId != null && m.expenseId!.isNotEmpty) continue;
       if (m.totalAmount <= 0) continue;
-      pseudo.add(Expense(
-        id: 'metal_${m.id}',
-        amount: m.totalAmount,
-        category: 'PreciousMetal',
-        note: m.metalType.label,
-        date: m.date,
-        type: m.action == MetalAction.buy
-            ? EntryType.expense
-            : EntryType.income,
-        accountId: m.accountId ?? '',
-        createdAt: m.date,
-        updatedAt: m.date,
-      ));
+      pseudo.add(
+        Expense(
+          id: 'metal_${m.id}',
+          amount: m.totalAmount,
+          category: 'PreciousMetal',
+          note: m.metalType.label,
+          date: m.date,
+          type: m.action == MetalAction.buy
+              ? EntryType.expense
+              : EntryType.income,
+          accountId: m.accountId ?? '',
+          createdAt: m.date,
+          updatedAt: m.date,
+        ),
+      );
     }
 
     if (pseudo.isEmpty) return normalized;
@@ -309,13 +290,43 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   Widget build(BuildContext context) {
     final allExpensesAsync = ref.watch(allExpensesProvider);
     final symbol = ref.watch(currencySymbolProvider).valueOrNull ?? '\$';
-    final visibleSections = ref.watch(statsSectionsVisibilityProvider);
     // Keep these (autoDispose) providers alive across rebuilds so the
     // investment data merged in _withInvestmentExpenses stays available when
     // switching period tabs — otherwise stock entries vanish on tab change.
     ref.watch(stockInvestmentsProvider);
     ref.watch(currencyConverterProvider);
+    // Watched here so the report rebuilds when the card order, budget config or
+    // group list changes; `_buildReport` reads them (it also runs off-build for
+    // the share snapshot, where watch isn't allowed).
+    ref.watch(statsCardOrderProvider);
+    ref.watch(budgetConfigProvider);
+    ref.watch(myGroupsProvider);
+    final hidden = ref.watch(statsHiddenCardsProvider);
+    final hasHidden = _presentCardIds().any(hidden.contains);
     final range = _currentRange(context);
+
+    // Home's budget tap routes here: switch to the Month tab and scroll the
+    // Monthly Budget card into view, then clear the flag.
+    ref.listen<bool>(statsFocusBudgetProvider, (_, focus) {
+      if (!focus) return;
+      final now = DateTime.now();
+      setState(() {
+        _period = _StatsPeriod.month;
+        _anchor = DateTime(now.year, now.month, 1);
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _budgetCardKey.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+            alignment: 0.1,
+          );
+        }
+        ref.read(statsFocusBudgetProvider.notifier).state = false;
+      });
+    });
 
     return SafeArea(
       child: StickyHeaderScaffold(
@@ -325,7 +336,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TopActionBar(
-                onManage: () => _showVisibilitySheet(context),
+                reorderMode: _reorderMode,
+                hasHidden: hasHidden,
+                onAdd: () => _showAddCardSheet(context),
+                onDone: _exitReorderMode,
                 onShare: _isSharing ? null : () => _shareSnapshot(context),
               ),
               const SizedBox(height: 16),
@@ -360,7 +374,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
               const SizedBox(height: 10),
               _PeriodNavRow(
                 label: range.label,
-                showNav: _period != _StatsPeriod.all && _period != _StatsPeriod.custom,
+                showNav:
+                    _period != _StatsPeriod.all &&
+                    _period != _StatsPeriod.custom,
                 showCustom: _period == _StatsPeriod.custom,
                 customStart: _customStart,
                 customEnd: _customEnd,
@@ -395,72 +411,23 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 .where((e) => _inRange(e, range))
                 .toList();
 
-            final accounts = ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
+            final accounts =
+                ref.watch(accountsProvider).valueOrNull ?? const <Account>[];
 
             return SingleChildScrollView(
               controller: sc,
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _buildReport(
-                    visibleSections: visibleSections,
-                    rangedExpenses: rangedExpenses,
-                    rangedIncome: rangedIncome,
-                    allExpenses: allExpenses,
-                    range: range,
-                    symbol: symbol,
-                    accounts: accounts,
-                    rangeLabel: range.label,
-                    showNav: false,
-                    onPrev: () => _step(-1),
-                    onNext: () => _step(1),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: _showDateRangePicker,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutCubic,
-                        padding: _period == _StatsPeriod.custom
-                            ? const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 7)
-                            : const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: _period == _StatsPeriod.custom
-                              ? AppActionBlue.color
-                              : context.brand.background,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: _period == _StatsPeriod.custom &&
-                                _customStart != null
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(CupertinoIcons.calendar,
-                                      size: 13, color: Colors.white),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Icon(
-                                CupertinoIcons.calendar,
-                                size: 16,
-                                color: context.brand.inkSoft,
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: _buildReport(
+                rangedExpenses: rangedExpenses,
+                rangedIncome: rangedIncome,
+                allExpenses: allExpenses,
+                range: range,
+                symbol: symbol,
+                accounts: accounts,
+                rangeLabel: range.label,
+                showNav: false,
+                onPrev: () => _step(-1),
+                onNext: () => _step(1),
               ),
             );
           },
@@ -469,41 +436,127 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     );
   }
 
-  void _showVisibilitySheet(BuildContext context) {
+  /// Card ids whose data is available right now (before applying the user's
+  /// hidden set). Donut + Overview are always available; budget needs a
+  /// by-category month, group spend needs at least one group.
+  Set<String> _presentCardIds() {
+    final cfg = ref.read(budgetConfigProvider).valueOrNull;
+    final ids = <String>{'donutChart', 'importantData'};
+    if (_period == _StatsPeriod.month &&
+        (cfg?.isByCategory ?? false) &&
+        (cfg?.categories.isNotEmpty ?? false)) {
+      ids.add('monthlyBudget');
+    }
+    if ((ref.read(myGroupsProvider).valueOrNull ?? const []).isNotEmpty) {
+      ids.add('groupSpend');
+    }
+    return ids;
+  }
+
+  String _cardTitle(BuildContext context, String id) => switch (id) {
+    'donutChart' => context.t('stats.byCategory'),
+    'monthlyBudget' => context.t('home.budget'),
+    'importantData' => context.t('stats.section.importantData'),
+    'groupSpend' => context.t('stats.groupSpending'),
+    _ => id,
+  };
+
+  void _hideCard(String id) {
+    HapticFeedback.selectionClick();
+    ref.read(statsHiddenCardsProvider.notifier).hide(id);
+  }
+
+  void _showAddCardSheet(BuildContext context) {
+    final hidden = ref.read(statsHiddenCardsProvider);
+    final hiddenPresent = _presentCardIds()
+        .where(hidden.contains)
+        .toList(growable: false);
+    if (hiddenPresent.isEmpty) return;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: context.brand.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (ctx) => Consumer(
-        builder: (ctx, ref, _) {
-          final visible = ref.watch(statsSectionsVisibilityProvider);
-          final notifier = ref.read(statsSectionsVisibilityProvider.notifier);
-          final items = [
-            ('importantData', context.t('stats.section.importantData')),
-            ('donutChart', context.t('stats.section.donutChart')),
-          ];
-          return _VisibilitySheet(
-            title: context.t('stats.customizeSections'),
-            footnote: context.t('customize.keepOneVisible'),
-            children: [
-              for (final (id, label) in items)
-                _VisibilitySwitchRow(
-                  label: label,
-                  visible: visible.contains(id),
-                  canHide: visible.length > 1 || !visible.contains(id),
-                  onChanged: (value) => notifier.setVisible(id, value),
+      builder: (ctx) {
+        final brand = ctx.brand;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: brand.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-            ],
-          );
-        },
-      ),
+                Text(
+                  context.t('stats.addCardTitle'),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final id in hiddenPresent)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        ref.read(statsHiddenCardsProvider.notifier).show(id);
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _cardTitle(context, id),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: brand.ink,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.add_circled_solid,
+                              size: 22,
+                              color: AppActionBlue.color,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildReport({
-    required Set<String> visibleSections,
     required List<Expense> rangedExpenses,
     required List<Expense> rangedIncome,
     required List<Expense> allExpenses,
@@ -517,40 +570,274 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     VoidCallback? onNext,
   }) {
     const showLine = false;
-    final showDonut = visibleSections.contains('donutChart');
-    final showSummary = visibleSections.contains('importantData');
 
+    // Build every available card; the user's hidden set is applied afterwards.
+    final cfg = ref.read(budgetConfigProvider).valueOrNull;
+    final showBudget =
+        _period == _StatsPeriod.month &&
+        (cfg?.isByCategory ?? false) &&
+        (cfg?.categories.isNotEmpty ?? false);
+    final hasGroups =
+        (ref.read(myGroupsProvider).valueOrNull ?? const []).isNotEmpty;
+
+    final cards = <String, Widget>{};
+    {
+      Widget donut = _ChartsCarousel(
+        showLine: showLine,
+        showDonut: true,
+        allExpenses: allExpenses,
+        rangedExpenses: rangedExpenses,
+        range: range,
+        period: _period,
+        symbol: symbol,
+        stacked: forReport,
+        rangeLabel: rangeLabel,
+        showNav: showNav,
+        onPrev: onPrev,
+        onNext: onNext,
+      );
+      // The date-range button belongs to the "By category" chart, so it rides
+      // along when the card is reordered instead of floating over the page.
+      if (!forReport) {
+        donut = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            donut,
+            Positioned(top: 12, right: 12, child: _dateRangeButton(context)),
+          ],
+        );
+      }
+      cards['donutChart'] = donut;
+    }
+    if (showBudget) {
+      cards['monthlyBudget'] = _BudgetByCategoryCard(
+        // The shared-snapshot pass rebuilds this report off-screen; only the
+        // live on-screen card carries the scroll key to avoid a duplicate.
+        key: forReport ? null : _budgetCardKey,
+        symbol: symbol,
+        forReport: forReport,
+      );
+    }
+    cards['importantData'] = const _FinancialSummaryCard();
+    if (hasGroups) {
+      cards['groupSpend'] = _GroupSpendCard(range: range, symbol: symbol);
+    }
+
+    final hidden = ref.read(statsHiddenCardsProvider);
+
+    // Share snapshot: static column in default order, hidden cards excluded.
+    if (forReport) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final id in PrefsService.defaultStatsCardOrder)
+            if (cards[id] != null && !hidden.contains(id))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: cards[id],
+              ),
+        ],
+      );
+    }
+
+    final savedOrder = ref.read(statsCardOrderProvider);
+    final order = <String>[
+      ...savedOrder.where(
+        (id) => cards.containsKey(id) && !hidden.contains(id),
+      ),
+      ...cards.keys.where(
+        (id) => !savedOrder.contains(id) && !hidden.contains(id),
+      ),
+    ];
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showDonut || showLine)
-          _ChartsCarousel(
-            showLine: showLine,
-            showDonut: showDonut,
-            allExpenses: allExpenses,
-            rangedExpenses: rangedExpenses,
-            range: range,
-            period: _period,
-            symbol: symbol,
-            stacked: forReport,
-            rangeLabel: rangeLabel,
-            showNav: showNav,
-            onPrev: onPrev,
-            onNext: onNext,
-          ),
-        // Overview is a lifetime snapshot (not period-filtered), so it sits
-        // below the donut chart — the floating calendar / date-range button
-        // stays anchored to the date-filtered "by category" chart above.
-        // By-category budget progress (only renders when that mode is on).
-        _BudgetByCategoryCard(symbol: symbol),
-        if (showSummary) ...[
-          const SizedBox(height: 14),
-          const _FinancialSummaryCard(),
-        ],
-        const SizedBox(height: 14),
-        _GroupSpendCard(range: range, symbol: symbol),
+        // Always-visible affordance so users know cards can be rearranged.
+        if (order.length > 1) _reorderBanner(context),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          buildDefaultDragHandles: false,
+          // Keep the lifted card looking like a card (rounded, soft shadow)
+          // instead of the default sharp Material rectangle.
+          proxyDecorator: (child, index, animation) {
+            return AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) {
+                final t = Curves.easeInOut.transform(animation.value);
+                return Transform.scale(
+                  scale: 1 + 0.03 * t,
+                  child: Material(
+                    color: Colors.transparent,
+                    elevation: 8 * t,
+                    shadowColor: Colors.black.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    child: child,
+                  ),
+                );
+              },
+              child: child,
+            );
+          },
+          onReorderStart: (_) {
+            HapticFeedback.mediumImpact();
+            if (!_reorderMode) setState(() => _reorderMode = true);
+          },
+          onReorder: (oldIndex, newIndex) {
+            HapticFeedback.selectionClick();
+            if (newIndex > oldIndex) newIndex -= 1;
+            final next = [...order];
+            next.insert(newIndex, next.removeAt(oldIndex));
+            // Keep ids not currently visible so their relative order sticks.
+            final full = <String>[
+              ...next,
+              ...savedOrder.where((id) => !next.contains(id)),
+            ];
+            ref.read(statsCardOrderProvider.notifier).setOrder(full);
+          },
+          children: [
+            for (var i = 0; i < order.length; i++)
+              _reorderableCard(i, order[i], cards[order[i]]!, order.length > 1),
+          ],
+        ),
       ],
+    );
+  }
+
+  /// Wraps a report card with its reorder drag handle, and—while in reorder
+  /// mode—an iOS-style jiggle (alternating phase per card, like Quick Add) plus
+  /// a corner hide button. [canHide] is false for the last remaining card so at
+  /// least one card always stays on the page.
+  Widget _reorderableCard(int index, String id, Widget card, bool canHide) {
+    Widget content = Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: AbsorbPointer(absorbing: _reorderMode, child: card),
+    );
+    if (_reorderMode) {
+      content = AnimatedBuilder(
+        animation: _jiggleCtrl,
+        builder: (_, child) {
+          final dir = index.isEven ? 1.0 : -1.0;
+          final angle = 0.014 * dir * (_jiggleCtrl.value * 2 - 1);
+          return Transform.rotate(angle: angle, child: child);
+        },
+        child: content,
+      );
+      // Static (non-jiggling) hide badge at the top-left corner, iOS style.
+      if (canHide) {
+        content = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            content,
+            Positioned(
+              top: -4,
+              left: -4,
+              child: GestureDetector(
+                onTap: () => _hideCard(id),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: AppColors.expense,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.minus,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+    }
+    return ReorderableDelayedDragStartListener(
+      key: ValueKey(id),
+      index: index,
+      child: content,
+    );
+  }
+
+  // Plain inline hint (Done lives in the header tick button).
+  Widget _reorderBanner(BuildContext context) {
+    final brand = context.brand;
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.arrow_up_arrow_down,
+            size: 12,
+            color: brand.inkSoft,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            context.t('budget.reorderHint'),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: brand.inkSoft,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateRangeButton(BuildContext context) {
+    final isCustom = _period == _StatsPeriod.custom;
+    return GestureDetector(
+      onTap: _showDateRangePicker,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: isCustom
+            ? const EdgeInsets.symmetric(horizontal: 10, vertical: 7)
+            : const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isCustom ? AppActionBlue.color : context.brand.background,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: isCustom && _customStart != null
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    CupertinoIcons.calendar,
+                    size: 13,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${DateFormat('d/M').format(_customStart!)}–${DateFormat('d/M').format(_customEnd!)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              )
+            : Icon(
+                CupertinoIcons.calendar,
+                size: 16,
+                color: context.brand.inkSoft,
+              ),
+      ),
     );
   }
 
@@ -576,21 +863,78 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     );
   }
 
+  // Compact branded header shown above the exported cards.
+  Widget _exportHeader(
+    BrandColors brand,
+    String periodLabel,
+    String rangeLabel,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppActionBlue.color,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            CupertinoIcons.chart_pie_fill,
+            size: 18,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Trackora',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              Text(
+                rangeLabel,
+                style: TextStyle(fontSize: 12, color: brand.inkSoft),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppActionBlue.color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            periodLabel,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppActionBlue.color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _shareSnapshot(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final failedMsg = context.t('stats.exportFailed');
     final shareSubject = context.t('stats.shareSubject');
     setState(() => _isSharing = true);
-    final overlay = Overlay.of(context, rootOverlay: true);
-    final captureKey = GlobalKey();
-    final mediaSize = MediaQuery.sizeOf(context);
     final brand = context.brand;
-    final allItems =
-        _withInvestmentExpenses(ref.read(allExpensesProvider).valueOrNull ?? const []);
+    final allItems = _withInvestmentExpenses(
+      ref.read(allExpensesProvider).valueOrNull ?? const [],
+    );
     final symbol = ref.read(currencySymbolProvider).valueOrNull ?? '\$';
-    final visibleSections = ref.read(statsSectionsVisibilityProvider);
     final range = _currentRange(context);
-    final prevRange = _prevRange();
+    final accounts =
+        ref.read(accountsProvider).valueOrNull ?? const <Account>[];
 
     final allExpenses = allItems
         .where((e) => e.type == EntryType.expense)
@@ -602,113 +946,614 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         .where((e) => _inRange(e, range))
         .toList();
     final rangedIncome = allIncome.where((e) => _inRange(e, range)).toList();
-    final prevExpenses = prevRange != null
-        ? allExpenses.where((e) => _inRange(e, prevRange)).toList()
-        : <Expense>[];
-    final prevTotal = prevExpenses.fold<double>(0, (s, e) => s + e.convertedAmount);
-    final currentTotal = rangedExpenses.fold<double>(0, (s, e) => s + e.convertedAmount);
-    final prevLabel = prevRange?.label ?? '';
 
+    final periodKey = switch (_period) {
+      _StatsPeriod.week => 'stats.filterWeek',
+      _StatsPeriod.month => 'stats.filterMonth',
+      _StatsPeriod.sixMonth => 'stats.filterSixMonth',
+      _StatsPeriod.year => 'stats.filterYear',
+      _StatsPeriod.all => 'stats.filterAll',
+      _StatsPeriod.custom => 'stats.filterCustom',
+    };
+
+    // The exported "receipt": exactly the page's cards (stacked, default order,
+    // hidden cards excluded) under a compact branded header + footer. Works with
+    // or without data — the cards render their own empty states.
     final report = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ReportHeader(rangeLabel: range.label, period: _period),
-        const SizedBox(height: 14),
-        _SpendingHeader(
-          period: _period,
-          anchor: _anchor,
-          rangeLabel: range.label,
-          currentTotal: currentTotal,
-          prevTotal: prevTotal,
-          prevLabel: prevLabel,
-          symbol: symbol,
-          showNav: false,
-          onPrev: () {},
-          onNext: () {},
-        ),
+        _exportHeader(brand, context.t(periodKey), range.label),
         const SizedBox(height: 14),
         _buildReport(
-          visibleSections: visibleSections,
           rangedExpenses: rangedExpenses,
           rangedIncome: rangedIncome,
           allExpenses: allExpenses,
           range: range,
           symbol: symbol,
+          accounts: accounts,
           forReport: true,
+          rangeLabel: range.label,
         ),
+        const SizedBox(height: 18),
+        Column(
+          children: [
+            Text(
+              'Generated by Trackora',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+                color: brand.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              DateFormat('yyyy-MM-dd  HH:mm').format(DateTime.now()),
+              style: TextStyle(
+                fontSize: 10.5,
+                color: brand.inkSoft.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
       ],
     );
 
-    final entry = OverlayEntry(
-      builder: (ctx) => Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 0,
-            width: mediaSize.width,
-            child: Material(
-              color: brand.background,
-              child: MediaQuery(
-                data: MediaQuery.of(context),
-                child: Theme(
-                  data: Theme.of(context),
-                  child: RepaintBoundary(
-                    key: captureKey,
-                    child: IntrinsicHeight(
-                      child: Container(
-                        color: brand.background,
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                        child: report,
+    // Present the receipt "printing" out of a machine; the preview captures the
+    // on-screen boundary and shares (the proven, reliable capture path).
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => _StatsReceiptScreen(
+          receipt: report,
+          title: context.t('stats.shareSnapshot'),
+          shareSubject: shareSubject,
+        ),
+      ),
+    );
+    if (mounted) setState(() => _isSharing = false);
+  }
+}
+
+/// Full-screen preview that animates the stats snapshot "printing" out of a
+/// machine, then lets the user share it. Capturing an on-screen RepaintBoundary
+/// (rather than an off-screen overlay) is the reliable path — the same one the
+/// receipt screens use.
+class _StatsReceiptScreen extends StatefulWidget {
+  final Widget receipt;
+  final String title;
+  final String shareSubject;
+
+  const _StatsReceiptScreen({
+    required this.receipt,
+    required this.title,
+    required this.shareSubject,
+  });
+
+  @override
+  State<_StatsReceiptScreen> createState() => _StatsReceiptScreenState();
+}
+
+class _StatsReceiptScreenState extends State<_StatsReceiptScreen>
+    with TickerProviderStateMixin {
+  final _captureKey = GlobalKey();
+  final _shareBtnKey = GlobalKey();
+  late final AnimationController _printCtrl;
+  late final Animation<double> _reveal;
+  // Repeating pulse for the status LED while the machine is "operating".
+  late final AnimationController _blinkCtrl;
+  bool _sharing = false;
+
+  // Random torn-edge profile — a fresh irregular rip every time the preview is
+  // generated. Fixed for this instance so it stays stable during the animation.
+  late final List<double> _tearProfile = List.generate(
+    64,
+    (_) => math.Random().nextDouble(),
+  );
+
+  static const double _printerHeight = 48;
+
+  @override
+  void initState() {
+    super.initState();
+    _printCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+    // Decelerating feed — starts moving, eases to a gentle stop as it settles.
+    _reveal = CurvedAnimation(parent: _printCtrl, curve: Curves.easeOutCubic);
+    _blinkCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 460),
+    );
+    // The LED blinks only while the paper is feeding; steady once done.
+    _printCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _blinkCtrl.stop();
+        if (mounted) setState(() {});
+      }
+    });
+    // Start "printing" once the paper has been laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _printCtrl.forward();
+      _blinkCtrl.repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _printCtrl.dispose();
+    _blinkCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _share() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final failedMsg = context.t('stats.exportFailed');
+    // iPad share-sheet anchor from the button (ignored on iPhone).
+    final btnBox =
+        _shareBtnKey.currentContext?.findRenderObject() as RenderBox?;
+    final origin = (btnBox != null && btnBox.hasSize && !btnBox.size.isEmpty)
+        ? btnBox.localToGlobal(Offset.zero) & btnBox.size
+        : (Offset.zero & MediaQuery.sizeOf(context));
+
+    ui.Image? img;
+    try {
+      // The boundary is laid out at full height inside the scroll view, so it
+      // captures the whole receipt regardless of the print-reveal or scroll.
+      final boundary =
+          _captureKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('receipt not ready');
+      img = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw StateError('png encoding returned null');
+      final bytes = byteData.buffer.asUint8List();
+
+      final dir = await getTemporaryDirectory();
+      final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final file = File('${dir.path}/trackora_stats_$ts.png');
+      await file.writeAsBytes(bytes, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png', name: 'trackora_stats.png')],
+        subject: widget.shareSubject,
+        sharePositionOrigin: origin,
+      );
+    } catch (e, st) {
+      debugPrint('[StatsReceipt] share failed: $e\n$st');
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(failedMsg)));
+      }
+    } finally {
+      img?.dispose();
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    return Scaffold(
+      backgroundColor: brand.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 4, 16, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(CupertinoIcons.xmark, color: brand.ink),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: brand.ink,
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 40),
+                ],
+              ),
+            ),
+            Expanded(child: _printerArea(brand)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: _shareBtnKey,
+                  onPressed: _sharing ? null : _share,
+                  icon: _sharing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(CupertinoIcons.share, size: 18),
+                  label: Text(context.t('common.share')),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _printerArea(BrandColors brand) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        // Inset the paper so the (wider) machine body + overhanging caps always
+        // fit within the area without clipping.
+        final paperW = (constraints.maxWidth - 40).clamp(0.0, 360.0);
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            // The paper feed (scrollable once printed).
+            Positioned.fill(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(
+                  top: _printerHeight - 2,
+                  bottom: 28,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: paperW,
+                      // The paper slides DOWN inside this window, bottom-edge
+                      // first, emerging from the machine slot. Only the top is
+                      // clipped (behind the machine) so the sheet keeps its
+                      // side/leading shadow as it feeds — it reads as real paper.
+                      child: AnimatedBuilder(
+                        animation: _reveal,
+                        builder: (ctx, child) => ClipRect(
+                          clipper: _TopOnlyClipper(),
+                          child: FractionalTranslation(
+                            translation: Offset(0, -(1 - _reveal.value)),
+                            child: child,
+                          ),
+                        ),
+                        child: DecoratedBox(
+                          // Soft sheet shadow (display only — the captured
+                          // RepaintBoundary sits inside it, so shares stay clean).
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: isDark ? 0.4 : 0.13,
+                                ),
+                                blurRadius: 18,
+                                offset: const Offset(0, 7),
+                              ),
+                            ],
+                          ),
+                          child: RepaintBoundary(
+                            key: _captureKey,
+                            child: _paper(brand),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Opaque mask over everything above the slot, so no paper/content
+            // is ever visible above (or beside) the machine — the sheet only
+            // appears once it clears the slot.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: _printerHeight + 4,
+              child: IgnorePointer(child: ColoredBox(color: brand.background)),
+            ),
+            // Contact shadow the machine casts onto the paper as it appears.
+            Positioned(
+              top: _printerHeight + 4,
+              child: IgnorePointer(
+                child: Container(
+                  width: paperW,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: isDark ? 0.3 : 0.13),
+                        Colors.black.withValues(alpha: 0),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
+            // The printer sitting over the slot, so paper emerges from under it.
+            Positioned(top: 4, child: _printerBar(brand, paperW + 28)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _paper(BrandColors brand) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: brand.background,
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          child: widget.receipt,
+        ),
+        // Randomised torn bottom edge — part of the captured snapshot.
+        SizedBox(
+          height: 15,
+          child: CustomPaint(
+            painter: _TornEdgePainter(
+              paper: brand.background,
+              trace: brand.inkSoft.withValues(alpha: 0.35),
+              profile: _tearProfile,
+            ),
           ),
-          Positioned.fill(
-            child: IgnorePointer(child: Container(color: brand.background)),
+        ),
+      ],
+    );
+  }
+
+  Widget _printerBar(BrandColors brand, double width) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Slot tone derived from the surface so it matches the app palette.
+    final slotColor = Color.alphaBlend(
+      brand.ink.withValues(alpha: isDark ? 0.6 : 0.16),
+      brand.surface,
+    );
+    final capColor = Color.alphaBlend(
+      brand.ink.withValues(alpha: isDark ? 0.14 : 0.05),
+      brand.surface,
+    );
+
+    return SizedBox(
+      width: width,
+      height: _printerHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          // Rounded end-caps (behind the body), like feed rollers.
+          Positioned(left: -2, child: _printerCap(brand, capColor, isDark)),
+          Positioned(right: -2, child: _printerCap(brand, capColor, isDark)),
+          // ── Machine body: a clean app-style surface card ────────────
+          Container(
+            width: width,
+            height: _printerHeight,
+            decoration: BoxDecoration(
+              color: brand.surface,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: brand.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.10),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // centre grip pill (device handle)
+                Align(
+                  alignment: const Alignment(0, -0.55),
+                  child: Container(
+                    width: 34,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: brand.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                // status dot (accent) on the left
+                Positioned(left: 18, top: 13, child: _printerLed()),
+                // small feed indicator lines on the right
+                Positioned(
+                  right: 16,
+                  top: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(
+                      2,
+                      (i) => Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        width: 14 - i * 4.0,
+                        height: 2,
+                        decoration: BoxDecoration(
+                          color: brand.inkSoft.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // recessed exit slot near the bottom (the "hole")
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Container(
+                      width: width - 24,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: slotColor,
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          // inner-ish top shadow so the slot reads as recessed
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.5 : 0.25,
+                            ),
+                            blurRadius: 2,
+                            spreadRadius: -1,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
-
-    overlay.insert(entry);
-    try {
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-
-      final boundary =
-          captureKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null) {
-        throw StateError('Could not locate capture boundary.');
-      }
-      final image = await boundary.toImage(pixelRatio: 2.5);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        throw StateError('Snapshot encoding returned null.');
-      }
-      final bytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
-      final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final file = File('${dir.path}/trackora_stats_$ts.png');
-      await file.writeAsBytes(bytes, flush: true);
-      await Share.shareXFiles([
-        XFile(file.path, mimeType: 'image/png', name: 'trackora_stats.png'),
-      ], subject: shareSubject);
-    } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(failedMsg)));
-      }
-    } finally {
-      entry.remove();
-      if (mounted) setState(() => _isSharing = false);
-    }
   }
+
+  Widget _printerCap(BrandColors brand, Color color, bool isDark) {
+    return Container(
+      width: 14,
+      height: _printerHeight + 6,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: brand.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.10),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _printerLed() {
+    const green = Color(0xFF34C759);
+    return AnimatedBuilder(
+      animation: _blinkCtrl,
+      builder: (context, _) {
+        // Blink green while feeding (operating); steady accent blue when idle.
+        final printing = _printCtrl.isAnimating;
+        final color = printing ? green : AppActionBlue.color;
+        final level = printing ? (0.3 + 0.7 * _blinkCtrl.value) : 1.0;
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: level),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.6 * level),
+                blurRadius: 6,
+                spreadRadius: 0.5,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Clips only above the box top (hiding the not-yet-fed paper behind the
+/// machine) while leaving generous room on the sides and below so the sheet's
+/// shadow still shows as it feeds out.
+class _TopOnlyClipper extends CustomClipper<Rect> {
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(-60, 0, size.width + 60, size.height + 60);
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => false;
+}
+
+/// Ragged, randomly-torn bottom edge for the exported receipt. The paper fill
+/// ends on an irregular jagged line (transparent below it, so the snapshot has
+/// a genuinely torn silhouette), traced with a thin line + soft shadow so the
+/// rip reads even against a same-colour background.
+class _TornEdgePainter extends CustomPainter {
+  final Color paper;
+  final Color trace;
+  final List<double> profile;
+
+  const _TornEdgePainter({
+    required this.paper,
+    required this.trace,
+    required this.profile,
+  });
+
+  double _yAt(int i, int teeth, double h) {
+    final r = profile[i % profile.length];
+    return h * (0.28 + 0.72 * r);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    if (w <= 0) return;
+    final teeth = (w / 7).round().clamp(12, profile.length);
+
+    // Filled paper ending on the jagged line (right → left).
+    final fill = Path()
+      ..moveTo(0, 0)
+      ..lineTo(w, 0);
+    for (var i = teeth; i >= 0; i--) {
+      fill.lineTo(w * (i / teeth), _yAt(i, teeth, h));
+    }
+    fill.close();
+    canvas.drawPath(fill, Paint()..color = paper);
+
+    // The rip line itself.
+    final rip = Path();
+    for (var i = teeth; i >= 0; i--) {
+      final x = w * (i / teeth);
+      final y = _yAt(i, teeth, h);
+      i == teeth ? rip.moveTo(x, y) : rip.lineTo(x, y);
+    }
+    // soft shadow under the rip for depth
+    canvas.drawPath(
+      rip,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.07)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+    );
+    // crisp trace on top
+    canvas.drawPath(
+      rip,
+      Paint()
+        ..color = trace
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TornEdgePainter old) =>
+      old.profile != profile || old.paper != paper || old.trace != trace;
 }
 
 enum _StatsPeriod { week, month, sixMonth, year, all, custom }
@@ -748,18 +1593,22 @@ class _FinancialSummaryCard extends ConsumerWidget {
         ref.watch(installmentsProvider).valueOrNull ?? const <Installment>[];
     final savingPlans =
         ref.watch(savingPlansProvider).valueOrNull ?? const <SavingPlan>[];
-    final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ??
+    final stocks =
+        ref.watch(stockInvestmentsProvider).valueOrNull ??
         const <StockInvestment>[];
-    final metals = ref.watch(preciousMetalsProvider).valueOrNull ??
+    final metals =
+        ref.watch(preciousMetalsProvider).valueOrNull ??
         const <PreciousMetal>[];
 
     // Borrowed: outstanding amounts the user still owes others.
     final borrowed = borrowLending
-        .where((r) =>
-            !r.cancelled &&
-            r.status != BorrowLendingStatus.settled &&
-            r.remaining > 0 &&
-            r.type == BorrowLendingType.borrowed)
+        .where(
+          (r) =>
+              !r.cancelled &&
+              r.status != BorrowLendingStatus.settled &&
+              r.remaining > 0 &&
+              r.type == BorrowLendingType.borrowed,
+        )
         .fold<double>(0, (sum, r) => sum + r.remaining);
 
     // Installments: total monthly payment across active installments.
@@ -829,8 +1678,7 @@ class _FinancialSummaryCard extends ConsumerWidget {
                   symbol: symbol,
                   visible: visible,
                   tint: const Color(0xFFFF3B30),
-                  onTap: () =>
-                      _openPage(context, const BorrowLendingScreen()),
+                  onTap: () => _openPage(context, const BorrowLendingScreen()),
                 ),
               ),
               const SizedBox(width: 10),
@@ -841,8 +1689,7 @@ class _FinancialSummaryCard extends ConsumerWidget {
                   symbol: symbol,
                   visible: visible,
                   tint: const Color(0xFFF57C00),
-                  onTap: () =>
-                      _openPage(context, const InstallmentsScreen()),
+                  onTap: () => _openPage(context, const InstallmentsScreen()),
                 ),
               ),
             ],
@@ -857,8 +1704,7 @@ class _FinancialSummaryCard extends ConsumerWidget {
                   symbol: symbol,
                   visible: visible,
                   tint: const Color(0xFF34C759),
-                  onTap: () =>
-                      _openPage(context, const SavingPlansScreen()),
+                  onTap: () => _openPage(context, const SavingPlansScreen()),
                 ),
               ),
               const SizedBox(width: 10),
@@ -911,8 +1757,10 @@ class _SummaryTileState extends State<_SummaryTile>
     vsync: this,
     duration: const Duration(milliseconds: 110),
   );
-  late final Animation<double> _scale = Tween(begin: 1.0, end: 0.96)
-      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  late final Animation<double> _scale = Tween(
+    begin: 1.0,
+    end: 0.96,
+  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
 
   @override
   void dispose() {
@@ -949,8 +1797,10 @@ class _SummaryTileState extends State<_SummaryTile>
                   Container(
                     width: 7,
                     height: 7,
-                    decoration:
-                        BoxDecoration(color: tint, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: tint,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -1008,7 +1858,6 @@ class _FloatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.brand.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        
       ),
       child: child,
     );
@@ -1018,10 +1867,19 @@ class _FloatCard extends StatelessWidget {
 // ── Top action bar ─────────────────────────────────────────────
 
 class _TopActionBar extends StatelessWidget {
-  final VoidCallback onManage;
+  final bool reorderMode;
+  final bool hasHidden;
+  final VoidCallback onAdd;
+  final VoidCallback onDone;
   final VoidCallback? onShare;
 
-  const _TopActionBar({required this.onManage, required this.onShare});
+  const _TopActionBar({
+    required this.reorderMode,
+    required this.hasHidden,
+    required this.onAdd,
+    required this.onDone,
+    required this.onShare,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1033,12 +1891,20 @@ class _TopActionBar extends StatelessWidget {
             style: Theme.of(context).textTheme.displayMedium,
           ),
         ),
-        GlassCircleButton(
-          icon: CupertinoIcons.slider_horizontal_3,
-          onTap: onManage,
-        ),
-        const SizedBox(width: 8),
-        const FxRateButton(),
+        if (reorderMode) ...[
+          // While rearranging: add hidden cards back, then finish.
+          if (hasHidden) ...[
+            GlassCircleButton(icon: CupertinoIcons.add, onTap: onAdd),
+            const SizedBox(width: 8),
+          ],
+          GlassCircleButton(icon: CupertinoIcons.checkmark_alt, onTap: onDone),
+        ] else ...[
+          if (onShare != null) ...[
+            GlassCircleButton(icon: CupertinoIcons.share, onTap: onShare!),
+            const SizedBox(width: 8),
+          ],
+          const FxRateButton(),
+        ],
       ],
     );
   }
@@ -1233,7 +2099,10 @@ class _PeriodNavRow extends StatelessWidget {
               ),
               child: Container(
                 key: ValueKey(label),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: showCustom
                     ? BoxDecoration(
                         color: AppActionBlue.color.withValues(alpha: 0.12),
@@ -1289,7 +2158,11 @@ class _NavArrow extends StatelessWidget {
   final VoidCallback onTap;
   final BrandColors brand;
 
-  const _NavArrow({required this.icon, required this.onTap, required this.brand});
+  const _NavArrow({
+    required this.icon,
+    required this.onTap,
+    required this.brand,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1304,178 +2177,6 @@ class _NavArrow extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, size: 16, color: brand.ink),
-      ),
-    );
-  }
-}
-
-// ── Spending header ────────────────────────────────────────────
-
-class _SpendingHeader extends StatelessWidget {
-  final _StatsPeriod period;
-  final DateTime anchor;
-  final String rangeLabel;
-  final double currentTotal;
-  final double prevTotal;
-  final String prevLabel;
-  final String symbol;
-  final bool showNav;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-
-  const _SpendingHeader({
-    required this.period,
-    required this.anchor,
-    required this.rangeLabel,
-    required this.currentTotal,
-    required this.prevTotal,
-    required this.prevLabel,
-    required this.symbol,
-    required this.showNav,
-    required this.onPrev,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final hasComparison = prevTotal > 0;
-    final pctChange = hasComparison
-        ? ((currentTotal - prevTotal) / prevTotal * 100)
-        : 0.0;
-    final isIncrease = pctChange > 0;
-    final periodHeader = _buildPeriodHeader(context);
-
-    return _FloatCard(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  periodHeader,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: brand.inkSoft,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-              if (showNav) ...[
-                _navBtn(context, CupertinoIcons.chevron_left, onPrev),
-                const SizedBox(width: 6),
-                _navBtn(context, CupertinoIcons.chevron_right, onNext),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child: FittedBox(
-                  alignment: Alignment.centerLeft,
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        formatMoney(symbol, currentTotal),
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1.5,
-                          color: brand.ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (hasComparison) ...[
-                const SizedBox(width: 10),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (isIncrease
-                              ? AppColors.expense
-                              : AppColors.income)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${isIncrease ? '↑' : '↓'}${pctChange.abs().toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isIncrease ? AppColors.expense : AppColors.income,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (hasComparison) ...[
-            const SizedBox(height: 6),
-            Text(
-              context
-                  .t('stats.vsPrevious')
-                  .replaceAll('{label}', prevLabel)
-                  .replaceAll('{amount}', formatMoney(symbol, prevTotal)),
-              style: TextStyle(
-                fontSize: 12,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _buildPeriodHeader(BuildContext context) {
-    switch (period) {
-      case _StatsPeriod.week:
-        return context.t('stats.periodHeader.week').replaceAll(
-            '{date}', DateFormat('MMM d').format(anchor).toUpperCase());
-      case _StatsPeriod.month:
-        return context.t('stats.periodHeader.month').replaceAll(
-            '{month}', DateFormat('MMMM').format(anchor).toUpperCase());
-      case _StatsPeriod.sixMonth:
-        return context.t('stats.periodHeader.sixMonth');
-      case _StatsPeriod.year:
-        return context.t('stats.periodHeader.year').replaceAll(
-            '{year}', DateFormat('yyyy').format(anchor));
-      case _StatsPeriod.all:
-        return context.t('stats.periodHeader.all');
-      case _StatsPeriod.custom:
-        return context.t('stats.periodHeader.custom');
-    }
-  }
-
-  Widget _navBtn(BuildContext context, IconData icon, VoidCallback onTap) {
-    final brand = context.brand;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: brand.background,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, size: 17, color: brand.ink),
       ),
     );
   }
@@ -1641,10 +2342,7 @@ class _LineChartCardState extends State<_LineChartCard>
     );
 
     if (widget.bare) return content;
-    return _FloatCard(
-      padding: EdgeInsets.zero,
-      child: content,
-    );
+    return _FloatCard(padding: EdgeInsets.zero, child: content);
   }
 
   String _subtitle(BuildContext context) {
@@ -1707,7 +2405,8 @@ class _LineChartCardState extends State<_LineChartCard>
               e.date.isBefore(range.endExclusive!)) {
             final monthDiff =
                 (e.date.year - start.year) * 12 + (e.date.month - start.month);
-            if (monthDiff >= 0 && monthDiff < 6) values[monthDiff] += e.convertedAmount;
+            if (monthDiff >= 0 && monthDiff < 6)
+              values[monthDiff] += e.convertedAmount;
           }
         }
         final labels = [
@@ -1959,7 +2658,8 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
   double _pageOffset = 0.0;
 
   void _onControllerUpdate() {
-    if (mounted) setState(() => _pageOffset = _controller.page ?? _page.toDouble());
+    if (mounted)
+      setState(() => _pageOffset = _controller.page ?? _page.toDouble());
   }
 
   @override
@@ -1976,7 +2676,10 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
     if (_page >= pageCount && pageCount > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() { _page = 0; _pageOffset = 0.0; });
+        setState(() {
+          _page = 0;
+          _pageOffset = 0.0;
+        });
         if (_controller.hasClients) _controller.jumpToPage(0);
       });
     }
@@ -2053,7 +2756,11 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
               padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
               child: Row(
                 children: [
-                  _navBtn(context, CupertinoIcons.chevron_left, widget.onPrev ?? () {}),
+                  _navBtn(
+                    context,
+                    CupertinoIcons.chevron_left,
+                    widget.onPrev ?? () {},
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -2069,7 +2776,11 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  _navBtn(context, CupertinoIcons.chevron_right, widget.onNext ?? () {}),
+                  _navBtn(
+                    context,
+                    CupertinoIcons.chevron_right,
+                    widget.onNext ?? () {},
+                  ),
                 ],
               ),
             ),
@@ -2082,7 +2793,9 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 const gap = 8.0;
-                final pillW = (constraints.maxWidth - gap * (pages.length - 1)) / pages.length;
+                final pillW =
+                    (constraints.maxWidth - gap * (pages.length - 1)) /
+                    pages.length;
                 final pillLeft = _pageOffset * (pillW + gap);
                 return SizedBox(
                   height: 40,
@@ -2118,21 +2831,31 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
                                   );
                                 },
                                 child: Center(
-                                  child: Builder(builder: (context) {
-                                    final dist = (_pageOffset - i).abs().clamp(0.0, 1.0);
-                                    final fg = brand.accentDark.computeLuminance() < 0.5
-                                        ? Colors.white
-                                        : Colors.black;
-                                    final color = Color.lerp(fg, brand.inkSoft, dist)!;
-                                    return Text(
-                                      pages[i].label,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: color,
-                                      ),
-                                    );
-                                  }),
+                                  child: Builder(
+                                    builder: (context) {
+                                      final dist = (_pageOffset - i)
+                                          .abs()
+                                          .clamp(0.0, 1.0);
+                                      final fg =
+                                          brand.accentDark.computeLuminance() <
+                                              0.5
+                                          ? Colors.white
+                                          : Colors.black;
+                                      final color = Color.lerp(
+                                        fg,
+                                        brand.inkSoft,
+                                        dist,
+                                      )!;
+                                      return Text(
+                                        pages[i].label,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: color,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
@@ -2151,7 +2874,10 @@ class _ChartsCarouselState extends State<_ChartsCarousel> {
             height: 540,
             child: PageView(
               controller: _controller,
-              onPageChanged: (i) => setState(() { _page = i; _pageOffset = i.toDouble(); }),
+              onPageChanged: (i) => setState(() {
+                _page = i;
+                _pageOffset = i.toDouble();
+              }),
               children: [
                 for (final page in pages)
                   if (page.id == 'donut')
@@ -2211,132 +2937,9 @@ class _ChartPage {
   });
 }
 
-// ── Report header (snapshot only) ─────────────────────────────
-
-class _ReportHeader extends StatelessWidget {
-  final String rangeLabel;
-  final _StatsPeriod period;
-
-  const _ReportHeader({required this.rangeLabel, required this.period});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final periodKey = switch (period) {
-      _StatsPeriod.week => 'stats.filterWeek',
-      _StatsPeriod.month => 'stats.filterMonth',
-      _StatsPeriod.sixMonth => 'stats.filterSixMonth',
-      _StatsPeriod.year => 'stats.filterYear',
-      _StatsPeriod.all => 'stats.filterAll',
-      _StatsPeriod.custom => 'stats.filterCustom',
-    };
-    final generated = DateFormat('MMM d, yyyy · HH:mm').format(DateTime.now());
-    return _FloatCard(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.mint,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  CupertinoIcons.doc_chart,
-                  size: 20,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t('stats.report.title'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      generated,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: brand.inkSoft,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _ReportTag(
-                icon: CupertinoIcons.calendar,
-                label: periodKey.startsWith('stats.')
-                    ? context.t(periodKey)
-                    : periodKey,
-              ),
-              _ReportTag(icon: CupertinoIcons.time, label: rangeLabel),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReportTag extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _ReportTag({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: brand.background,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: brand.inkSoft),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: brand.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Category donut chart ────────────────────────────────────────
 
-class _CategoryCard extends StatefulWidget {
+class _CategoryCard extends ConsumerStatefulWidget {
   final List<Expense> expenses;
   final String symbol;
   final String rangeLabel;
@@ -2352,19 +2955,34 @@ class _CategoryCard extends StatefulWidget {
   });
 
   @override
-  State<_CategoryCard> createState() => _CategoryCardState();
+  ConsumerState<_CategoryCard> createState() => _CategoryCardState();
 }
 
-class _CategoryCardState extends State<_CategoryCard> {
+class _CategoryCardState extends ConsumerState<_CategoryCard> {
   @override
   Widget build(BuildContext context) {
+    // Split bills charge the full amount to the category, but only the user's
+    // net share (total minus what debtors have repaid) is really their spend —
+    // net it out here so the donut matches the Monthly Budget figures.
+    final bills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
+    final billByExpenseId = {for (final b in bills) b.expenseId: b};
+    double net(Expense e) {
+      final bill = billByExpenseId[e.id];
+      if (bill == null || bill.totalAmount <= 0 || bill.collected <= 0) {
+        return e.convertedAmount;
+      }
+      final collectedBase =
+          bill.collected * (e.convertedAmount / bill.totalAmount);
+      return (e.convertedAmount - collectedBase).clamp(0.0, double.infinity);
+    }
+
     final Map<String, double> totals = {};
     for (final e in widget.expenses) {
-      totals[e.category] = (totals[e.category] ?? 0) + e.convertedAmount;
+      totals[e.category] = (totals[e.category] ?? 0) + net(e);
     }
     final sorted = totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final total = widget.expenses.fold<double>(0, (s, e) => s + e.convertedAmount);
+    final total = widget.expenses.fold<double>(0, (s, e) => s + net(e));
     final brand = context.brand;
 
     if (widget.expenses.isEmpty) {
@@ -2410,10 +3028,7 @@ class _CategoryCardState extends State<_CategoryCard> {
         ),
       );
       if (widget.bare) return emptyContent;
-      return _FloatCard(
-        padding: EdgeInsets.zero,
-        child: emptyContent,
-      );
+      return _FloatCard(padding: EdgeInsets.zero, child: emptyContent);
     }
 
     // Use LayoutBuilder to detect if height is bounded (in PageView) vs unbounded (stacked/report)
@@ -2427,6 +3042,9 @@ class _CategoryCardState extends State<_CategoryCard> {
             size: 190,
             strokeWidth: 34,
             showLabels: true,
+            // Snapshot export captures a static frame — draw it fully, not
+            // mid-sweep.
+            animate: !widget.forReport,
             segments: sorted
                 .map(
                   (entry) => DonutSegment(
@@ -2444,12 +3062,17 @@ class _CategoryCardState extends State<_CategoryCard> {
           ),
         );
 
-        final legendItems = sorted.take(6).map((entry) => _LegendRow(
-          entry: entry,
-          total: total,
-          symbol: widget.symbol,
-          onTap: () => _showCategoryRecords(context, entry),
-        )).toList();
+        final legendItems = sorted
+            .take(6)
+            .map(
+              (entry) => _LegendRow(
+                entry: entry,
+                total: total,
+                symbol: widget.symbol,
+                onTap: () => _showCategoryRecords(context, entry),
+              ),
+            )
+            .toList();
 
         if (bounded) {
           // Bounded height (in PageView): chart stays fixed, only legend scrolls
@@ -2462,12 +3085,11 @@ class _CategoryCardState extends State<_CategoryCard> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      context.t('stats.byCategoryHeader'),
+                      context.t('stats.byCategory'),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: brand.inkSoft,
-                        letterSpacing: 0.8,
+                        color: brand.ink,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -2502,12 +3124,11 @@ class _CategoryCardState extends State<_CategoryCard> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                context.t('stats.byCategoryHeader'),
+                context.t('stats.byCategory'),
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: brand.inkSoft,
-                  letterSpacing: 0.8,
+                  color: brand.ink,
                 ),
               ),
               const SizedBox(height: 16),
@@ -2676,12 +3297,14 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-class _CategoryRecordsSheet extends StatelessWidget {
+class _CategoryRecordsSheet extends ConsumerWidget {
   final String category;
   final List<Expense> records;
   final double total;
   final String symbol;
   final String rangeLabel;
+  // The budget set for this category, when opened from the Monthly Budget card.
+  final double? budget;
 
   const _CategoryRecordsSheet({
     required this.category,
@@ -2689,12 +3312,17 @@ class _CategoryRecordsSheet extends StatelessWidget {
     required this.total,
     required this.symbol,
     required this.rangeLabel,
+    this.budget,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final brand = context.brand;
     final style = styleFor(category);
+    // Map each record to its split bill (if any) so a shared expense can show
+    // the user's real share and any amount still owed by others.
+    final bills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
+    final billByExpenseId = {for (final b in bills) b.expenseId: b};
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
@@ -2766,25 +3394,32 @@ class _CategoryRecordsSheet extends StatelessWidget {
               color: brand.surface,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Text(
-                    formatMoney(symbol, total),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        formatMoney(symbol, total),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                  ),
+                    Text(
+                      '${records.length} ${records.length == 1 ? context.t('common.entry') : context.t('common.entries')}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${records.length} ${records.length == 1 ? context.t('common.entry') : context.t('common.entries')}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                if (budget != null && budget! > 0)
+                  _budgetProgress(context, brand, style),
               ],
             ),
           ),
@@ -2795,9 +3430,70 @@ class _CategoryRecordsSheet extends StatelessWidget {
               itemCount: records.length,
               separatorBuilder: (_, _) =>
                   Divider(height: 1, color: brand.divider),
-              itemBuilder: (context, index) =>
-                  _RecordRow(expense: records[index], symbol: symbol),
+              itemBuilder: (context, index) => _RecordRow(
+                expense: records[index],
+                symbol: symbol,
+                bill: billByExpenseId[records[index].id],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // "600 of 900 used" progress against this category's own monthly budget.
+  Widget _budgetProgress(
+    BuildContext context,
+    BrandColors brand,
+    CategoryStyle style,
+  ) {
+    final cap = budget!;
+    final ratio = (total / cap).clamp(0.0, 1.0);
+    final over = total > cap + 0.005;
+    final barColor = over ? AppColors.expense : style.accent;
+    final remaining = cap - total;
+    final tail = over
+        ? context.t('budget.overBudget')
+        : '${formatMoney(symbol, remaining)} ${context.t('split.leftLc')}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 7,
+              backgroundColor: brand.divider,
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${formatMoney(symbol, total)} '
+                  '${context.t('budget.ofBudget').replaceAll('{budget}', formatMoney(symbol, cap))} '
+                  '${context.t('home.used')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                tail,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: over ? AppColors.expense : brand.inkSoft,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2808,8 +3504,10 @@ class _CategoryRecordsSheet extends StatelessWidget {
 class _RecordRow extends StatelessWidget {
   final Expense expense;
   final String symbol;
+  // The split bill this record belongs to, when it's a shared expense.
+  final SplitBill? bill;
 
-  const _RecordRow({required this.expense, required this.symbol});
+  const _RecordRow({required this.expense, required this.symbol, this.bill});
 
   @override
   Widget build(BuildContext context) {
@@ -2817,61 +3515,135 @@ class _RecordRow extends StatelessWidget {
     final title = expense.note.trim().isEmpty
         ? context.categoryLabel(expense.category)
         : expense.note.trim();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                color: brand.ink,
-                fontWeight: FontWeight.w600,
+    // For a split expense the full amount is charged to this category, but the
+    // user's own share is smaller. Anything not yet repaid still counts as
+    // their spend, so surface both the share used and what's still owed.
+    final b = bill;
+    String? youUsedLine;
+    String? owedLine;
+    if (b != null) {
+      final billSymbol = b.currencySymbol;
+      final ownShare = b.payer.amount;
+      youUsedLine = context
+          .t('split.youUsed')
+          .replaceAll('{amount}', formatMoney(billSymbol, ownShare));
+      // Debtors who still owe (their amount tracks the remaining balance).
+      final owers = b.members
+          .where(
+            (m) =>
+                !m.isPayer &&
+                m.status != SplitMemberStatus.paid &&
+                m.amount > 0.005,
+          )
+          .toList();
+      if (owers.isNotEmpty) {
+        final names = owers.map((m) => m.name).join(', ');
+        final owedAmt = owers.fold<double>(0, (s, m) => s + m.amount);
+        owedLine = context
+            .t('split.owedToYouInline')
+            .replaceAll('{name}', names)
+            .replaceAll('{amount}', formatMoney(billSymbol, owedAmt));
+      }
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        // Open the record for viewing / editing. Close the sheet first so
+        // returning from the editor lands back on the report, not a stale sheet.
+        final nav = Navigator.of(context);
+        nav.pop();
+        nav.push(
+          CupertinoPageRoute(
+            builder: (_) => AddEditExpenseScreen(expense: expense),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: brand.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (youUsedLine != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      youUsedLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: brand.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (owedLine != null)
+                      Text(
+                        owedLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: brand.inkSoft,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * 0.48,
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.48,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatMoney(
+                      expense.originalCurrency != null
+                          ? (kSupportedCurrencies[expense.originalCurrency!] ??
+                                expense.originalCurrency!)
+                          : symbol,
+                      expense.amount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.expense,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${DateFormat('MMM d, yyyy').format(expense.date)} · ${context.categoryLabel(expense.category)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: brand.inkSoft,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  formatMoney(
-                    expense.originalCurrency != null
-                        ? (kSupportedCurrencies[expense.originalCurrency!] ?? expense.originalCurrency!)
-                        : symbol,
-                    expense.amount,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.expense,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${DateFormat('MMM d, yyyy').format(expense.date)} · ${context.categoryLabel(expense.category)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: brand.inkSoft,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2941,7 +3713,8 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
 
     String rangeLabel() {
       if (_start == null) return context.t('stats.selectStartDate');
-      if (_end == null) return '${DateFormat('d MMM yyyy').format(_start!)} — ?';
+      if (_end == null)
+        return '${DateFormat('d MMM yyyy').format(_start!)} — ?';
       return '${DateFormat('d MMM').format(_start!)} – ${DateFormat('d MMM yyyy').format(_end!)}';
     }
 
@@ -2954,7 +3727,8 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
       final isStart = _start != null && _isSameDay(date, _start!);
       final isEnd = _end != null && _isSameDay(date, _end!);
       final isSelected = isStart || isEnd;
-      final inRange = _start != null &&
+      final inRange =
+          _start != null &&
           _end != null &&
           !date.isBefore(_start!) &&
           !date.isAfter(_end!);
@@ -2964,26 +3738,26 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
       final textColor = isFuture
           ? brand.inkSoft.withValues(alpha: 0.35)
           : isSelected
-              ? Colors.white
-              : brand.ink;
+          ? Colors.white
+          : brand.ink;
 
       // Range strip: full-width background for interior days, half-width for edges
       Widget cell = Container(
         decoration: inRange && !isStart && !isEnd
             ? BoxDecoration(color: rangeColor)
             : (isStart && _end != null
-                ? BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.transparent, rangeColor],
-                    ),
-                  )
-                : isEnd && _start != null
-                    ? BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [rangeColor, Colors.transparent],
-                        ),
-                      )
-                    : null),
+                  ? BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, rangeColor],
+                      ),
+                    )
+                  : isEnd && _start != null
+                  ? BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [rangeColor, Colors.transparent],
+                      ),
+                    )
+                  : null),
         child: Center(
           child: Container(
             width: 36,
@@ -2991,11 +3765,11 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
             decoration: isSelected
                 ? BoxDecoration(color: accent, shape: BoxShape.circle)
                 : isToday
-                    ? BoxDecoration(
-                        border: Border.all(color: accent, width: 1.5),
-                        shape: BoxShape.circle,
-                      )
-                    : null,
+                ? BoxDecoration(
+                    border: Border.all(color: accent, width: 1.5),
+                    shape: BoxShape.circle,
+                  )
+                : null,
             child: Center(
               child: Text(
                 '$day',
@@ -3071,7 +3845,9 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                   if (_start != null && _end != null)
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       color: accent,
                       borderRadius: BorderRadius.circular(20),
                       minimumSize: Size.zero,
@@ -3110,8 +3886,11 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                         color: brand.background,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(CupertinoIcons.chevron_left,
-                          size: 14, color: brand.ink),
+                      child: Icon(
+                        CupertinoIcons.chevron_left,
+                        size: 14,
+                        color: brand.ink,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -3127,13 +3906,12 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: _month.year == today.year &&
-                            _month.month == today.month
+                    onTap:
+                        _month.year == today.year && _month.month == today.month
                         ? null
                         : () => setState(() {
-                              _month =
-                                  DateTime(_month.year, _month.month + 1);
-                            }),
+                            _month = DateTime(_month.year, _month.month + 1);
+                          }),
                     child: Container(
                       width: 32,
                       height: 32,
@@ -3144,7 +3922,8 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                       child: Icon(
                         CupertinoIcons.chevron_right,
                         size: 14,
-                        color: _month.year == today.year &&
+                        color:
+                            _month.year == today.year &&
                                 _month.month == today.month
                             ? brand.inkSoft.withValues(alpha: 0.3)
                             : brand.ink,
@@ -3196,114 +3975,23 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
   }
 }
 
-// ── Manage-visibility sheet ────────────────────────────────────
-
-class _VisibilitySheet extends StatelessWidget {
-  final String title;
-  final String footnote;
-  final List<Widget> children;
-
-  const _VisibilitySheet({
-    required this.title,
-    required this.footnote,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: brand.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            SectionCard(
-              padding: EdgeInsets.zero,
-              child: Column(children: children),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              footnote,
-              style: TextStyle(
-                fontSize: 12,
-                color: brand.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VisibilitySwitchRow extends StatelessWidget {
-  final String label;
-  final bool visible;
-  final bool canHide;
-  final ValueChanged<bool> onChanged;
-
-  const _VisibilitySwitchRow({
-    required this.label,
-    required this.visible,
-    required this.canHide,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: brand.ink,
-              ),
-            ),
-          ),
-          CupertinoSwitch(
-            value: visible,
-            onChanged: canHide ? onChanged : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Group Spend card ─────────────────────────────────────────────────────────
 
 const _kMemberBgs = [
-  Color(0xFFEAE3F8), Color(0xFFD7F4E5), Color(0xFFDBEAFE),
-  Color(0xFFFEF3C7), Color(0xFFFFEDD5), Color(0xFFFCE7F3),
+  Color(0xFFEAE3F8),
+  Color(0xFFD7F4E5),
+  Color(0xFFDBEAFE),
+  Color(0xFFFEF3C7),
+  Color(0xFFFFEDD5),
+  Color(0xFFFCE7F3),
 ];
 const _kMemberFgs = [
-  Color(0xFF5A4AAB), Color(0xFF1FBE71), Color(0xFF2563EB),
-  Color(0xFFD97706), Color(0xFFEA580C), Color(0xFFDB2777),
+  Color(0xFF5A4AAB),
+  Color(0xFF1FBE71),
+  Color(0xFF2563EB),
+  Color(0xFFD97706),
+  Color(0xFFEA580C),
+  Color(0xFFDB2777),
 ];
 
 // Returns each member's consumed share for the given expenses.
@@ -3315,7 +4003,8 @@ Map<String, double> _memberShares(
   for (final e in expenses) {
     if (e.splitPercents != null && e.splitPercents!.isNotEmpty) {
       for (final entry in e.splitPercents!.entries) {
-        result[entry.key] = (result[entry.key] ?? 0) + e.amount * (entry.value / 100.0);
+        result[entry.key] =
+            (result[entry.key] ?? 0) + e.amount * (entry.value / 100.0);
       }
     } else if (e.splitBetween.isNotEmpty) {
       final share = e.amount / e.splitBetween.length;
@@ -3356,7 +4045,8 @@ class _GroupSpendCard extends ConsumerWidget {
   bool _inRange(GroupExpenseItem e) {
     final d = DateTime(e.date.year, e.date.month, e.date.day);
     if (range.start != null && d.isBefore(range.start!)) return false;
-    if (range.endExclusive != null && !d.isBefore(range.endExclusive!)) return false;
+    if (range.endExclusive != null && !d.isBefore(range.endExclusive!))
+      return false;
     return true;
   }
 
@@ -3366,16 +4056,20 @@ class _GroupSpendCard extends ConsumerWidget {
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? [];
     if (groups.isEmpty) return const SizedBox.shrink();
 
-    final groupData = <({
-      String id,
-      String name,
-      List<GroupMember> members,
-      List<GroupExpenseItem> expenses,
-      double total,
-    })>[];
+    final groupData =
+        <
+          ({
+            String id,
+            String name,
+            List<GroupMember> members,
+            List<GroupExpenseItem> expenses,
+            double total,
+          })
+        >[];
 
     for (final group in groups) {
-      final expenses = ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? [];
+      final expenses =
+          ref.watch(groupExpensesProvider(group.id)).valueOrNull ?? [];
       final ranged = expenses.where(_inRange).toList();
       final total = ranged.fold(0.0, (s, e) => s + e.amount);
       if (total == 0) continue;
@@ -3399,7 +4093,8 @@ class _GroupSpendCard extends ConsumerWidget {
         if (m.uid == currentUid && myLiveName.isNotEmpty) {
           resolvedNames[m.uid] = myLiveName;
         } else {
-          final live = ref.watch(memberDisplayNameProvider(m.uid)).valueOrNull ?? '';
+          final live =
+              ref.watch(memberDisplayNameProvider(m.uid)).valueOrNull ?? '';
           resolvedNames[m.uid] = live.isNotEmpty ? live : m.displayName;
         }
       }
@@ -3432,7 +4127,11 @@ class _GroupSpendCard extends ConsumerWidget {
                 ),
                 child: Text(
                   '${groupData.length}',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: brand.inkSoft,
+                  ),
                 ),
               ),
             ],
@@ -3463,11 +4162,19 @@ class _GroupSpendCard extends ConsumerWidget {
             children: [
               Text(
                 context.t('stats.totalGroupSpend'),
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: brand.inkSoft,
+                ),
               ),
               Text(
                 formatMoney(symbol, overallTotal),
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: brand.ink),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: brand.ink,
+                ),
               ),
             ],
           ),
@@ -3505,16 +4212,25 @@ class _GroupSectionView extends StatefulWidget {
 class _GroupSectionViewState extends State<_GroupSectionView> {
   String? _selectedUid; // null = All
 
-  List<({String uid, String displayName, double spend, int colorIndex})> get _memberRows {
+  List<({String uid, String displayName, double spend, int colorIndex})>
+  get _memberRows {
     final memberUids = widget.members.map((m) => m.uid).toList();
     final shares = _memberShares(widget.expenses, memberUids);
-    final rows = widget.members.asMap().entries.map((e) => (
-      uid: e.value.uid,
-      displayName: widget.resolvedNames[e.value.uid] ?? e.value.displayName,
-      spend: shares[e.value.uid] ?? 0,
-      colorIndex: e.key,
-    )).toList()
-      ..sort((a, b) => b.spend.compareTo(a.spend));
+    final rows =
+        widget.members
+            .asMap()
+            .entries
+            .map(
+              (e) => (
+                uid: e.value.uid,
+                displayName:
+                    widget.resolvedNames[e.value.uid] ?? e.value.displayName,
+                spend: shares[e.value.uid] ?? 0,
+                colorIndex: e.key,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.spend.compareTo(a.spend));
     return rows;
   }
 
@@ -3556,7 +4272,11 @@ class _GroupSectionViewState extends State<_GroupSectionView> {
                   color: const Color(0xFFE8F0FE),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(CupertinoIcons.person_3_fill, size: 12, color: Color(0xFF1967D2)),
+                child: const Icon(
+                  CupertinoIcons.person_3_fill,
+                  size: 12,
+                  color: Color(0xFF1967D2),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -3564,12 +4284,20 @@ class _GroupSectionViewState extends State<_GroupSectionView> {
                   widget.groupName!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: brand.ink),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
                 ),
               ),
               Text(
                 formatMoney(widget.symbol, widget.total),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: brand.ink,
+                ),
               ),
             ],
           ),
@@ -3611,13 +4339,18 @@ class _GroupSectionViewState extends State<_GroupSectionView> {
                       color: const Color(0xFF1967D2),
                       onTap: () => setState(() => _selectedUid = null),
                     ),
-                    ...rows.map((m) => _FilterPill(
-                      label: m.displayName.split(' ').first,
-                      selected: _selectedUid == m.uid,
-                      color: _kMemberFgs[m.colorIndex % _kMemberFgs.length],
-                      onTap: () => setState(() =>
-                          _selectedUid = _selectedUid == m.uid ? null : m.uid),
-                    )),
+                    ...rows.map(
+                      (m) => _FilterPill(
+                        label: m.displayName.split(' ').first,
+                        selected: _selectedUid == m.uid,
+                        color: _kMemberFgs[m.colorIndex % _kMemberFgs.length],
+                        onTap: () => setState(
+                          () => _selectedUid = _selectedUid == m.uid
+                              ? null
+                              : m.uid,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -3642,7 +4375,8 @@ class _GroupSectionViewState extends State<_GroupSectionView> {
 // ── Vertical bar chart ────────────────────────────────────────────────────────
 
 class _GroupVerticalBars extends StatelessWidget {
-  final List<({String uid, String displayName, double spend, int colorIndex})> rows;
+  final List<({String uid, String displayName, double spend, int colorIndex})>
+  rows;
   final double total;
   final String symbol;
 
@@ -3664,8 +4398,12 @@ class _GroupVerticalBars extends StatelessWidget {
         final ratio = maxSpend > 0 ? (m.spend / maxSpend).clamp(0.0, 1.0) : 0.0;
         final fg = _kMemberFgs[m.colorIndex % _kMemberFgs.length];
         final bg = _kMemberBgs[m.colorIndex % _kMemberBgs.length];
-        final initial = m.displayName.isNotEmpty ? m.displayName[0].toUpperCase() : '?';
-        final pct = total > 0 ? (m.spend / total * 100).toStringAsFixed(0) : '0';
+        final initial = m.displayName.isNotEmpty
+            ? m.displayName[0].toUpperCase()
+            : '?';
+        final pct = total > 0
+            ? (m.spend / total * 100).toStringAsFixed(0)
+            : '0';
 
         return Expanded(
           child: Padding(
@@ -3689,7 +4427,11 @@ class _GroupVerticalBars extends StatelessWidget {
                 // % label
                 Text(
                   '$pct%',
-                  style: TextStyle(fontSize: 9, color: brand.inkSoft, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: brand.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 // Animated bar
@@ -3723,7 +4465,11 @@ class _GroupVerticalBars extends StatelessWidget {
                   child: Center(
                     child: Text(
                       initial,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: fg,
+                      ),
                     ),
                   ),
                 ),
@@ -3734,7 +4480,11 @@ class _GroupVerticalBars extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: brand.inkSoft),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: brand.inkSoft,
+                  ),
                 ),
               ],
             ),
@@ -3833,7 +4583,12 @@ class _GroupCategoryDonut extends StatelessWidget {
             size: 160,
             strokeWidth: 28,
             segments: sorted
-                .map((e) => DonutSegment(value: e.value, color: _donutColorFor(e.key)))
+                .map(
+                  (e) => DonutSegment(
+                    value: e.value,
+                    color: _donutColorFor(e.key),
+                  ),
+                )
                 .toList(),
             centerChild: _GroupDonutCenter(total: total, symbol: symbol),
           ),
@@ -3852,7 +4607,10 @@ class _GroupCategoryDonut extends StatelessWidget {
                     Container(
                       width: 9,
                       height: 9,
-                      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -3860,17 +4618,29 @@ class _GroupCategoryDonut extends StatelessWidget {
                         context.categoryLabel(e.key),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: brand.ink),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                        ),
                       ),
                     ),
                     Text(
                       '${(pct * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: brand.inkSoft),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: brand.inkSoft,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       formatMoney(symbol, e.value),
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: brand.ink),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: brand.ink,
+                      ),
                     ),
                   ],
                 ),
@@ -3958,7 +4728,14 @@ Color _donutColorFor(String category) {
 /// red), using the same category icons + colours as expenses.
 class _BudgetByCategoryCard extends ConsumerWidget {
   final String symbol;
-  const _BudgetByCategoryCard({required this.symbol});
+  // Snapshot/share export: the image isn't clickable, so spell out each
+  // category's spend inline instead of relying on the tappable legend.
+  final bool forReport;
+  const _BudgetByCategoryCard({
+    super.key,
+    required this.symbol,
+    this.forReport = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3968,16 +4745,22 @@ class _BudgetByCategoryCard extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final brand = context.brand;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final catSpend = ref.watch(categorySpendThisCycleProvider);
 
-    final items = cfg.categories.entries
-        .map((e) => _CatBudgetRow(e.key, catSpend[e.key] ?? 0, e.value))
-        .toList()
-      ..sort((a, b) => b.ratio.compareTo(a.ratio));
+    final items =
+        cfg.categories.entries
+            .map((e) => _CatBudgetRow(e.key, catSpend[e.key] ?? 0, e.value))
+            .toList()
+          ..sort((a, b) => b.ratio.compareTo(a.ratio));
+
+    // Total = the user's overall monthly cap (never below the sum allocated to
+    // categories). The segmented bar (iOS-storage style) shows each category's
+    // share of that cap, so any unallocated budget reads as free headroom.
+    final totalBudget = cfg.effectiveTotal;
+    final totalSpent = items.fold(0.0, (s, it) => s + it.spent);
+    final totalOver = totalSpent > totalBudget + 0.005;
 
     return Container(
-      margin: const EdgeInsets.only(top: 14),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       decoration: BoxDecoration(
         color: brand.surface,
@@ -3986,78 +4769,209 @@ class _BudgetByCategoryCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            context.t('budget.byCategoryTitle'),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-              color: brand.inkSoft,
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (final it in items) _row(context, it, brand, isDark),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(
-      BuildContext context, _CatBudgetRow it, BrandColors brand, bool isDark) {
-    final style = styleFor(it.name);
-    final over = it.spent > it.budget + 0.005;
-    final near = !over && it.ratio >= 0.85;
-    final progress =
-        it.budget <= 0 ? 0.0 : (it.spent / it.budget).clamp(0.0, 1.0);
-    final base = isDark ? Color.lerp(style.accent, Colors.white, 0.4)! : style.accent;
-    final barColor = over
-        ? AppColors.expense
-        : near
-            ? const Color(0xFFE8820E)
-            : base;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Icon(style.icon, size: 15, color: barColor),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  context.categoryLabel(it.name),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  context.t('home.budget'),
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                     color: brand.ink,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
-                '${formatMoney(symbol, it.spent)} ${context.t('budget.ofBudget').replaceAll('{budget}', formatMoney(symbol, it.budget))}',
+                '${formatMoney(symbol, totalSpent)} ${context.t('budget.ofBudget').replaceAll('{budget}', formatMoney(symbol, totalBudget))} ${context.t('home.used')}',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: over ? AppColors.expense : brand.inkSoft,
+                  color: totalOver ? AppColors.expense : brand.inkSoft,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 7,
-              backgroundColor: brand.divider,
-              valueColor: AlwaysStoppedAnimation(barColor),
+          const SizedBox(height: 14),
+          BudgetSegmentBar(
+            segments: [
+              for (final it in items)
+                if (it.spent > 0)
+                  BudgetSegment(
+                    name: it.name,
+                    amount: it.spent,
+                    color: _segmentColor(it.name),
+                  ),
+            ],
+            totalBudget: totalBudget,
+            totalSpent: totalSpent,
+            symbol: symbol,
+            onSegmentTap: (name) => _showCategoryRecords(
+              context,
+              ref,
+              name,
+              catSpend[name] ?? 0,
+              budget: cfg.categories[name],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (forReport)
+            // Snapshot: not clickable, so show each category's spend inline.
+            for (int i = 0; i < items.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              _legendRow(context, items[i], brand),
+            ]
+          else
+            // Live: compact legend; tap a category to open its detail popup.
+            Wrap(
+              spacing: 16,
+              runSpacing: 10,
+              children: [
+                for (final it in items) _legendItem(context, ref, it, brand),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Compact, tappable legend chip for the live card (dot + name).
+  Widget _legendItem(
+    BuildContext context,
+    WidgetRef ref,
+    _CatBudgetRow it,
+    BrandColors brand,
+  ) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showCategoryRecords(
+        context,
+        ref,
+        it.name,
+        it.spent,
+        budget: it.budget,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: _segmentColor(it.name),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            context.categoryLabel(it.name),
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: brand.ink,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Color _segmentColor(String name) {
+    final style = styleFor(name);
+    return budgetSliceColor(style.accent, style.background);
+  }
+
+  // Detailed, non-interactive row for the snapshot: category, spent / budget,
+  // and a spend bar (turns red when over budget).
+  Widget _legendRow(BuildContext context, _CatBudgetRow it, BrandColors brand) {
+    final color = _segmentColor(it.name);
+    final over = it.spent > it.budget + 0.005;
+    final ratio = it.budget > 0 ? (it.spent / it.budget).clamp(0.0, 1.0) : 0.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.categoryLabel(it.name),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: brand.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${formatMoney(symbol, it.spent)} / ${formatMoney(symbol, it.budget)}',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: over ? AppColors.expense : brand.ink,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: ratio,
+            minHeight: 6,
+            backgroundColor: brand.divider,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              over ? AppColors.expense : color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCategoryRecords(
+    BuildContext context,
+    WidgetRef ref,
+    String category,
+    double spent, {
+    double? budget,
+  }) {
+    HapticFeedback.selectionClick();
+    final records =
+        (ref.read(expensesProvider).valueOrNull ?? const <Expense>[])
+            .where((e) => e.type == EntryType.expense && e.category == category)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.brand.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * 0.78,
+          ),
+          child: _CategoryRecordsSheet(
+            category: category,
+            records: records,
+            total: spent,
+            symbol: symbol,
+            rangeLabel: DateFormat.yMMMM().format(DateTime.now()),
+            budget: budget,
+          ),
+        ),
       ),
     );
   }

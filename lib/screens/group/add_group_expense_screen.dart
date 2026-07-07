@@ -12,7 +12,9 @@ import '../../models/account.dart';
 import '../../models/expense_group.dart';
 import '../../models/group_expense_item.dart';
 import '../../repositories/local_expense_group_repository.dart';
+import '../../services/amount_calc.dart';
 import '../../services/i18n.dart';
+import '../../widgets/amount_operator_bar.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../settings/manage_categories_screen.dart';
@@ -110,7 +112,7 @@ class _AddGroupExpenseScreenState
 
   bool get _isEdit => widget.existing != null;
   double get _parsedAmount =>
-      double.tryParse(_amountCtrl.text.trim()) ?? 0;
+      evalAmount(_amountCtrl.text.trim()) ?? 0;
 
   // Theme-aware tokens for the group "hero card". In light mode they keep the
   // original lavender palette; in dark mode they flip to a dark elevated card
@@ -134,6 +136,7 @@ class _AddGroupExpenseScreenState
   @override
   void initState() {
     super.initState();
+    attachAmountCalculator(_amountCtrl, _amountFocus);
     _closeCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -586,7 +589,7 @@ class _AddGroupExpenseScreenState
     final user = ref.read(authStateProvider).valueOrNull;
     if (user == null) return;
 
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    final amount = evalAmount(_amountCtrl.text.trim());
     if (amount == null || amount <= 0) {
       AppToast.show(context, context.t('validation.invalidAmount'));
       return;
@@ -1285,6 +1288,11 @@ class _AddGroupExpenseScreenState
                                 ),
                               ],
                             ),
+                          ),
+
+                          AmountOperatorBar(
+                            controller: _amountCtrl,
+                            focusNode: _amountFocus,
                           ),
 
                           // Split breakdown — interactive YOU / PARTNER inputs

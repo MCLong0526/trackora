@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 
 import '../app_config.dart';
 import '../models/account.dart';
@@ -30,6 +31,7 @@ import '../repositories/firebase_precious_metal_repository.dart';
 import '../repositories/firebase_saving_plan_repository.dart';
 import '../repositories/installment_repository.dart';
 import '../repositories/local_account_repository.dart';
+import '../repositories/local_storage.dart';
 import '../repositories/local_borrow_lending_repository.dart';
 import '../repositories/local_custom_category_repository.dart';
 import '../repositories/local_expense_repository.dart';
@@ -145,8 +147,10 @@ final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalAccountRepository();
-      final pendingDeleteIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'account').toSet();
+      final pendingDeleteIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'account',
+      ).toSet();
       // Update local with current Firebase data (skip pending-deleted accounts).
       // Do NOT delete local-only entries here — they may be offline-created
       // accounts that haven't synced to Firebase yet.
@@ -177,7 +181,9 @@ final installmentRepositoryProvider = Provider<InstallmentRepository>((ref) {
       return LocalInstallmentRepository();
     case StorageMode.firebase:
       final isOnline = ref.watch(isOnlineProvider);
-      return isOnline ? FirebaseInstallmentRepository() : LocalInstallmentRepository();
+      return isOnline
+          ? FirebaseInstallmentRepository()
+          : LocalInstallmentRepository();
   }
 });
 final expenseServiceProvider = Provider(
@@ -188,13 +194,17 @@ final installmentServiceProvider = Provider(
       InstallmentService(repository: ref.watch(installmentRepositoryProvider)),
 );
 
-final borrowLendingRepositoryProvider = Provider<BorrowLendingRepository>((ref) {
+final borrowLendingRepositoryProvider = Provider<BorrowLendingRepository>((
+  ref,
+) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalBorrowLendingRepository();
     case StorageMode.firebase:
       final isOnline = ref.watch(isOnlineProvider);
-      return isOnline ? FirebaseBorrowLendingRepository() : LocalBorrowLendingRepository();
+      return isOnline
+          ? FirebaseBorrowLendingRepository()
+          : LocalBorrowLendingRepository();
   }
 });
 final borrowLendingServiceProvider = Provider(
@@ -207,7 +217,9 @@ final savingPlanRepositoryProvider = Provider<SavingPlanRepository>((ref) {
       return LocalSavingPlanRepository();
     case StorageMode.firebase:
       final isOnline = ref.watch(isOnlineProvider);
-      return isOnline ? FirebaseSavingPlanRepository() : LocalSavingPlanRepository();
+      return isOnline
+          ? FirebaseSavingPlanRepository()
+          : LocalSavingPlanRepository();
   }
 });
 final savingPlanServiceProvider = Provider(
@@ -235,8 +247,10 @@ final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalPersonRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'person').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'person',
+      ).toSet();
       for (final p in items) {
         if (p.id.isNotEmpty && !deletedIds.contains(p.id)) {
           await local.update(user.uid, p);
@@ -251,8 +265,9 @@ final peopleProvider = StreamProvider.autoDispose<List<Person>>((ref) {
 });
 
 // ── Custom categories ─────────────────────────────────────────────────────
-final customCategoryRepositoryProvider =
-    Provider<CustomCategoryRepository>((ref) {
+final customCategoryRepositoryProvider = Provider<CustomCategoryRepository>((
+  ref,
+) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalCustomCategoryRepository();
@@ -268,26 +283,30 @@ final customCategoryRepositoryProvider =
 /// into Hive so categories stay available offline.
 final customCategoriesProvider =
     StreamProvider.autoDispose<List<CustomCategory>>((ref) {
-  final user = ref.watch(authStateProvider).valueOrNull;
-  if (user == null) return Stream.value(const []);
-  final stream = ref.watch(customCategoryRepositoryProvider).getAll(user.uid);
-  if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
-    return stream.asyncMap((items) async {
-      final local = LocalCustomCategoryRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'category').toSet();
-      for (final c in items) {
-        if (c.id.isNotEmpty && !deletedIds.contains(c.id)) {
-          await local.update(user.uid, c);
-        }
+      final user = ref.watch(authStateProvider).valueOrNull;
+      if (user == null) return Stream.value(const []);
+      final stream = ref
+          .watch(customCategoryRepositoryProvider)
+          .getAll(user.uid);
+      if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
+        return stream.asyncMap((items) async {
+          final local = LocalCustomCategoryRepository();
+          final deletedIds = SyncService.getEntityPendingDeleteIds(
+            user.uid,
+            'category',
+          ).toSet();
+          for (final c in items) {
+            if (c.id.isNotEmpty && !deletedIds.contains(c.id)) {
+              await local.update(user.uid, c);
+            }
+          }
+          return deletedIds.isEmpty
+              ? items
+              : items.where((c) => !deletedIds.contains(c.id)).toList();
+        });
       }
-      return deletedIds.isEmpty
-          ? items
-          : items.where((c) => !deletedIds.contains(c.id)).toList();
+      return stream;
     });
-  }
-  return stream;
-});
 
 /// Keeps the global [styleFor] registry in sync with the user's custom
 /// categories so their icon/colour resolve everywhere. Watch this once high in
@@ -301,26 +320,42 @@ final customCategoryStyleRegistryProvider = Provider<void>((ref) {
 });
 
 /// Custom category names for the given flow (income vs expense).
-List<String> customCategoryNames(List<CustomCategory> cats,
-        {required bool income}) =>
-    cats.where((c) => c.isIncome == income).map((c) => c.name).toList();
+List<String> customCategoryNames(
+  List<CustomCategory> cats, {
+  required bool income,
+}) => cats.where((c) => c.isIncome == income).map((c) => c.name).toList();
 
 // ── Split bills (for the Contacts "owes you" view) ────────────────────────
 /// All split bills for the active user — local-first, merged with Firestore
-/// when online (both stores share the same bill id, so merge by id is safe).
-final allSplitBillsProvider =
-    FutureProvider.autoDispose<List<SplitBill>>((ref) async {
+/// when online. One bill per expense, keeping whichever copy was updated most
+/// recently so a just-saved local edit isn't masked by a not-yet-propagated
+/// remote copy (the cause of "owes you" amounts only updating after a restart).
+final allSplitBillsProvider = FutureProvider.autoDispose<List<SplitBill>>((
+  ref,
+) async {
+  // Re-fetch whenever the local split-bills box changes (a bill saved while
+  // adding an expense), so the People page shows new "owes you" amounts
+  // immediately instead of only after an app restart.
+  ref.watch(splitBillsBoxTickProvider);
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return const [];
   final local = await LocalSplitBillRepository().getAllSplitBills(user.uid);
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     try {
-      final remote = await SplitBillRepository().watchSplitBills(user.uid).first;
-      final byId = {for (final b in local) b.id: b};
-      for (final r in remote) {
-        byId[r.id] = r;
+      final remote = await SplitBillRepository()
+          .watchSplitBills(user.uid)
+          .first;
+      // Merge remote first, then local, keeping the most recently updated copy
+      // per expense. Local edits carry a fresh updatedAt, so they win over the
+      // stale remote value while Firestore is still catching up.
+      final byExpense = <String, SplitBill>{};
+      for (final b in [...remote, ...local]) {
+        final existing = byExpense[b.expenseId];
+        if (existing == null || !b.updatedAt.isBefore(existing.updatedAt)) {
+          byExpense[b.expenseId] = b;
+        }
       }
-      return byId.values.toList();
+      return byExpense.values.toList();
     } catch (_) {}
   }
   return local;
@@ -348,7 +383,8 @@ PersonOwedSummary personOwedSummary(
   for (final b in bills) {
     for (final m in b.members) {
       if (m.isPayer || m.status == SplitMemberStatus.paid) continue;
-      final matches = (m.personId != null && m.personId == person.id) ||
+      final matches =
+          (m.personId != null && m.personId == person.id) ||
           (m.personId == null && m.name.trim().toLowerCase() == lowerName);
       if (!matches) continue;
       pending.add((bill: b, member: m));
@@ -357,6 +393,29 @@ PersonOwedSummary personOwedSummary(
   }
   return PersonOwedSummary(total, pending);
 }
+
+/// Ticks whenever the local split-bills Hive box changes (a bill saved,
+/// updated or deleted). Widgets that read split state synchronously — e.g. the
+/// activity-list split badge — watch this so they rebuild the instant a bill is
+/// written, without waiting for a provider invalidation or a page change.
+final splitBillsBoxTickProvider = StreamProvider.autoDispose<int>((ref) {
+  if (!Hive.isBoxOpen(LocalStorage.splitBillsBoxName)) {
+    return const Stream<int>.empty();
+  }
+  return LocalStorage.splitBills.watch().map((_) => 0);
+});
+
+/// True when at least one person still owes the user across any split bill.
+/// Drives the "owed" badge on the People tile in the Manage hub.
+final someoneOwesYouProvider = Provider.autoDispose<bool>((ref) {
+  final bills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
+  for (final b in bills) {
+    for (final m in b.members) {
+      if (!m.isPayer && m.status != SplitMemberStatus.paid) return true;
+    }
+  }
+  return false;
+});
 
 /// Stream of all borrow / lending records for the active user.
 final borrowLendingProvider = StreamProvider.autoDispose<List<BorrowLending>>((
@@ -368,8 +427,10 @@ final borrowLendingProvider = StreamProvider.autoDispose<List<BorrowLending>>((
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalBorrowLendingRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'bl').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'bl',
+      ).toSet();
       for (final r in items) {
         if (r.id.isNotEmpty && !deletedIds.contains(r.id)) {
           await local.update(user.uid, r);
@@ -391,8 +452,10 @@ final savingPlansProvider = StreamProvider.autoDispose<List<SavingPlan>>((ref) {
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalSavingPlanRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'plan').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'plan',
+      ).toSet();
       for (final p in items) {
         if (p.id.isNotEmpty && !deletedIds.contains(p.id)) {
           await local.update(user.uid, p);
@@ -416,21 +479,18 @@ class UserNameNotifier extends StateNotifier<String> {
   UserNameNotifier(this._prefs, this._ref) : super('') {
     // Reload name whenever the authenticated user changes so names don't
     // bleed between accounts when one user logs out and another logs in.
-    _ref.listen<AsyncValue<AppUser?>>(
-      authStateProvider,
-      (previous, next) {
-        final prevUid = previous?.valueOrNull?.uid;
-        final nextUid = next.valueOrNull?.uid;
-        if (prevUid != nextUid) {
-          if (nextUid == null) {
-            state = ''; // signed out — clear immediately
-          } else {
-            state = ''; // clear stale name before loading new user's name
-            _load(nextUid);
-          }
+    _ref.listen<AsyncValue<AppUser?>>(authStateProvider, (previous, next) {
+      final prevUid = previous?.valueOrNull?.uid;
+      final nextUid = next.valueOrNull?.uid;
+      if (prevUid != nextUid) {
+        if (nextUid == null) {
+          state = ''; // signed out — clear immediately
+        } else {
+          state = ''; // clear stale name before loading new user's name
+          _load(nextUid);
         }
-      },
-    );
+      }
+    });
     // Initial load for the current user (if already signed in at startup).
     final uid = _ref.read(authStateProvider).valueOrNull?.uid;
     if (uid != null) _load(uid);
@@ -467,10 +527,9 @@ class UserNameNotifier extends StateNotifier<String> {
         if (mounted) state = authName;
         await _prefs.setUserNameForUid(uid, authName);
         try {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .set({'displayName': authName}, SetOptions(merge: true));
+          await FirebaseFirestore.instance.collection('users').doc(uid).set({
+            'displayName': authName,
+          }, SetOptions(merge: true));
         } catch (_) {}
       }
     }
@@ -481,15 +540,15 @@ class UserNameNotifier extends StateNotifier<String> {
     // Prefer the gated app user, but fall back to the raw Firebase user: at
     // signup the email isn't verified yet, so authStateProvider is still null —
     // without this fallback the name set during signup is never persisted.
-    final uid = _ref.read(authStateProvider).valueOrNull?.uid ??
+    final uid =
+        _ref.read(authStateProvider).valueOrNull?.uid ??
         FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
       await _prefs.setUserNameForUid(uid, name.trim());
       try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .set({'displayName': name.trim()}, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'displayName': name.trim(),
+        }, SetOptions(merge: true));
       } catch (_) {}
     }
   }
@@ -501,14 +560,16 @@ final userNameProvider = StateNotifierProvider<UserNameNotifier, String>(
 
 /// Live display name for any user UID, read from `users/{uid}/displayName`.
 /// Falls back to an empty string if the document doesn't exist or has no name.
-final memberDisplayNameProvider =
-    StreamProvider.family.autoDispose<String, String>((ref, uid) {
-  return FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .snapshots()
-      .map((snap) => (snap.data()?['displayName'] as String?)?.trim() ?? '');
-});
+final memberDisplayNameProvider = StreamProvider.family
+    .autoDispose<String, String>((ref, uid) {
+      return FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .map(
+            (snap) => (snap.data()?['displayName'] as String?)?.trim() ?? '',
+          );
+    });
 
 final authStateProvider = StreamProvider<AppUser?>(
   (ref) => ref.read(authServiceProvider).authStateChanges,
@@ -524,6 +585,11 @@ final homeTabIndexProvider = StateProvider<int>((_) => 0);
 
 /// When true, BudgetScreen opens the monthly budget popup on its next build.
 final openBudgetPopupProvider = StateProvider<bool>((_) => false);
+
+/// When true, StatisticsScreen jumps to the Month tab and scrolls to the
+/// Monthly Budget card on its next build, then resets itself to false. Set by
+/// the home spending card's budget tap.
+final statsFocusBudgetProvider = StateProvider<bool>((_) => false);
 
 final expensesProvider = StreamProvider.autoDispose<List<Expense>>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
@@ -657,7 +723,8 @@ Map<String, double> computeAccountBalanceMap(
     if (aid != null &&
         balances.containsKey(aid) &&
         (m.expenseId == null || m.expenseId!.isEmpty)) {
-      balances[aid] = (balances[aid] ?? 0) +
+      balances[aid] =
+          (balances[aid] ?? 0) +
           (m.action == MetalAction.sell ? m.totalAmount : -m.totalAmount);
     }
   }
@@ -699,10 +766,15 @@ final totalAccountBalanceProvider = Provider.autoDispose<double>((ref) {
   final mainCode = converter?.base;
   final metals = ref.watch(preciousMetalsProvider).valueOrNull ?? const [];
   final stocks = ref.watch(stockInvestmentsProvider).valueOrNull ?? const [];
-  final balances = computeAccountBalanceMap(accounts, all,
-      metals: metals,
-      stocks: stocks,
-      toBase: converter == null ? null : (amt, code) => converter.toBase(amt, code));
+  final balances = computeAccountBalanceMap(
+    accounts,
+    all,
+    metals: metals,
+    stocks: stocks,
+    toBase: converter == null
+        ? null
+        : (amt, code) => converter.toBase(amt, code),
+  );
 
   double total = 0;
   for (final a in accounts) {
@@ -726,8 +798,10 @@ final installmentsProvider = StreamProvider.autoDispose<List<Installment>>((
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalInstallmentRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'inst').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'inst',
+      ).toSet();
       for (final i in items) {
         if (i.id.isNotEmpty && !deletedIds.contains(i.id)) {
           await local.update(user.uid, i);
@@ -750,9 +824,9 @@ final budgetProvider = StreamProvider.autoDispose<double>((ref) {
       return LocalExpenseRepository().getMonthlyBudget(user.uid);
     }
     // Mirror Firebase budget to local so it's available offline
-    return FirebaseExpenseRepository()
-        .getMonthlyBudget(user.uid)
-        .asyncMap((amount) async {
+    return FirebaseExpenseRepository().getMonthlyBudget(user.uid).asyncMap((
+      amount,
+    ) async {
       await LocalExpenseRepository().setMonthlyBudget(user.uid, amount);
       return amount;
     });
@@ -762,8 +836,7 @@ final budgetProvider = StreamProvider.autoDispose<double>((ref) {
 
 /// Full budget config (total vs by-category) for the active user. Offline-aware,
 /// mirroring [budgetProvider]'s Firebase→local fallback.
-final budgetConfigProvider =
-    StreamProvider.autoDispose<MonthlyBudget>((ref) {
+final budgetConfigProvider = StreamProvider.autoDispose<MonthlyBudget>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(const MonthlyBudget());
   if (storageMode == StorageMode.firebase) {
@@ -771,9 +844,9 @@ final budgetConfigProvider =
     if (!isOnline) {
       return LocalExpenseRepository().getBudgetConfig(user.uid);
     }
-    return FirebaseExpenseRepository()
-        .getBudgetConfig(user.uid)
-        .asyncMap((cfg) async {
+    return FirebaseExpenseRepository().getBudgetConfig(user.uid).asyncMap((
+      cfg,
+    ) async {
       await LocalExpenseRepository().setBudgetConfig(user.uid, cfg);
       return cfg;
     });
@@ -785,19 +858,45 @@ final budgetConfigProvider =
 /// expense-type entries only. Used by the by-category budget UI.
 final categorySpendThisCycleProvider =
     Provider.autoDispose<Map<String, double>>((ref) {
-  final expenses = ref.watch(expensesProvider).valueOrNull ?? const [];
-  final converter = ref.watch(currencyConverterProvider).valueOrNull;
-  final out = <String, double>{};
-  for (final e in expenses) {
-    if (e.type != EntryType.expense) continue;
-    final amt = converter == null
-        ? e.amount
-        : (e.baseCurrencyAmount ??
-            converter.toBase(e.amount, e.originalCurrency ?? converter.base));
-    out[e.category] = (out[e.category] ?? 0) + amt;
-  }
-  return out;
-});
+      // Follow the custom expense cycle when set; otherwise the calendar month.
+      final cycleRange = ref.watch(cycleDateRangeProvider);
+      final List<Expense> expenses;
+      if (cycleRange != null) {
+        final all = ref.watch(allExpensesProvider).valueOrNull ?? const [];
+        expenses = all.where((e) {
+          final d = DateTime(e.date.year, e.date.month, e.date.day);
+          return !d.isBefore(cycleRange.start) &&
+              d.isBefore(cycleRange.endExclusive);
+        }).toList();
+      } else {
+        expenses = ref.watch(expensesProvider).valueOrNull ?? const [];
+      }
+      final converter = ref.watch(currencyConverterProvider).valueOrNull;
+      // Net out money repaid on split bills: the origin expense is recorded at
+      // the full total, but a debtor's repayment isn't the user's own spending.
+      final bills = ref.watch(allSplitBillsProvider).valueOrNull ?? const [];
+      final billByExpenseId = {for (final b in bills) b.expenseId: b};
+      final out = <String, double>{};
+      for (final e in expenses) {
+        if (e.type != EntryType.expense) continue;
+        var amt = converter == null
+            ? e.amount
+            : (e.baseCurrencyAmount ??
+                  converter.toBase(
+                    e.amount,
+                    e.originalCurrency ?? converter.base,
+                  ));
+        final bill = billByExpenseId[e.id];
+        if (bill != null && bill.totalAmount > 0 && bill.collected > 0) {
+          // collected is proportional to the expense amount in whatever
+          // currency `amt` is measured, so scale by amt / totalAmount.
+          amt = (amt - bill.collected * (amt / bill.totalAmount))
+              .clamp(0.0, double.infinity);
+        }
+        out[e.category] = (out[e.category] ?? 0) + amt;
+      }
+      return out;
+    });
 
 final currencySymbolProvider = FutureProvider<String>(
   (ref) => ref.read(prefsServiceProvider).currencySymbol(),
@@ -1003,6 +1102,61 @@ final homeCardOrderProvider =
       (ref) => HomeCardOrderNotifier(ref.read(prefsServiceProvider)),
     );
 
+class StatsCardOrderNotifier extends StateNotifier<List<String>> {
+  final PrefsService _prefs;
+
+  StatsCardOrderNotifier(this._prefs)
+    : super(PrefsService.defaultStatsCardOrder) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = await _prefs.statsCardOrder();
+  }
+
+  Future<void> setOrder(List<String> order) async {
+    state = order;
+    await _prefs.setStatsCardOrder(order);
+  }
+}
+
+final statsCardOrderProvider =
+    StateNotifierProvider<StatsCardOrderNotifier, List<String>>(
+      (ref) => StatsCardOrderNotifier(ref.read(prefsServiceProvider)),
+    );
+
+/// Stats report cards the user has hidden. Persisted; a card renders only when
+/// its data is available *and* its id is not in this set.
+class StatsHiddenCardsNotifier extends StateNotifier<Set<String>> {
+  final PrefsService _prefs;
+
+  StatsHiddenCardsNotifier(this._prefs) : super(const {}) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    state = await _prefs.statsHiddenCards();
+  }
+
+  Future<void> hide(String id) async {
+    if (state.contains(id)) return;
+    state = {...state, id};
+    await _prefs.setStatsHiddenCards(state);
+  }
+
+  Future<void> show(String id) async {
+    if (!state.contains(id)) return;
+    final next = {...state}..remove(id);
+    state = next;
+    await _prefs.setStatsHiddenCards(next);
+  }
+}
+
+final statsHiddenCardsProvider =
+    StateNotifierProvider<StatsHiddenCardsNotifier, Set<String>>(
+      (ref) => StatsHiddenCardsNotifier(ref.read(prefsServiceProvider)),
+    );
+
 class MoneyHubOrderNotifier extends StateNotifier<List<String>> {
   final PrefsService _prefs;
 
@@ -1077,13 +1231,17 @@ final pendingExpenseChangeCountProvider = Provider.autoDispose<int>((ref) {
   return pendingWrites + pendingDeletes;
 });
 
-final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((ref) {
+final preciousMetalRepositoryProvider = Provider<PreciousMetalRepository>((
+  ref,
+) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalPreciousMetalRepository();
     case StorageMode.firebase:
       final isOnline = ref.watch(isOnlineProvider);
-      return isOnline ? FirebasePreciousMetalRepository() : LocalPreciousMetalRepository();
+      return isOnline
+          ? FirebasePreciousMetalRepository()
+          : LocalPreciousMetalRepository();
   }
 });
 
@@ -1100,8 +1258,10 @@ final preciousMetalsProvider = StreamProvider.autoDispose<List<PreciousMetal>>((
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((items) async {
       final local = LocalPreciousMetalRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'metal').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'metal',
+      ).toSet();
       for (final m in items) {
         if (m.id.isNotEmpty && !deletedIds.contains(m.id)) {
           await local.update(user.uid, m);
@@ -1140,7 +1300,9 @@ final travelGroupRepositoryProvider = Provider<TravelGroupRepository>((ref) {
       return LocalTravelGroupRepository();
     case StorageMode.firebase:
       final isOnline = ref.watch(isOnlineProvider);
-      return isOnline ? FirebaseTravelGroupRepository() : LocalTravelGroupRepository();
+      return isOnline
+          ? FirebaseTravelGroupRepository()
+          : LocalTravelGroupRepository();
   }
 });
 
@@ -1157,8 +1319,10 @@ final travelGroupsProvider = StreamProvider.autoDispose<List<TravelGroup>>((
   if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
     return stream.asyncMap((groups) async {
       final local = LocalTravelGroupRepository();
-      final deletedIds =
-          SyncService.getEntityPendingDeleteIds(user.uid, 'tg').toSet();
+      final deletedIds = SyncService.getEntityPendingDeleteIds(
+        user.uid,
+        'tg',
+      ).toSet();
       for (final g in groups) {
         if (g.id.isNotEmpty && !deletedIds.contains(g.id)) {
           await local.updateGroup(g);
@@ -1174,7 +1338,9 @@ final travelGroupsProvider = StreamProvider.autoDispose<List<TravelGroup>>((
 
 final travelGroupMembersProvider = StreamProvider.autoDispose
     .family<List<TravelGroupMember>, String>((ref, groupId) {
-      final stream = ref.watch(travelGroupRepositoryProvider).getMembers(groupId);
+      final stream = ref
+          .watch(travelGroupRepositoryProvider)
+          .getMembers(groupId);
       if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
         return stream.asyncMap((members) async {
           final local = LocalTravelGroupRepository();
@@ -1189,7 +1355,9 @@ final travelGroupMembersProvider = StreamProvider.autoDispose
 
 final travelGroupExpensesProvider = StreamProvider.autoDispose
     .family<List<TravelExpense>, String>((ref, groupId) {
-      final stream = ref.watch(travelGroupRepositoryProvider).getExpenses(groupId);
+      final stream = ref
+          .watch(travelGroupRepositoryProvider)
+          .getExpenses(groupId);
       if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
         return stream.asyncMap((expenses) async {
           final local = LocalTravelGroupRepository();
@@ -1277,8 +1445,9 @@ final cycleDateRangeProvider = Provider.autoDispose<CycleDateRange?>((ref) {
 
 // ── Stock Investments ─────────────────────────────────────────────────────────
 
-final stockInvestmentRepositoryProvider =
-    Provider<StockInvestmentRepository>((ref) {
+final stockInvestmentRepositoryProvider = Provider<StockInvestmentRepository>((
+  ref,
+) {
   switch (storageMode) {
     case StorageMode.local:
       return LocalStockInvestmentRepository();
@@ -1299,13 +1468,16 @@ final stockInvestmentsProvider =
     StreamProvider.autoDispose<List<StockInvestment>>((ref) {
       final user = ref.watch(authStateProvider).valueOrNull;
       if (user == null) return Stream.value(const []);
-      final stream =
-          ref.watch(stockInvestmentRepositoryProvider).getAll(user.uid);
+      final stream = ref
+          .watch(stockInvestmentRepositoryProvider)
+          .getAll(user.uid);
       if (storageMode == StorageMode.firebase && ref.watch(isOnlineProvider)) {
         return stream.asyncMap((items) async {
           final local = LocalStockInvestmentRepository();
-          final deletedIds =
-              SyncService.getEntityPendingDeleteIds(user.uid, 'stock').toSet();
+          final deletedIds = SyncService.getEntityPendingDeleteIds(
+            user.uid,
+            'stock',
+          ).toSet();
           for (final s in items) {
             if (s.id.isNotEmpty && !deletedIds.contains(s.id)) {
               await local.update(user.uid, s);
@@ -1363,10 +1535,14 @@ final myGroupsProvider = StreamProvider.autoDispose<List<ExpenseGroup>>((ref) {
   if (user == null) return Stream.value(const []);
   // Pending offline group-delete and group-leave IDs — filter these out so
   // the UI immediately hides them even before the Firebase sync runs.
-  final pendingDeletes =
-      SyncService.getEntityPendingDeleteIds(user.uid, 'group_delete').toSet();
-  final pendingLeaves =
-      SyncService.getEntityPendingDeleteIds(user.uid, 'group_leave').toSet();
+  final pendingDeletes = SyncService.getEntityPendingDeleteIds(
+    user.uid,
+    'group_delete',
+  ).toSet();
+  final pendingLeaves = SyncService.getEntityPendingDeleteIds(
+    user.uid,
+    'group_leave',
+  ).toSet();
   final stream = ref
       .watch(expenseGroupServiceProvider)
       .getGroups(user.uid)
@@ -1414,7 +1590,7 @@ class QuickAddOrderNotifier extends StateNotifier<List<int>> {
   final PrefsService _prefs;
 
   QuickAddOrderNotifier(this._prefs)
-      : super(PrefsService.defaultQuickAddOrder) {
+    : super(PrefsService.defaultQuickAddOrder) {
     _load();
   }
 
@@ -1431,13 +1607,13 @@ class QuickAddOrderNotifier extends StateNotifier<List<int>> {
 
 final quickAddOrderProvider =
     StateNotifierProvider<QuickAddOrderNotifier, List<int>>(
-  (ref) => QuickAddOrderNotifier(ref.read(prefsServiceProvider)),
-);
+      (ref) => QuickAddOrderNotifier(ref.read(prefsServiceProvider)),
+    );
 
 // Background sync: pushes Firestore data into local Hive so partners'
 // expenses become visible without restarting the app.
-final groupExpenseSyncProvider =
-    StreamProvider.family.autoDispose<void, String>((ref, groupId) {
+final groupExpenseSyncProvider = StreamProvider.family
+    .autoDispose<void, String>((ref, groupId) {
       if (storageMode != StorageMode.firebase) return Stream.value(null);
       final user = ref.watch(authStateProvider).valueOrNull;
       final firebaseRepo = FirebaseExpenseGroupRepository();
@@ -1447,7 +1623,10 @@ final groupExpenseSyncProvider =
         // doesn't re-create it in local Hive before sync has pushed the delete.
         final uid = user?.uid ?? '';
         final pendingDeletes = uid.isNotEmpty
-            ? SyncService.getEntityPendingDeleteIds(uid, 'group_expense').toSet()
+            ? SyncService.getEntityPendingDeleteIds(
+                uid,
+                'group_expense',
+              ).toSet()
             : const <String>{};
         for (final e in expenses) {
           if (pendingDeletes.contains('$groupId:${e.id}')) continue;

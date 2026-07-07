@@ -23,7 +23,10 @@ import '../../screens/expenses/bill_detail_screen.dart';
 import '../../screens/expenses/split_bill_screen.dart';
 import '../../screens/people/people_screen.dart';
 import '../../screens/settings/manage_categories_screen.dart';
+import '../../services/amount_calc.dart';
 import '../../services/i18n.dart';
+import '../../widgets/amount_operator_bar.dart';
+import '../../widgets/app_dialog.dart';
 import '../../services/prefs_service.dart';
 import '../../services/split_settlement_service.dart';
 import '../../services/sync_service.dart';
@@ -121,6 +124,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
   bool _cardAtBottom = true; // at bottom (or no overflow) → hide bottom fade
 
   bool _splitBillEnabled = false;
+  // True once the total changed after the split was last reviewed, so we can
+  // prompt the user to re-check the split on save.
+  bool _splitNeedsReview = false;
   List<SplitMember> _splitMembers = [];
   SplitMode _splitMode = SplitMode.equally;
   double _splitBillTotal =
@@ -281,6 +287,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
     _hasValidAmount = _checkAmountValid();
     _amountController.addListener(_onAmountChanged);
+    attachAmountCalculator(_amountController, _amountFocus);
     _loadInitialCurrency();
     if (_isEdit) _loadSplitBill();
     if (widget.copyFrom != null) _loadSplitBillForCopy();
@@ -296,7 +303,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
   bool _checkAmountValid() {
     final text = _amountController.text;
-    return text.isNotEmpty && (double.tryParse(text) ?? 0) > 0;
+    return text.isNotEmpty && (evalAmount(text) ?? 0) > 0;
   }
 
   void _onAmountChanged() {
@@ -305,8 +312,9 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       setState(() => _hasValidAmount = valid);
     }
     if (_splitBillEnabled && _splitMembers.isNotEmpty) {
-      final newTotal = double.tryParse(_amountController.text) ?? 0;
+      final newTotal = evalAmount(_amountController.text) ?? 0;
       if (newTotal > 0 && (newTotal - _splitBillTotal).abs() > 0.001) {
+        _splitNeedsReview = true;
         _syncSplitToAmount(newTotal);
       }
     }
@@ -623,7 +631,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       final one = converter?.toBase(1.0, _currencyCode) ?? 0;
       if (one > 0) fxToBase = one;
     }
-    final amount = double.tryParse(_amountController.text) ?? 0;
+    final amount = evalAmount(_amountController.text) ?? 0;
     final totalAmount = _splitBillEnabled && _splitBillTotal > 0
         ? _splitBillTotal
         : amount;
@@ -660,6 +668,8 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         // others' shares are tracked as owed and returned when they settle.
         _amountController.text = result.totalAmount.toStringAsFixed(2);
       });
+      // The user just reviewed the split, so clear any pending review prompt.
+      _splitNeedsReview = false;
       // Prevent the amount field from auto-focusing when returning
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) FocusScope.of(context).unfocus();
@@ -688,6 +698,39 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       );
       return;
     }
+
+    // If the total changed since the split was last reviewed, ask the user to
+    // re-check the split before saving (the amounts were auto-rescaled).
+    if (_splitBillEnabled && _splitMembers.isNotEmpty && _splitNeedsReview) {
+      var review = false;
+      var saveAnyway = false;
+      await showAppDialog(
+        context: context,
+        title: context.t('split.reviewTitle'),
+        message: context.t('split.reviewMessage'),
+        icon: CupertinoIcons.exclamationmark_triangle_fill,
+        accent: const Color(0xFFE8820E),
+        actions: [
+          AppDialogAction(
+            label: context.t('split.reviewNow'),
+            isPrimary: true,
+            onTap: () => review = true,
+          ),
+          AppDialogAction(
+            label: context.t('split.saveAnyway'),
+            onTap: () => saveAnyway = true,
+          ),
+        ],
+      );
+      if (!mounted) return;
+      if (review) {
+        await _openSplitBillSheet(context);
+        return;
+      }
+      if (!saveAnyway) return; // dismissed without choosing
+      _splitNeedsReview = false;
+    }
+
     setState(() => _saving = true);
 
     final user = ref.read(authStateProvider).valueOrNull;
@@ -738,7 +781,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         }
       }
 
-      final amount = double.parse(_amountController.text);
+      final amount = evalAmount(_amountController.text) ?? 0;
       final now = DateTime.now();
 
       final mainCode = await ref.read(currencyCodeProvider.future);
@@ -961,6 +1004,15 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
     _splitMembers = updated;
   }
 
+  // Total already settled per member, keyed by member id.
+  Map<String, double> _collectedByMember(List<SplitSettlement> settlements) {
+    final out = <String, double>{};
+    for (final s in settlements) {
+      out[s.memberId] = (out[s.memberId] ?? 0) + s.amount;
+    }
+    return out;
+  }
+
   Future<SplitBill?> _saveSplitBill({
     required String uid,
     required String expenseId,
@@ -1021,18 +1073,37 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
 
       // Revert any paid members to pending when the total changed so the
       // "Manage split & settle" page no longer shows them as PAID.
-      final finalMembers = amountChanged
-          ? _splitMembers
-              .map(
-                (m) => m.status == SplitMemberStatus.paid
-                    ? m.copyWith(
-                        status: SplitMemberStatus.pending,
-                        paidAt: null,
-                      )
-                    : m,
-              )
-              .toList()
-          : _splitMembers;
+      final List<SplitMember> finalMembers;
+      if (amountChanged) {
+        finalMembers = _splitMembers
+            .map(
+              (m) => m.status == SplitMemberStatus.paid
+                  ? m.copyWith(
+                      status: SplitMemberStatus.pending,
+                      paidAt: null,
+                    )
+                  : m,
+            )
+            .toList();
+      } else {
+        // The edit page shows each debtor's *original* split share. Convert
+        // back to the remaining-owed balance by subtracting what they've
+        // already paid, so a partial settlement isn't wiped on re-save.
+        final collected = _collectedByMember(settlements);
+        finalMembers = _splitMembers.map((m) {
+          final c = collected[m.id] ?? 0;
+          if (c <= 0 || m.status == SplitMemberStatus.paid) return m;
+          final remaining = (m.amount - c).clamp(0.0, double.infinity);
+          final isPaid = remaining <= 0.005;
+          return m.copyWith(
+            amount: isPaid ? m.amount : remaining,
+            status: isPaid
+                ? SplitMemberStatus.paid
+                : SplitMemberStatus.pending,
+            paidAt: isPaid ? now2 : null,
+          );
+        }).toList();
+      }
 
       final bill = SplitBill(
         id: localId,
@@ -1163,10 +1234,21 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
       }
 
       if (!mounted || bill == null) return;
+      // Show the *original* split share on the edit page: a partially-paid
+      // debtor stores their remaining balance, so add back what they've
+      // already settled. (Fully-paid members keep their frozen amount.)
+      final collected = _collectedByMember(bill.settlements);
+      final displayMembers = bill.members.map((m) {
+        final c = collected[m.id] ?? 0;
+        if (c > 0 && m.status != SplitMemberStatus.paid) {
+          return m.copyWith(amount: m.amount + c);
+        }
+        return m;
+      }).toList();
       setState(() {
         _splitBillEnabled = true;
-        _splitMembers = bill!.members;
-        _splitMode = bill.splitMode;
+        _splitMembers = displayMembers;
+        _splitMode = bill!.splitMode;
         _splitBillTotal = bill.totalAmount;
         _splitBill = bill;
         // Keep the stored expense amount in the field (the full bill total for
@@ -1204,9 +1286,17 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
         } catch (_) {}
       }
       if (!mounted || bill == null) return;
+      // A copy starts a fresh bill, so seed it with each debtor's original
+      // split share (add back what a partial settlement had deducted).
+      final collected = _collectedByMember(bill.settlements);
       setState(() {
         _splitBillEnabled = true;
-        _splitMembers = bill!.members.map((m) => m.copyWith()).toList();
+        _splitMembers = bill!.members.map((m) {
+          final c = collected[m.id] ?? 0;
+          return c > 0 && m.status != SplitMemberStatus.paid
+              ? m.copyWith(amount: m.amount + c)
+              : m.copyWith();
+        }).toList();
         _splitMode = bill.splitMode;
         _splitBillTotal = bill.totalAmount;
       });
@@ -1968,7 +2058,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                             if (v == null || v.isEmpty) {
                               return context.t('validation.enterAmount');
                             }
-                            final n = double.tryParse(v);
+                            final n = evalAmount(v);
                             if (n == null || n <= 0) {
                               return context.t('validation.invalidAmount');
                             }
@@ -1983,7 +2073,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                       listenable: _amountController,
                       builder: (ctx, _) {
                         final amt =
-                            double.tryParse(_amountController.text) ?? 0;
+                            evalAmount(_amountController.text) ?? 0;
                         if (amt <= 0) return const SizedBox.shrink();
                         final converted = converter.toBase(amt, _currencyCode);
                         return Padding(
@@ -2004,6 +2094,10 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                         );
                       },
                     ),
+                  AmountOperatorBar(
+                    controller: _amountController,
+                    focusNode: _amountFocus,
+                  ),
                 ],
               );
             },
@@ -2668,7 +2762,12 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 .replaceAll('{amount}', '$symbol ${each.toStringAsFixed(2)}') +
             est(each);
       case SplitMode.amount:
-        final total = _splitMembers.fold<double>(0, (s, m) => s + m.amount);
+        // Use the fixed bill total, not the sum of member amounts — a member's
+        // amount tracks their *remaining* owed balance, so it shrinks after a
+        // settlement and would make the bill total look smaller than it is.
+        final total = _splitBillTotal > 0
+            ? _splitBillTotal
+            : _splitMembers.fold<double>(0, (s, m) => s + m.amount);
         return context
                 .t('expense.splitTotal')
                 .replaceAll('{n}', '$n')
@@ -2730,7 +2829,7 @@ class _AddEditExpenseScreenState extends ConsumerState<AddEditExpenseScreen>
                 HapticFeedback.selectionClick();
                 if (v) {
                   // Just enable — user taps Edit to configure
-                  final amount = double.tryParse(_amountController.text) ?? 0;
+                  final amount = evalAmount(_amountController.text) ?? 0;
                   setState(() {
                     _splitBillEnabled = true;
                     if (_splitBillTotal <= 0) _splitBillTotal = amount;

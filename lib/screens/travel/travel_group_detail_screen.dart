@@ -846,14 +846,10 @@ class _ExpenseRow extends StatelessWidget {
     required this.onDelete,
   });
 
-  static const _catIcons = kTravelCatIcons;
-
-  static const _catColors = kTravelCatColors;
-
   @override
   Widget build(BuildContext context) {
     final divider = isDark ? const Color(0xFF3A3A3C) : _hairline;
-    final catColor = _catColors[expense.category] ?? const Color(0xFF8E8E93);
+    final catColor = travelCatColor(expense.category);
 
     return Column(
       children: [
@@ -882,7 +878,7 @@ class _ExpenseRow extends StatelessWidget {
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Icon(
-                      _catIcons[expense.category] ?? CupertinoIcons.square_grid_2x2_fill,
+                      travelCatIcon(expense.category),
                       color: catColor, size: 17,
                     ),
                   ),

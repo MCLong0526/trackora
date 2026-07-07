@@ -13,11 +13,13 @@ import '../../models/stock_investment.dart';
 import '../../repositories/local_expense_repository.dart';
 import '../../services/i18n.dart';
 import '../../services/money_format.dart';
+import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_carousel_section.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/exchange_rate_sheet.dart';
+import '../../widgets/fading_edge_list.dart';
 import '../../widgets/reorderable_tile_grid.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/sticky_header_scaffold.dart';
@@ -34,12 +36,13 @@ import '../group/group_dashboard_screen.dart';
 /// followed by the user's custom expense categories (same set as the expense
 /// picker uses).
 List<String> _budgetCategories(WidgetRef ref) {
-  final custom = ((ref.read(customCategoriesProvider).valueOrNull ?? const [])
-          .where((c) => !c.isIncome)
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
-      .map((c) => c.name)
-      .toList();
+  final custom =
+      ((ref.read(customCategoriesProvider).valueOrNull ?? const [])
+              .where((c) => !c.isIncome)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+          .map((c) => c.name)
+          .toList();
   // Custom categories first (most-recently-added), then the built-ins —
   // matching the expense picker order.
   return [...custom, ...kDefaultExpenseCategories];
@@ -86,11 +89,19 @@ Future<void> showMonthlyBudgetEditor(
         await LocalExpenseRepository().setBudgetConfig(userId, result);
       }
       if (context.mounted) {
-        AppToast.show(context, context.t('budget.updated'), type: AppToastType.success);
+        AppToast.show(
+          context,
+          context.t('budget.updated'),
+          type: AppToastType.success,
+        );
       }
     } catch (_) {
       if (context.mounted) {
-        AppToast.show(context, context.t('budget.failedToSave'), type: AppToastType.error);
+        AppToast.show(
+          context,
+          context.t('budget.failedToSave'),
+          type: AppToastType.error,
+        );
       }
     }
   }
@@ -171,9 +182,26 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     setState(() {});
   }
 
-  void _onTotalChanged() => setState(() {});
+  void _onTotalChanged() {
+    // Live: as the user types the total, if it drops below what's allocated
+    // across categories, reset the by-category section first (more friendly).
+    _resetCategoriesIfBelowTotal();
+    setState(() {});
+  }
+
+  // When the user manually sets a total below what's currently allocated across
+  // categories, the by-category section is reset (cleared) so the total wins.
+  void _resetCategoriesIfBelowTotal() {
+    final typed = _typedTotal;
+    if (typed <= 0 || typed >= _categoryTotal) return;
+    for (final c in _catCtrls.values) {
+      if (c.text.isNotEmpty) c.text = '';
+    }
+    setState(() {});
+  }
 
   void _save() {
+    _resetCategoriesIfBelowTotal();
     final map = <String, double>{};
     _catCtrls.forEach((k, c) {
       final v = double.tryParse(c.text) ?? 0;
@@ -223,8 +251,10 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
               ),
               Text(
                 context.t('budget.setMonthlyBudget'),
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -251,13 +281,18 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
               // so the title never runs off the top; scrolls past the cap.
               ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: _listMaxHeight(context)),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final cat in widget.categories)
-                        _categoryRow(cat, brand),
-                    ],
+                child: FadingEdgeList(
+                  fadeColor: brand.background,
+                  topHeight: 16,
+                  bottomHeight: 24,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final cat in widget.categories)
+                          _categoryRow(cat, brand),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -294,8 +329,9 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
           Expanded(
             child: TextField(
               controller: _totalCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               textAlign: TextAlign.right,
               textInputAction: TextInputAction.done,
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -334,7 +370,8 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     // total card, Save) plus extra breathing room so the title sits well clear
     // of the status bar when the numpad is up.
     const fixedChrome = 430.0;
-    final available = media.size.height -
+    final available =
+        media.size.height -
         media.viewInsets.bottom -
         media.padding.top -
         fixedChrome;
@@ -344,7 +381,9 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
   Widget _categoryRow(String cat, BrandColors brand) {
     final s = styleFor(cat);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final iconColor = isDark ? Color.lerp(s.accent, Colors.white, 0.5)! : s.accent;
+    final iconColor = isDark
+        ? Color.lerp(s.accent, Colors.white, 0.5)!
+        : s.accent;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -373,15 +412,19 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
             width: 120,
             child: TextField(
               controller: _catCtrls[cat],
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               textAlign: TextAlign.right,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
                 isDense: true,
                 prefixText: '${widget.symbol} ',
                 hintText: '0',
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
               ),
             ),
           ),
@@ -431,6 +474,116 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
     setState(() => _hubEditMode = false);
   }
 
+  String _moduleLabel(BuildContext context, String id) => switch (id) {
+    'installments' => context.t('budget.manageInstallments'),
+    'borrowLending' => context.t('tools.borrowLending'),
+    'savingPlans' => context.t('tools.savingPlans'),
+    'monthlyBudget' => context.t('home.budget'),
+    'people' => context.t('budget.people'),
+    'travelGroups' => context.t('travel.title'),
+    'investments' => context.t('budget.investments'),
+    'groups' => context.t('budget.groupsLabel'),
+    'expenseCycle' => context.t('budget.expenseCycle'),
+    _ => id,
+  };
+
+  void _hideModule(String id) {
+    HapticFeedback.selectionClick();
+    ref.read(moneyHubVisibilityProvider.notifier).setVisible(id, false);
+  }
+
+  void _showAddModuleSheet(BuildContext context) {
+    final visible = ref.read(moneyHubVisibilityProvider);
+    final hidden = PrefsService.defaultMoneyHubModules
+        .where((id) => !visible.contains(id))
+        .toList(growable: false);
+    if (hidden.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.brand.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        final brand = ctx.brand;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: brand.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  context.t('money.addModule'),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: brand.ink,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final id in hidden)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        ref
+                            .read(moneyHubVisibilityProvider.notifier)
+                            .setVisible(id, true);
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: brand.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _moduleLabel(context, id),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: brand.ink,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.add_circled_solid,
+                              size: 22,
+                              color: AppActionBlue.color,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Applies a remove-at-[from] / insert-at-[to] reorder of the visible
   /// [reorderableIds] back onto the full saved money-hub order, leaving any
   /// hidden modules in their existing slots.
@@ -456,13 +609,17 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
 
   /// Tile content for one quick-action. Rearrangeable modules jiggle while in
   /// edit mode; the drag handling itself lives in [ReorderableTileGrid].
-  Widget _hubTile(_BudgetQuickItem item) {
-    final reorderable = item.id != 'expenseCycle';
+  Widget _hubTile(_BudgetQuickItem item, bool canHide) {
+    // Every tile is hideable; the hide badge sits on the icon corner inside the
+    // button so it stays aligned. The badge is omitted on the last remaining
+    // tile so at least one always stays. ('expenseCycle' stays pinned/
+    // non-draggable via the grid's reorderableCount, but still jiggles + hides.)
     final button = _BudgetQuickButton(
       item: item,
-      editMode: _hubEditMode && reorderable,
+      editMode: _hubEditMode,
+      onHide: (_hubEditMode && canHide) ? () => _hideModule(item.id) : null,
     );
-    if (!_hubEditMode || !reorderable) return button;
+    if (!_hubEditMode) return button;
     return AnimatedBuilder(
       animation: _jiggleCtrl,
       builder: (_, child) {
@@ -499,20 +656,26 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
     final groups = ref.watch(myGroupsProvider).valueOrNull ?? const [];
 
     final metals =
-        ref.watch(preciousMetalsProvider).valueOrNull ?? const <PreciousMetal>[];
+        ref.watch(preciousMetalsProvider).valueOrNull ??
+        const <PreciousMetal>[];
     final stocks =
-        ref.watch(stockInvestmentsProvider).valueOrNull ?? const <StockInvestment>[];
+        ref.watch(stockInvestmentsProvider).valueOrNull ??
+        const <StockInvestment>[];
     final converter = ref.watch(currencyConverterProvider).valueOrNull;
     // Account balances use the shared canonical calculation so Budget tallies
     // with Manage / Summary / Profile (includes metals & stocks).
-    final accountBalances = computeAccountBalanceMap(accounts, allExpenses,
-        metals: metals,
-        stocks: stocks,
-        toBase: converter == null
-            ? null
-            : (amt, code) => converter.toBase(amt, code));
+    final accountBalances = computeAccountBalanceMap(
+      accounts,
+      allExpenses,
+      metals: metals,
+      stocks: stocks,
+      toBase: converter == null
+          ? null
+          : (amt, code) => converter.toBase(amt, code),
+    );
 
     // ── Quick-style button items — standard modules first, tools at end ─────────
+    final someoneOwesYou = ref.watch(someoneOwesYouProvider);
     final quickItems = <_BudgetQuickItem>[
       if (visibleModules.contains('monthlyBudget'))
         _BudgetQuickItem(
@@ -558,6 +721,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
           iconBg: AppColors.lilac,
           iconColor: kCategoryStyles['Shopping']!.accent,
           label: context.t('budget.badgePeople'),
+          showBadge: someoneOwesYou,
           onTap: () => _push(context, const PeopleScreen()),
         ),
       if (visibleModules.contains('travelGroups'))
@@ -603,31 +767,32 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
             }
           },
         ),
-      // ── Always-visible tools ──────────────────────────────
-      _BudgetQuickItem(
-        id: 'expenseCycle',
-        icon: CupertinoIcons.calendar_badge_plus,
-        iconBg: AppColors.butter,
-        iconColor: const Color(0xFFB8870A),
-        label: context.t('budget.expenseCycle'),
-        onTap: () => _showCycleSheet(context),
-      ),
+      // ── Tools (pinned at the end, but hideable like the modules) ──────────
+      if (visibleModules.contains('expenseCycle'))
+        _BudgetQuickItem(
+          id: 'expenseCycle',
+          icon: CupertinoIcons.calendar_badge_plus,
+          iconBg: AppColors.butter,
+          iconColor: const Color(0xFFB8870A),
+          label: context.t('budget.expenseCycle'),
+          onTap: () => _showCycleSheet(context),
+        ),
     ];
 
-    // Order the rearrangeable modules by the saved money-hub order; the
-    // always-on tool ('expenseCycle') stays pinned at the end.
+    // Order every visible tile (including 'expenseCycle') by the saved money-hub
+    // order; tiles missing from the saved order are appended.
     final hubOrder = ref.watch(moneyHubOrderProvider);
     final byId = {for (final it in quickItems) it.id: it};
     final reorderableIds = <String>[
       for (final id in hubOrder)
-        if (byId.containsKey(id) && id != 'expenseCycle') id,
+        if (byId.containsKey(id)) id,
       for (final it in quickItems)
-        if (it.id != 'expenseCycle' && !hubOrder.contains(it.id)) it.id,
+        if (!hubOrder.contains(it.id)) it.id,
     ];
-    final orderedItems = <_BudgetQuickItem>[
-      for (final id in reorderableIds) byId[id]!,
-      ...quickItems.where((it) => it.id == 'expenseCycle'),
-    ];
+    final orderedItems = [for (final id in reorderableIds) byId[id]!];
+    final hasHidden = PrefsService.defaultMoneyHubModules.any(
+      (id) => !visibleModules.contains(id),
+    );
 
     return SafeArea(
       child: StickyHeaderScaffold(
@@ -643,12 +808,20 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
               ),
               Row(
                 children: [
-                  GlassCircleButton(
-                    icon: CupertinoIcons.slider_horizontal_3,
-                    onTap: () => _showMoneyHubSheet(context, ref),
-                  ),
-                  const SizedBox(width: 8),
-                  const FxRateButton(),
+                  if (_hubEditMode) ...[
+                    if (hasHidden) ...[
+                      GlassCircleButton(
+                        icon: CupertinoIcons.add,
+                        onTap: () => _showAddModuleSheet(context),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    GlassCircleButton(
+                      icon: CupertinoIcons.checkmark_alt,
+                      onTap: _exitHubEdit,
+                    ),
+                  ] else
+                    const FxRateButton(),
                 ],
               ),
             ],
@@ -658,98 +831,83 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
           controller: sc,
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
           children: [
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // ── Accounts carousel (top section) ──────────────
-          AccountCarouselSection(
-            accounts: accounts,
-            balances: accountBalances,
-            allExpenses: allExpenses,
-            symbol: symbol,
-            visible: visible,
-          ),
+            // ── Accounts carousel (top section) ──────────────
+            AccountCarouselSection(
+              accounts: accounts,
+              balances: accountBalances,
+              allExpenses: allExpenses,
+              symbol: symbol,
+              visible: visible,
+            ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // ── Quick-action card ─────────────────────────────
-          if (orderedItems.isNotEmpty)
-            Builder(builder: (ctx) {
-              final brand = ctx.brand;
-              return Container(
-                padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
-                decoration: BoxDecoration(
-                  color: brand.surface,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Affordance so users know the tiles can be rearranged.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _hubEditMode
-                                ? CupertinoIcons.checkmark_circle_fill
-                                : CupertinoIcons.arrow_up_arrow_down,
-                            size: 12,
-                            color: _hubEditMode
-                                ? AppActionBlue.color
-                                : brand.inkSoft,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            _hubEditMode
-                                ? context.t('budget.reorderActive')
-                                : context.t('budget.reorderHint'),
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: _hubEditMode
-                                  ? AppActionBlue.color
-                                  : brand.inkSoft,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (_hubEditMode)
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _exitHubEdit,
-                              child: Text(
-                                context.t('budget.done'),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppActionBlue.color,
+            // ── Quick-action card ─────────────────────────────
+            if (orderedItems.isNotEmpty)
+              Builder(
+                builder: (ctx) {
+                  final brand = ctx.brand;
+                  return Container(
+                    padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
+                    decoration: BoxDecoration(
+                      color: brand.surface,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Always-visible affordance that tiles can be rearranged
+                        // (Done lives in the header tick while editing).
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.arrow_up_arrow_down,
+                                size: 12,
+                                color: brand.inkSoft,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                context.t('budget.reorderHint'),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: brand.inkSoft,
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+                            ],
+                          ),
+                        ),
+                        ReorderableTileGrid(
+                          itemCount: orderedItems.length,
+                          reorderableCount: reorderableIds.length,
+                          columns: 3,
+                          spacing: 0,
+                          runSpacing: 4,
+                          tileHeight: 84,
+                          itemKeys: [for (final it in orderedItems) it.id],
+                          itemBuilder: (_, i) => _hubTile(
+                            orderedItems[i],
+                            orderedItems.length > 1,
+                          ),
+                          feedbackBuilder: (_, i) =>
+                              _BudgetQuickButton(item: orderedItems[i]),
+                          onDragStart: _enterHubEdit,
+                          onReorder: (from, to) =>
+                              _reorderHub(reorderableIds, from, to),
+                        ),
+                      ],
                     ),
-                    ReorderableTileGrid(
-                      itemCount: orderedItems.length,
-                      reorderableCount: reorderableIds.length,
-                      columns: 3,
-                      spacing: 0,
-                      runSpacing: 4,
-                      tileHeight: 84,
-                      itemKeys: [for (final it in orderedItems) it.id],
-                      itemBuilder: (_, i) => _hubTile(orderedItems[i]),
-                      feedbackBuilder: (_, i) =>
-                          _BudgetQuickButton(item: orderedItems[i]),
-                      onDragStart: _enterHubEdit,
-                      onReorder: (from, to) =>
-                          _reorderHub(reorderableIds, from, to),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],  // end ListView children
-        ),   // end ListView
-      ),     // end StickyHeaderScaffold
+                  );
+                },
+              ),
+          ], // end ListView children
+        ), // end ListView
+      ), // end StickyHeaderScaffold
     );
   }
 
@@ -765,49 +923,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
       barrierColor: Colors.black.withValues(alpha: 0.4),
       isScrollControlled: true,
       builder: (_) => const _CycleSheetContent(),
-    );
-  }
-
-  void _showMoneyHubSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.brand.background,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => Consumer(
-        builder: (context, ref, _) {
-          final visible = ref.watch(moneyHubVisibilityProvider);
-          final notifier = ref.read(moneyHubVisibilityProvider.notifier);
-          final items = [
-            ('installments', context.t('budget.manageInstallments')),
-            ('borrowLending', context.t('tools.borrowLending')),
-            ('savingPlans', context.t('tools.savingPlans')),
-            ('monthlyBudget', context.t('home.budget')),
-            ('people', context.t('budget.people')),
-            ('travelGroups', context.t('travel.title')),
-            ('investments', context.t('budget.investments')),
-            ('groups', context.t('budget.groupsLabel')),
-          ];
-          return SingleChildScrollView(
-            child: _VisibilitySheet(
-              title: context.t('money.customizeHub'),
-              footnote: context.t('customize.keepOneVisible'),
-              children: [
-                for (final (id, label) in items)
-                  _VisibilitySwitchRow(
-                    label: label,
-                    visible: visible.contains(id),
-                    canHide: visible.length > 1 || !visible.contains(id),
-                    onChanged: (value) => notifier.setVisible(id, value),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
     );
   }
 }
@@ -889,7 +1004,11 @@ class _CycleSheetContent extends ConsumerWidget {
               ),
             ),
             if (useCustom) ...[
-              Container(height: 0.5, color: brand.divider, margin: const EdgeInsets.symmetric(horizontal: 14)),
+              Container(
+                height: 0.5,
+                color: brand.divider,
+                margin: const EdgeInsets.symmetric(horizontal: 14),
+              ),
               Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -905,18 +1024,33 @@ class _CycleSheetContent extends ConsumerWidget {
                             color: AppColors.mint,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: const Icon(CupertinoIcons.number, size: 16, color: AppColors.ink),
+                          child: const Icon(
+                            CupertinoIcons.number,
+                            size: 16,
+                            color: AppColors.ink,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
                             context.t('settings.cycleStartsOnDay'),
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: brand.ink),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: brand.ink,
+                            ),
                           ),
                         ),
-                        Text('$cycleDay', style: TextStyle(fontSize: 15, color: brand.inkSoft)),
+                        Text(
+                          '$cycleDay',
+                          style: TextStyle(fontSize: 15, color: brand.inkSoft),
+                        ),
                         const SizedBox(width: 6),
-                        Icon(CupertinoIcons.chevron_right, size: 14, color: brand.inkSoft),
+                        Icon(
+                          CupertinoIcons.chevron_right,
+                          size: 14,
+                          color: brand.inkSoft,
+                        ),
                       ],
                     ),
                   ),
@@ -930,7 +1064,12 @@ class _CycleSheetContent extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickCycleDay(BuildContext context, WidgetRef ref, int current, BrandColors brand) async {
+  Future<void> _pickCycleDay(
+    BuildContext context,
+    WidgetRef ref,
+    int current,
+    BrandColors brand,
+  ) async {
     int selected = current;
     await showModalBottomSheet<void>(
       context: context,
@@ -938,13 +1077,23 @@ class _CycleSheetContent extends ConsumerWidget {
       barrierColor: Colors.black.withValues(alpha: 0.4),
       builder: (ctx) => Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        decoration: BoxDecoration(color: brand.surface, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(
+          color: brand.surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 8),
-              Container(width: 36, height: 4, decoration: BoxDecoration(color: brand.divider, borderRadius: BorderRadius.circular(2))),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: brand.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
                 child: Row(
@@ -952,12 +1101,23 @@ class _CycleSheetContent extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         context.t('settings.cycleStartsOnDay'),
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: brand.ink),
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: brand.ink,
+                        ),
                       ),
                     ),
                     GestureDetector(
                       onTap: () => Navigator.pop(ctx),
-                      child: Text(context.t('budget.done'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF0066CC))),
+                      child: Text(
+                        context.t('budget.done'),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0066CC),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -966,115 +1126,29 @@ class _CycleSheetContent extends ConsumerWidget {
                 height: 200,
                 child: StatefulBuilder(
                   builder: (context, setLocal) => CupertinoPicker(
-                    scrollController: FixedExtentScrollController(initialItem: selected - 1),
+                    scrollController: FixedExtentScrollController(
+                      initialItem: selected - 1,
+                    ),
                     itemExtent: 40,
                     onSelectedItemChanged: (i) {
                       selected = i + 1;
                       ref.read(cycleDayStartProvider.notifier).set(selected);
                     },
-                    children: List.generate(28, (i) => Center(child: Text('${i + 1}', style: TextStyle(fontSize: 18, color: brand.ink)))),
+                    children: List.generate(
+                      28,
+                      (i) => Center(
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(fontSize: 18, color: brand.ink),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-
-class _VisibilitySheet extends StatelessWidget {
-  final String title;
-  final String footnote;
-  final List<Widget> children;
-
-  const _VisibilitySheet({
-    required this.title,
-    required this.footnote,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: brand.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 14),
-          SectionCard(
-            padding: EdgeInsets.zero,
-            child: Column(children: children),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            footnote,
-            style: TextStyle(
-              fontSize: 12,
-              color: brand.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VisibilitySwitchRow extends StatelessWidget {
-  final String label;
-  final bool visible;
-  final bool canHide;
-  final ValueChanged<bool> onChanged;
-
-  const _VisibilitySwitchRow({
-    required this.label,
-    required this.visible,
-    required this.canHide,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: brand.ink,
-              ),
-            ),
-          ),
-          CupertinoSwitch(
-            value: visible,
-            onChanged: canHide ? onChanged : null,
-          ),
-        ],
       ),
     );
   }
@@ -1090,6 +1164,10 @@ class _BudgetQuickItem {
   final String label;
   final VoidCallback onTap;
 
+  /// Shows a small "attention" dot on the icon (e.g. People when someone owes
+  /// the user), mirroring the split-bill badge in the activity list.
+  final bool showBadge;
+
   const _BudgetQuickItem({
     required this.id,
     required this.icon,
@@ -1097,13 +1175,19 @@ class _BudgetQuickItem {
     required this.iconColor,
     required this.label,
     required this.onTap,
+    this.showBadge = false,
   });
 }
 
 class _BudgetQuickButton extends StatefulWidget {
   final _BudgetQuickItem item;
   final bool editMode;
-  const _BudgetQuickButton({required this.item, this.editMode = false});
+  final VoidCallback? onHide;
+  const _BudgetQuickButton({
+    required this.item,
+    this.editMode = false,
+    this.onHide,
+  });
 
   @override
   State<_BudgetQuickButton> createState() => _BudgetQuickButtonState();
@@ -1154,27 +1238,71 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: effectiveBg,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: isDark
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: widget.item.iconBg.withValues(alpha: 0.55),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: effectiveBg,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: isDark
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: widget.item.iconBg.withValues(
+                                  alpha: 0.55,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                    ),
+                    child: Icon(
+                      widget.item.icon,
+                      color: widget.item.iconColor,
+                      size: 22,
+                    ),
+                  ),
+                  if (widget.item.showBadge && widget.onHide == null)
+                    Positioned(
+                      top: -3,
+                      right: -3,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8820E),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    ),
+                  if (widget.onHide != null)
+                    Positioned(
+                      top: -5,
+                      left: -5,
+                      child: GestureDetector(
+                        onTap: widget.onHide,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: AppColors.expense,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
                           ),
-                        ],
-                ),
-                child: Icon(
-                  widget.item.icon,
-                  color: widget.item.iconColor,
-                  size: 22,
-                ),
+                          child: const Icon(
+                            CupertinoIcons.minus,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 7),
               Text(
@@ -1196,4 +1324,3 @@ class _BudgetQuickButtonState extends State<_BudgetQuickButton>
     );
   }
 }
-

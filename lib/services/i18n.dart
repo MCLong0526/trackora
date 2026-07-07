@@ -138,6 +138,7 @@ class AppStrings {
     'common.edit': 'Edit',
     'common.update': 'Update',
     'common.close': 'Close',
+    'common.share': 'Share',
     'common.actions': 'Actions',
     'common.show': 'Show',
     'common.hide': 'Hide',
@@ -200,6 +201,9 @@ class AppStrings {
     'people.typeOther': 'Other',
     'people.noResults': 'No results',
     'people.noMatches': 'No matches.',
+    'people.searchOrAdd': 'Search or add a name',
+    'people.addToContacts': 'Add to contacts',
+    'people.noContacts': 'No saved contacts yet.',
     'people.removeTitle': 'Remove Person?',
     'people.remove': 'Remove',
     'people.removed': 'Person removed',
@@ -339,6 +343,14 @@ class AppStrings {
     'split.settleFooter':
         'Settling posts the amount back into your chosen account as income.',
     'split.owesYou': 'Owes you',
+    'split.youUsed': 'You used {amount}',
+    'split.owedToYouInline': '{name} still owed you {amount}',
+    'split.reviewTitle': 'Check split amounts',
+    'split.reviewMessage':
+        'You changed the total. Please review how it is split so each person\'s share is correct.',
+    'split.reviewNow': 'Review split',
+    'split.saveAnyway': 'Save anyway',
+    'split.changesSaved': 'Split changes saved',
     'split.owedTransactions': 'Pending split bills',
     'split.allSettledPerson': 'All settled up — nothing owed.',
     'split.settledTransactions': 'Settled records',
@@ -381,6 +393,7 @@ class AppStrings {
     'stats.trend': 'Trend',
     'stats.weeklySpend': 'Weekly spend',
     'stats.byCategory': 'By category',
+    'stats.addCardTitle': 'Add a card',
     'stats.calendar': 'Calendar',
     'stats.noCalendarRecords': 'No records this month',
     'stats.tapDayToSeeRecords': 'Tap a day to see records',
@@ -436,6 +449,7 @@ class AppStrings {
     'money.subtitle':
         'Manage commitments, lending, savings and spending limits.',
     'money.customizeHub': 'Customize Manage Page',
+    'money.addModule': 'Add a tool',
     'customize.keepOneVisible': 'At least one item must stay visible.',
     'budget.title': 'Monthly\nbudget',
     'budget.subtitle':
@@ -590,7 +604,8 @@ class AppStrings {
     'settings.profile': 'Profile',
     'settings.expenseCycle': 'Expense Cycle',
     'settings.customExpenseCycle': 'Custom Expense Cycle',
-    'settings.customExpenseCycleSub': 'Use salary cycle instead of calendar month',
+    'settings.customExpenseCycleSub':
+        'Use salary cycle instead of calendar month',
     'settings.cycleStartsOnDay': 'Cycle starts on day',
     'settings.preferences': 'Preferences',
     'settings.account': 'Account',
@@ -649,7 +664,8 @@ class AppStrings {
     'onb.skipTour': 'Skip tour',
     'onb.tourBadge': 'QUICK TOUR',
     'onb.nameTitle': 'What should we call you?',
-    'onb.nameSubtitle': 'Your display name shows on shared receipts and group expenses.',
+    'onb.nameSubtitle':
+        'Your display name shows on shared receipts and group expenses.',
     'onb.nameHint': 'Your name',
     'onb.nameRequired': 'Please enter a name',
     'onb.currencyTitle': 'Choose your currency',
@@ -659,17 +675,23 @@ class AppStrings {
     'onb.tourTitle': 'You\'re all set!',
     'onb.tourSubtitle': 'Here\'s a quick tour of what you can do.',
     'onb.t1Title': 'Add an expense in seconds',
-    'onb.t1Body': 'Tap the + button at the centre of the home screen to record spending or income instantly.',
+    'onb.t1Body':
+        'Tap the + button at the centre of the home screen to record spending or income instantly.',
     'onb.t2Title': 'Double-tap the back of your phone',
-    'onb.t2Body': 'On iPhone, open Settings ▸ Accessibility ▸ Touch ▸ Back Tap and assign the Trackora shortcut. Then a double-tap on the back of your phone opens quick add — no unlocking needed.',
+    'onb.t2Body':
+        'On iPhone, open Settings ▸ Accessibility ▸ Touch ▸ Back Tap and assign the Trackora shortcut. Then a double-tap on the back of your phone opens quick add — no unlocking needed.',
     'onb.t3Title': 'Make the Manage page yours',
-    'onb.t3Body': 'On the Budget tab, tap Edit to reorder, show or hide modules like Installments, Savings and Borrow/Lend.',
+    'onb.t3Body':
+        'On the Budget tab, tap Edit to reorder, show or hide modules like Installments, Savings and Borrow/Lend.',
     'onb.t4Title': 'Match your salary cycle',
-    'onb.t4Body': 'Prefer payday-to-payday? In Settings, turn on a custom cycle and pick the start day so your month lines up with your pay.',
+    'onb.t4Body':
+        'Prefer payday-to-payday? In Settings, turn on a custom cycle and pick the start day so your month lines up with your pay.',
     'onb.t5Title': 'Track expenses together',
-    'onb.t5Body': 'Create a group, then invite someone by email or a share code. You both record shared expenses and Trackora splits and settles automatically.',
+    'onb.t5Body':
+        'Create a group, then invite someone by email or a share code. You both record shared expenses and Trackora splits and settles automatically.',
     'onb.t6Title': 'Split a personal bill',
-    'onb.t6Body': 'When adding a personal expense, use Split bill to divide it among friends and keep track of who owes you.',
+    'onb.t6Body':
+        'When adding a personal expense, use Split bill to divide it among friends and keep track of who owes you.',
 
     // Money Tools entry section in Profile.
     'tools.title': 'Money Tools',
@@ -821,7 +843,8 @@ class AppStrings {
     'auth.createAccountBtn': 'Create an account',
     'auth.alreadyHaveAccount': 'Already have an account?',
     'auth.logIn': 'Log in',
-    'auth.tagline': 'A calmer way to see where every ringgit goes — across all your accounts.',
+    'auth.tagline':
+        'A calmer way to see where every ringgit goes — across all your accounts.',
     'welcome.changeLanguage': 'Language',
 
     // Precious metals.
@@ -863,7 +886,8 @@ class AppStrings {
     'account.otherTypes': 'Other Types',
     'account.extra8': '8 extra categories',
     'account.noAccounts': 'No accounts yet',
-    'account.noAccountsHint': 'Add a bank, e-wallet, or cash account to start tracking your money.',
+    'account.noAccountsHint':
+        'Add a bank, e-wallet, or cash account to start tracking your money.',
     'account.tapToTrack': 'Tap to track gold & silver',
     'account.preciousMetals': 'Precious Metals',
     'account.editAccount': 'Edit Account',
@@ -903,7 +927,8 @@ class AppStrings {
     'expense.entryDeleted': 'Entry deleted',
     'expense.savedOffline': 'Saved offline — will sync when connected',
     'expense.selectDestAccount': 'Please select a destination account',
-    'expense.sameAccountError': 'Source and destination accounts must be different',
+    'expense.sameAccountError':
+        'Source and destination accounts must be different',
     'expense.transferBetweenAccounts': 'Transfer Between My Accounts',
     'expense.transferExample': "e.g. Maybank → Touch 'n Go",
     'expense.from': 'From',
@@ -957,7 +982,8 @@ class AppStrings {
 
     // Add/edit account extras.
     'account.deleteAccount': 'Delete Account',
-    'account.deleteConfirm': 'Delete this account and all its data? This cannot be undone.',
+    'account.deleteConfirm':
+        'Delete this account and all its data? This cannot be undone.',
     'account.editTitle': 'Edit Account',
     'account.newTitle': 'New Account',
     'account.typeLabel': 'Account Type',
@@ -1011,7 +1037,8 @@ class AppStrings {
     'asset.perMonth': 'per month',
     'asset.loadingAccounts': 'Loading accounts…',
     'asset.noAccounts': 'No accounts yet',
-    'asset.addAccountsDesc': 'Add bank, e-wallet, or cash accounts\nto track your net worth.',
+    'asset.addAccountsDesc':
+        'Add bank, e-wallet, or cash accounts\nto track your net worth.',
     'asset.addAccount': 'Add Account',
     'asset.outstandingLending': 'Outstanding Lending',
     'asset.outstandingBorrowing': 'Outstanding Borrowing',
@@ -1092,9 +1119,11 @@ class AppStrings {
     'settings.newEmail': 'New email',
     'settings.currentPassword': 'Current password',
     'settings.sendVerificationLink': 'Send Verification Link',
-    'settings.verificationSent': 'Verification link sent to {email}.\n\nClick the link in that email to confirm your new address, then sign in again.',
+    'settings.verificationSent':
+        'Verification link sent to {email}.\n\nClick the link in that email to confirm your new address, then sign in again.',
     'settings.syncSignInTitle': 'Sign In & Sync',
-    'settings.syncDataStaysLocal': 'Your data stays local. Sync creates a backup.',
+    'settings.syncDataStaysLocal':
+        'Your data stays local. Sync creates a backup.',
     'settings.justNow': 'Just now',
     'settings.minutesAgo': '{m}m ago',
     'settings.hoursAgo': '{h}h ago',
@@ -1104,12 +1133,14 @@ class AppStrings {
     'settings.noAccount': "No account? We'll create one automatically.",
     'settings.deleteAccount': 'Delete Account',
     'settings.deleteAccountConfirmTitle': 'Delete Account?',
-    'settings.deleteAccountConfirmBody': 'This will permanently delete your account and all your data. This cannot be undone.',
+    'settings.deleteAccountConfirmBody':
+        'This will permanently delete your account and all your data. This cannot be undone.',
     'settings.deleteAccountConfirm': 'Delete Account',
     'settings.deleteAccountSuccess': 'Account deleted',
     'settings.deleteAccountFailed': 'Could not delete account. Try again.',
     'settings.deleteAccountReauthTitle': 'Verify Identity',
-    'settings.deleteAccountReauthBody': 'For security, please enter your password to continue.',
+    'settings.deleteAccountReauthBody':
+        'For security, please enter your password to continue.',
     'settings.deleteAccountPassword': 'Password',
     'settings.deleteAccountVerify': 'Verify & Delete',
     'settings.deleteAccountWrongPassword': 'Incorrect password. Try again.',
@@ -1185,7 +1216,8 @@ class AppStrings {
     'travel.joinCode': 'Join with code',
     'travel.newTrip': 'New trip',
     'travel.planHero': 'Plan the trip.\nWe\'ll do the math.',
-    'travel.planHeroSub': 'Add companions and start tracking expenses together.',
+    'travel.planHeroSub':
+        'Add companions and start tracking expenses together.',
     'travel.whoPaid': 'WHO PAID',
     'travel.groupTrip': 'Group Trip',
     'travel.travelers': 'Travelers',
@@ -1281,7 +1313,8 @@ class AppStrings {
     'group.entrySaved': 'Entry saved',
     'group.entryUpdated': 'Entry updated',
     'group.failedToDeleteEntry': 'Failed to delete entry',
-    'group.deleteExpensePermanent': 'This will permanently remove this expense.',
+    'group.deleteExpensePermanent':
+        'This will permanently remove this expense.',
     'group.deleteGroupPermanent':
         'This will permanently delete the group and all its expenses for everyone.',
     'group.deleteGroupRemoveAll':
@@ -1451,8 +1484,7 @@ class AppStrings {
     'asset.healthy': 'Healthy',
     'asset.fair': 'Fair',
     'asset.atRisk': 'At risk',
-    'asset.assetsLiabilitiesPercent':
-        '{owned}% assets · {owed}% liabilities',
+    'asset.assetsLiabilitiesPercent': '{owned}% assets · {owed}% liabilities',
     'asset.assetsBreakdown': 'Assets Breakdown',
     'asset.liabilitiesBreakdown': 'Liabilities Breakdown',
     'asset.lentOut': 'Lent Out',
@@ -1705,6 +1737,7 @@ class AppStrings {
     'common.edit': '编辑',
     'common.update': '更新',
     'common.close': '关闭',
+    'common.share': '分享',
     'common.actions': '操作',
     'common.show': '显示',
     'common.hide': '隐藏',
@@ -1767,6 +1800,9 @@ class AppStrings {
     'people.typeOther': '其他',
     'people.noResults': '无结果',
     'people.noMatches': '无匹配项。',
+    'people.searchOrAdd': '搜索或添加姓名',
+    'people.addToContacts': '添加到联系人',
+    'people.noContacts': '暂无已保存的联系人。',
     'people.removeTitle': '移除联系人？',
     'people.remove': '移除',
     'people.removed': '已移除联系人',
@@ -1894,6 +1930,13 @@ class AppStrings {
     'split.billClosed': '账单已结清！所有人都已结算。',
     'split.settleFooter': '结算后金额将作为收入存入你选择的账户。',
     'split.owesYou': '欠你',
+    'split.youUsed': '你实际使用 {amount}',
+    'split.owedToYouInline': '{name} 仍欠你 {amount}',
+    'split.reviewTitle': '检查分账金额',
+    'split.reviewMessage': '你更改了总金额。请检查分账方式，确保每个人的分摊金额正确。',
+    'split.reviewNow': '检查分账',
+    'split.saveAnyway': '仍然保存',
+    'split.changesSaved': '分账更改已保存',
     'split.owedTransactions': '待结算的分摊账单',
     'split.allSettledPerson': '已全部结清 — 无欠款。',
     'split.settledTransactions': '已结清记录',
@@ -1934,6 +1977,7 @@ class AppStrings {
     'stats.trend': '趋势',
     'stats.weeklySpend': '每周支出',
     'stats.byCategory': '按类别',
+    'stats.addCardTitle': '添加卡片',
     'stats.calendar': '日历',
     'stats.noCalendarRecords': '本月暂无记录',
     'stats.tapDayToSeeRecords': '点击某天查看记录',
@@ -1985,6 +2029,7 @@ class AppStrings {
     'money.title': '管理',
     'money.subtitle': '管理分期、借贷、储蓄计划和消费上限。',
     'money.customizeHub': '自定义管理页面',
+    'money.addModule': '添加工具',
     'customize.keepOneVisible': '至少保留一个项目显示。',
     'budget.title': '月度\n预算',
     'budget.subtitle': '仅用于日常消费。\n账单和分期会单独追踪。',
@@ -2197,7 +2242,8 @@ class AppStrings {
     'onb.t1Title': '几秒钟记一笔',
     'onb.t1Body': '点击主页中央的「+」按钮，即可立即记录支出或收入。',
     'onb.t2Title': '双击手机背面',
-    'onb.t2Body': '在 iPhone 上，前往「设置 ▸ 辅助功能 ▸ 触控 ▸ 轻点背面」并指定 Trackora 快捷指令。之后双击手机背面即可打开快速记账，无需解锁。',
+    'onb.t2Body':
+        '在 iPhone 上，前往「设置 ▸ 辅助功能 ▸ 触控 ▸ 轻点背面」并指定 Trackora 快捷指令。之后双击手机背面即可打开快速记账，无需解锁。',
     'onb.t3Title': '打造你的管理页',
     'onb.t3Body': '在「预算」标签页点击「编辑」，即可重新排序、显示或隐藏分期、储蓄、借贷等模块。',
     'onb.t4Title': '配合你的发薪周期',
@@ -3080,7 +3126,8 @@ class AppStrings {
     'tips.backTap.s2t': '向下滚动找到「轻点背面」',
     'tips.backTap.s2b': '在「触控」页面底部可找到「轻点背面」。点击它即可显示「轻点两下」和「轻点三下」选项。',
     'tips.backTap.s3t': '将「轻点两下」设为 Trackora',
-    'tips.backTap.s3b': '点击「轻点两下」，向下滚动到「App 快捷指令」，选择 Trackora。这样就把轻点背面的手势链接到快速添加。',
+    'tips.backTap.s3b':
+        '点击「轻点两下」，向下滚动到「App 快捷指令」，选择 Trackora。这样就把轻点背面的手势链接到快速添加。',
     'tips.backTap.s4t': '双击即可即时添加',
     'tips.backTap.s4b': '现在随时双击 iPhone 背面——即使在锁屏状态下——也能立即打开快速添加。',
     'tips.customize.title': '自定义你的管理页',
@@ -3159,7 +3206,8 @@ class AppStrings {
     'home.recent': 'Aktiviti terkini',
     'home.noEntries': 'Tiada rekod',
     'home.noEntriesThisMonth': 'Tiada rekod bulan ini',
-    'home.addFirstExpense': 'Gunakan Tambah Pantas untuk rekod belanja pertama.',
+    'home.addFirstExpense':
+        'Gunakan Tambah Pantas untuk rekod belanja pertama.',
     'home.allTime': 'sepanjang masa',
     'home.balanceFormula': 'Simpanan + Pendapatan − Belanja',
     'home.more': 'lagi',
@@ -3189,6 +3237,7 @@ class AppStrings {
     'common.edit': 'Edit',
     'common.update': 'Kemaskini',
     'common.close': 'Tutup',
+    'common.share': 'Kongsi',
     'common.actions': 'Tindakan',
     'common.show': 'Tunjuk',
     'common.hide': 'Sembunyi',
@@ -3251,6 +3300,9 @@ class AppStrings {
     'people.typeOther': 'Lain-lain',
     'people.noResults': 'Tiada hasil',
     'people.noMatches': 'Tiada padanan.',
+    'people.searchOrAdd': 'Cari atau tambah nama',
+    'people.addToContacts': 'Tambah ke kenalan',
+    'people.noContacts': 'Tiada kenalan disimpan lagi.',
     'people.removeTitle': 'Buang orang?',
     'people.remove': 'Buang',
     'people.removed': 'Orang dibuang',
@@ -3266,7 +3318,8 @@ class AppStrings {
     'people.confirm': 'Sahkan',
     'people.noSavedContacts': 'Tiada kenalan disimpan lagi.',
     'people.noSavedPeople': 'Tiada orang disimpan lagi.',
-    'conn.offline': 'Luar talian — perubahan disegerak apabila anda menyambung semula',
+    'conn.offline':
+        'Luar talian — perubahan disegerak apabila anda menyambung semula',
     'conn.online': 'Kembali dalam talian',
     'conn.syncing': 'Kembali dalam talian — menyegerak…',
 
@@ -3387,6 +3440,14 @@ class AppStrings {
     'split.settleFooter':
         'Penyelesaian memasukkan jumlah ke akaun pilihan anda sebagai pendapatan.',
     'split.owesYou': 'Hutang anda',
+    'split.youUsed': 'Anda guna {amount}',
+    'split.owedToYouInline': '{name} masih berhutang {amount} kepada anda',
+    'split.reviewTitle': 'Semak jumlah pecahan',
+    'split.reviewMessage':
+        'Anda menukar jumlah keseluruhan. Sila semak cara ia dibahagikan supaya bahagian setiap orang betul.',
+    'split.reviewNow': 'Semak pecahan',
+    'split.saveAnyway': 'Simpan juga',
+    'split.changesSaved': 'Perubahan pecahan disimpan',
     'split.owedTransactions': 'Bil pecahan tertunggak',
     'split.allSettledPerson': 'Semua selesai — tiada hutang.',
     'split.settledTransactions': 'Rekod selesai',
@@ -3411,7 +3472,8 @@ class AppStrings {
     'split.someone': 'Seseorang',
 
     'voice.title': 'Tambah perbelanjaan suara',
-    'voice.example': 'Cuba: “Tambah perbelanjaan RM18 untuk makan tengah hari di Starbucks”',
+    'voice.example':
+        'Cuba: “Tambah perbelanjaan RM18 untuk makan tengah hari di Starbucks”',
     'voice.listening': 'Mendengar…',
     'voice.tapToSpeak': 'Ketik mikrofon untuk bercakap',
     'voice.useThis': 'Guna ini',
@@ -3427,6 +3489,7 @@ class AppStrings {
     'stats.trend': 'Trend',
     'stats.weeklySpend': 'Belanja mingguan',
     'stats.byCategory': 'Mengikut kategori',
+    'stats.addCardTitle': 'Tambah kad',
     'stats.calendar': 'Kalendar',
     'stats.noCalendarRecords': 'Tiada rekod bulan ini',
     'stats.tapDayToSeeRecords': 'Ketik hari untuk lihat rekod',
@@ -3481,6 +3544,7 @@ class AppStrings {
     'money.title': 'Pengurusan',
     'money.subtitle': 'Urus komitmen, pinjaman, simpanan dan had belanja.',
     'money.customizeHub': 'Sesuaikan Halaman Urus',
+    'money.addModule': 'Tambah alat',
     'customize.keepOneVisible':
         'Sekurang-kurangnya satu item mesti dipaparkan.',
     'budget.title': 'Bajet\nbulanan',
@@ -3696,7 +3760,8 @@ class AppStrings {
     'onb.skipTour': 'Langkau lawatan',
     'onb.tourBadge': 'LAWATAN RINGKAS',
     'onb.nameTitle': 'Apa nama panggilan anda?',
-    'onb.nameSubtitle': 'Nama paparan anda muncul pada resit dikongsi dan perbelanjaan kumpulan.',
+    'onb.nameSubtitle':
+        'Nama paparan anda muncul pada resit dikongsi dan perbelanjaan kumpulan.',
     'onb.nameHint': 'Nama anda',
     'onb.nameRequired': 'Sila masukkan nama',
     'onb.currencyTitle': 'Pilih mata wang anda',
@@ -3704,19 +3769,26 @@ class AppStrings {
     'onb.langTitle': 'Pilih bahasa anda',
     'onb.langSubtitle': 'Trackora menyokong Inggeris, Cina dan Melayu.',
     'onb.tourTitle': 'Semua sudah sedia!',
-    'onb.tourSubtitle': 'Berikut lawatan ringkas tentang apa yang anda boleh buat.',
+    'onb.tourSubtitle':
+        'Berikut lawatan ringkas tentang apa yang anda boleh buat.',
     'onb.t1Title': 'Tambah perbelanjaan dalam beberapa saat',
-    'onb.t1Body': 'Ketik butang + di tengah skrin utama untuk merekod perbelanjaan atau pendapatan dengan segera.',
+    'onb.t1Body':
+        'Ketik butang + di tengah skrin utama untuk merekod perbelanjaan atau pendapatan dengan segera.',
     'onb.t2Title': 'Ketik dua kali belakang telefon',
-    'onb.t2Body': 'Pada iPhone, buka Tetapan ▸ Kebolehaksesan ▸ Sentuh ▸ Ketik Belakang dan tetapkan pintasan Trackora. Kemudian ketik dua kali belakang telefon untuk buka tambah pantas — tanpa buka kunci.',
+    'onb.t2Body':
+        'Pada iPhone, buka Tetapan ▸ Kebolehaksesan ▸ Sentuh ▸ Ketik Belakang dan tetapkan pintasan Trackora. Kemudian ketik dua kali belakang telefon untuk buka tambah pantas — tanpa buka kunci.',
     'onb.t3Title': 'Sesuaikan halaman Urus',
-    'onb.t3Body': 'Pada tab Bajet, ketik Edit untuk susun semula, tunjuk atau sembunyikan modul seperti Ansuran, Simpanan dan Pinjam/Pinjamkan.',
+    'onb.t3Body':
+        'Pada tab Bajet, ketik Edit untuk susun semula, tunjuk atau sembunyikan modul seperti Ansuran, Simpanan dan Pinjam/Pinjamkan.',
     'onb.t4Title': 'Padankan kitaran gaji anda',
-    'onb.t4Body': 'Mahu ikut hari gaji? Dalam Tetapan, hidupkan kitaran tersuai dan pilih hari mula supaya bulan anda sejajar dengan gaji.',
+    'onb.t4Body':
+        'Mahu ikut hari gaji? Dalam Tetapan, hidupkan kitaran tersuai dan pilih hari mula supaya bulan anda sejajar dengan gaji.',
     'onb.t5Title': 'Jejak perbelanjaan bersama',
-    'onb.t5Body': 'Cipta kumpulan, kemudian jemput seseorang melalui e-mel atau kod kongsi. Anda berdua merekod perbelanjaan dikongsi dan Trackora membahagi serta menyelesaikannya secara automatik.',
+    'onb.t5Body':
+        'Cipta kumpulan, kemudian jemput seseorang melalui e-mel atau kod kongsi. Anda berdua merekod perbelanjaan dikongsi dan Trackora membahagi serta menyelesaikannya secara automatik.',
     'onb.t6Title': 'Pecahkan bil peribadi',
-    'onb.t6Body': 'Semasa menambah perbelanjaan peribadi, guna Pecah bil untuk bahagikan antara rakan dan jejak siapa berhutang dengan anda.',
+    'onb.t6Body':
+        'Semasa menambah perbelanjaan peribadi, guna Pecah bil untuk bahagikan antara rakan dan jejak siapa berhutang dengan anda.',
 
     'tools.title': 'Alat Kewangan',
     'tools.borrowLending': 'Pinjam & Pinjamkan',
@@ -3864,7 +3936,8 @@ class AppStrings {
     'auth.createAccountBtn': 'Buat akaun',
     'auth.alreadyHaveAccount': 'Sudah ada akaun?',
     'auth.logIn': 'Log masuk',
-    'auth.tagline': 'Cara lebih tenang untuk lihat ke mana setiap ringgit pergi — merentasi semua akaun.',
+    'auth.tagline':
+        'Cara lebih tenang untuk lihat ke mana setiap ringgit pergi — merentasi semua akaun.',
     'welcome.changeLanguage': 'Bahasa',
 
     // Precious metals.
@@ -3906,7 +3979,8 @@ class AppStrings {
     'account.otherTypes': 'Jenis Lain',
     'account.extra8': '8 kategori lain',
     'account.noAccounts': 'Tiada akaun lagi',
-    'account.noAccountsHint': 'Tambah akaun bank, e-dompet atau tunai untuk mula menjejak wang anda.',
+    'account.noAccountsHint':
+        'Tambah akaun bank, e-dompet atau tunai untuk mula menjejak wang anda.',
     'account.tapToTrack': 'Ketik untuk jejak emas & perak',
     'account.preciousMetals': 'Logam Berharga',
     'account.editAccount': 'Edit Akaun',
@@ -3917,7 +3991,8 @@ class AppStrings {
     'auth.newToApp': 'Baru di Trackora?',
     'auth.continueWith': 'ATAU TERUSKAN DENGAN',
     'auth.resetPassword': 'Tetapkan Semula Kata Laluan',
-    'auth.resetEmailSent': 'E-mel tetapan semula dihantar. Semak peti masuk anda.',
+    'auth.resetEmailSent':
+        'E-mel tetapan semula dihantar. Semak peti masuk anda.',
     'auth.resetEmailFailed': 'Gagal hantar e-mel tetapan semula.',
     'auth.send': 'Hantar',
     'auth.getStarted': 'Mulakan',
@@ -3942,7 +4017,8 @@ class AppStrings {
     'expense.updatedNamed': '{type} dikemaskini',
     'expense.deletedNamed': '{type} dipadam',
     'expense.entryDeleted': 'Rekod dipadam',
-    'expense.savedOffline': 'Disimpan luar talian — akan disegerakkan apabila disambung',
+    'expense.savedOffline':
+        'Disimpan luar talian — akan disegerakkan apabila disambung',
     'expense.selectDestAccount': 'Sila pilih akaun destinasi',
     'expense.sameAccountError': 'Akaun sumber dan destinasi mesti berbeza',
     'expense.transferBetweenAccounts': 'Pindahan Antara Akaun Saya',
@@ -3998,7 +4074,8 @@ class AppStrings {
 
     // Add/edit account extras.
     'account.deleteAccount': 'Padam Akaun',
-    'account.deleteConfirm': 'Padam akaun ini dan semua datanya? Tindakan ini tidak boleh dibatalkan.',
+    'account.deleteConfirm':
+        'Padam akaun ini dan semua datanya? Tindakan ini tidak boleh dibatalkan.',
     'account.editTitle': 'Edit Akaun',
     'account.newTitle': 'Akaun Baru',
     'account.typeLabel': 'Jenis Akaun',
@@ -4017,7 +4094,8 @@ class AppStrings {
     'account.remarkHelper':
         'Tambah catatan untuk membezakan akaun yang sama nama (cth. dua kad dari bank yang sama).',
     'account.dangerZone': 'Zon Bahaya',
-    'account.dangerDesc': 'Memadam akaun ini secara kekal. Tidak boleh dibatalkan.',
+    'account.dangerDesc':
+        'Memadam akaun ini secara kekal. Tidak boleh dibatalkan.',
     'account.updateBtn': 'Kemaskini Akaun',
     'account.createBtn': 'Buat Akaun',
     'account.enterName': 'Sila masukkan nama',
@@ -4052,7 +4130,8 @@ class AppStrings {
     'asset.perMonth': 'sebulan',
     'asset.loadingAccounts': 'Memuatkan akaun…',
     'asset.noAccounts': 'Belum ada akaun',
-    'asset.addAccountsDesc': 'Tambah akaun bank, e-dompet atau tunai\nuntuk menjejaki nilai bersih anda.',
+    'asset.addAccountsDesc':
+        'Tambah akaun bank, e-dompet atau tunai\nuntuk menjejaki nilai bersih anda.',
     'asset.addAccount': 'Tambah Akaun',
     'asset.outstandingLending': 'Pinjaman Belum Selesai',
     'asset.outstandingBorrowing': 'Pinjaman Masuk Belum Selesai',
@@ -4133,24 +4212,29 @@ class AppStrings {
     'settings.newEmail': 'E-mel baru',
     'settings.currentPassword': 'Kata laluan semasa',
     'settings.sendVerificationLink': 'Hantar Pautan Pengesahan',
-    'settings.verificationSent': 'Pautan pengesahan dihantar ke {email}.\n\nKlik pautan dalam e-mel itu untuk mengesahkan alamat baru anda, kemudian log masuk semula.',
+    'settings.verificationSent':
+        'Pautan pengesahan dihantar ke {email}.\n\nKlik pautan dalam e-mel itu untuk mengesahkan alamat baru anda, kemudian log masuk semula.',
     'settings.syncSignInTitle': 'Log Masuk & Segerak',
-    'settings.syncDataStaysLocal': 'Data anda disimpan secara setempat. Segerak mencipta sandaran.',
+    'settings.syncDataStaysLocal':
+        'Data anda disimpan secara setempat. Segerak mencipta sandaran.',
     'settings.justNow': 'Baru sahaja',
     'settings.minutesAgo': '{m} min lepas',
     'settings.hoursAgo': '{h} jam lepas',
     'settings.daysAgo': '{d} hari lepas',
     'settings.emailField': 'E-mel',
     'settings.passwordField': 'Kata laluan',
-    'settings.noAccount': "Tiada akaun? Kami akan mencipta satu secara automatik.",
+    'settings.noAccount':
+        "Tiada akaun? Kami akan mencipta satu secara automatik.",
     'settings.deleteAccount': 'Padam Akaun',
     'settings.deleteAccountConfirmTitle': 'Padam Akaun?',
-    'settings.deleteAccountConfirmBody': 'Ini akan memadamkan akaun dan semua data anda secara kekal. Tindakan ini tidak boleh dibatalkan.',
+    'settings.deleteAccountConfirmBody':
+        'Ini akan memadamkan akaun dan semua data anda secara kekal. Tindakan ini tidak boleh dibatalkan.',
     'settings.deleteAccountConfirm': 'Padam Akaun',
     'settings.deleteAccountSuccess': 'Akaun dipadam',
     'settings.deleteAccountFailed': 'Tidak dapat memadam akaun. Cuba lagi.',
     'settings.deleteAccountReauthTitle': 'Sahkan Identiti',
-    'settings.deleteAccountReauthBody': 'Untuk keselamatan, sila masukkan kata laluan anda untuk meneruskan.',
+    'settings.deleteAccountReauthBody':
+        'Untuk keselamatan, sila masukkan kata laluan anda untuk meneruskan.',
     'settings.deleteAccountPassword': 'Kata Laluan',
     'settings.deleteAccountVerify': 'Sahkan & Padam',
     'settings.deleteAccountWrongPassword': 'Kata laluan salah. Cuba lagi.',
@@ -4161,7 +4245,8 @@ class AppStrings {
     'travel.new': 'Perjalanan Baru',
     'travel.edit': 'Edit Perjalanan',
     'travel.delete': 'Padam Perjalanan',
-    'travel.deleteConfirm': 'Padam kumpulan perjalanan ini dan semua perbelanjaan?',
+    'travel.deleteConfirm':
+        'Padam kumpulan perjalanan ini dan semua perbelanjaan?',
     'travel.empty': 'Tiada perjalanan lagi',
     'travel.emptyHint': 'Cipta kumpulan untuk jejak perbelanjaan bersama.',
     'travel.createGroup': 'Cipta Kumpulan',
@@ -4226,7 +4311,8 @@ class AppStrings {
     'travel.joinCode': 'Sertai dengan kod',
     'travel.newTrip': 'Perjalanan baru',
     'travel.planHero': 'Rancang perjalanan.\nBiarkan kami kira.',
-    'travel.planHeroSub': 'Tambah rakan dan mula menjejak perbelanjaan bersama.',
+    'travel.planHeroSub':
+        'Tambah rakan dan mula menjejak perbelanjaan bersama.',
     'travel.whoPaid': 'SIAPA BAYAR',
     'travel.groupTrip': 'Perjalanan Kumpulan',
     'travel.travelers': 'Pengembara',
@@ -4297,8 +4383,7 @@ class AppStrings {
     'group.errorNotSignedIn': 'Belum log masuk',
     'group.errorNotSynced':
         'Kumpulan anda belum disegerakkan. Pastikan anda dalam talian dan kumpulan dibuat semasa dalam talian.',
-    'group.errorOnlineForCode':
-        'Anda perlu dalam talian untuk menjana kod.',
+    'group.errorOnlineForCode': 'Anda perlu dalam talian untuk menjana kod.',
     'group.errorNetwork':
         'Rangkaian tidak tersedia. Semak sambungan dan cuba lagi.',
     'group.enterInviteCode': 'Masukkan kod jemputan',
@@ -4406,8 +4491,7 @@ class AppStrings {
     'groupExpense.splitEvenlyAmt': '{amount} setiap orang',
     'groupExpense.splitEqualBoth': 'Bahagi sama rata antara berdua',
     'groupExpense.splitByPercent': 'Bahagi mengikut peratus',
-    'groupExpense.splitByPercentDesc':
-        'Tetapkan peratusan tersuai antara anda',
+    'groupExpense.splitByPercentDesc': 'Tetapkan peratusan tersuai antara anda',
     'groupExpense.splitByPercentBadge': 'Tersuai %',
     'groupExpense.splitByAmount': 'Bahagi mengikut jumlah',
     'groupExpense.splitByAmountDesc': 'Masukkan jumlah tepat setiap orang',
@@ -4496,8 +4580,7 @@ class AppStrings {
     'asset.healthy': 'Sihat',
     'asset.fair': 'Sederhana',
     'asset.atRisk': 'Berisiko',
-    'asset.assetsLiabilitiesPercent':
-        '{owned}% aset · {owed}% liabiliti',
+    'asset.assetsLiabilitiesPercent': '{owned}% aset · {owed}% liabiliti',
     'asset.assetsBreakdown': 'Pecahan Aset',
     'asset.liabilitiesBreakdown': 'Pecahan Liabiliti',
     'asset.lentOut': 'Dipinjamkan',
@@ -4596,11 +4679,13 @@ class AppStrings {
     'stats.summaryInstallmentMo': 'Ansuran / sebulan',
     // ── How Trackora Works (tips screen) ───────────────────────────────
     'tips.screenTitle': 'Cara Trackora Berfungsi',
-    'tips.screenSubtitle': 'Ketik topik untuk melihat arahan langkah demi langkah.',
+    'tips.screenSubtitle':
+        'Ketik topik untuk melihat arahan langkah demi langkah.',
     'tips.stepOf': 'Langkah {n} daripada {total}',
     'tips.next': 'Seterusnya',
     'tips.add.title': 'Tambah Rekod dalam Beberapa Saat',
-    'tips.add.sub': 'Jejak sebarang perbelanjaan, pendapatan atau pemindahan serta-merta',
+    'tips.add.sub':
+        'Jejak sebarang perbelanjaan, pendapatan atau pemindahan serta-merta',
     'tips.add.s1t': 'Ketik Butang +',
     'tips.add.s1b':
         'Butang + ungu di bahagian bawah skrin membuka menu tambah pantas. Ketik bila-bila masa untuk mula rekod baharu.',
@@ -4642,7 +4727,8 @@ class AppStrings {
     'tips.customize.s4b':
         'Modul tersembunyi hilang dari halaman Urus serta-merta. Anda boleh kembali ke sini untuk mengaktifkannya semula.',
     'tips.cycle.title': 'Padankan Kitaran Gaji Anda',
-    'tips.cycle.sub': 'Laporan yang ditetapkan semula pada hari gaji sebenar anda',
+    'tips.cycle.sub':
+        'Laporan yang ditetapkan semula pada hari gaji sebenar anda',
     'tips.cycle.s1t': 'Pergi ke Tab Bajet',
     'tips.cycle.s1b':
         'Ketik tab Bajet. Pilihan Kitaran Perbelanjaan tersedia dalam bahagian Urus — cari ikon tetapan kitaran.',
@@ -4670,7 +4756,8 @@ class AppStrings {
     'tips.split.s4b':
         'Ketik "Jana Resit" untuk cipta imej boleh kongsi yang menunjukkan siapa hutang apa. Hantar melalui WhatsApp atau apl lain.',
     'tips.travel.title': 'Kumpulan Pelancongan dengan Kod Jemputan',
-    'tips.travel.sub': 'Jejak perbelanjaan perjalanan dikongsi dengan rakan dan keluarga',
+    'tips.travel.sub':
+        'Jejak perbelanjaan perjalanan dikongsi dengan rakan dan keluarga',
     'tips.travel.s1t': 'Pergi ke Aset → Kumpulan Pelancongan',
     'tips.travel.s1b':
         'Ketik tab Aset (paling kanan dalam navigasi bawah), kemudian buka Kumpulan Pelancongan. Ketik + untuk cipta perjalanan baharu.',

@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../theme/app_theme.dart';
+
 /// Shared travel-expense categories — a richer set mirroring the personal
 /// expense categories (was previously only 6 options). Keys are kept lowercase
 /// to stay compatible with existing travel-expense records.
@@ -42,11 +44,13 @@ const Map<String, Color> kTravelCatColors = {
   'general': Color(0xFF8E8E93),
 };
 
-IconData travelCatIcon(String cat) =>
-    kTravelCatIcons[cat] ?? CupertinoIcons.square_grid_2x2_fill;
+// Travel expenses now use the same category keys as personal expenses
+// (capitalized built-ins + custom categories). These helpers first honour the
+// legacy lowercase travel map (so old records keep their icon/colour) and fall
+// back to the shared personal-expense style for the new/custom keys.
+IconData travelCatIcon(String cat) => kTravelCatIcons[cat] ?? styleFor(cat).icon;
 
-Color travelCatColor(String cat) =>
-    kTravelCatColors[cat] ?? const Color(0xFF8E8E93);
+Color travelCatColor(String cat) => kTravelCatColors[cat] ?? styleFor(cat).accent;
 
 /// Human-readable label for a travel category key (capitalizes the key).
 String travelCatLabel(String cat) =>

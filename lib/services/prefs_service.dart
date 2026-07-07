@@ -16,6 +16,8 @@ class PrefsService {
   static const _kMoneyHubSeenModules = 'money_hub_seen_modules';
   static const _kMoneyHubOrder = 'money_hub_order';
   static const _kStatsSectionsVisible = 'stats_sections_visible';
+  static const _kStatsCardOrder = 'stats_card_order';
+  static const _kStatsHiddenCards = 'stats_hidden_cards';
   static const _kLiveActivityEnabled = 'live_activity_enabled';
   static const _kFirstLaunchDone = 'first_launch_done';
   static const _kUseCustomCycle = 'use_custom_cycle';
@@ -40,6 +42,7 @@ class PrefsService {
     'travelGroups',
     'investments',
     'groups',
+    'expenseCycle',
   ];
 
   static const defaultMoneyHubOrder = <String>[
@@ -51,11 +54,18 @@ class PrefsService {
     'travelGroups',
     'investments',
     'groups',
+    'expenseCycle',
   ];
 
-  static const defaultStatsSections = <String>[
-    'importantData',
+  static const defaultStatsSections = <String>['importantData', 'donutChart'];
+
+  /// Top-to-bottom order of the Statistics report cards. Long-press drag in the
+  /// stats page rewrites this; unknown/new ids are appended on read.
+  static const defaultStatsCardOrder = <String>[
     'donutChart',
+    'monthlyBudget',
+    'importantData',
+    'groupSpend',
   ];
 
   /// Whether the user wants the home balance to be readable. Default
@@ -147,6 +157,39 @@ class PrefsService {
     final p = await _prefsOrNull();
     if (p == null) return;
     await p.setStringList(_kHomeCardOrder, order);
+  }
+
+  Future<List<String>> statsCardOrder() async {
+    final p = await _prefsOrNull();
+    if (p == null) return defaultStatsCardOrder;
+    final saved = p.getStringList(_kStatsCardOrder);
+    if (saved == null) return defaultStatsCardOrder;
+    final all = defaultStatsCardOrder.toSet();
+    final result = saved.where(all.contains).toList();
+    for (final id in defaultStatsCardOrder) {
+      if (!result.contains(id)) result.add(id);
+    }
+    return result;
+  }
+
+  Future<void> setStatsCardOrder(List<String> order) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setStringList(_kStatsCardOrder, order);
+  }
+
+  /// Stats report cards the user has hidden (via the per-card hide button in
+  /// rearrange mode). Empty by default — every available card is shown.
+  Future<Set<String>> statsHiddenCards() async {
+    final p = await _prefsOrNull();
+    if (p == null) return <String>{};
+    return (p.getStringList(_kStatsHiddenCards) ?? const []).toSet();
+  }
+
+  Future<void> setStatsHiddenCards(Set<String> ids) async {
+    final p = await _prefsOrNull();
+    if (p == null) return;
+    await p.setStringList(_kStatsHiddenCards, ids.toList());
   }
 
   Future<Set<String>> visibleHomeCards() async {

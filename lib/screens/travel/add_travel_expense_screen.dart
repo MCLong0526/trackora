@@ -3,15 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/category_catalog.dart';
 import '../../models/travel_expense.dart';
+import '../settings/manage_categories_screen.dart';
 import '../../models/travel_group.dart';
+import '../../theme/app_theme.dart';
+import '../../services/amount_calc.dart';
 import '../../services/exchange_rate_service.dart';
 import '../../services/i18n.dart';
 import '../../services/prefs_service.dart';
 import '../../state/providers.dart';
+import '../../widgets/amount_operator_bar.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/currency_picker.dart';
-import 'travel_categories.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const _blue = Color(0xFF0066CC);
@@ -61,6 +65,7 @@ class AddTravelExpenseScreen extends ConsumerStatefulWidget {
 class _AddTravelExpenseScreenState
     extends ConsumerState<AddTravelExpenseScreen> {
   final _amountCtrl = TextEditingController();
+  final _amountFocus = FocusNode();
   final _descCtrl = TextEditingController();
 
   late String _paidByMemberId;
@@ -68,19 +73,34 @@ class _AddTravelExpenseScreenState
   _SplitMode _splitMode = _SplitMode.equally;
   final Map<String, TextEditingController> _customCtrls = {};
   late DateTime _date;
-  String _category = 'food';
+  String _category = 'Food';
   bool _saving = false;
   late String _currencyCode;
 
   bool get _isEdit => widget.expense != null;
 
-  static const _categories = kTravelCategories;
-  static const _catIcons = kTravelCatIcons;
-  static const _catColors = kTravelCatColors;
+  // Same category set as personal expenses: built-ins + the user's custom
+  // categories (most-recent first). A legacy/lowercase category on an existing
+  // record is kept selectable by prepending it.
+  List<String> get _categories {
+    final custom =
+        ((ref.read(customCategoriesProvider).valueOrNull ?? const [])
+                .where((c) => !c.isIncome)
+                .toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+            .map((c) => c.name)
+            .toList();
+    final list = [...custom, ...kDefaultExpenseCategories];
+    if (_category.isNotEmpty && !list.contains(_category)) {
+      return [_category, ...list];
+    }
+    return list;
+  }
 
   @override
   void initState() {
     super.initState();
+    attachAmountCalculator(_amountCtrl, _amountFocus);
     final memberIds = widget.members.map((m) => m.id).toList();
     // Init custom controllers
     for (final m in widget.members) {
@@ -129,13 +149,14 @@ class _AddTravelExpenseScreenState
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _amountFocus.dispose();
     _descCtrl.dispose();
     for (final c in _customCtrls.values) { c.dispose(); }
     super.dispose();
   }
 
   double get _parsedAmount =>
-      double.tryParse(_amountCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+      evalAmount(_amountCtrl.text.trim().replaceAll(',', '.')) ?? 0;
 
   void _onCustomFieldChanged(String memberId, String value) {
     setState(() {});
@@ -185,92 +206,86 @@ class _AddTravelExpenseScreenState
     if (picked != null) setState(() => _date = picked);
   }
 
-  void _showCategoryPicker() {
-    FocusScope.of(context).unfocus();
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => Material(
-        type: MaterialType.transparency,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF2C2C2E) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36, height: 4,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0E0E0),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+  // Inline horizontal category picker — same UX as a personal expense: a
+  // leading "manage" chip then every category (built-ins + custom) as a circle
+  // the user taps directly, no popup.
+  Widget _categoryChips() {
+    final cats = _categories;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBg = isDark
+        ? Color.alphaBlend(
+            Colors.white.withValues(alpha: 0.10), const Color(0xFF1C1C1E))
+        : const Color(0xFFF0F0F3);
+    return SizedBox(
+      height: 60,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.hardEdge,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: cats.length + 1,
+        itemBuilder: (context, idx) {
+          if (idx == 0) {
+            return GestureDetector(
+              onTap: () async {
+                FocusScope.of(context).unfocus();
+                await Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const ManageCategoriesScreen(),
+                  ),
+                );
+                if (mounted) setState(() {});
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: unselectedBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : const Color(0xFFE0E0E0),
                     ),
                   ),
-                  Text('Category', style: _display(18, tracking: -0.3)),
-                  const SizedBox(height: 16),
-                  GridView.count(
-                    crossAxisCount: 3,
-                    shrinkWrap: true,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 1.4,
-                    children: _categories.map((cat) {
-                      final selected = cat == _category;
-                      final color = _catColors[cat] ?? const Color(0xFF8E8E93);
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() => _category = cat);
-                          Navigator.pop(ctx);
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: selected ? _blue : color.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _catIcons[cat] ?? CupertinoIcons.square_grid_2x2_fill,
-                                color: selected ? Colors.white : color,
-                                size: 22,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                cat[0].toUpperCase() + cat.substring(1),
-                                style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w600,
-                                  color: selected ? Colors.white : color,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                  child: Icon(CupertinoIcons.add, size: 19, color: _ink48),
+                ),
+              ),
+            );
+          }
+          final cat = cats[idx - 1];
+          final selected = cat == _category;
+          final style = styleFor(cat);
+          final unselectedIcon =
+              isDark ? Color.lerp(style.accent, Colors.white, 0.5)! : style.accent;
+          return GestureDetector(
+            onTap: () {
+              if (_category == cat) return;
+              FocusScope.of(context).unfocus();
+              setState(() => _category = cat);
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: selected ? style.accent : unselectedBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  style.icon,
+                  size: 19,
+                  color: selected ? Colors.white : unselectedIcon,
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
-    ).whenComplete(() {
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) FocusScope.of(context).unfocus();
-        });
-      }
-    });
+    );
   }
 
   Future<void> _save() async {
@@ -375,8 +390,8 @@ class _AddTravelExpenseScreenState
     final now = DateTime.now();
     final isToday = DateFormat('yyyy-MM-dd').format(_date) == DateFormat('yyyy-MM-dd').format(now);
     final dateLabel = isToday ? 'Today, ${dateLabelFmt.format(_date)}' : dateLabelFmt.format(_date);
-    final catDisplay = _category[0].toUpperCase() + _category.substring(1);
-    final catColor = _catColors[_category] ?? const Color(0xFF8E8E93);
+    final catDisplay = context.categoryLabel(_category);
+    final catColor = styleFor(_category).accent;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -468,6 +483,7 @@ class _AddTravelExpenseScreenState
                           Expanded(
                             child: TextField(
                               controller: _amountCtrl,
+                              focusNode: _amountFocus,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               autofocus: !_isEdit,
                               cursorHeight: 36,
@@ -485,6 +501,10 @@ class _AddTravelExpenseScreenState
                         ],
                       ),
                     ),
+                    AmountOperatorBar(
+                      controller: _amountCtrl,
+                      focusNode: _amountFocus,
+                    ),
                     Builder(builder: (ctx) {
                       final groupCurrency = widget.group.currency;
                       final isForeign = _currencyCode != groupCurrency;
@@ -494,7 +514,7 @@ class _AddTravelExpenseScreenState
                       return ListenableBuilder(
                         listenable: _amountCtrl,
                         builder: (_, child) {
-                          final amt = double.tryParse(_amountCtrl.text) ?? 0;
+                          final amt = evalAmount(_amountCtrl.text) ?? 0;
                           if (amt <= 0) return const SizedBox(height: 16);
                           final converted = amt * converter.crossRate(_currencyCode, groupCurrency);
                           return Padding(
@@ -535,43 +555,41 @@ class _AddTravelExpenseScreenState
                             ),
                             style: _body(16, weight: FontWeight.w500),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Divider(height: 1, color: border),
-                          // Category + date info row
+                          const SizedBox(height: 8),
+                          // Category picker — inline, like a personal expense.
+                          _categoryChips(),
+                          const SizedBox(height: 4),
+                          // Selected category label + date.
                           Row(
                             children: [
-                              GestureDetector(
-                                onTap: _showCategoryPicker,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 20, height: 20,
-                                        decoration: BoxDecoration(
-                                          color: catColor.withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(5),
-                                        ),
-                                        child: Icon(
-                                          _catIcons[_category] ?? CupertinoIcons.square_grid_2x2_fill,
-                                          color: catColor, size: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(catDisplay, style: _body(13, color: _ink48)),
-                                    ],
-                                  ),
+                              Container(
+                                width: 6, height: 6,
+                                decoration: BoxDecoration(
+                                  color: catColor,
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Text('·', style: _body(13, color: _ink48)),
-                              ),
+                              const SizedBox(width: 6),
+                              Text(catDisplay,
+                                  style: _body(13,
+                                      weight: FontWeight.w600, color: catColor)),
+                              const Spacer(),
                               GestureDetector(
                                 onTap: _pickDate,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  child: Text(dateLabel, style: _body(13, color: _ink48)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    children: [
+                                      Icon(CupertinoIcons.calendar,
+                                          size: 13, color: _ink48),
+                                      const SizedBox(width: 5),
+                                      Text(dateLabel,
+                                          style: _body(13, color: _ink48)),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],

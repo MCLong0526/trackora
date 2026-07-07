@@ -23,6 +23,11 @@ class AnimatedDonutChart extends StatefulWidget {
   final Duration duration;
   final bool showLabels;
 
+  /// When false, the chart renders fully drawn immediately (no sweep-in).
+  /// Used when capturing a static snapshot, where a mid-animation frame would
+  /// export a half-drawn ring.
+  final bool animate;
+
   const AnimatedDonutChart({
     super.key,
     required this.segments,
@@ -32,6 +37,7 @@ class AnimatedDonutChart extends StatefulWidget {
     this.onSegmentTap,
     this.duration = const Duration(milliseconds: 820),
     this.showLabels = false,
+    this.animate = true,
   });
 
   @override
@@ -51,9 +57,13 @@ class _AnimatedDonutChartState extends State<AnimatedDonutChart>
       parent: _ctrl,
       curve: Curves.easeInOutCubic,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _ctrl.forward();
-    });
+    if (!widget.animate) {
+      _ctrl.value = 1.0; // fully drawn, no sweep-in (snapshot capture)
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ctrl.forward();
+      });
+    }
   }
 
   @override

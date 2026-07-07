@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/person.dart';
 import '../../models/split_bill.dart';
+import '../../services/i18n.dart';
 import '../../state/providers.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/person_avatar.dart';
 
 // ── Design tokens (DESIGN.md aligned) ─────────────────────────────────────────
@@ -207,9 +209,19 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     setState(() {
       _lockedIds.add(edited.id);
       edited.amount = newAmount.clamp(0, double.infinity);
-      final free = _members
+      var free = _members
           .where((m) => m.id != edited.id && !_lockedIds.contains(m.id))
           .toList();
+      // If every other member is already locked, the remainder would be
+      // stranded and member amounts would stop summing to the total (the
+      // receipt/settlement then disagree). Re-open all other members so the
+      // just-edited one anchors and the rest absorb the balance.
+      if (free.isEmpty) {
+        free = _members.where((m) => m.id != edited.id).toList();
+        _lockedIds
+          ..clear()
+          ..add(edited.id);
+      }
       if (free.isEmpty) return;
       final lockedSum = _members
           .where((m) => _lockedIds.contains(m.id))
@@ -228,9 +240,17 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       _lockedIds.add(edited.id);
       _percents[edited.id] = newPct;
       edited.amount = _totalAmount * (newPct / 100.0);
-      final free = _members
+      var free = _members
           .where((m) => m.id != edited.id && !_lockedIds.contains(m.id))
           .toList();
+      // See _onAmountChanged: don't strand the remainder when all others are
+      // locked, or percentages stop summing to 100.
+      if (free.isEmpty) {
+        free = _members.where((m) => m.id != edited.id).toList();
+        _lockedIds
+          ..clear()
+          ..add(edited.id);
+      }
       if (free.isEmpty) return;
       final lockedSum = _members
           .where((m) => _lockedIds.contains(m.id))
@@ -272,10 +292,14 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     String? name;
     int? colorIdx;
     String? emoji;
+    String? personId;
     if (result is Person) {
       name = result.name;
       colorIdx = result.colorIndex;
       emoji = result.emoji;
+      // Link to the saved contact directly so the owed amount shows against the
+      // right person on the People page (and we don't create a duplicate later).
+      personId = result.id;
     } else if (result is Map<String, dynamic>) {
       name = result['name'] as String?;
       colorIdx = result['colorIndex'] as int?;
@@ -298,6 +322,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
           name: name!,
           colorIndex: colorIdx ?? personColorIndex(name),
           emoji: emoji,
+          personId: personId,
           amount: 0,
         ),
       );
@@ -446,7 +471,14 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
     _thParchment = isDark ? brand.surface : _kParchment;
     _thPurpleSoft = isDark ? _kPurple.withValues(alpha: 0.18) : _kPurpleSoft;
 
-    return Scaffold(
+    return PopScope(
+      // Block the implicit pop so closing keeps (saves) the user's changes
+      // instead of discarding them.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeWithSave();
+      },
+      child: Scaffold(
       backgroundColor: parchmentColor,
       body: SafeArea(
         child: Column(
@@ -485,7 +517,35 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
         ),
       ),
       bottomNavigationBar: _saveButton(keyboardH),
+      ),
     );
+  }
+
+  // Whatever the user has configured so far as a result — or null when no one
+  // has been added to split with yet (nothing worth keeping).
+  SplitBillResult? _configuredResult() {
+    final hasDebtors = _members.any((m) => !m.isPayer);
+    if (!hasDebtors) return null;
+    return SplitBillResult(
+      members: _members,
+      splitMode: _mode,
+      totalAmount: _totalAmount,
+    );
+  }
+
+  // Close via the X / back gesture: keep the user's changes instead of
+  // discarding them, and confirm with a toast.
+  void _closeWithSave() {
+    FocusScope.of(context).unfocus();
+    final result = _configuredResult();
+    if (result != null) {
+      AppToast.show(
+        context,
+        context.t('split.changesSaved'),
+        type: AppToastType.success,
+      );
+    }
+    Navigator.pop(context, result);
   }
 
   // ─── Header ───────────────────────────────────────────────────────────────────
@@ -497,7 +557,7 @@ class _SplitBillScreenState extends ConsumerState<SplitBillScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: _closeWithSave,
             child: Container(
               width: 40,
               height: 40,
@@ -1347,50 +1407,45 @@ class _SplitBillAddPersonSheet extends ConsumerStatefulWidget {
 
 class _SplitBillAddPersonSheetState
     extends ConsumerState<_SplitBillAddPersonSheet> {
-  final _nameCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
-  bool _saveToContacts = false;
   bool _saving = false;
-  bool _showNew = true; // toggle between new-name input and saved contacts
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+  // New people are always saved to Contacts so the split record is correct and
+  // the person shows in the People page. Returns the saved [Person].
+  Future<void> _addNew(String rawName) async {
+    final name = rawName.trim();
+    if (name.isEmpty || _saving) return;
     if (widget.existingNames.contains(name.toLowerCase())) return;
 
     final colorIdx = personColorIndex(name);
-
-    if (_saveToContacts) {
-      setState(() => _saving = true);
-      final user = ref.read(authStateProvider).valueOrNull;
-      if (user != null) {
-        try {
-          final now = DateTime.now();
-          final person = Person(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
-            name: name,
-            type: PersonType.friend,
-            colorIndex: colorIdx,
-            createdAt: now,
-            updatedAt: now,
-          );
-          await ref.read(personServiceProvider).add(user.uid, person);
-          if (mounted) Navigator.pop(context, person);
-        } catch (_) {
-          if (mounted) setState(() => _saving = false);
-        }
+    setState(() => _saving = true);
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user != null) {
+      try {
+        final now = DateTime.now();
+        final person = Person(
+          id: now.microsecondsSinceEpoch.toString(),
+          name: name,
+          type: PersonType.friend,
+          colorIndex: colorIdx,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await ref.read(personServiceProvider).add(user.uid, person);
+        if (mounted) Navigator.pop(context, person);
         return;
+      } catch (_) {
+        if (mounted) setState(() => _saving = false);
       }
-      setState(() => _saving = false);
+      return;
     }
-
+    // Local mode without a signed-in user: fall back to a name-only member.
     if (mounted) {
       Navigator.pop(context, {'name': name, 'colorIndex': colorIdx});
     }
@@ -1400,7 +1455,8 @@ class _SplitBillAddPersonSheetState
   Widget build(BuildContext context) {
     final brand = context.brand;
     final async = ref.watch(peopleProvider);
-    final query = _searchCtrl.text.trim().toLowerCase();
+    final query = _searchCtrl.text.trim();
+    final queryLower = query.toLowerCase();
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -1449,253 +1505,150 @@ class _SplitBillAddPersonSheetState
               ),
             ),
             const SizedBox(height: 12),
-            // Tab row: New / From Contacts
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(3),
+              child: CupertinoTextField(
+                controller: _searchCtrl,
+                placeholder: 'Search or add a name',
+                autofocus: false,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: _addNew,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                prefix: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Icon(CupertinoIcons.search,
+                      size: 18, color: brand.inkSoft),
+                ),
                 decoration: BoxDecoration(
                   color: brand.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final pillW = constraints.maxWidth / 2;
-                    return Stack(
-                      children: [
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeInOutCubic,
-                          left: _showNew ? 0 : pillW,
-                          top: 0,
-                          bottom: 0,
-                          width: pillW,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: brand.background,
-                              borderRadius: BorderRadius.circular(AppRadius.chip - 2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            _tabChip('New', _showNew, brand, () => setState(() => _showNew = true)),
-                            _tabChip('From Contacts', !_showNew, brand, () => setState(() => _showNew = false)),
-                          ],
-                        ),
-                      ],
-                    );
-                  },
+                  borderRadius: BorderRadius.circular(AppRadius.field),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: child,
-                ),
-                child: _showNew
-                    ? _newTabBody(brand)
-                    : _contactsTabBody(brand, async, query),
-              ),
-            ),
+            const SizedBox(height: 10),
+            _body(brand, async, query, queryLower),
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _newTabBody(BrandColors brand) {
-    return SizedBox(
-      key: const ValueKey('new'),
-      width: double.infinity,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: CupertinoTextField(
-              controller: _nameCtrl,
-              placeholder: 'Name',
-              autofocus: false,
-              textCapitalization: TextCapitalization.words,
-              onChanged: (_) => setState(() {}),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: brand.surface,
-                borderRadius: BorderRadius.circular(AppRadius.field),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: brand.surface,
-                borderRadius: BorderRadius.circular(AppRadius.field),
-              ),
-              child: Row(
-                children: [
-                  TweenAnimationBuilder<Color?>(
-                    duration: const Duration(milliseconds: 250),
-                    tween: ColorTween(
-                      begin: brand.inkSoft,
-                      end: _saveToContacts ? brand.accentDark : brand.inkSoft,
-                    ),
-                    builder: (_, color, child) => Icon(
-                      CupertinoIcons.person_crop_circle_fill,
-                      size: 20,
-                      color: color ?? brand.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Save to my contacts',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: brand.ink,
-                      ),
-                    ),
-                  ),
-                  CupertinoSwitch(
-                    value: _saveToContacts,
-                    activeTrackColor: brand.accentDark,
-                    onChanged: (v) => setState(() => _saveToContacts = v),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: GestureDetector(
-              onTap: _saving || _nameCtrl.text.trim().isEmpty
-                  ? null
-                  : _submit,
-              child: Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  color: _nameCtrl.text.trim().isEmpty
-                      ? brand.ink.withValues(alpha: 0.2)
-                      : brand.accentDark,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
-                ),
-                alignment: Alignment.center,
-                child: _saving
-                    ? const CupertinoActivityIndicator()
-                    : Text(
-                        _saveToContacts
-                            ? 'Add & Save to Contacts'
-                            : 'Add Person',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _nameCtrl.text.trim().isEmpty
-                              ? brand.inkSoft
-                              : brand.background,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _contactsTabBody(
+  Widget _body(
     BrandColors brand,
     AsyncValue<List<Person>> async,
     String query,
+    String queryLower,
   ) {
-    return SizedBox(
-      key: const ValueKey('contacts'),
-      width: double.infinity,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: CupertinoSearchTextField(
-              controller: _searchCtrl,
-              placeholder: 'Search contacts…',
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-          const SizedBox(height: 8),
-          async.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: CupertinoActivityIndicator(),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('Error: $e'),
-            ),
-            data: (all) {
-              final filtered = query.isEmpty
-                  ? all
-                  : all
-                      .where((p) =>
-                          p.name.toLowerCase().contains(query) ||
-                          (p.phone?.toLowerCase().contains(query) ?? false))
-                      .toList();
-              if (filtered.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                  child: Text(
-                    all.isEmpty ? 'No saved contacts yet.' : 'No matches.',
-                    style: TextStyle(color: brand.inkSoft, fontSize: 13),
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(24),
+        child: CupertinoActivityIndicator(),
+      ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text('Error: $e'),
+      ),
+      data: (all) {
+        final filtered = queryLower.isEmpty
+            ? all
+            : all
+                .where((p) =>
+                    p.name.toLowerCase().contains(queryLower) ||
+                    (p.phone?.toLowerCase().contains(queryLower) ?? false))
+                .toList();
+        final exactExists =
+            all.any((p) => p.name.toLowerCase() == queryLower);
+        final alreadyAdded = widget.existingNames.contains(queryLower);
+        final showAddNew =
+            query.isNotEmpty && !exactExists && !alreadyAdded;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showAddNew)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: GestureDetector(
+                  onTap: _saving ? null : () => _addNew(query),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: brand.accentDark.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: brand.accentDark.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(CupertinoIcons.add,
+                              size: 20, color: brand.accentDark),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Add "$query" to contacts',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: brand.accentDark,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_saving)
+                          const CupertinoActivityIndicator()
+                        else
+                          Icon(CupertinoIcons.chevron_right,
+                              size: 16, color: brand.accentDark),
+                      ],
+                    ),
                   ),
-                );
-              }
-              return ConstrainedBox(
+                ),
+              ),
+            if (filtered.isEmpty && !showAddNew)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Text(
+                  all.isEmpty ? 'No saved contacts yet.' : 'No matches.',
+                  style: TextStyle(color: brand.inkSoft, fontSize: 13),
+                ),
+              )
+            else if (filtered.isNotEmpty)
+              ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.38,
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: filtered.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 6),
                   itemBuilder: (ctx, i) {
                     final p = filtered[i];
-                    final alreadyAdded =
+                    final alreadyAddedRow =
                         widget.existingNames.contains(p.name.toLowerCase());
                     return GestureDetector(
-                      onTap: alreadyAdded
+                      onTap: alreadyAddedRow
                           ? null
                           : () => Navigator.pop(context, p),
                       child: Opacity(
-                        opacity: alreadyAdded ? 0.4 : 1.0,
+                        opacity: alreadyAddedRow ? 0.4 : 1.0,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             color: brand.surface,
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.card),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                           child: Row(
                             children: [
@@ -1708,8 +1661,7 @@ class _SplitBillAddPersonSheetState
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       p.name,
@@ -1727,7 +1679,7 @@ class _SplitBillAddPersonSheetState
                                   ],
                                 ),
                               ),
-                              if (alreadyAdded)
+                              if (alreadyAddedRow)
                                 Text('Added',
                                     style: TextStyle(
                                         fontSize: 11, color: brand.inkSoft)),
@@ -1738,38 +1690,11 @@ class _SplitBillAddPersonSheetState
                     );
                   },
                 ),
-              );
-            },
-          ),
-        ],
-      ),
+              ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _tabChip(
-      String label, bool selected, BrandColors brand, VoidCallback onTap) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Center(
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? brand.ink : brand.inkSoft,
-              ),
-              child: Text(label),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
